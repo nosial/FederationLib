@@ -4,13 +4,18 @@
 
     use FederationServer\Classes\Configuration\DatabaseConfiguration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
+    use FederationServer\Classes\Configuration\FileStorageConfiguration;
 
     class Configuration
     {
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
+        private static ?FileStorageConfiguration $fileStorageConfiguration = null;
 
+        /**
+         * Initialize the configuration with default values.
+         */
         public static function initialize(): void
         {
             self::$configuration = new \ConfigLib\Configuration('federation_server');
@@ -29,12 +34,21 @@
             self::$configuration->setDefault('redis.password', null);
             self::$configuration->setDefault('redis.database', 0);
 
+            self::$configuration->setDefault('file_storage.max_size', 52428800); // 50 MB
+            self::$configuration->setDefault('file_storage.path', '/var/www/uploads');
+
             self::$configuration->save();
 
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
+            self::$fileStorageConfiguration = new FileStorageConfiguration(self::$configuration->get('file_storage'));
         }
 
+        /**
+         * Get the configuration values.
+         *
+         * @return array
+         */
         public static function getConfiguration(): array
         {
             if(self::$configuration === null)
@@ -45,6 +59,11 @@
             return self::$configuration->getConfiguration();
         }
 
+        /**
+         * Get the configuration library instance.
+         *
+         * @return \ConfigLib\Configuration
+         */
         public static function getConfigurationLib(): \ConfigLib\Configuration
         {
             if(self::$configuration === null)
@@ -55,6 +74,11 @@
             return self::$configuration;
         }
 
+        /**
+         * Get the database, Redis, and file storage configurations.
+         *
+         * @return DatabaseConfiguration
+         */
         public static function getDatabaseConfiguration(): DatabaseConfiguration
         {
             if(self::$databaseConfiguration === null)
@@ -65,6 +89,11 @@
             return self::$databaseConfiguration;
         }
 
+        /**
+         * Get the Redis configuration.
+         *
+         * @return RedisConfiguration
+         */
         public static function getRedisConfiguration(): RedisConfiguration
         {
             if(self::$redisConfiguration === null)
@@ -74,4 +103,20 @@
 
             return self::$redisConfiguration;
         }
+
+        /**
+         * Get the file storage configuration.
+         *
+         * @return FileStorageConfiguration
+         */
+        public static function getFileStorageConfiguration(): FileStorageConfiguration
+        {
+            if(self::$fileStorageConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$fileStorageConfiguration;
+        }
     }
+
