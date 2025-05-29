@@ -10,6 +10,14 @@
     <option name="highlightLevel" value="WARNING" />
     <option name="transferred" value="true" />
   </component>
+  <component name="PhpIncludePathManager">
+    <include_path>
+      <path value="/var/ncc/packages/net.nosial.configlib=1.2.0" />
+      <path value="/var/ncc/packages/net.nosial.loglib2=1.0.3" />
+      <path value="/var/ncc/packages/net.nosial.optslib=1.1.3" />
+    </include_path>
+  </component>
+  <component name="PhpProjectSharedConfiguration" php_language_level="8.3" />
   <component name="PhpStanOptionsConfiguration">
     <option name="transferred" value="true" />
   </component>
