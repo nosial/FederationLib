@@ -1,0 +1,57 @@
+{
+    "project": {
+        "compiler": {
+            "extension": "php",
+            "minimum_version": "8.0",
+            "maximum_version": "8.2"
+        },
+        "options": {
+            "create_symlink": true
+        }
+    },
+    "assembly": {
+        "name": "FederationServer",
+        "package": "net.nosial.federation",
+        "version": "1.0.0",
+        "uuid": "b93eb819-0eac-46c5-a721-9893a046bec9"
+    },
+    "build": {
+        "source_path": "src/FederationServer",
+        "default_configuration": "release",
+        "main": "main_policy",
+        "define_constants": {
+            "ASSEMBLY_PACKAGE": "%ASSEMBLY.PACKAGE%",
+            "ASSEMBLY_VERSION": "%ASSEMBLY.VERSION%",
+            "ASSEMBLY_UID": "%ASSEMBLY.UID%"
+        },
+        "configurations": [
+            {
+                "name": "release",
+                "build_type": "ncc",
+                "output": "build/release/%ASSEMBLY.PACKAGE%.ncc"
+            },
+            {
+                "name": "debug",
+                "build_type": "ncc",
+                "output": "build/debug/%ASSEMBLY.PACKAGE%.ncc",
+                "define_constants": {
+                    "DEBUG": "1"
+                }
+            }
+        ]
+    },
+    "execution_policies": [
+        {
+            "name": "main_policy",
+            "runner": "php",
+            "execute": {
+                "working_directory": "%CWD%",
+                "silent": false,
+                "tty": true,
+                "timeout": null,
+                "idle_timeout": null,
+                "target": "main"
+            }
+        }
+    ]
+}
