@@ -54,6 +54,11 @@
                 "name": "net.nosial.optslib",
                 "version": "latest",
                 "source": "nosial/optslib=latest@github"
+            },
+            {
+                "name": "com.symfony.uid",
+                "version": "latest",
+                "source": "symfony/uid=latest@packagist"
             }
         ]
     },
