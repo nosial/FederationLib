@@ -13,7 +13,6 @@
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
-        private static ?FileStorageConfiguration $fileStorageConfiguration = null;
 
         /**
          * Initialize the configuration with default values.
@@ -24,6 +23,8 @@
 
             self::$configuration->setDefault('server.name', 'Federation Server');
             self::$configuration->setDefault('server.api_key', Utilities::generateString());
+            self::$configuration->setDefault('server.max_upload_size', 52428800); // 50MB default
+            self::$configuration->setDefault('server.storage_path', '/var/www/uploads');
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);
@@ -38,16 +39,11 @@
             self::$configuration->setDefault('redis.port', 6379);
             self::$configuration->setDefault('redis.password', null);
             self::$configuration->setDefault('redis.database', 0);
-
-            self::$configuration->setDefault('file_storage.max_size', 52428800); // 50 MB
-            self::$configuration->setDefault('file_storage.path', '/var/www/uploads');
-
             self::$configuration->save();
 
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
-            self::$fileStorageConfiguration = new FileStorageConfiguration(self::$configuration->get('file_storage'));
         }
 
         /**
@@ -123,21 +119,6 @@
             }
 
             return self::$redisConfiguration;
-        }
-
-        /**
-         * Get the file storage configuration.
-         *
-         * @return FileStorageConfiguration
-         */
-        public static function getFileStorageConfiguration(): FileStorageConfiguration
-        {
-            if(self::$fileStorageConfiguration === null)
-            {
-                self::initialize();
-            }
-
-            return self::$fileStorageConfiguration;
         }
     }
 

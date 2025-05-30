@@ -17,11 +17,10 @@
          * @param string $uuid The UUID of the file attachment.
          * @param string $evidence The UUID of the evidence associated with the file attachment.
          * @param string $fileName The name of the file being attached.
-         * @param string $fileSize The size of the file in bytes.
+         * @param int $fileSize The size of the file in bytes.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws InvalidArgumentException If the file name exceeds 255 characters or if the file size is not a positive integer.
          */
-        public static function createRecord(string $uuid, string $evidence, string $fileName, string $fileSize): void
+        public static function createRecord(string $uuid, string $evidence, string $fileMime, string $fileName, int $fileSize): void
         {
             if(strlen($fileName) > 255)
             {
@@ -35,11 +34,12 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO file_attachments (uuid, evidence, file_name, file_size) VALUES (:uuid, :evidence, :file_name, :file_size)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO file_attachments (uuid, evidence, file_mime, file_name, file_size) VALUES (:uuid, :evidence, :file_mime, :file_name, :file_size)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':evidence', $evidence);
+                $stmt->bindParam(':file_mime', $fileMime);
                 $stmt->bindParam(':file_name', $fileName);
-                $stmt->bindParam(':file_size', $fileSize);
+                $stmt->bindParam(':file_size', $fileSize, PDO::PARAM_INT);
 
                 $stmt->execute();
             }

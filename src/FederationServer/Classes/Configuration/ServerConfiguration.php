@@ -6,6 +6,8 @@
     {
         private string $name;
         private ?string $apiKey;
+        private int $maxUploadSize;
+        private string $storagePath;
 
         /**
          * ServerConfiguration constructor.
@@ -16,6 +18,8 @@
         {
             $this->name = $config['server.name'] ?? 'Federation Server';
             $this->apiKey = $config['server.api_key'] ?? null;
+            $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
+            $this->storagePath = $config['server.storage_path'] ?? '/var/www/uploads';
         }
 
         /**
@@ -36,5 +40,25 @@
         public function getApiKey(): ?string
         {
             return $this->apiKey;
+        }
+
+        /**
+         * Get the maximum allowed upload size in bytes.
+         *
+         * @return int Maximum upload size in bytes
+         */
+        public function getMaxUploadSize(): int
+        {
+            return $this->maxUploadSize;
+        }
+
+        /**
+         * Get the path where files are stored.
+         *
+         * @return string The storage path for uploaded files.
+         */
+        public function getStoragePath(): string
+        {
+            return $this->storagePath;
         }
     }
