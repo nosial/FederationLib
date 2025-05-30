@@ -6,6 +6,7 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\FileAttachmentRecord;
     use InvalidArgumentException;
+    use PDO;
     use PDOException;
 
     class FileAttachmentManager
@@ -63,7 +64,7 @@
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
 
-                $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($result === false)
                 {
                     return null; // No record found
@@ -92,7 +93,7 @@
                 $stmt->bindParam(':evidence', $evidence);
                 $stmt->execute();
 
-                $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 return array_map(fn($data) => new FileAttachmentRecord($data), $results);
             }
             catch (PDOException $e)
