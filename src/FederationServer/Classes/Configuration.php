@@ -5,9 +5,11 @@
     use FederationServer\Classes\Configuration\DatabaseConfiguration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
     use FederationServer\Classes\Configuration\FileStorageConfiguration;
+    use FederationServer\Classes\Configuration\ServerConfiguration;
 
     class Configuration
     {
+        private static ?ServerConfiguration $serverConfiguration = null;
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
@@ -19,6 +21,9 @@
         public static function initialize(): void
         {
             self::$configuration = new \ConfigLib\Configuration('federation_server');
+
+            self::$configuration->setDefault('server.name', 'Federation Server');
+            self::$configuration->setDefault('server.api_key', Utilities::generateString());
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);
@@ -39,6 +44,7 @@
 
             self::$configuration->save();
 
+            self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
             self::$fileStorageConfiguration = new FileStorageConfiguration(self::$configuration->get('file_storage'));
@@ -72,6 +78,21 @@
             }
 
             return self::$configuration;
+        }
+
+        /**
+         * Get the server configuration.
+         *
+         * @return ServerConfiguration
+         */
+        public static function getServerConfiguration(): ServerConfiguration
+        {
+            if(self::$serverConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$serverConfiguration;
         }
 
         /**
