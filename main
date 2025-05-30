@@ -1,6 +1,9 @@
 <?php
 
-    if (PHP_SAPI !== 'cli')
+use FederationServer\Program;
+use ncc\Classes\Runtime;
+
+if (PHP_SAPI !== 'cli')
     {
         print('net.nosial.federation must be run from the command line.' . PHP_EOL);
         exit(1);
@@ -20,5 +23,5 @@
     }
 
     require('ncc');
-    \ncc\Classes\Runtime::import('net.nosial.federation', 'latest');
-	exit(\FederationServer\Program::main($argv));
+    Runtime::import('net.nosial.federation', 'latest');
+	exit(Program::main($argv));

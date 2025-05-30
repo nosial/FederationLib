@@ -6,6 +6,7 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\EvidenceRecord;
     use InvalidArgumentException;
+    use PDO;
     use PDOException;
 
     class EvidenceManager
@@ -91,7 +92,7 @@
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
 
-                $data = $stmt->fetch(\PDO::FETCH_ASSOC);
+                $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($data)
                 {
                     return new EvidenceRecord($data);
@@ -124,7 +125,7 @@
                 $stmt->bindParam(':entity', $entity);
                 $stmt->execute();
 
-                $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $evidenceRecords = [];
                 foreach ($results as $data)
                 {
@@ -160,7 +161,7 @@
                 $stmt->bindParam(':operator', $operator);
                 $stmt->execute();
 
-                $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $evidenceRecords = [];
                 foreach ($results as $data)
                 {

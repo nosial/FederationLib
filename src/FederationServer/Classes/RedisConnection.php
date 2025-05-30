@@ -5,6 +5,7 @@
     use Redis;
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
+    use RedisException;
 
     class RedisConnection
     {
@@ -14,7 +15,7 @@
          * Get the Redis connection instance. If it does not exist, create it using the configuration.
          *
          * @return Redis|null Returns Redis instance if enabled, otherwise null.
-         * @throws \RedisException
+         * @throws RedisException
          */
         public static function getConnection(): ?Redis
         {

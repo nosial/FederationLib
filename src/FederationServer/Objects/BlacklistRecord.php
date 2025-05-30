@@ -2,6 +2,7 @@
 
     namespace FederationServer\Objects;
 
+    use DateTime;
     use FederationServer\Classes\Enums\BlacklistType;
     use FederationServer\Interfaces\SerializableInterface;
 
@@ -127,7 +128,7 @@
                 {
                     $array['expires'] = strtotime($array['expires']);
                 }
-                elseif($array['expires'] instanceof \DateTime)
+                elseif($array['expires'] instanceof DateTime)
                 {
                     $array['expires'] = $array['expires']->getTimestamp();
                 }
@@ -139,7 +140,7 @@
                 {
                     $array['created'] = strtotime($array['created']);
                 }
-                elseif($array['created'] instanceof \DateTime)
+                elseif($array['created'] instanceof DateTime)
                 {
                     $array['created'] = $array['created']->getTimestamp();
                 }

@@ -2,9 +2,10 @@
 
     namespace FederationServer\Exceptions;
 
+    use Exception;
     use Throwable;
 
-    class DatabaseOperationException extends \Exception
+    class DatabaseOperationException extends Exception
     {
         /**
          * DatabaseOperationException constructor.

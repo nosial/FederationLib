@@ -2,6 +2,7 @@
 
     namespace FederationServer\Objects;
 
+    use DateTime;
     use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Interfaces\SerializableInterface;
 
@@ -115,7 +116,7 @@
                 {
                     $array['timestamp'] = strtotime($array['timestamp']);
                 }
-                elseif($array['timestamp'] instanceof \DateTime)
+                elseif($array['timestamp'] instanceof DateTime)
                 {
                     $array['timestamp'] = $array['timestamp']->getTimestamp();
                 }

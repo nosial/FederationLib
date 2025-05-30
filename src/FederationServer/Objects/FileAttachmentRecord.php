@@ -2,6 +2,7 @@
 
     namespace FederationServer\Objects;
 
+    use DateTime;
     use FederationServer\Interfaces\SerializableInterface;
 
     class FileAttachmentRecord implements SerializableInterface
@@ -107,7 +108,7 @@
                 {
                     $array['created'] = strtotime($array['created']);
                 }
-                elseif($array['created'] instanceof \DateTime)
+                elseif($array['created'] instanceof DateTime)
                 {
                     $array['created'] = $array['created']->getTimestamp();
                 }

@@ -7,6 +7,7 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\OperatorRecord;
     use InvalidArgumentException;
+    use PDO;
     use PDOException;
     use Symfony\Component\Uid\Uuid;
 
@@ -251,7 +252,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET manage_operators=:manage_operators WHERE uuid=:uuid");
-                $stmt->bindParam(':manage_operators', $canManageOperators, \PDO::PARAM_BOOL);
+                $stmt->bindParam(':manage_operators', $canManageOperators, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
@@ -279,7 +280,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET manage_blacklist=:manage_blacklist WHERE uuid=:uuid");
-                $stmt->bindParam(':manage_blacklist', $canManageBlacklist, \PDO::PARAM_BOOL);
+                $stmt->bindParam(':manage_blacklist', $canManageBlacklist, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
@@ -307,7 +308,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET is_client=:is_client WHERE uuid=:uuid");
-                $stmt->bindParam(':is_client', $isClient, \PDO::PARAM_BOOL);
+                $stmt->bindParam(':is_client', $isClient, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
