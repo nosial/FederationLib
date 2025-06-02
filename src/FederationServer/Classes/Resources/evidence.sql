@@ -5,6 +5,7 @@ create table evidence
     blacklist    varchar(36)                             null comment 'Optional. If this evidence caused a blacklist, this would be the evidence related to it',
     entity       varchar(36)                             not null comment 'The UUID of the entity that this evidence is related to',
     operator     varchar(36)                             not null comment 'The operator that submitted the evidence',
+    confidential tinyint(1)  default 0                   not null comment 'Default: 0, 1=The evidence and all of it''s attachments is confidential and only operators can view this, 0=The evidence is available for public view',
     text_content text                                    null comment 'Optional. the text content with the evidence',
     note         text                                    null comment 'Optional note by the operator that submitted the evidence',
     created      timestamp   default current_timestamp() not null comment 'The timestamp of the evidence',
