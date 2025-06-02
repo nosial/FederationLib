@@ -4,6 +4,7 @@
 
     use FederationServer\Classes\DatabaseConnection;
     use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Logger;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\AuditLogRecord;
     use InvalidArgumentException;
@@ -26,6 +27,33 @@
             if(strlen($message) === 0)
             {
                 throw new InvalidArgumentException("Message cannot be empty.");
+            }
+
+            if($operator !== null && strlen($operator) === 0)
+            {
+                throw new InvalidArgumentException("Operator UUID cannot be empty.");
+            }
+
+            if($entity !== null && strlen($entity) === 0)
+            {
+                throw new InvalidArgumentException("Entity UUID cannot be empty.");
+            }
+
+            if($operator !== null && $entity !== null)
+            {
+                Logger::log()->info(sprintf("Audit Entry [%s] %s by %s on %s", $type->value, $message, $operator, $entity));
+            }
+            elseif($operator !== null)
+            {
+                Logger::log()->info(sprintf("Audit Entry [%s] %s by %s", $type->value, $message, $operator));
+            }
+            elseif($entity !== null)
+            {
+                Logger::log()->info(sprintf("Audit Entry [%s] %s on %s", $type->value, $message, $entity));
+            }
+            else
+            {
+                Logger::log()->info(sprintf("Audit Entry [%s] %s", $type->value, $message));
             }
 
             try
