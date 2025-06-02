@@ -17,7 +17,7 @@
          * Create a new operator with a unique API key.
          *
          * @param string $name The name of the operator.
-         * @return string The generated API key for the operator.
+         * @return string The generated UUID for the operator.
          * @throws InvalidArgumentException If the name is empty or exceeds 255 characters.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */

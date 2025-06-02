@@ -11,6 +11,7 @@
         private ?string $blacklist;
         private string $entity;
         private string $operator;
+        private bool $confidential;
         private ?string $textContent;
         private ?string $note;
         private int $created;
@@ -26,6 +27,7 @@
             $this->blacklist = $data['blacklist'] ?? null;
             $this->entity = $data['entity'] ?? '';
             $this->operator = $data['operator'] ?? '';
+            $this->confidential = (bool)$data['confidential'] ?? false;
             $this->textContent = $data['text_content'] ?? null;
             $this->note = $data['note'] ?? null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
@@ -72,6 +74,16 @@
         }
 
         /**
+         * Check if the evidence is confidential.
+         *
+         * @return bool
+         */
+        public function isConfidential(): bool
+        {
+            return $this->confidential;
+        }
+
+        /**
          * Get the text content value.
          *
          * @return string|null
@@ -112,6 +124,7 @@
                 'blacklist' => $this->blacklist,
                 'entity' => $this->entity,
                 'operator' => $this->operator,
+                'confidential' => $this->confidential,
                 'text_content' => $this->textContent,
                 'note' => $this->note,
                 'created' => $this->created,

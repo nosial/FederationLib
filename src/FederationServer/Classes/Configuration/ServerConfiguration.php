@@ -4,6 +4,7 @@
 
     class ServerConfiguration
     {
+        private string $baseUrl;
         private string $name;
         private ?string $apiKey;
         private int $maxUploadSize;
@@ -16,10 +17,21 @@
          */
         public function __construct(array $config)
         {
+            $this->baseUrl = $config['server.base_url'] ?? 'http://127.0.0.1:6161';
             $this->name = $config['server.name'] ?? 'Federation Server';
             $this->apiKey = $config['server.api_key'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
             $this->storagePath = $config['server.storage_path'] ?? '/var/www/uploads';
+        }
+
+        /**
+         * Get the base URL of the server.
+         *
+         * @return string The base URL of the server.
+         */
+        public function getBaseUrl(): string
+        {
+            return $this->baseUrl;
         }
 
         /**
