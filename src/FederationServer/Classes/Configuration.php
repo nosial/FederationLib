@@ -21,10 +21,13 @@
         {
             self::$configuration = new \ConfigLib\Configuration('federation_server');
 
+            self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:6161');
             self::$configuration->setDefault('server.name', 'Federation Server');
             self::$configuration->setDefault('server.api_key', Utilities::generateString());
             self::$configuration->setDefault('server.max_upload_size', 52428800); // 50MB default
             self::$configuration->setDefault('server.storage_path', '/var/www/uploads');
+
+            self::$configuration->setDefault('logging.log_unauthorized_requests', true);
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);
