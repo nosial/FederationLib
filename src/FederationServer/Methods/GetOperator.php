@@ -2,11 +2,10 @@
 
     namespace FederationServer\Methods;
 
-    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
-    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -26,14 +25,20 @@
                 throw new RequestException('Unauthorized: Insufficient permissions to get operators', 403);
             }
 
-            if(!FederationServer::getParameter('uuid'))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID required', 405);
+            }
+
+            $operatorUuid = $matches[1];
+            if(!$operatorUuid || !Validate::uuid($operatorUuid))
+            {
+                throw new RequestException('Invalid operator UUID', 400);
             }
 
             try
             {
-                $existingOperator = OperatorManager::getOperator(FederationServer::getParameter('uuid'));
+                $existingOperator = OperatorManager::getOperator($operatorUuid);
                 if($existingOperator === null)
                 {
                     throw new RequestException('Operator Not Found', 404);
