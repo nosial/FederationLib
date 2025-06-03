@@ -2,6 +2,7 @@
 
     namespace FederationServer\Classes\Managers;
 
+    use DateTime;
     use FederationServer\Classes\DatabaseConnection;
     use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
@@ -158,9 +159,12 @@
         }
 
         /**
-         * Retrieves the total count of audit log entries.
+         * Retrieves audit log entries by entity.
          *
-         * @return int The total number of audit log entries.
+         * @param string $entity The UUID of the entity to filter by.
+         * @param int $limit The maximum number of entries to retrieve.
+         * @param int $page The page number for pagination.
+         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
         public static function getEntriesByEntity(string $entity, int $limit=100, int $page=1): array
@@ -203,13 +207,13 @@
         /**
          * Retrieves audit log entries by type.
          *
-         * @param AuditLogType $type The type of audit log entries to retrieve.
+         * @param AuditLogType[] $type The type of audit log entries to retrieve.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByType(AuditLogType $type, int $limit=100, int $page=1): array
+        public static function getEntriesByType(array $type, int $limit=100, int $page=1): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -220,9 +224,16 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE type = :type ORDER BY timestamp DESC LIMIT :limit OFFSET :offset");
-                $type = $type->value;
-                $stmt->bindParam(':type', $type);
+                $placeholders = rtrim(str_repeat('?,', count($type)), ',');
+                $sql = "SELECT * FROM audit_log WHERE type IN ($placeholders) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+
+                // Bind the type parameters
+                foreach ($type as $index => $t)
+                {
+                    $stmt->bindValue($index + 1, $t->value);
+                }
+
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -255,11 +266,12 @@
             }
 
             $timestamp = time() - ($olderThanDays * 86400); // Convert days to seconds
+            $timestamp = DateTime::createFromFormat('U', $timestamp)->getTimestamp();
 
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM audit_log WHERE timestamp < :timestamp");
-                $stmt->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
+                $stmt->bindParam(':timestamp', $timestamp);
                 $stmt->execute();
             }
             catch (PDOException $e)
