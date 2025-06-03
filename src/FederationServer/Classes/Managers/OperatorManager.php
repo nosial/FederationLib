@@ -317,4 +317,42 @@
                 throw new DatabaseOperationException(sprintf("Failed to set client status for operator with UUID '%s'", $uuid), 0, $e);
             }
         }
+
+        /**
+         * Retrieve a list of operators with pagination support.
+         *
+         * @param int $limit The maximum number of operators to retrieve.
+         * @param int $page The page number for pagination.
+         * @return OperatorRecord[] An array of OperatorRecord objects representing the operators.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function getOperators(int $limit=100, int $page=1): array
+        {
+            if($limit < 1 || $page < 1)
+            {
+                throw new InvalidArgumentException('Limit and page must be greater than 0.');
+            }
+
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $operators = [];
+                while($data = $stmt->fetch())
+                {
+                    $operators[] = new OperatorRecord($data);
+                }
+
+                return $operators;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve operators', 0, $e);
+            }
+        }
     }

@@ -9,6 +9,7 @@
     use FederationServer\Methods\Operators\DeleteOperator;
     use FederationServer\Methods\Operators\EnableOperator;
     use FederationServer\Methods\Operators\GetOperator;
+    use FederationServer\Methods\Operators\ListOperators;
     use FederationServer\Methods\Operators\ManageBlacklistPermission;
     use FederationServer\Methods\Operators\ManageClientPermission;
     use FederationServer\Methods\Operators\ManageOperatorsPermission;
@@ -40,8 +41,7 @@
             switch($this)
             {
                 case self::LIST_OPERATORS:
-                    // This method does not have a dedicated handler, it is handled by the main request handler
-                    // in FederationServer::handleRequest()
+                    ListOperators::handleRequest();
                     break;
                 case self::GET_OPERATOR:
                     GetOperator::handleRequest();
