@@ -76,6 +76,41 @@
         }
 
         /**
+         * Retrieves a specific audit log entry by its UUID.
+         *
+         * @param string $uuid The UUID of the audit log entry to retrieve.
+         * @return AuditLogRecord|null An AuditLogRecord object representing the entry, or null if not found.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntry(string $uuid): ?AuditLogRecord
+        {
+            if(strlen($uuid) === 0)
+            {
+                throw new InvalidArgumentException("UUID cannot be empty.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($result === false)
+                {
+                    return null; // No entry found
+                }
+
+                return new AuditLogRecord($result);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve audit log entry: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
          * Retrieves audit log entries with optional pagination and filtering.
          *
          * @param int $limit The maximum number of entries to retrieve.
