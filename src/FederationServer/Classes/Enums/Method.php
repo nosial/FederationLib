@@ -6,6 +6,7 @@
     use FederationServer\Methods\Attachments\DeleteAttachment;
     use FederationServer\Methods\Attachments\DownloadAttachment;
     use FederationServer\Methods\Attachments\UploadAttachment;
+    use FederationServer\Methods\Audit\ListAuditLogs;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
     use FederationServer\Methods\Operators\EnableOperator;
@@ -18,6 +19,8 @@
 
     enum Method
     {
+        case LIST_AUDIT_LOGS;
+
         case LIST_OPERATORS;
         case CREATE_OPERATOR;
         case DELETE_OPERATOR;
@@ -42,6 +45,10 @@
         {
             switch($this)
             {
+                case self::LIST_AUDIT_LOGS:
+                    ListAuditLogs::handleRequest();
+                    break;
+
                 case self::LIST_OPERATORS:
                     ListOperators::handleRequest();
                     break;
@@ -93,11 +100,11 @@
         {
             return match (true)
             {
-                $requestMethod === 'POST' && $path === '/' => null,
+                $path === '/' && $requestMethod === 'GET' => Method::LIST_AUDIT_LOGS,
 
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
-                ($requestMethod === 'POST' || $requestMethod === 'PUT') && $path === '/attachments/upload' => Method::UPLOAD_ATTACHMENT,
+                $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
 
                 $path === '/operators' && ($requestMethod === 'POST' || $requestMethod === 'GET') => Method::LIST_OPERATORS,
                 $path === '/operators/create' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,

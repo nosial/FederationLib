@@ -125,6 +125,11 @@
             return $this->updated;
         }
 
+        public function toPublicRecord(): PublicOperatorRecord
+        {
+            return new PublicOperatorRecord($this);
+        }
+
         /**
          * @inheritDoc
          */
