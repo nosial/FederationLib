@@ -51,30 +51,44 @@
          * Retrieves an entity by its ID and domain.
          *
          * @param string $id The ID of the entity.
-         * @param string $domain The domain of the entity.
+         * @param string|null $domain The domain of the entity.
          * @return EntityRecord|null The EntityRecord object if found, null otherwise.
-         * @throws InvalidArgumentException If the ID or domain is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntityByDomain(string $id, string $domain): ?EntityRecord
+        public static function getEntity(string $id, ?string $domain): ?EntityRecord
         {
-            if(strlen($id) < 1 || strlen($domain) < 1)
+            if(strlen($id) < 1)
             {
                 throw new InvalidArgumentException("Entity ID and domain must be provided.");
             }
 
+            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+            {
+                throw new InvalidArgumentException("Invalid domain format.");
+            }
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE id = :id AND domain = :domain");
-                $stmt->bindParam(':id', $id);
-                $stmt->bindParam(':domain', $domain);
-                $stmt->execute();
+                if(is_null($domain))
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE id = :id");
+                    $stmt->bindParam(':id', $id);
+                }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE id = :id AND domain = :domain");
+                    $stmt->bindParam(':id', $id);
+                    $stmt->bindParam(':domain', $domain);
+                }
 
+                $stmt->execute();
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
+
                 if($data)
                 {
                     return new EntityRecord($data);
                 }
+
                 return null;
             }
             catch (PDOException $e)

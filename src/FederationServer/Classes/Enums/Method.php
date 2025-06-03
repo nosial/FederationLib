@@ -8,6 +8,9 @@
     use FederationServer\Methods\Attachments\UploadAttachment;
     use FederationServer\Methods\Audit\ListAuditLogs;
     use FederationServer\Methods\Audit\ViewAuditEntry;
+    use FederationServer\Methods\Entities\GetEntity;
+    use FederationServer\Methods\Entities\ListEntities;
+    use FederationServer\Methods\Entities\QueryEntity;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
     use FederationServer\Methods\Operators\DisableOperator;
@@ -37,7 +40,9 @@
         case MANAGE_BLACKLIST_PERMISSION;
         case MANAGE_CLIENT_PERMISSION;
 
+        case GET_ENTITY;
         case LIST_ENTITIES;
+        case QUERY_ENTITY;
         case PUSH_ENTITY;
 
         case UPLOAD_ATTACHMENT;
@@ -73,6 +78,12 @@
 
                 case self::LIST_ENTITIES:
                     ListEntities::handleRequest();
+                    break;
+                case self::QUERY_ENTITY:
+                    QueryEntity::handleRequest();
+                    break;
+                case self::GET_ENTITY:
+                    GetEntity::handleRequest();
                     break;
                 case self::PUSH_ENTITY:
                     PushEntity::handleRequest();
@@ -134,6 +145,8 @@
 
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY,
+                $path === '/entities/query' && $requestMethod === 'POST' => Method::QUERY_ENTITY,
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
