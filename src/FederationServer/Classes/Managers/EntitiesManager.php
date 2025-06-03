@@ -170,4 +170,44 @@
                 throw new DatabaseOperationException("Failed to delete entity by ID and domain: " . $e->getMessage(), $e->getCode(), $e);
             }
         }
+
+        /**
+         * Retrieves a list of entities with pagination.
+         *
+         * @param int $limit The maximum number of entities to retrieve per page.
+         * @param int $page The page number to retrieve.
+         * @return EntityRecord[] An array of EntityRecord objects.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntities(int $limit=100, int $page=1): array
+        {
+            if($limit < 1)
+            {
+                $limit = 100;
+            }
+            if($page < 1)
+            {
+                $page = 1;
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $entities = [];
+                while($row = $stmt->fetch(PDO::FETCH_ASSOC))
+                {
+                    $entities[] = new EntityRecord($row);
+                }
+                return $entities;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve entities: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
     }
