@@ -7,6 +7,7 @@
     use FederationServer\Methods\Attachments\DownloadAttachment;
     use FederationServer\Methods\Attachments\UploadAttachment;
     use FederationServer\Methods\Audit\ListAuditLogs;
+    use FederationServer\Methods\Audit\ViewAuditEntry;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
     use FederationServer\Methods\Operators\EnableOperator;
@@ -20,6 +21,7 @@
     enum Method
     {
         case LIST_AUDIT_LOGS;
+        case VIEW_AUDIT_ENTRY;
 
         case LIST_OPERATORS;
         case CREATE_OPERATOR;
@@ -47,6 +49,9 @@
             {
                 case self::LIST_AUDIT_LOGS:
                     ListAuditLogs::handleRequest();
+                    break;
+                case self::VIEW_AUDIT_ENTRY:
+                    ViewAuditEntry::handleRequest();
                     break;
 
                 case self::LIST_OPERATORS:
@@ -101,6 +106,7 @@
             return match (true)
             {
                 $path === '/' && $requestMethod === 'GET' => Method::LIST_AUDIT_LOGS,
+                preg_match('#^/audit/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::VIEW_AUDIT_ENTRY,
 
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
