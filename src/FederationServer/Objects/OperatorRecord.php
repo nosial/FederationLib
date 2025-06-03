@@ -173,7 +173,7 @@
                 }
             }
 
-            $object = new self($array);
+            return new self($array);
         }
     }
 
