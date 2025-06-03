@@ -93,7 +93,7 @@
                 preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', $path) => Method::DOWNLOAD_ATTACHMENT,
                 ($requestMethod === 'POST' || $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
 
-                $requestMethod === 'GET' && $path === '/operators' => Method::LIST_OPERATORS,
+                ($requestMethod === 'POST' || $requestMethod === 'GET') && $path === '/operators' => Method::LIST_OPERATORS,
                 $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
