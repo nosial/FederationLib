@@ -6,6 +6,7 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Interfaces\RequestHandlerInterface;
+    use FederationServer\Interfaces\SerializableInterface;
     use FederationServer\Objects\OperatorRecord;
     use Throwable;
 
@@ -128,6 +129,11 @@
          */
         protected static function successResponse(mixed $data=null): void
         {
+            if($data instanceof SerializableInterface)
+            {
+                $data = $data->toArray();
+            }
+
             http_response_code(200);
             self::returnHeaders();
             print(json_encode([
