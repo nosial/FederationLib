@@ -8,6 +8,7 @@
     use FederationServer\Methods\DownloadAttachment;
     use FederationServer\Methods\EnableOperator;
     use FederationServer\Methods\GetOperator;
+    use FederationServer\Methods\RefreshOperatorApiKey;
     use FederationServer\Methods\UploadAttachment;
 
     enum Method
@@ -16,6 +17,7 @@
         case DELETE_OPERATOR;
         case ENABLE_OPERATOR;
         case GET_OPERATOR;
+        case REFRESH_OPERATOR_API_KEY;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
@@ -41,6 +43,9 @@
                     break;
                 case self::GET_OPERATOR:
                     GetOperator::handleRequest();
+                    break;
+                case self::REFRESH_OPERATOR_API_KEY:
+                    RefreshOperatorApiKey::handleRequest();
                     break;
 
                 case self::UPLOAD_ATTACHMENT:
@@ -72,6 +77,7 @@
                 $requestMethod === 'DELETE' && $path === '/operators/delete' => Method::DELETE_OPERATOR,
                 $requestMethod === 'GET' && $path === '/operators/get' => Method::GET_OPERATOR,
                 $requestMethod === 'POST' && $path === '/operators/enable' => Method::ENABLE_OPERATOR,
+                $requestMethod === 'POST' && $path === '/operators/refresh' => Method::REFRESH_OPERATOR_API_KEY,
 
                 default => null,
             };
