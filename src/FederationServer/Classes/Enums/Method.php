@@ -38,6 +38,9 @@
         {
             switch($this)
             {
+                case self::GET_OPERATOR:
+                    GetOperator::handleRequest();
+                    break;
                 case self::CREATE_OPERATOR:
                     CreateOperator::handleRequest();
                     break;
@@ -46,9 +49,6 @@
                     break;
                 case self::ENABLE_OPERATOR:
                     EnableOperator::handleRequest();
-                    break;
-                case self::GET_OPERATOR:
-                    GetOperator::handleRequest();
                     break;
                 case self::REFRESH_OPERATOR_API_KEY:
                     RefreshOperatorApiKey::handleRequest();
@@ -89,13 +89,13 @@
                 ($requestMethod === 'POST' | $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
 
                 $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
-                $requestMethod === 'DELETE' && $path === '/operators/delete' => Method::DELETE_OPERATOR,
-                $requestMethod === 'GET' && $path === '/operators/get' => Method::GET_OPERATOR,
-                $requestMethod === 'POST' && $path === '/operators/enable' => Method::ENABLE_OPERATOR,
-                $requestMethod === 'POST' && $path === '/operators/refresh' => Method::REFRESH_OPERATOR_API_KEY,
-                $requestMethod === 'POST' && $path === '/operators/permissions/manage_operators' => Method::MANAGE_OPERATORS_PERMISSION,
-                $requestMethod === 'POST' && $path === '/operators/permissions/manage_blacklist' => Method::MANAGE_BLACKLIST_PERMISSION,
-                $requestMethod === 'POST' && $path === '/operators/permissions/manage_client' => Method::MANAGE_CLIENT_PERMISSION,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_operators$#', $path) && $requestMethod === 'POST' => Method::MANAGE_OPERATORS_PERMISSION,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_blacklist$#', $path) && $requestMethod === 'POST' => Method::MANAGE_BLACKLIST_PERMISSION,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_client$#', $path) && $requestMethod === 'POST' => Method::MANAGE_CLIENT_PERMISSION,
 
                 default => null,
             };
