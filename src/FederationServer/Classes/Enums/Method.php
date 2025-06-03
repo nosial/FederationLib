@@ -33,6 +33,9 @@
         case MANAGE_BLACKLIST_PERMISSION;
         case MANAGE_CLIENT_PERMISSION;
 
+        case LIST_ENTITIES;
+        case PUSH_ENTITY;
+
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
         case DELETE_ATTACHMENT;
@@ -52,6 +55,23 @@
                     break;
                 case self::VIEW_AUDIT_ENTRY:
                     ViewAuditEntry::handleRequest();
+                    break;
+
+                case self::UPLOAD_ATTACHMENT:
+                    UploadAttachment::handleRequest();
+                    break;
+                case self::DOWNLOAD_ATTACHMENT:
+                    DownloadAttachment::handleRequest();
+                    break;
+                case self::DELETE_ATTACHMENT:
+                    DeleteAttachment::handleRequest();
+                    break;
+
+                case self::LIST_ENTITIES:
+                    ListEntities::handleRequest();
+                    break;
+                case self::PUSH_ENTITY:
+                    PushEntity::handleRequest();
                     break;
 
                 case self::LIST_OPERATORS:
@@ -81,16 +101,6 @@
                 case self::MANAGE_CLIENT_PERMISSION:
                     ManageClientPermission::handleRequest();
                     break;
-
-                case self::UPLOAD_ATTACHMENT:
-                    UploadAttachment::handleRequest();
-                    break;
-                case self::DOWNLOAD_ATTACHMENT:
-                    DownloadAttachment::handleRequest();
-                    break;
-                case self::DELETE_ATTACHMENT:
-                    DeleteAttachment::handleRequest();
-                    break;
             }
         }
 
@@ -112,9 +122,12 @@
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
                 $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
 
+                $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
+                $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
+
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
