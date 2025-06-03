@@ -18,7 +18,7 @@
          */
         public static function handleRequest(): void
         {
-            if(!preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Attachment UUID required', 405);
             }

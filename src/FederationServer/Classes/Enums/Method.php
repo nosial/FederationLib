@@ -3,6 +3,7 @@
     namespace FederationServer\Classes\Enums;
 
     use FederationServer\Exceptions\RequestException;
+    use FederationServer\Methods\Attachments\DeleteAttachment;
     use FederationServer\Methods\Attachments\DownloadAttachment;
     use FederationServer\Methods\Attachments\UploadAttachment;
     use FederationServer\Methods\Operators\CreateOperator;
@@ -29,6 +30,7 @@
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
+        case DELETE_ATTACHMENT;
 
         /**
          * Handles the request of the method
@@ -74,6 +76,9 @@
                 case self::DOWNLOAD_ATTACHMENT:
                     DownloadAttachment::handleRequest();
                     break;
+                case self::DELETE_ATTACHMENT:
+                    DeleteAttachment::handleRequest();
+                    break;
             }
         }
 
@@ -90,13 +95,14 @@
             {
                 $requestMethod === 'POST' && $path === '/' => null,
 
-                preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', $path) => Method::DOWNLOAD_ATTACHMENT,
-                ($requestMethod === 'POST' || $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
+                preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
+                preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
+                ($requestMethod === 'POST' || $requestMethod === 'PUT') && $path === '/attachments/upload' => Method::UPLOAD_ATTACHMENT,
 
                 ($requestMethod === 'POST' || $requestMethod === 'GET') && $path === '/operators' => Method::LIST_OPERATORS,
                 $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_operators$#', $path) && $requestMethod === 'POST' => Method::MANAGE_OPERATORS_PERMISSION,
