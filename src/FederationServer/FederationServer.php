@@ -2,22 +2,10 @@
 
     namespace FederationServer;
 
-    use FederationServer\Classes\Configuration;
-    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Enums\Method;
-    use FederationServer\Classes\FileUploadHandler;
-    use FederationServer\Classes\Logger;
-    use FederationServer\Classes\Managers\AuditLogManager;
-    use FederationServer\Classes\Managers\FileAttachmentManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
-    use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
-    use FederationServer\Methods\CreateOperator;
-    use FederationServer\Methods\DownloadAttachment;
-    use FederationServer\Methods\UploadAttachment;
     use FederationServer\Objects\OperatorRecord;
-    use Throwable;
 
     class FederationServer extends RequestHandler
     {
@@ -36,52 +24,21 @@
                 parent::handleRequest();
 
                 // Execute the request method
-                Method::matchHandle(self::getRequestMethod(), self::getPath())->handleRequest();
 
-                switch (true)
+                $requestMethod = Method::matchHandle(self::getRequestMethod(), self::getPath());
+                if($requestMethod === null)
                 {
-                    case self::getRequestMethod() === 'POST' && self::getPath() === '/':
-                        self::errorResponse('Method Not Allowed', 405);
-                        break;
-
-                    case preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', self::getPath()):
-                        DownloadAttachment::handleRequest();
-                        break;
-
-                    case self::getRequestMethod() === 'POST' && self::getPath() === '/createOperator':
-                        CreateOperator::handleRequest();
-                        break;
-
-                    case (self::getRequestMethod() === 'POST' | self::getRequestMethod() === 'PUT') && self::getPath() === '/upload':
-                        UploadAttachment::handleRequest();
-                        break;
-
-                    default:
-                        self::errorResponse('Method Not Found', 405);
-                        break;
+                    self::errorResponse('Invalid request method or path.', 400);
                 }
+
+                // Handle the request based on the matched method.
+                $requestMethod->handleRequest();
             }
             catch (RequestException $e)
             {
                 self::throwableResponse($e);
             }
         }
-
-        /**
-         * Handle the root POST request.
-         *
-         * This method is a placeholder for handling POST requests to the root path.
-         * It can be extended to implement specific functionality as needed.
-         *
-         * @return void
-         */
-        private static function handlePost(): void
-        {
-            // Placeholder for handling POST requests to the root path.
-            // This can be extended to implement specific functionality as needed.
-            self::successResponse(['message' => 'Root POST request handled successfully.']);
-        }
-
 
         /**
          * Get a parameter from the request, checking POST, GET, and decoded JSON content.
