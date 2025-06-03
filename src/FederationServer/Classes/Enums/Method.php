@@ -13,6 +13,7 @@
     use FederationServer\Methods\Operators\DisableOperator;
     use FederationServer\Methods\Operators\EnableOperator;
     use FederationServer\Methods\Operators\GetOperator;
+    use FederationServer\Methods\Operators\GetSelfOperator;
     use FederationServer\Methods\Operators\ListOperators;
     use FederationServer\Methods\Operators\ManageBlacklistPermission;
     use FederationServer\Methods\Operators\ManageClientPermission;
@@ -26,6 +27,7 @@
 
         case LIST_OPERATORS;
         case CREATE_OPERATOR;
+        case GET_SELF_OPERATOR;
         case DELETE_OPERATOR;
         case ENABLE_OPERATOR;
         case DISABLE_OPERATOR;
@@ -85,6 +87,9 @@
                 case self::CREATE_OPERATOR:
                     CreateOperator::handleRequest();
                     break;
+                case self::GET_SELF_OPERATOR:
+                    GetSelfOperator::handleRequest();
+                    break;
                 case self::DELETE_OPERATOR:
                     DeleteOperator::handleRequest();
                     break;
@@ -132,6 +137,7 @@
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
+                $path === '/operators/self' && $requestMethod === 'GET' => Method::GET_SELF_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
