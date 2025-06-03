@@ -76,12 +76,15 @@
         }
 
         /**
-         * Retrieves all audit log entries.
+         * Retrieves audit log entries with optional pagination and filtering.
          *
-         * @return AuditLogRecord[] An array of associative arrays representing the audit log entries.
+         * @param int $limit The maximum number of entries to retrieve.
+         * @param int $page The page number for pagination.
+         * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
+         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntries(int $limit=100, int $page=1): array
+        public static function getEntries(int $limit=100, int $page=1, ?array $filterType=null): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -92,9 +95,34 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $sql = "SELECT * FROM audit_log";
+                $params = [];
+
+                if ($filterType !== null && count($filterType) > 0)
+                {
+                    foreach ($filterType as $i => $t)
+                    {
+                        if (!$t instanceof AuditLogType)
+                        {
+                            throw new InvalidArgumentException("All filterType elements must be of type AuditLogType.");
+                        }
+                        $params[":type$i"] = $t->value;
+                    }
+                    $placeholders = implode(", ", array_keys($params));
+                    $sql .= " WHERE type IN ($placeholders)";
+                }
+
+                $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+
+                foreach ($params as $key => $value)
+                {
+                    $stmt->bindValue($key, $value);
+                }
+
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -118,10 +146,11 @@
          * @param string $operator The UUID of the operator to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
+         * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
          * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1): array
+        public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1, ?array $filterType=null): array
         {
             if(strlen($operator) === 0)
             {
@@ -137,14 +166,36 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE operator = :operator ORDER BY timestamp DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':operator', $operator);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $sql = "SELECT * FROM audit_log WHERE operator = :operator";
+                $params = [':operator' => $operator];
+
+                if ($filterType !== null && count($filterType) > 0)
+                {
+                    foreach ($filterType as $i => $t)
+                    {
+                        if (!$t instanceof AuditLogType)
+                        {
+                            throw new InvalidArgumentException("All filterType elements must be of type AuditLogType.");
+                        }
+                        $params[":type$i"] = $t->value;
+                    }
+                    $placeholders = implode(", ", array_keys(array_slice($params, 1)));
+                    $sql .= " AND type IN ($placeholders)";
+                }
+
+                $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                foreach ($params as $key => $value) {
+                    $stmt->bindValue($key, $value);
+                }
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $entries = [];
+
                 foreach ($results as $row)
                 {
                     $entries[] = new AuditLogRecord($row);
@@ -164,10 +215,11 @@
          * @param string $entity The UUID of the entity to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
+         * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
          * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByEntity(string $entity, int $limit=100, int $page=1): array
+        public static function getEntriesByEntity(string $entity, int $limit=100, int $page=1, ?array $filterType=null): array
         {
             if(strlen($entity) === 0)
             {
@@ -180,13 +232,35 @@
             }
 
             $offset = ($page - 1) * $limit;
-
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE entity = :entity ORDER BY timestamp DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':entity', $entity);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $sql = "SELECT * FROM audit_log WHERE entity = :entity";
+                $params = [':entity' => $entity];
+
+                if ($filterType !== null && count($filterType) > 0)
+                {
+                    foreach ($filterType as $i => $t)
+                    {
+                        if (!$t instanceof AuditLogType)
+                        {
+                            throw new InvalidArgumentException("All filterType elements must be of type AuditLogType.");
+                        }
+
+                        $params[":type$i"] = $t->value;
+                    }
+                    $placeholders = implode(", ", array_keys(array_slice($params, 1)));
+                    $sql .= " AND type IN ($placeholders)";
+                }
+
+                $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                foreach ($params as $key => $value)
+                {
+                    $stmt->bindValue($key, $value);
+                }
+
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -201,55 +275,6 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries by entity: " . $e->getMessage(), 0, $e);
-            }
-        }
-
-        /**
-         * Retrieves audit log entries by type.
-         *
-         * @param AuditLogType[] $type The type of audit log entries to retrieve.
-         * @param int $limit The maximum number of entries to retrieve.
-         * @param int $page The page number for pagination.
-         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function getEntriesByType(array $type, int $limit=100, int $page=1): array
-        {
-            if($limit <= 0 || $page <= 0)
-            {
-                throw new InvalidArgumentException("Limit and page must be greater than zero.");
-            }
-
-            $offset = ($page - 1) * $limit;
-
-            try
-            {
-                $placeholders = rtrim(str_repeat('?,', count($type)), ',');
-                $sql = "SELECT * FROM audit_log WHERE type IN ($placeholders) ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
-                $stmt = DatabaseConnection::getConnection()->prepare($sql);
-
-                // Bind the type parameters
-                foreach ($type as $index => $t)
-                {
-                    $stmt->bindValue($index + 1, $t->value);
-                }
-
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-                $stmt->execute();
-
-                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $entries = [];
-                foreach ($results as $row)
-                {
-                    $entries[] = new AuditLogRecord($row);
-                }
-
-                return $entries;
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to retrieve audit log entries by type: " . $e->getMessage(), 0, $e);
             }
         }
 
