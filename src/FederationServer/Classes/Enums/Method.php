@@ -4,6 +4,7 @@
 
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Methods\ManageBlacklistPermission;
+    use FederationServer\Methods\ManageClientPermission;
     use FederationServer\Methods\ManageOperatorsPermission;
     use FederationServer\Methods\CreateOperator;
     use FederationServer\Methods\DeleteOperator;
@@ -22,6 +23,7 @@
         case REFRESH_OPERATOR_API_KEY;
         case MANAGE_OPERATORS_PERMISSION;
         case MANAGE_BLACKLIST_PERMISSION;
+        case MANAGE_CLIENT_PERMISSION;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
@@ -57,6 +59,9 @@
                 case self::MANAGE_BLACKLIST_PERMISSION:
                     ManageBlacklistPermission::handleRequest();
                     break;
+                case self::MANAGE_CLIENT_PERMISSION:
+                    ManageClientPermission::handleRequest();
+                    break;
 
                 case self::UPLOAD_ATTACHMENT:
                     UploadAttachment::handleRequest();
@@ -90,6 +95,7 @@
                 $requestMethod === 'POST' && $path === '/operators/refresh' => Method::REFRESH_OPERATOR_API_KEY,
                 $requestMethod === 'POST' && $path === '/operators/permissions/manage_operators' => Method::MANAGE_OPERATORS_PERMISSION,
                 $requestMethod === 'POST' && $path === '/operators/permissions/manage_blacklist' => Method::MANAGE_BLACKLIST_PERMISSION,
+                $requestMethod === 'POST' && $path === '/operators/permissions/manage_client' => Method::MANAGE_CLIENT_PERMISSION,
 
                 default => null,
             };
