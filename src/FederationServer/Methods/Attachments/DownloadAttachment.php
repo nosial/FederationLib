@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Methods;
+    namespace FederationServer\Methods\Attachments;
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EvidenceManager;

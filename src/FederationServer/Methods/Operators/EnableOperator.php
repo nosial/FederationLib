@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Methods;
+    namespace FederationServer\Methods\Operators;
 
     use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;

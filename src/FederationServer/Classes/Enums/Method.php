@@ -3,16 +3,16 @@
     namespace FederationServer\Classes\Enums;
 
     use FederationServer\Exceptions\RequestException;
-    use FederationServer\Methods\ManageBlacklistPermission;
-    use FederationServer\Methods\ManageClientPermission;
-    use FederationServer\Methods\ManageOperatorsPermission;
-    use FederationServer\Methods\CreateOperator;
-    use FederationServer\Methods\DeleteOperator;
-    use FederationServer\Methods\DownloadAttachment;
-    use FederationServer\Methods\EnableOperator;
-    use FederationServer\Methods\GetOperator;
-    use FederationServer\Methods\RefreshOperatorApiKey;
-    use FederationServer\Methods\UploadAttachment;
+    use FederationServer\Methods\Attachments\DownloadAttachment;
+    use FederationServer\Methods\Attachments\UploadAttachment;
+    use FederationServer\Methods\Operators\CreateOperator;
+    use FederationServer\Methods\Operators\DeleteOperator;
+    use FederationServer\Methods\Operators\EnableOperator;
+    use FederationServer\Methods\Operators\GetOperator;
+    use FederationServer\Methods\Operators\ManageBlacklistPermission;
+    use FederationServer\Methods\Operators\ManageClientPermission;
+    use FederationServer\Methods\Operators\ManageOperatorsPermission;
+    use FederationServer\Methods\Operators\RefreshOperatorApiKey;
 
     enum Method
     {

@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Methods;
+    namespace FederationServer\Methods\Operators;
 
     use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\OperatorManager;
@@ -10,7 +10,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class ManageBlacklistPermission extends RequestHandler
+    class ManageOperatorsPermission extends RequestHandler
     {
         /**
          * @inheritDoc
@@ -37,7 +37,7 @@
 
             try
             {
-                OperatorManager::setManageBlacklist($operatorUuid, $enabled);
+                OperatorManager::setManageOperators($operatorUuid, $enabled);
             }
             catch(DatabaseOperationException $e)
             {
