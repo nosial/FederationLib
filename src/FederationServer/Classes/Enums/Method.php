@@ -66,6 +66,7 @@
                 $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
                 $requestMethod === 'DELETE' && $path === '/operators/delete' => Method::DELETE_OPERATOR,
                 $requestMethod === 'POST' && $path === '/operators/enable' => Method::ENABLE_OPERATOR,
+
                 default => null,
             };
 
