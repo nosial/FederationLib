@@ -106,8 +106,8 @@
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
                 $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
 
-                $path === '/operators' && ($requestMethod === 'POST' || $requestMethod === 'GET') => Method::LIST_OPERATORS,
-                $path === '/operators/create' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
+                $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
+                $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
