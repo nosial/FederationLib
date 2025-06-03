@@ -10,6 +10,7 @@
     use FederationServer\Methods\Audit\ViewAuditEntry;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
+    use FederationServer\Methods\Operators\DisableOperator;
     use FederationServer\Methods\Operators\EnableOperator;
     use FederationServer\Methods\Operators\GetOperator;
     use FederationServer\Methods\Operators\ListOperators;
@@ -27,6 +28,7 @@
         case CREATE_OPERATOR;
         case DELETE_OPERATOR;
         case ENABLE_OPERATOR;
+        case DISABLE_OPERATOR;
         case GET_OPERATOR;
         case REFRESH_OPERATOR_API_KEY;
         case MANAGE_OPERATORS_PERMISSION;
@@ -89,6 +91,9 @@
                 case self::ENABLE_OPERATOR:
                     EnableOperator::handleRequest();
                     break;
+                case self::DISABLE_OPERATOR:
+                    DisableOperator::handleRequest();
+                    break;
                 case self::REFRESH_OPERATOR_API_KEY:
                     RefreshOperatorApiKey::handleRequest();
                     break;
@@ -130,6 +135,7 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/disable$#', $path) && $requestMethod === 'POST' => Method::DISABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_operators$#', $path) && $requestMethod === 'POST' => Method::MANAGE_OPERATORS_PERMISSION,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_blacklist$#', $path) && $requestMethod === 'POST' => Method::MANAGE_BLACKLIST_PERMISSION,

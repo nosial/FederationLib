@@ -11,7 +11,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class EnableOperator extends RequestHandler
+    class DisableOperator extends RequestHandler
     {
         /**
          * @inheritDoc
@@ -26,7 +26,7 @@
                 throw new RequestException('Unauthorized: Insufficient permissions to enable/disable operators', 403);
             }
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/disable$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Bad Request: Operator UUID is required', 400);
             }
@@ -45,13 +45,13 @@
                     throw new RequestException('Operator Not Found', 404);
                 }
 
-                if(!$existingOperator->isDisabled())
+                if($existingOperator->isDisabled())
                 {
                     throw new RequestException('Operator is already enabled', 400);
                 }
 
-                OperatorManager::enableOperator($operatorUuid);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_ENABLED, sprintf('Operator %s (%s) enabled by %s (%s)',
+                OperatorManager::disableOperator($operatorUuid);
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_DISABLED, sprintf('Operator %s (%s) disabled by %s (%s)',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),
                     $authenticatedOperator->getName(),
@@ -60,8 +60,8 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error(sprintf('Database error while enabling the operator: %s', $e->getMessage()), $e);
-                throw new RequestException('Internal Server Error: Unable to enable operator', 500, $e);
+                Logger::log()->error(sprintf('Database error while disablinf the operator: %s', $e->getMessage()), $e);
+                throw new RequestException('Internal Server Error: Unable to disable operator', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.
