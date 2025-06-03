@@ -18,11 +18,12 @@
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
 
-            $operatorUuid = FederationServer::getParameter('uuid');
-            if($operatorUuid !== null)
+            $operatorUuid = null;
+            if(preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', FederationServer::getPath(), $matches))
             {
-                // Ensure the authenticated operator has permission to delete operators.
-                if(!$authenticatedOperator->canManageOperators())
+                $operatorUuid = $matches[1];
+                // Ensure the authenticated operator has permission to refresh other operators' API keys.
+                if($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->canManageOperators())
                 {
                     throw new RequestException('Unauthorized: Insufficient permissions to refresh other operators API keys', 403);
                 }

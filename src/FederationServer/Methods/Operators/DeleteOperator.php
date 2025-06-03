@@ -26,20 +26,26 @@
                 throw new RequestException('Unauthorized: Insufficient permissions to delete operators', 403);
             }
 
-            if(!FederationServer::getParameter('uuid'))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID required', 400);
+            }
+
+            $operatorUuid = $matches[1];
+            if(!$operatorUuid)
+            {
+                throw new RequestException('Operator UUID required', 400);
             }
 
             try
             {
-                $existingOperator = OperatorManager::getOperator(FederationServer::getParameter('uuid'));
+                $existingOperator = OperatorManager::getOperator($operatorUuid);
                 if($existingOperator === null)
                 {
                     throw new RequestException('Operator Not Found', 404);
                 }
 
-                OperatorManager::deleteOperator(FederationServer::getParameter('uuid'));
+                OperatorManager::deleteOperator($operatorUuid);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf('Operator %s (%s) deleted by %s (%s)',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),

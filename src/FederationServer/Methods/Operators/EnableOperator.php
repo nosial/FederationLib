@@ -26,7 +26,13 @@
                 throw new RequestException('Unauthorized: Insufficient permissions to enable/disable operators', 403);
             }
 
-            if(!FederationServer::getParameter('uuid'))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', FederationServer::getPath(), $matches))
+            {
+                throw new RequestException('Bad Request: Operator UUID is required', 400);
+            }
+
+            $operatorUuid = $matches[1];
+            if(!$operatorUuid)
             {
                 throw new RequestException('Bad Request: Operator UUID is required', 400);
             }
@@ -44,7 +50,7 @@
 
             try
             {
-                $existingOperator = OperatorManager::getOperator(FederationServer::getParameter('uuid'));
+                $existingOperator = OperatorManager::getOperator($operatorUuid);
                 if($existingOperator === null)
                 {
                     throw new RequestException('Operator Not Found', 404);
@@ -52,7 +58,7 @@
 
                 if($enabled)
                 {
-                    OperatorManager::enableOperator(FederationServer::getParameter('uuid'));
+                    OperatorManager::enableOperator($operatorUuid);
                     AuditLogManager::createEntry(AuditLogType::OPERATOR_ENABLED, sprintf('Operator %s (%s) enabled by %s (%s)',
                         $existingOperator->getName(),
                         $existingOperator->getUuid(),
@@ -62,7 +68,7 @@
                 }
                 else
                 {
-                    OperatorManager::disableOperator(FederationServer::getParameter('uuid'));
+                    OperatorManager::disableOperator($operatorUuid);
                     AuditLogManager::createEntry(AuditLogType::OPERATOR_DISABLED, sprintf('Operator %s (%s) disabled by %s (%s)',
                         $existingOperator->getName(),
                         $existingOperator->getUuid(),

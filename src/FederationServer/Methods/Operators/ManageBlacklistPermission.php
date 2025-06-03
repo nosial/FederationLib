@@ -23,12 +23,13 @@
                 throw new RequestException('Unauthorized: Insufficient permissions manage permissions', 403);
             }
 
-            $operatorUuid = FederationServer::getParameter('uuid');
-            $enabled = (bool)filter_var(FederationServer::getParameter('enabled'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if($operatorUuid === null)
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_blacklist$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Bad Request: Missing required parameters', 400);
             }
+
+            $operatorUuid = $matches[1];
+            $enabled = (bool)filter_var(FederationServer::getParameter('enabled'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
             if(!Validate::uuid($operatorUuid))
             {
