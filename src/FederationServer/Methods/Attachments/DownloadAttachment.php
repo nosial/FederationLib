@@ -42,6 +42,7 @@
                 {
                     // Require authentication if confidential
                     $operator = FederationServer::getAuthenticatedOperator();
+
                     if(!$operator->canManageBlacklist())
                     {
                         throw new RequestException('Insufficient Permissions to view confidential evidence', 401);
