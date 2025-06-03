@@ -17,13 +17,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-
-            // Ensure the authenticated operator has permission to delete operators.
-            if(!$authenticatedOperator->canManageOperators())
-            {
-                throw new RequestException('Unauthorized: Insufficient permissions to get operators', 403);
-            }
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
@@ -50,7 +44,14 @@
                 throw new RequestException('Internal Server Error: Unable to get operator', 500, $e);
             }
 
-            // Respond with the UUID of the newly created operator.
-            self::successResponse($existingOperator->toArray());
+            if($authenticatedOperator?->canManageOperators())
+            {
+                // If the authenticated operator can manage operators, return the full record
+                self::successResponse($existingOperator->toArray());
+                return;
+            }
+
+            // Respond with public record if the authenticated operator cannot manage operators
+            self::successResponse($existingOperator->toPublicRecord()->toArray());
         }
     }

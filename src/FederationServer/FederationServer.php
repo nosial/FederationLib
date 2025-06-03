@@ -119,8 +119,14 @@
         /**
          * @inheritDoc
          */
-        public static function getAuthenticatedOperator(): OperatorRecord
+        public static function getAuthenticatedOperator(bool $requireAuthentication=true): ?OperatorRecord
         {
-            return parent::getAuthenticatedOperator();
+            $authenticatedOperator = parent::getAuthenticatedOperator();
+            if($requireAuthentication && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: No authenticated operator found', 401);
+            }
+
+            return $authenticatedOperator;
         }
     }

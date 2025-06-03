@@ -196,16 +196,16 @@
          * This method retrieves the API key from the request headers or query parameters,
          * validates it, and returns the corresponding OperatorRecord object if found and enabled.
          *
-         * @return OperatorRecord Returns the authenticated OperatorRecord object or null if not found or disabled.
+         * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if not found or disabled.
          * @throws RequestException If the API key is missing, invalid, or the operator is disabled.
          */
-        protected static function getAuthenticatedOperator(): OperatorRecord
+        protected static function getAuthenticatedOperator(): ?OperatorRecord
         {
             // First obtain the API key from the request headers or query parameters.
-            $apiKey = $_SERVER['HTTP_API_KEY'] ?? $_GET['api_key'] ?? null;
+            $apiKey = $_SERVER['HTTP_API_KEY'] ?? $_GET['api_key'] ?? $_POST['api_key'] ?? null;
             if (empty($apiKey))
             {
-                throw new RequestException('API key is required', 401);
+                return null;
             }
 
             if(strlen($apiKey) > 32)
