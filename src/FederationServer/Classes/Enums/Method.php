@@ -6,12 +6,14 @@
     use FederationServer\Methods\CreateOperator;
     use FederationServer\Methods\DeleteOperator;
     use FederationServer\Methods\DownloadAttachment;
+    use FederationServer\Methods\EnableOperator;
     use FederationServer\Methods\UploadAttachment;
 
     enum Method
     {
         case CREATE_OPERATOR;
         case DELETE_OPERATOR;
+        case ENABLE_OPERATOR;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
@@ -31,6 +33,9 @@
                     break;
                 case self::DELETE_OPERATOR:
                     DeleteOperator::handleRequest();
+                    break;
+                case self::ENABLE_OPERATOR:
+                    EnableOperator::handleRequest();
                     break;
 
                 case self::UPLOAD_ATTACHMENT:
@@ -54,10 +59,13 @@
             return match (true)
             {
                 $requestMethod === 'POST' && $path === '/' => null,
+
                 preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', $path) => Method::DOWNLOAD_ATTACHMENT,
-                ($requestMethod === 'POST' | $requestMethod === 'PUT') && $path === '/uploadAttachment' => Method::UPLOAD_ATTACHMENT,
-                $requestMethod === 'POST' && $path === '/createOperator' => Method::CREATE_OPERATOR,
-                $requestMethod === 'DELETE' && $path === '/deleteOperator' => Method::DELETE_OPERATOR,
+                ($requestMethod === 'POST' | $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
+
+                $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
+                $requestMethod === 'DELETE' && $path === '/operators/delete' => Method::DELETE_OPERATOR,
+                $requestMethod === 'POST' && $path === '/operators/enable' => Method::ENABLE_OPERATOR,
                 default => null,
             };
 
