@@ -3,6 +3,7 @@
     namespace FederationServer\Classes\Enums;
 
     use FederationServer\Exceptions\RequestException;
+    use FederationServer\Methods\ManageOperatorsPermission;
     use FederationServer\Methods\CreateOperator;
     use FederationServer\Methods\DeleteOperator;
     use FederationServer\Methods\DownloadAttachment;
@@ -18,6 +19,7 @@
         case ENABLE_OPERATOR;
         case GET_OPERATOR;
         case REFRESH_OPERATOR_API_KEY;
+        case MANAGE_OPERATORS_PERMISSION;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
@@ -46,6 +48,9 @@
                     break;
                 case self::REFRESH_OPERATOR_API_KEY:
                     RefreshOperatorApiKey::handleRequest();
+                    break;
+                case self::MANAGE_OPERATORS_PERMISSION:
+                    ManageOperatorsPermission::handleRequest();
                     break;
 
                 case self::UPLOAD_ATTACHMENT:
@@ -78,6 +83,7 @@
                 $requestMethod === 'GET' && $path === '/operators/get' => Method::GET_OPERATOR,
                 $requestMethod === 'POST' && $path === '/operators/enable' => Method::ENABLE_OPERATOR,
                 $requestMethod === 'POST' && $path === '/operators/refresh' => Method::REFRESH_OPERATOR_API_KEY,
+                $requestMethod === 'POST' && $path === '/operators/permissions/manage_operators' => Method::MANAGE_OPERATORS_PERMISSION,
 
                 default => null,
             };
