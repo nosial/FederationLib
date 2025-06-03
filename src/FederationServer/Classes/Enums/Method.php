@@ -16,6 +16,7 @@
 
     enum Method
     {
+        case LIST_OPERATORS;
         case CREATE_OPERATOR;
         case DELETE_OPERATOR;
         case ENABLE_OPERATOR;
@@ -38,6 +39,10 @@
         {
             switch($this)
             {
+                case self::LIST_OPERATORS:
+                    // This method does not have a dedicated handler, it is handled by the main request handler
+                    // in FederationServer::handleRequest()
+                    break;
                 case self::GET_OPERATOR:
                     GetOperator::handleRequest();
                     break;
@@ -86,8 +91,9 @@
                 $requestMethod === 'POST' && $path === '/' => null,
 
                 preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', $path) => Method::DOWNLOAD_ATTACHMENT,
-                ($requestMethod === 'POST' | $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
+                ($requestMethod === 'POST' || $requestMethod === 'PUT') && $path === '/attachment/upload' => Method::UPLOAD_ATTACHMENT,
 
+                ($requestMethod === 'POST' || $requestMethod === 'GET') && $path === '/operators' => Method::LIST_OPERATORS,
                 $requestMethod === 'POST' && $path === '/operators/create' => Method::CREATE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'POST' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
