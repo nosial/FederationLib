@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Audit;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\Managers\OperatorManager;
@@ -18,12 +19,12 @@
          */
         public static function handleRequest(): void
         {
-            $limit = (int) (FederationServer::getParameter('limit') ?? 100);
+            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
 
-            if($limit < 1)
+            if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListAuditLogsMaxItems())
             {
-                $limit = 100;
+                $limit = Configuration::getServerConfiguration()->getListAuditLogsMaxItems();
             }
 
             if($page < 1)

@@ -9,6 +9,7 @@
         private ?string $apiKey;
         private int $maxUploadSize;
         private string $storagePath;
+        private int $listAuditLogsMaxItems;
 
         /**
          * ServerConfiguration constructor.
@@ -17,11 +18,12 @@
          */
         public function __construct(array $config)
         {
-            $this->baseUrl = $config['server.base_url'] ?? 'http://127.0.0.1:6161';
-            $this->name = $config['server.name'] ?? 'Federation Server';
-            $this->apiKey = $config['server.api_key'] ?? null;
+            $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:6161';
+            $this->name = $config['name'] ?? 'Federation Server';
+            $this->apiKey = $config['api_key'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
-            $this->storagePath = $config['server.storage_path'] ?? '/var/www/uploads';
+            $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
+            $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
         }
 
         /**
@@ -72,5 +74,15 @@
         public function getStoragePath(): string
         {
             return $this->storagePath;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing audit logs.
+         *
+         * @return int The maximum number of audit log items to return.
+         */
+        public function getListAuditLogsMaxItems(): int
+        {
+            return $this->listAuditLogsMaxItems;
         }
     }
