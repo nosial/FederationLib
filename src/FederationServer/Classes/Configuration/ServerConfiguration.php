@@ -21,6 +21,7 @@
          * @var AuditLogType[]
          */
         private array $publicAuditEntries;
+        private bool $publicEvidence;
 
         /**
          * ServerConfiguration constructor.
@@ -41,6 +42,7 @@
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
+            $this->publicEvidence = $config['public_evidence'] ?? true;
         }
 
         /**
@@ -161,5 +163,15 @@
         public function getPublicAuditEntries(): array
         {
             return $this->publicAuditEntries;
+        }
+
+        /**
+         * Check if evidence is publicly accessible.
+         *
+         * @return bool True if public evidence is enabled, false otherwise.
+         */
+        public function isPublicEvidence(): bool
+        {
+            return $this->publicEvidence;
         }
     }
