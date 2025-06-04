@@ -29,6 +29,8 @@
             self::$configuration->setDefault('server.list_audit_logs_max_items', 100);
             self::$configuration->setDefault('server.list_entities_max_items', 100);
             self::$configuration->setDefault('server.list_operators_max_items', 100);
+            self::$configuration->setDefault('server.list_evidence_max_items', 100);
+            self::$configuration->setDefault('server.list_blacklist_max_items', 100);
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);

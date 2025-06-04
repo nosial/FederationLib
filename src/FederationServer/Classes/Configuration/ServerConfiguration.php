@@ -11,7 +11,9 @@
         private string $storagePath;
         private int $listAuditLogsMaxItems;
         private int $listEntitiesMaxItems;
-        private int $listOperatorsMaxItems = 100;
+        private int $listOperatorsMaxItems;
+        private int $listEvidenceMaxItems;
+        private int $listBlacklistMaxItems;
 
         /**
          * ServerConfiguration constructor.
@@ -28,6 +30,8 @@
             $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
             $this->listEntitiesMaxItems = $config['list_entities_max_items'] ?? 100;
             $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
+            $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
+            $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
         }
 
         /**
@@ -108,5 +112,25 @@
         public function getListOperatorsMaxItems(): int
         {
             return $this->listOperatorsMaxItems;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing evidence.
+         *
+         * @return int The maximum number of evidence items to return.
+         */
+        public function getListEvidenceMaxItems(): int
+        {
+            return $this->listEvidenceMaxItems;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing blacklists.
+         *
+         * @return int The maximum number of blacklist items to return.
+         */
+        public function getListBlacklistMaxItems(): int
+        {
+            return $this->listBlacklistMaxItems;
         }
     }
