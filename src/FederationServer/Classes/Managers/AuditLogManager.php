@@ -213,8 +213,10 @@
                         {
                             throw new InvalidArgumentException("All filterType elements must be of type AuditLogType.");
                         }
+
                         $params[":type$i"] = $t->value;
                     }
+
                     $placeholders = implode(", ", array_keys(array_slice($params, 1)));
                     $sql .= " AND type IN ($placeholders)";
                 }
@@ -222,9 +224,12 @@
                 $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
-                foreach ($params as $key => $value) {
+
+                foreach ($params as $key => $value)
+                {
                     $stmt->bindValue($key, $value);
                 }
+
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
