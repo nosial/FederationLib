@@ -10,6 +10,7 @@
         private int $maxUploadSize;
         private string $storagePath;
         private int $listAuditLogsMaxItems;
+        private int $listEntitiesMaxItems;
 
         /**
          * ServerConfiguration constructor.
@@ -24,6 +25,7 @@
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
             $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
             $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
+            $this->listEntitiesMaxItems = $config['list_entities_max_items'] ?? 100;
         }
 
         /**
@@ -84,5 +86,15 @@
         public function getListAuditLogsMaxItems(): int
         {
             return $this->listAuditLogsMaxItems;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing entities.
+         *
+         * @return int The maximum number of entity items to return.
+         */
+        public function getListEntitiesMaxItems(): int
+        {
+            return $this->listEntitiesMaxItems;
         }
     }

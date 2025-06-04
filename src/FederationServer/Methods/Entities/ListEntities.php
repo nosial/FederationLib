@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Entities;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -15,12 +16,12 @@
          */
         public static function handleRequest(): void
         {
-            $limit = (int) (FederationServer::getParameter('limit') ?? 100);
+            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEntitiesMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
 
-            if($limit < 1)
+            if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEntitiesMaxItems())
             {
-                $limit = 100;
+                $limit = Configuration::getServerConfiguration()->getListEntitiesMaxItems();
             }
 
             if($page < 1)
