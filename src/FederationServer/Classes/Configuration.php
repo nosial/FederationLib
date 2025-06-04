@@ -30,8 +30,6 @@
             self::$configuration->setDefault('server.list_entities_max_items', 100);
             self::$configuration->setDefault('server.list_operators_max_items', 100);
 
-            self::$configuration->setDefault('logging.log_unauthorized_requests', true);
-
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);
             self::$configuration->setDefault('database.username', 'root');
