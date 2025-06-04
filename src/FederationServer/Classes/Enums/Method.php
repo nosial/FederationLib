@@ -10,6 +10,7 @@
     use FederationServer\Methods\Audit\ViewAuditEntry;
     use FederationServer\Methods\Entities\GetEntity;
     use FederationServer\Methods\Entities\ListEntities;
+    use FederationServer\Methods\Entities\PushEntity;
     use FederationServer\Methods\Entities\QueryEntity;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;

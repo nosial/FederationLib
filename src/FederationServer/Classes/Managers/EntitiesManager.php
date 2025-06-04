@@ -8,6 +8,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Symfony\Component\Uid\Uuid;
 
     class EntitiesManager
     {
@@ -19,7 +20,7 @@
          * @throws InvalidArgumentException If the ID exceeds 255 characters or if the domain is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function registerEntity(string $id, ?string $domain=null): void
+        public static function registerEntity(string $id, ?string $domain=null): string
         {
             if(strlen($id) > 255)
             {
@@ -34,9 +35,12 @@
                 throw new InvalidArgumentException("Domain cannot exceed 255 characters.");
             }
 
+            $uuid = Uuid::v4()->toRfc4122();
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (id, domain) VALUES (:id, :domain)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, id, domain) VALUES (:uuid, :id, :domain)");
+                $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':id', $id);
                 $stmt->bindParam(':domain', $domain);
                 $stmt->execute();
@@ -45,6 +49,8 @@
             {
                 throw new DatabaseOperationException("Failed to register entity: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            return $uuid;
         }
 
         /**
@@ -128,6 +134,78 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve entity by UUID: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Checks if an entity exists by its ID and domain.
+         *
+         * @param string $id The ID of the entity.
+         * @param string|null $domain The domain of the entity, can be null.
+         * @return bool True if the entity exists, false otherwise.
+         * @throws InvalidArgumentException If the ID is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function entityExists(string $id, ?string $domain): bool
+        {
+            if(strlen($id) < 1)
+            {
+                throw new InvalidArgumentException("Entity ID must be provided.");
+            }
+
+            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+            {
+                throw new InvalidArgumentException("Invalid domain format.");
+            }
+
+            try
+            {
+                if(is_null($domain))
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE id = :id");
+                    $stmt->bindParam(':id', $id);
+                }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE id = :id AND domain = :domain");
+                    $stmt->bindParam(':id', $id);
+                    $stmt->bindParam(':domain', $domain);
+                }
+
+                $stmt->execute();
+                return (bool)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check entity existence: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Checks if an entity exists by its UUID.
+         *
+         * @param string $uuid The UUID of the entity.
+         * @return bool True if the entity exists, false otherwise.
+         * @throws InvalidArgumentException If the UUID is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function entityExistsByUuid(string $uuid): bool
+        {
+            if(strlen($uuid) < 1)
+            {
+                throw new InvalidArgumentException("Entity UUID must be provided.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+                return (bool)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check entity existence by UUID: " . $e->getMessage(), $e->getCode(), $e);
             }
         }
 

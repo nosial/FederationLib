@@ -1,0 +1,66 @@
+<?php
+
+    namespace FederationServer\Methods\Entities;
+
+    use FederationServer\Classes\Managers\EntitiesManager;
+    use FederationServer\Classes\RequestHandler;
+    use FederationServer\Exceptions\DatabaseOperationException;
+    use FederationServer\Exceptions\RequestException;
+    use FederationServer\FederationServer;
+
+    class PushEntity extends RequestHandler
+    {
+        /**
+         * @inheritDoc
+         */
+        public static function handleRequest(): void
+        {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!$authenticatedOperator->isClient() && !$authenticatedOperator->canManageOperators())
+            {
+                throw new RequestException('Unauthorized: Insufficient permissions to push entities', 403);
+            }
+
+            $id = FederationServer::getParameter('id');
+            $domain = FederationServer::getParameter('domain') ?? null;
+
+            if(!$id)
+            {
+                throw new RequestException('Bad Request: Entity ID is required', 400);
+            }
+
+            if(strlen($id) > 255)
+            {
+                throw new RequestException('Bad Request: Entity ID exceeds maximum length of 255 characters', 400);
+            }
+
+            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+            {
+                throw new RequestException('Bad Request: Invalid domain format', 400);
+            }
+
+            if(!is_null($domain) && strlen($domain) > 255)
+            {
+                throw new RequestException('Bad Request: Domain exceeds maximum length of 255 characters', 400);
+            }
+
+            try
+            {
+                if(!EntitiesManager::entityExists($id, $domain))
+                {
+                    $entityUuid = EntitiesManager::registerEntity($id, $domain);
+                }
+                else
+                {
+                    $entityUuid = EntitiesManager::getEntity($id, $domain)->getUuid();
+                }
+            }
+            catch (DatabaseOperationException $e)
+            {
+                throw new RequestException('Internal Server Error: Unable to register entity', 500, $e);
+            }
+
+            self::successResponse($entityUuid);
+        }
+    }
+
