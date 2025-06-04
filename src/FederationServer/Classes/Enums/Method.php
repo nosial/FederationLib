@@ -8,6 +8,7 @@
     use FederationServer\Methods\Attachments\UploadAttachment;
     use FederationServer\Methods\Audit\ListAuditLogs;
     use FederationServer\Methods\Audit\ViewAuditEntry;
+    use FederationServer\Methods\Entities\DeleteEntity;
     use FederationServer\Methods\Entities\GetEntity;
     use FederationServer\Methods\Entities\ListEntities;
     use FederationServer\Methods\Entities\PushEntity;
@@ -42,6 +43,7 @@
         case MANAGE_CLIENT_PERMISSION;
 
         case GET_ENTITY;
+        case DELETE_ENTITY;
         case LIST_ENTITIES;
         case QUERY_ENTITY;
         case PUSH_ENTITY;
@@ -85,6 +87,9 @@
                     break;
                 case self::GET_ENTITY:
                     GetEntity::handleRequest();
+                    break;
+                case self::DELETE_ENTITY:
+                    DeleteEntity::handleRequest();
                     break;
                 case self::PUSH_ENTITY:
                     PushEntity::handleRequest();
@@ -146,8 +151,9 @@
 
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
-                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY,
                 $path === '/entities/query' && $requestMethod === 'POST' => Method::QUERY_ENTITY,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
