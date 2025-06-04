@@ -106,32 +106,79 @@
                 throw new DatabaseOperationException("Failed to retrieve evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
         }
+        
+        /**
+         * Retrieves all evidence records from the database.
+         *
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
+         * @return EvidenceRecord[] An array of EvidenceRecord objects.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEvidenceRecords(int $limit=100, int $page=1, bool $includeConfidential=false): array
+        {
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $query = "SELECT * FROM evidence";
+                if(!$includeConfidential)
+                {
+                    $query .= " WHERE confidential = 0";
+                }
+                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($query);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $evidenceRecords = [];
+                foreach ($results as $data)
+                {
+                    $evidenceRecords[] = new EvidenceRecord($data);
+                }
+
+                return $evidenceRecords;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
 
         /**
          * Retrieves all evidence records associated with a specific operator.
          *
          * @param string $entity The UUID of the entity.
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
          * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
          * @return EvidenceRecord[] An array of EvidenceRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEvidenceByEntity(string $entity, bool $includeConfidential=false): array
+        public static function getEvidenceByEntity(string $entity, int $limit=100, int $page=1, bool $includeConfidential=false): array
         {
             if(strlen($entity) < 1)
             {
                 throw new InvalidArgumentException('Entity must be provided.');
             }
-
+            
             try
             {
+                $offset = ($page - 1) * $limit;
                 $query = "SELECT * FROM evidence WHERE entity = :entity";
                 if(!$includeConfidential)
                 {
                     $query .= " AND confidential = 0";
                 }
+                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':entity', $entity);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -153,12 +200,14 @@
          * Retrieves all evidence records associated with a specific operator.
          *
          * @param string $operator The UUID of the operator.
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
          * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
          * @return EvidenceRecord[] An array of EvidenceRecord objects.
          * @throws InvalidArgumentException If the operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEvidenceByOperator(string $operator, bool $includeConfidential=false): array
+        public static function getEvidenceByOperator(string $operator, int $limit=100, int $page=1, bool $includeConfidential=false): array
         {
             if(strlen($operator) < 1)
             {
@@ -167,14 +216,18 @@
 
             try
             {
+                $offset = ($page - 1) * $limit;
                 $query = "SELECT * FROM evidence WHERE operator = :operator";
                 if(!$includeConfidential)
                 {
                     $query .= " AND confidential = 0";
                 }
+                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':operator', $operator);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -192,6 +245,14 @@
             }
         }
 
+        /**
+         * Checks if an evidence record exists by its UUID.
+         *
+         * @param string $uuid The UUID of the evidence record to check.
+         * @return bool True if the evidence exists, false otherwise.
+         * @throws InvalidArgumentException If the UUID is not provided or is empty.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
         public static function evidenceExists(string $uuid): bool
         {
             if(strlen($uuid) < 1)
