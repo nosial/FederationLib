@@ -48,6 +48,18 @@
         case QUERY_ENTITY;
         case PUSH_ENTITY;
 
+        case LIST_EVIDENCE;
+        case ADD_EVIDENCE;
+        case GET_EVIDENCE;
+        case DELETE_EVIDENCE;
+
+        case LIST_BLACKLIST;
+        case CREATE_BLACKLIST;
+        case DELETE_BLACKLIST;
+        case LIFT_BLACKLIST;
+        case ATTACH_EVIDENCE;
+        case GET_BLACKLIST;
+
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
         case DELETE_ATTACHMENT;
@@ -128,6 +140,36 @@
                 case self::MANAGE_CLIENT_PERMISSION:
                     ManageClientPermission::handleRequest();
                     break;
+
+                case self::LIST_EVIDENCE:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::ADD_EVIDENCE:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::GET_EVIDENCE:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::DELETE_EVIDENCE:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::LIST_BLACKLIST:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::CREATE_BLACKLIST:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::DELETE_BLACKLIST:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::LIFT_BLACKLIST:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::ATTACH_EVIDENCE:
+                    throw new \Exception('To be implemented');
+                    break;
+                case self::GET_BLACKLIST:
+                    throw new \Exception('To be implemented');
             }
         }
 
@@ -154,6 +196,18 @@
                 $path === '/entities/query' && $requestMethod === 'POST' => Method::QUERY_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
+
+                $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
+                $path === '/blacklist' && $requestMethod === 'POST' => Method::CREATE_BLACKLIST,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/lift$#', $path) && $requestMethod === 'POST' => Method::LIFT_BLACKLIST,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/attach_evidence$#', $path) && $requestMethod === 'POST' => Method::ATTACH_EVIDENCE,
+
+                $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
+                $path === '/evidence' && $requestMethod === 'POST' => Method::ADD_EVIDENCE,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
