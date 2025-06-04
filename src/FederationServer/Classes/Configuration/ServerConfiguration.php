@@ -40,8 +40,7 @@
             $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
-            $publicAuditEntries = $config['public_audit_entries'] ?? [];
-            $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $publicAuditEntries);
+            $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
         }
 
         /**
