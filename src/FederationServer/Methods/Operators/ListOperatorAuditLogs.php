@@ -69,24 +69,9 @@
                     throw new RequestException('Not Found: Operator with the specified UUID does not exist', 404);
                 }
 
-                $auditLogs = AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries);
-                foreach($auditLogs as $logRecord)
-                {
-                    $operatorRecord = null;
-                    $entityRecord = null;
-
-                    if($logRecord->getOperator() !== null)
-                    {
-                        $operatorRecord = OperatorManager::getOperator($logRecord->getOperator());
-                    }
-
-                    if($logRecord->getEntity() !== null)
-                    {
-                        $entityRecord = EntitiesManager::getEntityByUuid($logRecord->getEntity());
-                    }
-
-                    $results[] = new PublicAuditRecord($logRecord, $operatorRecord, $entityRecord);
-                }
+                $results = array_map(fn($log) => AuditLogManager::toPublicAuditRecord($log),
+                    AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries)
+                );
             }
             catch (DatabaseOperationException $e)
             {

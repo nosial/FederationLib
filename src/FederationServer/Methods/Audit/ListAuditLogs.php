@@ -51,27 +51,11 @@
                 $filteredEntries = null;
             }
 
-
             try
             {
-                $auditLogs = AuditLogManager::getEntries($limit, $page, $filteredEntries);
-                foreach($auditLogs as $logRecord)
-                {
-                    $operatorRecord = null;
-                    $entityRecord = null;
-
-                    if($logRecord->getOperator() !== null)
-                    {
-                        $operatorRecord = OperatorManager::getOperator($logRecord->getOperator());
-                    }
-
-                    if($logRecord->getEntity() !== null)
-                    {
-                        $entityRecord = EntitiesManager::getEntityByUuid($logRecord->getEntity());
-                    }
-
-                    $results[] = new PublicAuditRecord($logRecord, $operatorRecord, $entityRecord);
-                }
+                $results = array_map(fn($log) => AuditLogManager::toPublicAuditRecord($log),
+                    AuditLogManager::getEntries($limit, $page, $filteredEntries)
+                );
             }
             catch (DatabaseOperationException $e)
             {
