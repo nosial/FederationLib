@@ -38,14 +38,14 @@
 
             try
             {
-                $operators = EvidenceManager::getEvidenceRecords($limit, $page);
+                $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page);
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve operators', 500, $e);
+                throw new RequestException('Internal Server Error: Unable to retrieve evidence', 500, $e);
             }
 
-            $result = array_map(fn($op) => $op->toArray(), $operators);
+            $result = array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords);
             self::successResponse($result);
         }
     }
