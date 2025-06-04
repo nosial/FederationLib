@@ -19,9 +19,6 @@
 
     class UploadAttachment extends RequestHandler
     {
-        // Maximum number of files allowed in the storage directory
-        private const MAX_FILES = 10000;
-
         /**
          * @inheritDoc
          * @throws RequestException
@@ -87,8 +84,7 @@
             // Validate file upload status
             if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
             {
-                $errorMessage = self::getUploadErrorMessage($file['error'] ?? -1);
-                throw new RequestException($errorMessage);
+                throw new RequestException(self::getUploadErrorMessage($file['error'] ?? -1), 400);
             }
 
             // Validate file exists and is readable
@@ -103,7 +99,7 @@
             // Check for symlinks/hardlinks in tmp_name
             if (is_link($file['tmp_name']))
             {
-                throw new RequestException('Invalid file upload (symbolic link detected)');
+                throw new RequestException('Invalid file upload (symbolic link detected)', 400);
             }
 
             // Additional check for path traversal attempts
@@ -119,21 +115,14 @@
             {
                 if (!mkdir($storagePath, 0750, true))
                 {
-                    throw new RequestException('Storage directory could not be created');
+                    throw new RequestException('Storage directory could not be created', 500);
                 }
             }
 
             // Verify storage directory permissions
             if (!is_writable($storagePath))
             {
-                throw new RequestException('Storage directory is not writable');
-            }
-
-            // Limit number of files in storage directory (prevent DoS)
-            $fileCount = iterator_count(new FilesystemIterator($storagePath, FilesystemIterator::SKIP_DOTS));
-            if ($fileCount >= self::MAX_FILES)
-            {
-                throw new RequestException('Storage limit reached');
+                throw new RequestException('Storage directory is not writable', 500);
             }
 
             // Generate a strong random UUID for the file
@@ -147,7 +136,7 @@
 
             if (!move_uploaded_file($file['tmp_name'], $tempDestination))
             {
-                throw new RequestException('Failed to move uploaded file');
+                throw new RequestException('Failed to move uploaded file', 500);
             }
 
             try
@@ -158,7 +147,7 @@
                 // Move to final destination
                 if (!rename($tempDestination, $destinationPath))
                 {
-                    throw new RequestException('Failed to finalize file upload');
+                    throw new RequestException('Failed to finalize file upload', 500);
                 }
 
                 // Create a record in the database
