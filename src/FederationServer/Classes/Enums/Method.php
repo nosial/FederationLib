@@ -153,6 +153,7 @@
                 case self::DELETE_EVIDENCE:
                     throw new \Exception('To be implemented');
                     break;
+
                 case self::LIST_BLACKLIST:
                     throw new \Exception('To be implemented');
                     break;
