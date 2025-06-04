@@ -19,6 +19,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            if(!Configuration::getServerConfiguration()->isPublicAuditLogs() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+            }
+
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
 
@@ -34,9 +40,21 @@
 
             $results = [];
 
+            if($authenticatedOperator === null)
+            {
+                // Public audit logs are enabled, filter by public entries
+                $filteredEntries = Configuration::getServerConfiguration()->getPublicAuditEntries();
+            }
+            else
+            {
+                // If an operator is authenticated, we can retrieve all entries
+                $filteredEntries = null;
+            }
+
+
             try
             {
-                $auditLogs = AuditLogManager::getEntries($limit, $page);
+                $auditLogs = AuditLogManager::getEntries($limit, $page, $filteredEntries);
                 foreach($auditLogs as $logRecord)
                 {
                     $operatorRecord = null;

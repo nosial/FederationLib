@@ -2,6 +2,8 @@
 
     namespace FederationServer\Classes\Configuration;
 
+    use FederationServer\Classes\Enums\AuditLogType;
+
     class ServerConfiguration
     {
         private string $baseUrl;
@@ -14,6 +16,11 @@
         private int $listOperatorsMaxItems;
         private int $listEvidenceMaxItems;
         private int $listBlacklistMaxItems;
+        private bool $publicAuditLogs;
+        /**
+         * @var AuditLogType[]
+         */
+        private array $publicAuditEntries;
 
         /**
          * ServerConfiguration constructor.
@@ -32,6 +39,9 @@
             $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
             $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
+            $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
+            $publicAuditEntries = $config['public_audit_entries'] ?? [];
+            $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $publicAuditEntries);
         }
 
         /**
@@ -132,5 +142,25 @@
         public function getListBlacklistMaxItems(): int
         {
             return $this->listBlacklistMaxItems;
+        }
+
+        /**
+         * Check if audit logs are publicly accessible.
+         *
+         * @return bool True if public audit logs are enabled, false otherwise.
+         */
+        public function isPublicAuditLogs(): bool
+        {
+            return $this->publicAuditLogs;
+        }
+
+        /**
+         * Get the list of public audit entries.
+         *
+         * @return AuditLogType[] The list of public audit entries.
+         */
+        public function getPublicAuditEntries(): array
+        {
+            return $this->publicAuditEntries;
         }
     }
