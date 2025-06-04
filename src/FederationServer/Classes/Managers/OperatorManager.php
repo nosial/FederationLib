@@ -89,6 +89,27 @@
             }
         }
 
+        public static function operatorExists(string $uuid): bool
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty.');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM operators WHERE uuid=:uuid");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+
+                return $stmt->fetchColumn() > 0; // Returns true if operator exists, false otherwise
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException(sprintf("Failed to check existence of operator with UUID '%s'", $uuid), 0, $e);
+            }
+        }
+
         /**
          * Retrieve an operator by their API key.
          *

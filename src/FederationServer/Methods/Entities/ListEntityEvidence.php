@@ -1,16 +1,16 @@
 <?php
 
-    namespace FederationServer\Methods\Evidence;
+    namespace FederationServer\Methods\Entities;
 
     use FederationServer\Classes\Configuration;
+    use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\Managers\EvidenceManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class ListEvidence extends RequestHandler
+    class ListEntityEvidence extends RequestHandler
     {
         /**
          * @inheritDoc
@@ -32,7 +32,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
-
+            
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEvidenceMaxItems())
             {
                 $limit = Configuration::getServerConfiguration()->getListEvidenceMaxItems();
@@ -43,8 +43,26 @@
                 $page = 1;
             }
 
+
+            if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches))
+            {
+                throw new RequestException('Bad Request: Entity UUID is required', 400);
+            }
+
+            $entityUuid = $matches[1];
+            if(!$entityUuid)
+            {
+                throw new RequestException('Bad Request: Entity UUID is required', 400);
+            }
+
             try
             {
+                $existingEntity = EntitiesManager::getEntityByUuid($entityUuid);
+                if($existingEntity === null)
+                {
+                    throw new RequestException('Entity Not Found', 404);
+                }
+                
                 $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page, $includeConfidential);
             }
             catch (DatabaseOperationException $e)

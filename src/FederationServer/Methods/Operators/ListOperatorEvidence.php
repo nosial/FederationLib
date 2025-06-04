@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Methods\Evidence;
+    namespace FederationServer\Methods\Operators;
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EvidenceManager;
@@ -10,7 +10,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class ListEvidence extends RequestHandler
+    class ListOperatorEvidence extends RequestHandler
     {
         /**
          * @inheritDoc
@@ -18,7 +18,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
-            $includeConfidential = false;
+            $listConfidential = false;
 
             if(!Configuration::getServerConfiguration()->isPublicEvidence() && $authenticatedOperator === null)
             {
@@ -27,12 +27,12 @@
 
             if($authenticatedOperator !== null)
             {
-                $includeConfidential = true;
+                $listConfidential = true;
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
-
+            
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEvidenceMaxItems())
             {
                 $limit = Configuration::getServerConfiguration()->getListEvidenceMaxItems();
@@ -43,9 +43,26 @@
                 $page = 1;
             }
 
+
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches))
+            {
+                throw new RequestException('Bad Request: Operator UUID is required', 400);
+            }
+
+            $operatorUuid = $matches[1];
+            if(!$operatorUuid)
+            {
+                throw new RequestException('Bad Request: Operator UUID is required', 400);
+            }
+
             try
             {
-                $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page, $includeConfidential);
+                if(!OperatorManager::operatorExists($operatorUuid))
+                {
+                    throw new RequestException('Operator Not Found', 404);
+                }
+
+                $evidenceRecords = EvidenceManager::getEvidenceByOperator($operatorUuid, $limit, $page, $listConfidential);
             }
             catch (DatabaseOperationException $e)
             {
