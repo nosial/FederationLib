@@ -11,6 +11,7 @@
         private string $storagePath;
         private int $listAuditLogsMaxItems;
         private int $listEntitiesMaxItems;
+        private int $listOperatorsMaxItems = 100;
 
         /**
          * ServerConfiguration constructor.
@@ -26,6 +27,7 @@
             $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
             $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
             $this->listEntitiesMaxItems = $config['list_entities_max_items'] ?? 100;
+            $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
         }
 
         /**
@@ -96,5 +98,15 @@
         public function getListEntitiesMaxItems(): int
         {
             return $this->listEntitiesMaxItems;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing operators.
+         *
+         * @return int The maximum number of operator items to return.
+         */
+        public function getListOperatorsMaxItems(): int
+        {
+            return $this->listOperatorsMaxItems;
         }
     }

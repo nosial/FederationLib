@@ -28,6 +28,7 @@
             self::$configuration->setDefault('server.storage_path', '/var/www/uploads');
             self::$configuration->setDefault('server.list_audit_logs_max_items', 100);
             self::$configuration->setDefault('server.list_entities_max_items', 100);
+            self::$configuration->setDefault('server.list_operators_max_items', 100);
 
             self::$configuration->setDefault('logging.log_unauthorized_requests', true);
 

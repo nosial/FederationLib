@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Operators;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -21,12 +22,12 @@
                 throw new RequestException('Unauthorized: Insufficient permissions to list operators', 403);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? 100);
+            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
 
-            if($limit < 1)
+            if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListOperatorsMaxItems())
             {
-                $limit = 100;
+                $limit = Configuration::getServerConfiguration()->getListOperatorsMaxItems();
             }
 
             if($page < 1)
