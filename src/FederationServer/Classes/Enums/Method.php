@@ -15,6 +15,9 @@
     use FederationServer\Methods\Entities\ListEntityEvidence;
     use FederationServer\Methods\Entities\PushEntity;
     use FederationServer\Methods\Entities\QueryEntity;
+    use FederationServer\Methods\Evidence\CreateEvidence;
+    use FederationServer\Methods\Evidence\DeleteEvidence;
+    use FederationServer\Methods\Evidence\GetEvidence;
     use FederationServer\Methods\Evidence\ListEvidence;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
@@ -58,7 +61,7 @@
         case LIST_ENTITY_AUDIT_LOGS;
 
         case LIST_EVIDENCE;
-        case ADD_EVIDENCE;
+        case CREATE_EVIDENCE;
         case GET_EVIDENCE;
         case DELETE_EVIDENCE;
 
@@ -165,14 +168,14 @@
                 case self::LIST_EVIDENCE:
                     ListEvidence::handleRequest();
                     break;
-                case self::ADD_EVIDENCE:
-                    throw new \Exception('To be implemented');
+                case self::CREATE_EVIDENCE:
+                    CreateEvidence::handleRequest();
                     break;
                 case self::GET_EVIDENCE:
-                    throw new \Exception('To be implemented');
+                    GetEvidence::handleRequest();;
                     break;
                 case self::DELETE_EVIDENCE:
-                    throw new \Exception('To be implemented');
+                    DeleteEvidence::handleRequest();
                     break;
 
                 case self::LIST_BLACKLIST:
@@ -229,7 +232,7 @@
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/attach_evidence$#', $path) && $requestMethod === 'POST' => Method::ATTACH_EVIDENCE,
 
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
-                $path === '/evidence' && $requestMethod === 'POST' => Method::ADD_EVIDENCE,
+                $path === '/evidence' && $requestMethod === 'POST' => Method::CREATE_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
 
