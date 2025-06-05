@@ -175,6 +175,39 @@
         }
 
         /**
+         * Returns an array of blacklist records in a pagination style for the global database
+         *
+         * @param int $limit The total amount of records to return in this database query
+         * @param int $page The current page, must start from 1.
+         * @return BlacklistRecord[] An array of blacklist records as the result
+         * @throws DatabaseOperationException Thrown if there was a database issue
+         */
+        public static function getEntries(int $limit=100, int $page=1): array
+        {
+            if($limit <= 0 || $page <= 0)
+            {
+                throw new InvalidArgumentException("Limit and page must be greater than zero.");
+            }
+
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                return array_map(fn($data) => new BlacklistRecord($data), $results);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve blacklist entries by operator: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
          * Retrieves all blacklist entries for a specific entity.
          *
          * @param string $operator The UUID of the operator to filter by.
