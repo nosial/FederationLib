@@ -8,7 +8,6 @@
     class EvidenceRecord implements SerializableInterface
     {
         private string $uuid;
-        private ?string $blacklist;
         private string $entity;
         private string $operator;
         private bool $confidential;
@@ -24,7 +23,6 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->blacklist = $data['blacklist'] ?? null;
             $this->entity = $data['entity'] ?? '';
             $this->operator = $data['operator'] ?? '';
             $this->confidential = (bool)$data['confidential'] ?? false;
@@ -41,16 +39,6 @@
         public function getUuid(): string
         {
             return $this->uuid;
-        }
-
-        /**
-         * Get the blacklist value.
-         *
-         * @return string|null
-         */
-        public function getBlacklist(): ?string
-        {
-            return $this->blacklist;
         }
 
         /**
@@ -121,7 +109,6 @@
         {
             return [
                 'uuid' => $this->uuid,
-                'blacklist' => $this->blacklist,
                 'entity' => $this->entity,
                 'operator' => $this->operator,
                 'confidential' => $this->confidential,
