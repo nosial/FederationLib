@@ -35,6 +35,7 @@
             self::$configuration->setDefault('server.public_audit_logs', true);
             self::$configuration->setDefault('server.public_audit_entries', array_map(fn($type) => $type->value, AuditLogType::cases()));
             self::$configuration->setDefault('server.public_evidence', true);
+            self::$configuration->setDefault('server.public_blacklist', true);
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
             self::$configuration->setDefault('database.port', 3306);
