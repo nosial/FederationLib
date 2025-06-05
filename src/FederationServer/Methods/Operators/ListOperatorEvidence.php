@@ -20,7 +20,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
             $listConfidential = false;
 
-            if(!Configuration::getServerConfiguration()->isPublicEvidence() && $authenticatedOperator === null)
+            if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('Unauthorized: You must be authenticated to list evidence', 401);
             }
