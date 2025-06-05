@@ -16,6 +16,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!$authenticatedOperator->canManageBlacklist())
+            {
+                throw new RequestException('Unauthorized: Insufficient permissions to manage entities', 401);
+            }
+
             if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Bad Request: Entity UUID is required', 400);
