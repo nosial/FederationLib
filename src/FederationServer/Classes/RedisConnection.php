@@ -3,8 +3,6 @@
     namespace FederationServer\Classes;
 
     use Redis;
-    use FederationServer\Classes\Configuration;
-    use FederationServer\Classes\Configuration\RedisConfiguration;
     use RedisException;
 
     class RedisConnection
