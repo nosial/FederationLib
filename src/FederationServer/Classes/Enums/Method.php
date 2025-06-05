@@ -12,6 +12,7 @@
     use FederationServer\Methods\Entities\GetEntity;
     use FederationServer\Methods\Entities\ListEntities;
     use FederationServer\Methods\Entities\ListEntityAuditLogs;
+    use FederationServer\Methods\Entities\ListEntityBlacklist;
     use FederationServer\Methods\Entities\ListEntityEvidence;
     use FederationServer\Methods\Entities\PushEntity;
     use FederationServer\Methods\Entities\QueryEntity;
@@ -26,6 +27,7 @@
     use FederationServer\Methods\Operators\GetOperator;
     use FederationServer\Methods\Operators\GetSelfOperator;
     use FederationServer\Methods\Operators\ListOperatorAuditLogs;
+    use FederationServer\Methods\Operators\ListOperatorBlacklist;
     use FederationServer\Methods\Operators\ListOperatorEvidence;
     use FederationServer\Methods\Operators\ListOperators;
     use FederationServer\Methods\Operators\ManageBlacklistPermission;
@@ -51,6 +53,7 @@
         case MANAGE_CLIENT_PERMISSION;
         case LIST_OPERATOR_EVIDENCE;
         case LIST_OPERATOR_AUDIT_LOGS;
+        case LIST_OPERATOR_BLACKLIST;
 
         case GET_ENTITY;
         case DELETE_ENTITY;
@@ -59,6 +62,7 @@
         case PUSH_ENTITY;
         case LIST_ENTITY_EVIDENCE;
         case LIST_ENTITY_AUDIT_LOGS;
+        case LIST_ENTITY_BLACKLIST;
 
         case LIST_EVIDENCE;
         case CREATE_EVIDENCE;
@@ -124,6 +128,9 @@
                 case self::LIST_ENTITY_AUDIT_LOGS:
                     ListEntityAuditLogs::handleRequest();
                     break;
+                case self::LIST_ENTITY_BLACKLIST:
+                    ListEntityBlacklist::handleRequest();
+                    break;
 
                 case self::LIST_OPERATORS:
                     ListOperators::handleRequest();
@@ -163,6 +170,9 @@
                     break;
                 case self::LIST_OPERATOR_AUDIT_LOGS:
                     ListOperatorAuditLogs::handleRequest();
+                    break;
+                case self::LIST_OPERATOR_BLACKLIST:
+                    ListOperatorBlacklist::handleRequest();
                     break;
 
                 case self::LIST_EVIDENCE:
@@ -223,6 +233,7 @@
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST,
 
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
                 $path === '/blacklist' && $requestMethod === 'POST' => Method::CREATE_BLACKLIST,
@@ -249,6 +260,7 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_client$#', $path) && $requestMethod === 'POST' => Method::MANAGE_CLIENT_PERMISSION,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_EVIDENCE,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_AUDIT_LOGS,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_BLACKLIST,
 
                 default => null,
             };
