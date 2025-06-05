@@ -11,6 +11,7 @@
         private string $uuid;
         private string $operator;
         private string $entity;
+        private ?string $evidence;
         private BlacklistType $type;
         private ?int $expires;
         private int $created;
@@ -22,6 +23,7 @@
          *                    - 'uuid': string, Unique identifier for the blacklist record.
          *                    - 'operator': string, UUID of the operator who created the record.
          *                    - 'entity': string, Entity being blacklisted (e.g., IP address, domain).
+         *                    - 'entity': string, Entity being blacklisted (e.g., IP address, domain).
          *                    - 'type': BlacklistType, Type of blacklist (e.g., IP, domain).
          *                    - 'expires': int|null, Timestamp when the blacklist expires, null if permanent.
          *                    - 'created': int, Timestamp when the record was created.
@@ -31,6 +33,7 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->operator = $data['operator'] ?? '';
             $this->entity = $data['entity'] ?? '';
+            $this->evidence = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             $this->expires = isset($data['expires']) ? (int)$data['expires'] : null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
@@ -64,6 +67,19 @@
         public function getEntity(): string
         {
             return $this->entity;
+        }
+
+        /**
+         * Get the evidence UUID associated with the blacklist record, if any.
+         *
+         * @return string|null The UUID of the evidence, or null if not applicable.
+         */
+        /**
+         * @return string|null
+         */
+        public function getEvidence(): ?string
+        {
+            return $this->evidence;
         }
 
         /**
@@ -105,6 +121,7 @@
                 'uuid' => $this->uuid,
                 'operator' => $this->operator,
                 'entity' => $this->entity,
+                'evidence' => $this->evidence,
                 'type' => $this->type->value,
                 'created' => $this->created,
             ];
