@@ -8,6 +8,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Symfony\Component\Uid\UuidV4;
 
     class EvidenceManager
     {
@@ -16,27 +17,29 @@
          *
          * @param string $entity The UUID of the entity associated with the evidence.
          * @param string $operator The UUID of the operator associated with the evidence.
-         * @param string|null $blacklist Optional blacklist value, can be null.
          * @param string|null $textContent Optional text content, can be null.
          * @param string|null $note Optional note, can be null.
          * @param bool $confidential Whether the evidence is confidential (default is false).
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @return string The UUID of the newly created evidence record.
          */
-        public static function addEvidence(string $entity, string $operator, ?string $blacklist=null, ?string $textContent=null, ?string $note=null, bool $confidential=false): void
+        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, bool $confidential=false): string
         {
             if(strlen($entity) < 1 || strlen($operator) < 1)
             {
                 throw new InvalidArgumentException('Entity and operator must be provided.');
             }
 
+            $uuid = UuidV4::v4()->toRfc4122();
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence (entity, operator, confidential, blacklist, text_content, note) VALUES (:entity, :operator, :confidential, :blacklist, :text_content, :note)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence (uuid, entity, operator, confidential, text_content, note) VALUES (:uuid, :entity, :operator, :confidential, :text_content, :note)");
+                $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
                 $stmt->bindParam(':confidential', $confidential);
-                $stmt->bindParam(':blacklist', $blacklist);
                 $stmt->bindParam(':text_content', $textContent);
                 $stmt->bindParam(':note', $note);
                 $stmt->execute();
@@ -45,6 +48,8 @@
             {
                 throw new DatabaseOperationException("Failed to add evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            return $uuid;
         }
 
         /**
