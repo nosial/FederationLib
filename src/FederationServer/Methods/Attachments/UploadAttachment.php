@@ -13,7 +13,6 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
-    use FilesystemIterator;
     use Symfony\Component\Uid\Uuid;
     use Throwable;
 
