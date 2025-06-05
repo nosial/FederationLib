@@ -22,6 +22,7 @@
          */
         private array $publicAuditEntries;
         private bool $publicEvidence;
+        private bool $publicBlacklist;
 
         /**
          * ServerConfiguration constructor.
@@ -43,6 +44,7 @@
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
+            $this->publicBlacklist = $config['public_blacklist'] ?? true;
         }
 
         /**
@@ -150,7 +152,7 @@
          *
          * @return bool True if public audit logs are enabled, false otherwise.
          */
-        public function isPublicAuditLogs(): bool
+        public function isAuditLogsPublic(): bool
         {
             return $this->publicAuditLogs;
         }
@@ -170,8 +172,18 @@
          *
          * @return bool True if public evidence is enabled, false otherwise.
          */
-        public function isPublicEvidence(): bool
+        public function isEvidencePublic(): bool
         {
             return $this->publicEvidence;
+        }
+
+        /**
+         * Checks if blacklist records is publicly accessible
+         *
+         * @return bool True if public blacklist is enabled, false otherwise
+         */
+        public function isBlacklistPublic(): bool
+        {
+            return $this->publicBlacklist;
         }
     }
