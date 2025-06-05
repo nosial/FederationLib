@@ -4,7 +4,6 @@
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EvidenceManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
