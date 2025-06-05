@@ -87,6 +87,34 @@
         }
 
         /**
+         * Checks if a blacklist entry exists for a specific UUID.
+         *
+         * @param string $uuid The UUID of the blacklist entry.
+         * @return bool True if the blacklist entry exists, false otherwise.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function blacklistExists(string $uuid): bool
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException("UUID cannot be empty.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+                return $stmt->fetchColumn() > 0;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check if blacklist exists: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
          * Retrieves a blacklist entry by its UUID.
          *
          * @param string $uuid The UUID of the blacklist entry.
