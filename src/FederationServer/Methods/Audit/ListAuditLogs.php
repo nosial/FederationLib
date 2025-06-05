@@ -4,13 +4,10 @@
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\AuditLogManager;
-    use FederationServer\Classes\Managers\EntitiesManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
-    use FederationServer\Objects\PublicAuditRecord;
 
     class ListAuditLogs extends RequestHandler
     {
