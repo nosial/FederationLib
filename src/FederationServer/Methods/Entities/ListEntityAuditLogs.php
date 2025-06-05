@@ -67,16 +67,14 @@
                     throw new RequestException('Not Found: Entity with the specified UUID does not exist', 404);
                 }
 
-                $results = array_map(fn($log) => AuditLogManager::toPublicAuditRecord($log),
-                    AuditLogManager::getEntriesByEntity($entityUuid, $limit, $page, $filteredEntries)
+                self::successResponse(array_map(fn($log) => $log->toArray(),
+                    AuditLogManager::getEntriesByEntity($entityUuid, $limit, $page, $filteredEntries))
                 );
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Internal Server Error: Unable to retrieve audit logs', 500, $e);
             }
-
-            self::successResponse(array_map(fn($log) => $log->toArray(), $results));
         }
     }
 

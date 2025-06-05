@@ -50,8 +50,8 @@
 
             try
             {
-                $results = array_map(fn($log) => AuditLogManager::toPublicAuditRecord($log),
-                    AuditLogManager::getEntries($limit, $page, $filteredEntries)
+                self::successResponse(array_map(fn($log) => $log->toArray(),
+                    AuditLogManager::getEntries($limit, $page, $filteredEntries))
                 );
             }
             catch (DatabaseOperationException $e)
@@ -59,7 +59,6 @@
                 throw new RequestException('Internal Server Error: Unable to retrieve audit logs', 500, $e);
             }
 
-            self::successResponse(array_map(fn($log) => $log->toArray(), $results));
         }
     }
 

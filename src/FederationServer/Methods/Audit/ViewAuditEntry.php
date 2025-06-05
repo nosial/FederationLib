@@ -3,14 +3,11 @@
     namespace FederationServer\Methods\Audit;
 
     use FederationServer\Classes\Managers\AuditLogManager;
-    use FederationServer\Classes\Managers\EntitiesManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
-    use FederationServer\Objects\PublicAuditRecord;
 
     class ViewAuditEntry extends RequestHandler
     {
@@ -38,27 +35,12 @@
                     throw new RequestException('Audit log not found', 404);
                 }
 
-                $operatorRecord = null;
-                $entityRecord = null;
-
-                if($logRecord->getOperator() !== null)
-                {
-                    $operatorRecord = OperatorManager::getOperator($logRecord->getOperator());
-                }
-
-                if($logRecord->getEntity() !== null)
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($logRecord->getEntity());
-                }
-
-                $result = new PublicAuditRecord($logRecord, $operatorRecord, $entityRecord);
+                self::successResponse($logRecord->toArray());
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Internal Server Error: Unable to retrieve audit log', 500, $e);
             }
-
-            self::successResponse($result->toArray());
         }
     }
 

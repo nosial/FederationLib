@@ -8,7 +8,6 @@
     use FederationServer\Classes\Logger;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\AuditLogRecord;
-    use FederationServer\Objects\PublicAuditRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
@@ -317,31 +316,6 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries by entity: " . $e->getMessage(), 0, $e);
             }
-        }
-
-        /**
-         * Converts an AuditLogRecord to a PublicAuditRecord.
-         *
-         * @param AuditLogRecord $record The AuditLogRecord to convert.
-         * @return PublicAuditRecord The converted PublicAuditRecord.
-         * @throws DatabaseOperationException Thrown if there was a database error while transforming the record.
-         */
-        public static function toPublicAuditRecord(AuditLogRecord $record): PublicAuditRecord
-        {
-            $operatorRecord = null;
-            $entityRecord = null;
-
-            if($record->getOperator() !== null)
-            {
-                $operatorRecord = OperatorManager::getOperator($record->getOperator());
-            }
-
-            if($record->getEntity() !== null)
-            {
-                $entityRecord = EntitiesManager::getEntityByUuid($record->getEntity());
-            }
-
-            return new PublicAuditRecord($record, $operatorRecord, $entityRecord);
         }
 
         /**
