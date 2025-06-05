@@ -19,7 +19,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
-            if(!Configuration::getServerConfiguration()->isPublicEvidence() && $authenticatedOperator === null)
+            if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('Unauthorized: You must be authenticated to access evidence', 401);
             }
