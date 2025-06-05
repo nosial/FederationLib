@@ -11,7 +11,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class GetEvidence extends RequestHandler
+    class GetEvidenceRecord extends RequestHandler
     {
         /**
          * @inheritDoc

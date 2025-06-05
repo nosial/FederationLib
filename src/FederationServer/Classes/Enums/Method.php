@@ -9,16 +9,16 @@
     use FederationServer\Methods\Audit\ListAuditLogs;
     use FederationServer\Methods\Audit\ViewAuditEntry;
     use FederationServer\Methods\Entities\DeleteEntity;
-    use FederationServer\Methods\Entities\GetEntity;
+    use FederationServer\Methods\Entities\GetEntityRecord;
     use FederationServer\Methods\Entities\ListEntities;
     use FederationServer\Methods\Entities\ListEntityAuditLogs;
-    use FederationServer\Methods\Entities\ListEntityBlacklist;
+    use FederationServer\Methods\Entities\ListEntityBlacklistRecords;
     use FederationServer\Methods\Entities\ListEntityEvidence;
     use FederationServer\Methods\Entities\PushEntity;
     use FederationServer\Methods\Entities\QueryEntity;
-    use FederationServer\Methods\Evidence\CreateEvidence;
+    use FederationServer\Methods\Evidence\SubmitEvidence;
     use FederationServer\Methods\Evidence\DeleteEvidence;
-    use FederationServer\Methods\Evidence\GetEvidence;
+    use FederationServer\Methods\Evidence\GetEvidenceRecord;
     use FederationServer\Methods\Evidence\ListEvidence;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
@@ -55,26 +55,26 @@
         case LIST_OPERATOR_AUDIT_LOGS;
         case LIST_OPERATOR_BLACKLIST;
 
-        case GET_ENTITY;
+        case GET_ENTITY_RECORD;
         case DELETE_ENTITY;
         case LIST_ENTITIES;
         case QUERY_ENTITY;
         case PUSH_ENTITY;
         case LIST_ENTITY_EVIDENCE;
         case LIST_ENTITY_AUDIT_LOGS;
-        case LIST_ENTITY_BLACKLIST;
+        case LIST_ENTITY_BLACKLIST_RECORDS;
 
         case LIST_EVIDENCE;
-        case CREATE_EVIDENCE;
-        case GET_EVIDENCE;
+        case SUBMIT_EVIDENCE;
+        case GET_EVIDENCE_RECORD;
         case DELETE_EVIDENCE;
 
         case LIST_BLACKLIST;
-        case CREATE_BLACKLIST;
+        case BLACKLIST_ENTITY;
         case DELETE_BLACKLIST;
         case LIFT_BLACKLIST;
-        case ATTACH_EVIDENCE;
-        case GET_BLACKLIST;
+        case BLACKLIST_ATTACH_EVIDENCE;
+        case GET_BLACKLIST_RECORD;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
@@ -113,8 +113,8 @@
                 case self::QUERY_ENTITY:
                     QueryEntity::handleRequest();
                     break;
-                case self::GET_ENTITY:
-                    GetEntity::handleRequest();
+                case self::GET_ENTITY_RECORD:
+                    GetEntityRecord::handleRequest();
                     break;
                 case self::DELETE_ENTITY:
                     DeleteEntity::handleRequest();
@@ -128,8 +128,8 @@
                 case self::LIST_ENTITY_AUDIT_LOGS:
                     ListEntityAuditLogs::handleRequest();
                     break;
-                case self::LIST_ENTITY_BLACKLIST:
-                    ListEntityBlacklist::handleRequest();
+                case self::LIST_ENTITY_BLACKLIST_RECORDS:
+                    ListEntityBlacklistRecords::handleRequest();
                     break;
 
                 case self::LIST_OPERATORS:
@@ -178,11 +178,11 @@
                 case self::LIST_EVIDENCE:
                     ListEvidence::handleRequest();
                     break;
-                case self::CREATE_EVIDENCE:
-                    CreateEvidence::handleRequest();
+                case self::SUBMIT_EVIDENCE:
+                    SubmitEvidence::handleRequest();
                     break;
-                case self::GET_EVIDENCE:
-                    GetEvidence::handleRequest();;
+                case self::GET_EVIDENCE_RECORD:
+                    GetEvidenceRecord::handleRequest();;
                     break;
                 case self::DELETE_EVIDENCE:
                     DeleteEvidence::handleRequest();
@@ -191,7 +191,7 @@
                 case self::LIST_BLACKLIST:
                     throw new \Exception('To be implemented');
                     break;
-                case self::CREATE_BLACKLIST:
+                case self::BLACKLIST_ENTITY:
                     throw new \Exception('To be implemented');
                     break;
                 case self::DELETE_BLACKLIST:
@@ -200,10 +200,10 @@
                 case self::LIFT_BLACKLIST:
                     throw new \Exception('To be implemented');
                     break;
-                case self::ATTACH_EVIDENCE:
+                case self::BLACKLIST_ATTACH_EVIDENCE:
                     throw new \Exception('To be implemented');
                     break;
-                case self::GET_BLACKLIST:
+                case self::GET_BLACKLIST_RECORD:
                     throw new \Exception('To be implemented');
             }
         }
@@ -229,22 +229,22 @@
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
                 $path === '/entities/query' && $requestMethod === 'POST' => Method::QUERY_ENTITY,
-                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
-                preg_match('#^/entities/([a-fA-F0-9\-]{36,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
 
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
-                $path === '/blacklist' && $requestMethod === 'POST' => Method::CREATE_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST,
+                $path === '/blacklist' && $requestMethod === 'POST' => Method::BLACKLIST_ENTITY,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST_RECORD,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/lift$#', $path) && $requestMethod === 'POST' => Method::LIFT_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/attach_evidence$#', $path) && $requestMethod === 'POST' => Method::ATTACH_EVIDENCE,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/attach_evidence$#', $path) && $requestMethod === 'POST' => Method::BLACKLIST_ATTACH_EVIDENCE,
 
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
-                $path === '/evidence' && $requestMethod === 'POST' => Method::CREATE_EVIDENCE,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE,
+                $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,

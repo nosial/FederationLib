@@ -11,7 +11,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class ListEntityBlacklist extends RequestHandler
+    class ListEntityBlacklistRecords extends RequestHandler
     {
         /**
          * @inheritDoc

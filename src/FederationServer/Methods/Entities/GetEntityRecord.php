@@ -9,7 +9,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class GetEntity extends RequestHandler
+    class GetEntityRecord extends RequestHandler
     {
         /**
          * @inheritDoc

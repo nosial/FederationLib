@@ -10,7 +10,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
 
-    class CreateEvidence extends RequestHandler
+    class SubmitEvidence extends RequestHandler
     {
         /**
          * @inheritDoc
