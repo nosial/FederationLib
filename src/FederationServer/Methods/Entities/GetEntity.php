@@ -3,7 +3,6 @@
     namespace FederationServer\Methods\Entities;
 
     use FederationServer\Classes\Managers\EntitiesManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
