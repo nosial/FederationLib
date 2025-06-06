@@ -13,6 +13,7 @@
         private string $entity;
         private ?string $evidence;
         private BlacklistType $type;
+        private bool $lifted;
         private ?int $expires;
         private int $created;
 
@@ -35,6 +36,7 @@
             $this->entity = $data['entity'] ?? '';
             $this->evidence = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
+            $this->lifted = isset($data['lifted']) ? (bool)$data['lifted'] : false;
             $this->expires = isset($data['expires']) ? (int)$data['expires'] : null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
         }
@@ -90,6 +92,16 @@
         public function getType(): BlacklistType
         {
             return $this->type;
+        }
+
+        /**
+         * Check if the blacklist record has been lifted.
+         *
+         * @return bool True if the record is lifted, false otherwise.
+         */
+        public function isLifted(): bool
+        {
+            return $this->lifted;
         }
 
         /**

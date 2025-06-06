@@ -190,6 +190,32 @@
         }
 
         /**
+         * Lifts a blacklist record, marking it as no longer active.
+         *
+         * @param string $uuid The UUID of the blacklist record to lift.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function liftBlacklistRecord(string $uuid): void
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException("UUID cannot be empty.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to lift blacklist record: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
          * Returns an array of blacklist records in a pagination style for the global database
          *
          * @param int $limit The total amount of records to return in this database query

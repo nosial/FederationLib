@@ -10,6 +10,7 @@
     use FederationServer\Methods\Audit\ViewAuditEntry;
     use FederationServer\Methods\Blacklist\BlacklistEntity;
     use FederationServer\Methods\Blacklist\DeleteBlacklist;
+    use FederationServer\Methods\Blacklist\LiftBlacklist;
     use FederationServer\Methods\Blacklist\ListBlacklist;
     use FederationServer\Methods\Entities\DeleteEntity;
     use FederationServer\Methods\Entities\GetEntityRecord;
@@ -201,7 +202,7 @@
                     DeleteBlacklist::handleRequest();
                     break;
                 case self::LIFT_BLACKLIST:
-                    throw new \Exception('To be implemented');
+                    LiftBlacklist::handleRequest();
                     break;
                 case self::BLACKLIST_ATTACH_EVIDENCE:
                     throw new \Exception('To be implemented');
