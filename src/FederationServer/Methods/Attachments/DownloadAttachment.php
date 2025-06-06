@@ -18,6 +18,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: You must be authenticated to download attachments', 401);
+            }
+
             if(!preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Attachment UUID required', 405);
@@ -27,12 +33,6 @@
             if(!$attachmentUuid || !Validate::uuid($attachmentUuid))
             {
                 throw new RequestException('Invalid attachment UUID', 400);
-            }
-
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-            if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
-            {
-                throw new RequestException('Unauthorized: You must be authenticated to download attachments', 401);
             }
 
             try
