@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Audit;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -16,6 +17,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+            }
+
             if(!preg_match('#^/audit/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Bad Request: Audit UUID is required', 400);
