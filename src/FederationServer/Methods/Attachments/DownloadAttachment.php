@@ -23,8 +23,8 @@
                 throw new RequestException('Attachment UUID required', 405);
             }
 
-            $uuid = $matches[1];
-            if(!$uuid || !Validate::uuid($uuid))
+            $attachmentUuid  = $matches[1];
+            if(!$attachmentUuid || !Validate::uuid($attachmentUuid))
             {
                 throw new RequestException('Invalid attachment UUID', 400);
             }
@@ -37,7 +37,7 @@
 
             try
             {
-                $attachment = FileAttachmentManager::getRecord($uuid);
+                $attachment = FileAttachmentManager::getRecord($attachmentUuid);
                 if(!$attachment)
                 {
                     throw new RequestException('Attachment not found', 404);
