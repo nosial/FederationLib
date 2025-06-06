@@ -16,7 +16,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
