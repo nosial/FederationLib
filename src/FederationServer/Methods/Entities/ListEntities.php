@@ -19,7 +19,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to view entity records', 401);
+                throw new RequestException('You must be authenticated to view entity records', 401);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEntitiesMaxItems());
@@ -41,7 +41,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve operators', 500, $e);
+                throw new RequestException('Unable to retrieve operators', 500, $e);
             }
 
             $result = array_map(fn($op) => $op->toArray(), $operators);

@@ -20,19 +20,19 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions manage permissions', 403);
+                throw new RequestException('Insufficient permissions manage permissions', 403);
             }
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_client$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Missing required parameters', 400);
+                throw new RequestException('Missing required parameters', 400);
             }
 
             $operatorUuid = $matches[1];
             $enabled = (bool)filter_var(FederationServer::getParameter('enabled'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             if(!Validate::uuid($operatorUuid))
             {
-                throw new RequestException('Bad Request: Invalid operator UUID', 400);
+                throw new RequestException('Invalid operator UUID', 400);
             }
 
             try
@@ -41,8 +41,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error('Database error while managing operator\'s permissions: ' . $e->getMessage(), $e);
-                throw new RequestException('Internal Server Error: Unable to manage operator\'s permissions', 500, $e);
+                throw new RequestException('Unable to manage operator\'s permissions', 500, $e);
             }
 
             self::successResponse();

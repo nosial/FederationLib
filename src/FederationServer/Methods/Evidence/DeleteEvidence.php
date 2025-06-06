@@ -19,7 +19,7 @@
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
-                throw new RequestException('Forbidden: You do not have permission to delete evidence', 403);
+                throw new RequestException('You do not have permission to delete evidence', 403);
             }
 
             if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
@@ -44,7 +44,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to delete evidence', 500, $e);
+                throw new RequestException('Unable to delete evidence', 500, $e);
             }
 
             self::successResponse();

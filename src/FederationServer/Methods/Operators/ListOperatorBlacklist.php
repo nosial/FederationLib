@@ -21,7 +21,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to list blacklist records', 401);
+                throw new RequestException('You must be authenticated to list blacklist records', 401);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
@@ -39,13 +39,13 @@
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/blacklist$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             $operatorUuid = $matches[1];
             if(!$operatorUuid || !Validate::uuid($operatorUuid))
             {
-                throw new RequestException('Bad Request: a valid operator UUID is required', 400);
+                throw new RequestException('a valid operator UUID is required', 400);
             }
 
             try
@@ -59,7 +59,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve blacklist records from the operator', 500, $e);
+                throw new RequestException('Unable to retrieve blacklist records from the operator', 500, $e);
             }
 
             self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $blacklistRecords));

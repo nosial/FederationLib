@@ -54,12 +54,12 @@
                 {
                     if($authenticatedOperator === null)
                     {
-                        throw new RequestException('Unauthorized: You must be authenticated to view confidential evidence', 401);
+                        throw new RequestException('You must be authenticated to view confidential evidence', 401);
                     }
 
                     if(!$authenticatedOperator->canManageBlacklist())
                     {
-                        throw new RequestException('Unauthorized: Insufficient Permissions to view confidential evidence', 401);
+                        throw new RequestException('Insufficient Permissions to view confidential evidence', 401);
                     }
                 }
             }

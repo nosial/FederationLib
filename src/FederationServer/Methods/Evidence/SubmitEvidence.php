@@ -20,25 +20,25 @@
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
-                throw new RequestException('Forbidden: You do not have permission to create evidence', 403);
+                throw new RequestException('You do not have permission to create evidence', 403);
             }
 
             $entityUuid = FederationServer::getParameter('entity_uuid');
             if(!$entityUuid || !Validate::uuid($entityUuid))
             {
-                throw new RequestException('Bad Request: Entity UUID is required and must be valid', 400);
+                throw new RequestException('Entity UUID is required and must be valid', 400);
             }
 
             $textContent = FederationServer::getParameter('text_content');
             if(!is_null($textContent) && strlen($textContent) > 65535)
             {
-                throw new RequestException('Bad Request: Text content must not exceed 65535 characters', 400);
+                throw new RequestException('Text content must not exceed 65535 characters', 400);
             }
 
             $note = FederationServer::getParameter('note');
             if(!is_null($note) && strlen($note) > 65535)
             {
-                throw new RequestException('Bad Request: Note must not exceed 65535 characters', 400);
+                throw new RequestException('Note must not exceed 65535 characters', 400);
             }
 
             $confidential = false;
@@ -51,14 +51,14 @@
             {
                 if(!EntitiesManager::getEntityByUuid($entityUuid))
                 {
-                    throw new RequestException('Not Found: Entity does not exist', 404);
+                    throw new RequestException('Entity does not exist', 404);
                 }
 
                 self::successResponse(EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential));
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Failed to create evidence', 500, $e);
+                throw new RequestException('Failed to create evidence', 500, $e);
             }
         }
     }

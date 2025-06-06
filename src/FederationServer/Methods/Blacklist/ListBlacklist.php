@@ -4,7 +4,6 @@
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\BlacklistManager;
-    use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
@@ -20,7 +19,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to list blacklist records', 401);
+                throw new RequestException('You must be authenticated to list blacklist records', 401);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
@@ -42,7 +41,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve blacklist records', 500, $e);
+                throw new RequestException('Unable to retrieve blacklist records', 500, $e);
             }
 
             self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $blacklistRecords));

@@ -25,7 +25,7 @@
             // Ensure the authenticated operator has permission to delete operators.
             if(!$authenticatedOperator->canManageBlacklist())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to delete attachments', 403);
+                throw new RequestException('Insufficient permissions to delete attachments', 403);
             }
 
             if(!preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
@@ -61,7 +61,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to create operator', 500, $e);
+                throw new RequestException('Unable to create operator', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.

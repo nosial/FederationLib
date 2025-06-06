@@ -20,18 +20,18 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+                throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
             if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
             $entityUuid = $matches[1];
             if(!$entityUuid)
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
@@ -62,7 +62,7 @@
             {
                 if(!EntitiesManager::entityExistsByUuid($entityUuid))
                 {
-                    throw new RequestException('Not Found: Entity with the specified UUID does not exist', 404);
+                    throw new RequestException('Entity with the specified UUID does not exist', 404);
                 }
 
                 self::successResponse(array_map(fn($log) => $log->toArray(),
@@ -71,7 +71,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve audit logs', 500, $e);
+                throw new RequestException('Unable to retrieve audit logs', 500, $e);
             }
         }
     }

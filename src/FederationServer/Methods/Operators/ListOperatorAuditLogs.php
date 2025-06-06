@@ -17,21 +17,21 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+                throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/audit$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             $operatorUuid = $matches[1];
             if(!$operatorUuid)
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
@@ -64,7 +64,7 @@
             {
                 if(!OperatorManager::operatorExists($operatorUuid))
                 {
-                    throw new RequestException('Not Found: Operator with the specified UUID does not exist', 404);
+                    throw new RequestException('Operator with the specified UUID does not exist', 404);
                 }
 
                 self::successResponse(array_map(fn($log) => $log->toArray(),
@@ -73,7 +73,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve audit logs', 500, $e);
+                throw new RequestException('Unable to retrieve audit logs', 500, $e);
             }
         }
     }

@@ -22,7 +22,7 @@
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to list evidence', 401);
+                throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
             if($authenticatedOperator !== null)
@@ -46,13 +46,13 @@
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             $operatorUuid = $matches[1];
             if(!$operatorUuid)
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             try
@@ -66,7 +66,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve evidence', 500, $e);
+                throw new RequestException('Unable to retrieve evidence', 500, $e);
             }
 
             $result = array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords);

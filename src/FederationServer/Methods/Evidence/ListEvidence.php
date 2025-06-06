@@ -21,7 +21,7 @@
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to list evidence', 401);
+                throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
             if($authenticatedOperator !== null)
@@ -48,7 +48,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve evidence', 500, $e);
+                throw new RequestException('Unable to retrieve evidence', 500, $e);
             }
 
             self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords));

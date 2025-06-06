@@ -19,32 +19,32 @@
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to manage entities', 401);
+                throw new RequestException('Insufficient permissions to manage entities', 401);
             }
 
             if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
             $entityUuid = $matches[1];
             if(!$entityUuid || !Validate::uuid($entityUuid))
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
             try
             {
                 if(!EntitiesManager::entityExistsByUuid($entityUuid))
                 {
-                    throw new RequestException('Not Found: Entity does not exist', 404);
+                    throw new RequestException('Entity does not exist', 404);
                 }
 
                 EntitiesManager::deleteEntity($entityUuid);
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to delete entity', 500, $e);
+                throw new RequestException('Unable to delete entity', 500, $e);
             }
 
             self::successResponse();

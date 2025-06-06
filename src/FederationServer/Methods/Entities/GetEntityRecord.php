@@ -20,18 +20,18 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to view entity records', 401);
+                throw new RequestException('You must be authenticated to view entity records', 401);
             }
 
             if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
             $entityUuid = $matches[1];
             if(!$entityUuid || !Validate::uuid($entityUuid))
             {
-                throw new RequestException('Bad Request: Entity UUID is required', 400);
+                throw new RequestException('Entity UUID is required', 400);
             }
 
 
@@ -41,7 +41,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve entity', 500, $e);
+                throw new RequestException('Unable to retrieve entity', 500, $e);
             }
 
             self::successResponse($entityRecord->toArray());

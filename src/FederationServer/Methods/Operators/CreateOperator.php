@@ -18,17 +18,17 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
 
             // Ensure the authenticated operator has permission to create new operators.
             if(!$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to create operators', 403);
+                throw new RequestException('Insufficient permissions to create operators', 403);
             }
 
             if(!FederationServer::getParameter('name'))
             {
-                throw new RequestException('Bad Request: Operator name is required', 400);
+                throw new RequestException('Operator name is required', 400);
             }
 
             try
@@ -43,8 +43,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error('Database error while creating operator: ' . $e->getMessage(), $e);
-                throw new RequestException('Internal Server Error: Unable to create operator', 500, $e);
+                throw new RequestException('Unable to create operator', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.

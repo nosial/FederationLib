@@ -7,6 +7,7 @@
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -18,23 +19,23 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
 
             // Ensure the authenticated operator has permission to delete operators.
             if(!$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to enable/disable operators', 403);
+                throw new RequestException('Insufficient permissions to enable/disable operators', 403);
             }
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/enable$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('Operator UUID is required', 400);
             }
 
             $operatorUuid = $matches[1];
-            if(!$operatorUuid)
+            if(!$operatorUuid || !Validate::uuid($operatorUuid))
             {
-                throw new RequestException('Bad Request: Operator UUID is required', 400);
+                throw new RequestException('a valid operator UUID is required', 400);
             }
 
             try
@@ -60,8 +61,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error(sprintf('Database error while enabling the operator: %s', $e->getMessage()), $e);
-                throw new RequestException('Internal Server Error: Unable to enable operator', 500, $e);
+                throw new RequestException('Unable to enable operator', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.

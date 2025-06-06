@@ -20,7 +20,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to access evidence', 401);
+                throw new RequestException('You must be authenticated to access evidence', 401);
             }
 
             if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
@@ -44,12 +44,12 @@
 
                 if($evidenceRecord->isConfidential() && $authenticatedOperator === null)
                 {
-                    throw new RequestException('Forbidden: Confidential evidence access is restricted', 403);
+                    throw new RequestException('Confidential evidence access is restricted', 403);
                 }
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to get evidence', 500, $e);
+                throw new RequestException('Unable to get evidence', 500, $e);
             }
         }
     }

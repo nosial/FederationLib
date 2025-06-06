@@ -18,7 +18,7 @@
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->isClient() && !$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to push entities', 403);
+                throw new RequestException('Insufficient permissions to push entities', 403);
             }
 
             $id = FederationServer::getParameter('id');
@@ -26,22 +26,22 @@
 
             if(!$id)
             {
-                throw new RequestException('Bad Request: Entity ID is required', 400);
+                throw new RequestException('Entity ID is required', 400);
             }
 
             if(strlen($id) > 255)
             {
-                throw new RequestException('Bad Request: Entity ID exceeds maximum length of 255 characters', 400);
+                throw new RequestException('Entity ID exceeds maximum length of 255 characters', 400);
             }
 
             if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
-                throw new RequestException('Bad Request: Invalid domain format', 400);
+                throw new RequestException('Invalid domain format', 400);
             }
 
             if(!is_null($domain) && strlen($domain) > 255)
             {
-                throw new RequestException('Bad Request: Domain exceeds maximum length of 255 characters', 400);
+                throw new RequestException('Domain exceeds maximum length of 255 characters', 400);
             }
 
             try
@@ -57,7 +57,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to register entity', 500, $e);
+                throw new RequestException('Unable to register entity', 500, $e);
             }
 
             self::successResponse($entityUuid);

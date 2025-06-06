@@ -19,7 +19,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: You must be authenticated to view entity records', 401);
+                throw new RequestException('You must be authenticated to view entity records', 401);
             }
 
             $id = FederationServer::getParameter('id');
@@ -27,12 +27,12 @@
 
             if(!$id)
             {
-                throw new RequestException('Bad Request: Entity ID is required', 400);
+                throw new RequestException('Entity ID is required', 400);
             }
 
             if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
-                throw new RequestException('Bad Request: Invalid domain format', 400);
+                throw new RequestException('Invalid domain format', 400);
             }
 
             try
@@ -41,7 +41,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve entity', 500, $e);
+                throw new RequestException('Unable to retrieve entity', 500, $e);
             }
 
             self::successResponse($entity->toArray());

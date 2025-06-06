@@ -20,18 +20,18 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+                throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
             if(!preg_match('#^/audit/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Bad Request: Audit UUID is required', 400);
+                throw new RequestException('Audit UUID is required', 400);
             }
 
             $entryUuid = $matches[1];
             if(!$entryUuid || !Validate::uuid($entryUuid))
             {
-                throw new RequestException('Bad Request: Invalid Audit UUID', 400);
+                throw new RequestException('Invalid Audit UUID', 400);
             }
 
             try
@@ -46,7 +46,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve audit log', 500, $e);
+                throw new RequestException('Unable to retrieve audit log', 500, $e);
             }
         }
     }

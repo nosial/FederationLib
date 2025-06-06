@@ -19,7 +19,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('Unauthorized: Public audit logs are disabled and no operator is authenticated', 403);
+                throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
@@ -56,7 +56,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve audit logs', 500, $e);
+                throw new RequestException('Unable to retrieve audit logs', 500, $e);
             }
 
         }

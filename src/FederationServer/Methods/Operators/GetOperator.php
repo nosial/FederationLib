@@ -17,8 +17,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
-
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Operator UUID required', 405);
@@ -40,8 +39,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error('Database error while getting operator: ' . $e->getMessage(), $e);
-                throw new RequestException('Internal Server Error: Unable to get operator', 500, $e);
+                throw new RequestException('Unable to get operator', 500, $e);
             }
 
             if($authenticatedOperator?->canManageOperators())

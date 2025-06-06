@@ -19,7 +19,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to list operators', 403);
+                throw new RequestException('Insufficient permissions to list operators', 403);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
@@ -41,7 +41,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Internal Server Error: Unable to retrieve operators', 500, $e);
+                throw new RequestException('Unable to retrieve operators', 500, $e);
             }
 
             $result = array_map(fn($op) => $op->toArray(), $operators);

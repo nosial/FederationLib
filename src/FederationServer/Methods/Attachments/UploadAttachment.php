@@ -152,13 +152,13 @@
             {
                 // If database insertion fails, remove the file to maintain consistency
                 @unlink($destinationPath);
-                throw new RequestException('Internal Server Error: Unable to create file attachment record', 500, $e);
+                throw new RequestException('Unable to create file attachment record', 500, $e);
             }
             catch (Throwable $e)
             {
                 // Handle any other unexpected errors
                 @unlink($destinationPath);
-                throw new RequestException('Internal Server Error', 500, $e);
+                throw new RequestException('Unable to upload file attachment to server', 500, $e);
             }
             finally
             {

@@ -7,6 +7,7 @@
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -18,12 +19,12 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
 
             // Ensure the authenticated operator has permission to delete operators.
             if(!$authenticatedOperator->canManageOperators())
             {
-                throw new RequestException('Unauthorized: Insufficient permissions to delete operators', 403);
+                throw new RequestException('Insufficient permissions to delete operators', 403);
             }
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', FederationServer::getPath(), $matches))
@@ -32,9 +33,9 @@
             }
 
             $operatorUuid = $matches[1];
-            if(!$operatorUuid)
+            if(!$operatorUuid || !Validate::uuid($operatorUuid))
             {
-                throw new RequestException('Operator UUID required', 400);
+                throw new RequestException('a valid Operator UUID required', 400);
             }
 
             try
@@ -55,8 +56,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error('Database error while creating operator: ' . $e->getMessage(), $e);
-                throw new RequestException('Internal Server Error: Unable to create operator', 500, $e);
+                throw new RequestException('Unable to create operator', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.

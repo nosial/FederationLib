@@ -42,7 +42,7 @@
                 self::$decodedContent = json_decode(self::$inputContent, true);
                 if (json_last_error() !== JSON_ERROR_NONE)
                 {
-                    throw new RequestException('Invalid JSON input: ' . json_last_error_msg(), 400);
+                    throw new RequestException(json_last_error_msg(), 400);
                 }
             }
 
@@ -172,6 +172,24 @@
          */
         protected static function throwableResponse(Throwable $e): void
         {
+            $prefixMessage = match($e->getCode())
+            {
+                400 => 'Bad Request',
+                401 => 'Unauthorized',
+                403 => 'Forbidden',
+                404 => 'Not Found',
+                405 => 'Method Not Allowed',
+                409 => 'Conflict',
+                422 => 'Unprocessable Entity',
+                429 => 'Too Many Requests',
+                500 => 'Internal Server Error',
+                501 => 'Not Implemented',
+                502 => 'Bad Gateway',
+                503 => 'Service Unavailable',
+                504 => 'Gateway Timeout: ',
+                default => 'Request Error: ',
+            };
+
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
             print(json_encode([
