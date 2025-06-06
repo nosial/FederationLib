@@ -16,7 +16,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             $includeConfidential = false;
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
@@ -51,8 +51,7 @@
                 throw new RequestException('Internal Server Error: Unable to retrieve evidence', 500, $e);
             }
 
-            $result = array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords);
-            self::successResponse($result);
+            self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords));
         }
     }
 

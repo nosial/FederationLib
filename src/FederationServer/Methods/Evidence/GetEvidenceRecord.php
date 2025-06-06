@@ -3,7 +3,6 @@
     namespace FederationServer\Methods\Evidence;
 
     use FederationServer\Classes\Configuration;
-    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -18,7 +17,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('Unauthorized: You must be authenticated to access evidence', 401);
@@ -50,7 +49,6 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error('Database error while getting evidence: ' . $e->getMessage(), $e);
                 throw new RequestException('Internal Server Error: Unable to get evidence', 500, $e);
             }
         }

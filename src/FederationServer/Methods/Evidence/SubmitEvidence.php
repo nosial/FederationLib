@@ -17,7 +17,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
                 throw new RequestException('Forbidden: You do not have permission to create evidence', 403);
@@ -54,14 +54,12 @@
                     throw new RequestException('Not Found: Entity does not exist', 404);
                 }
 
-                $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential);
+                self::successResponse(EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential));
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Internal Server Error: Failed to create evidence', 500, $e);
             }
-
-            self::successResponse($evidenceUuid);
         }
     }
 
