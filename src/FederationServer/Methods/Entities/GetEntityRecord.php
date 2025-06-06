@@ -17,6 +17,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: You must be authenticated to view entity records', 401);
+            }
+
             if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Bad Request: Entity UUID is required', 400);

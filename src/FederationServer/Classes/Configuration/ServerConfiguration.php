@@ -23,6 +23,7 @@
         private array $publicAuditEntries;
         private bool $publicEvidence;
         private bool $publicBlacklist;
+        private bool $publicEntities = true;
         private int $minBlacklistTime;
 
         /**
@@ -46,6 +47,7 @@
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
+            $this->publicEntities = $config['public_entities'] ?? true;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
         }
 
@@ -187,6 +189,16 @@
         public function isBlacklistPublic(): bool
         {
             return $this->publicBlacklist;
+        }
+
+        /**
+         * Checks if entities are publicly accessible
+         *
+         * @return bool True if public entities is enabled, false otherwise
+         */
+        public function isEntitiesPublic(): bool
+        {
+            return $this->publicEntities;
         }
 
         /**

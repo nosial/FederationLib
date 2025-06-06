@@ -4,7 +4,6 @@
 
     use FederationServer\Classes\Configuration\DatabaseConfiguration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
-    use FederationServer\Classes\Configuration\FileStorageConfiguration;
     use FederationServer\Classes\Configuration\ServerConfiguration;
     use FederationServer\Classes\Enums\AuditLogType;
 
@@ -36,6 +35,7 @@
             self::$configuration->setDefault('server.public_audit_entries', array_map(fn($type) => $type->value, AuditLogType::cases()));
             self::$configuration->setDefault('server.public_evidence', true);
             self::$configuration->setDefault('server.public_blacklist', true);
+            self::$configuration->setDefault('server.public_entities', true);
             self::$configuration->setDefault('server.min_blacklist_time', 1800);
 
             self::$configuration->setDefault('database.host', '127.0.0.1');
