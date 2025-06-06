@@ -4,7 +4,6 @@
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Enums\AuditLogType;
-    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\Managers\FileAttachmentManager;
@@ -153,14 +152,12 @@
             {
                 // If database insertion fails, remove the file to maintain consistency
                 @unlink($destinationPath);
-                Logger::log()->error(sprintf('Failed to record file upload for evidence %s: %s', $evidenceUuid, $e->getMessage()), $e);
                 throw new RequestException('Internal Server Error: Unable to create file attachment record', 500, $e);
             }
             catch (Throwable $e)
             {
                 // Handle any other unexpected errors
                 @unlink($destinationPath);
-                Logger::log()->error(sprintf('Unexpected error during file upload for evidence %s: %s', $evidenceUuid, $e->getMessage()));
                 throw new RequestException('Internal Server Error', 500, $e);
             }
             finally

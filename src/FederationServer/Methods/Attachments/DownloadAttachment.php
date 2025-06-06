@@ -65,7 +65,7 @@
             }
             catch(Throwable $e)
             {
-                throw new RequestException('Error retrieving attachment: ' . $e->getMessage(), 500, $e);
+                throw new RequestException('Internal server error while retrieving attachment', 500, $e);
             }
 
             $fileLocation = Configuration::getServerConfiguration()->getStoragePath() . DIRECTORY_SEPARATOR . $attachment->getUuid();

@@ -62,7 +62,6 @@
             }
             catch(DatabaseOperationException $e)
             {
-                Logger::log()->error(sprintf('Failed to delete attachment %s: %s', $attachmentUuid, $e->getMessage()), $e);
                 throw new RequestException('Internal Server Error: Unable to create operator', 500, $e);
             }
 
