@@ -2,7 +2,9 @@
 
     namespace FederationServer;
 
+    use Exception;
     use FederationServer\Classes\Enums\Method;
+    use FederationServer\Classes\Logger;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Objects\OperatorRecord;
@@ -24,7 +26,6 @@
                 parent::handleRequest();
 
                 // Execute the request method
-
                 $requestMethod = Method::matchHandle(self::getRequestMethod(), self::getPath());
                 if($requestMethod === null)
                 {
@@ -36,7 +37,13 @@
             }
             catch (RequestException $e)
             {
+                Logger::log()->error('Request Error: ' . $e->getMessage(), $e);
                 self::throwableResponse($e);
+            }
+            catch(Exception $e)
+            {
+                Logger::log()->error('Uncaught Exception:' . $e->getMessage(), $e);
+                self::errorResponse('Internal Server Error');
             }
         }
 
