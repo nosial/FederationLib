@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Entities;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -15,6 +16,12 @@
          */
         public static function handleRequest(): void
         {
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: You must be authenticated to view entity records', 401);
+            }
+
             $id = FederationServer::getParameter('id');
             $domain = FederationServer::getParameter('domain') ?? null;
 
@@ -30,14 +37,14 @@
 
             try
             {
-                $entitiy = EntitiesManager::getEntity($id, $domain);
+                $entity = EntitiesManager::getEntity($id, $domain);
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Internal Server Error: Unable to retrieve entity', 500, $e);
             }
 
-            self::successResponse($entitiy->toArray());
+            self::successResponse($entity->toArray());
         }
     }
 

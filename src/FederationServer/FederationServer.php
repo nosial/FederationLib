@@ -122,11 +122,10 @@
          * This method retrieves the currently authenticated operator, if any.
          * If no operator is authenticated, it returns null.
          *
-         * @param bool $requireAuthentication Whether to require authentication. Defaults to true.
          * @return OperatorRecord|null The authenticated operator record or null if not authenticated.
          * @throws RequestException If authentication is provided but is invalid/operator is disabled.
          */
-        public static function getAuthenticatedOperator(bool $requireAuthentication=true): ?OperatorRecord
+        public static function getAuthenticatedOperator(): ?OperatorRecord
         {
             return parent::getAuthenticatedOperator();
         }
