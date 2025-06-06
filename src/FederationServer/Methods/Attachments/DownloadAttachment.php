@@ -29,6 +29,12 @@
                 throw new RequestException('Invalid attachment UUID', 400);
             }
 
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
+            {
+                throw new RequestException('Unauthorized: You must be authenticated to download attachments', 401);
+            }
+
             try
             {
                 $attachment = FileAttachmentManager::getRecord($uuid);
@@ -38,14 +44,22 @@
                 }
 
                 $evidence = EvidenceManager::getEvidence($attachment->getEvidence());
-                if($evidence && $evidence->isConfidential())
-                {
-                    // Require authentication if confidential
-                    $operator = FederationServer::getAuthenticatedOperator();
 
-                    if(!$operator->canManageBlacklist())
+                if($evidence === null)
+                {
+                    throw new RequestException('Associated evidence not found', 404);
+                }
+
+                if($evidence->isConfidential())
+                {
+                    if($authenticatedOperator === null)
                     {
-                        throw new RequestException('Insufficient Permissions to view confidential evidence', 401);
+                        throw new RequestException('Unauthorized: You must be authenticated to view confidential evidence', 401);
+                    }
+
+                    if(!$authenticatedOperator->canManageBlacklist())
+                    {
+                        throw new RequestException('Unauthorized: Insufficient Permissions to view confidential evidence', 401);
                     }
                 }
             }
