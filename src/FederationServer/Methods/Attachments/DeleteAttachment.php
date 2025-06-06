@@ -3,7 +3,6 @@
     namespace FederationServer\Methods\Attachments;
 
     use FederationServer\Classes\Enums\AuditLogType;
-    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\Managers\FileAttachmentManager;
