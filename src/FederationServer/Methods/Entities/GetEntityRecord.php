@@ -2,6 +2,7 @@
 
     namespace FederationServer\Methods\Entities;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;

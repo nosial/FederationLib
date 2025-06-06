@@ -16,7 +16,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
                 throw new RequestException('Unauthorized: Insufficient permissions to manage entities', 401);
