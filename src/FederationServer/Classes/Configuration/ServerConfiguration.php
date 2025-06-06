@@ -23,6 +23,7 @@
         private array $publicAuditEntries;
         private bool $publicEvidence;
         private bool $publicBlacklist;
+        private int $minBlacklistTime;
 
         /**
          * ServerConfiguration constructor.
@@ -45,6 +46,7 @@
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
+            $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
         }
 
         /**
@@ -185,5 +187,17 @@
         public function isBlacklistPublic(): bool
         {
             return $this->publicBlacklist;
+        }
+
+        /**
+         * Returns the minimum allowed time that a blacklist could be set to expire, for example
+         * 1800 = 30 Minutes, if a blacklist is set to expire within 30 minutes or more, it's valid, otherwise
+         * anything less than that if it isn't null would be considered invalid.
+         *
+         * @return int The number of seconds allowed
+         */
+        public function getMinBlacklistTime(): int
+        {
+            return $this->minBlacklistTime;
         }
     }

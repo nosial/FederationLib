@@ -117,16 +117,37 @@
         }
 
         /**
-         * @inheritDoc
+         * Get the currently authenticated operator.
+         *
+         * This method retrieves the currently authenticated operator, if any.
+         * If no operator is authenticated, it returns null.
+         *
+         * @param bool $requireAuthentication Whether to require authentication. Defaults to true.
+         * @return OperatorRecord|null The authenticated operator record or null if not authenticated.
+         * @throws RequestException If authentication is provided but is invalid/operator is disabled.
          */
         public static function getAuthenticatedOperator(bool $requireAuthentication=true): ?OperatorRecord
         {
-            $authenticatedOperator = parent::getAuthenticatedOperator();
-            if($requireAuthentication && $authenticatedOperator === null)
+            return parent::getAuthenticatedOperator();
+        }
+
+        /**
+         * Get the authenticated operator, throwing an exception if not authenticated.
+         *
+         * This method retrieves the currently authenticated operator. If no operator is authenticated,
+         * it throws a RequestException with a 401 Unauthorized status code.
+         *
+         * @return OperatorRecord The authenticated operator record.
+         * @throws RequestException If no operator is authenticated.
+         */
+        public static function requireAuthenticatedOperator(): OperatorRecord
+        {
+            $operator = self::getAuthenticatedOperator();
+            if ($operator === null)
             {
-                throw new RequestException('Unauthorized: No authenticated operator found', 401);
+                throw new RequestException('Authentication required', 401);
             }
 
-            return $authenticatedOperator;
+            return $operator;
         }
     }

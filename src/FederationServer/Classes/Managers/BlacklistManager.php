@@ -4,11 +4,13 @@
 
     use FederationServer\Classes\DatabaseConnection;
     use FederationServer\Classes\Enums\BlacklistType;
+    use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\BlacklistRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Symfony\Component\Uid\UuidV4;
 
     class BlacklistManager
     {
@@ -19,10 +21,12 @@
          * @param string $operator The UUID of the operator performing the blacklisting.
          * @param BlacklistType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
+         * @param string|null $evidence Optional evidence UUID, must be a valid UUID if provided.
+         * @return string The UUID of the created blacklist entry.
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistEntity(string $entity, string $operator, BlacklistType $type, ?int $expires = null): void
+        public static function blacklistEntity(string $entity, string $operator, BlacklistType $type, ?int $expires=null, ?string $evidence=null): string
         {
             if(empty($entity) || empty($operator))
             {
@@ -34,13 +38,22 @@
                 throw new InvalidArgumentException("Expiration time must be in the future or null for permanent blacklisting.");
             }
 
+            if(!is_null($evidence) && !Validate::uuid($evidence))
+            {
+                throw new InvalidArgumentException("Evidence must be a valid UUID.");
+            }
+
+            $uuid = UuidV4::v4()->toRfc4122();
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (entity, operator, type, expires) VALUES (:entity, :operator, :type, :expires)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (uuid, entity, operator, type, expires, evidence) VALUES (:uuid, :entity, :operator, :type, :expires, :evidence)");
+                $stmt->bindParam(':uuid', $uuid);
                 $type = $type->value;
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
                 $stmt->bindParam(':type', $type);
+                $stmt->bindParam(':evidence', $evidence);
 
                 // Convert expires to datetime
                 if(is_null($expires))
@@ -56,6 +69,8 @@
             {
                 throw new DatabaseOperationException("Failed to prepare SQL statement for blacklisting entity: " . $e->getMessage(), 0, $e);
             }
+
+            return $uuid;
         }
 
         /**

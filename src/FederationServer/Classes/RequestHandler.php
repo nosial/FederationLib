@@ -8,6 +8,7 @@
     use FederationServer\Interfaces\RequestHandlerInterface;
     use FederationServer\Interfaces\SerializableInterface;
     use FederationServer\Objects\OperatorRecord;
+    use InvalidArgumentException;
     use Throwable;
 
     abstract class RequestHandler implements RequestHandlerInterface
@@ -207,23 +208,52 @@
          */
         protected static function getAuthenticatedOperator(): ?OperatorRecord
         {
-            // First obtain the API key from the request headers or query parameters.
-            $apiKey = $_SERVER['HTTP_API_KEY'] ?? $_GET['api_key'] ?? $_POST['api_key'] ?? null;
+            $apiKey = null;
+            if (isset($_SERVER['HTTP_AUTHORIZATION']))
+            {
+                $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
+                if (preg_match('/^Bearer\s+(\S+)$/', $authHeader, $matches))
+                {
+                    $apiKey = $matches[1];
+
+                }
+            }
+
             if (empty($apiKey))
             {
                 return null;
             }
 
-            if(strlen($apiKey) > 32)
+            if (strlen($apiKey) !== 32)
             {
-                throw new RequestException('API key is too long', 400);
+                throw new RequestException('Invalid API key', 400);
+            }
+
+            // If the given API key matches the master operator's API key, we can retrieve the master operator.
+            if(Configuration::getServerConfiguration()->getApiKey() !== null && $apiKey === Configuration::getServerConfiguration()->getApiKey())
+            {
+                // A master operator is automatically created if it does not exist.
+                // This is useful for initial setup or if the master operator was deleted.
+                // Master operators cannot be disabled, so we can safely return it.
+
+                try
+                {
+                    return OperatorManager::getMasterOperator();
+                }
+                catch (DatabaseOperationException $e)
+                {
+                    throw new RequestException('Internal Database Error', 500, $e);
+                }
+                catch(InvalidArgumentException $e)
+                {
+                    throw new RequestException('Invalid API Key Configuration', 500, $e);
+                }
             }
 
             try
             {
                 $operator = OperatorManager::getOperatorByApiKey($apiKey);
-
-                if($operator === null)
+                if ($operator === null)
                 {
                     throw new RequestException('Invalid API key', 401);
                 }
@@ -238,7 +268,6 @@
                 throw new RequestException('Operator is disabled', 403);
             }
 
-            // If the operator is found and enabled, return the OperatorRecord object.
             return $operator;
         }
     }

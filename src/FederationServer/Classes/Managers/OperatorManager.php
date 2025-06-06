@@ -2,6 +2,7 @@
 
     namespace FederationServer\Classes\Managers;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\DatabaseConnection;
     use FederationServer\Classes\Utilities;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -51,6 +52,77 @@
             }
 
             return $uuid;
+        }
+
+        /**
+         * Creates the master operator with a predefined API key.
+         *
+         * @param string $apiKey The API key for the master operator.
+         * @return string The UUID of the created master operator.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        private static function createMasterOperator(string $apiKey): string
+        {
+            if(empty($apiKey))
+            {
+                throw new InvalidArgumentException('API key cannot be empty.');
+            }
+
+            if(strlen($apiKey) !== 32)
+            {
+                throw new InvalidArgumentException('API key must be exactly 32 characters long.');
+            }
+
+            // This method is used to create the master operator with a predefined API key.
+            // It should only be called once during the initial setup of the server.
+            $uuid = Uuid::v7()->toRfc4122();
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, api_key, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, :api_key, 'root', 1, 1, 1)");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':api_key', $apiKey);
+
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to create master operator', 0, $e);
+            }
+
+            return $uuid;
+        }
+
+        /**
+         * Retrieve the master operator.
+         *
+         * This method checks if the master operator exists in the database.
+         * If it does not exist, it creates one with a predefined API key.
+         *
+         * @return OperatorRecord The master operator record.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws InvalidArgumentException If the API key for the master operator is not set in the configuration.
+         */
+        public static function getMasterOperator(): OperatorRecord
+        {
+            // This method retrieves the master operator from the database.
+            // If the master operator does not exist, it creates one with a predefined API key.
+            $apiKey = Configuration::getServerConfiguration()->getApiKey();
+
+            if(empty($apiKey))
+            {
+                throw new InvalidArgumentException('API key for master operator is not set in configuration.');
+            }
+
+            $operator = self::getOperatorByApiKey($apiKey);
+
+            if($operator === null)
+            {
+                $uuid = self::createMasterOperator($apiKey);
+                $operator = self::getOperator($uuid);
+            }
+
+            return $operator;
         }
 
         /**
