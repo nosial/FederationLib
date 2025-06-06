@@ -20,7 +20,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
 
             // Ensure the authenticated operator has permission to delete operators.
             if(!$authenticatedOperator->canManageBlacklist())
