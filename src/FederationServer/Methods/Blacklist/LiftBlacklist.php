@@ -3,6 +3,8 @@
     namespace FederationServer\Methods\Blacklist;
 
     use FederationServer\Classes\Configuration;
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\BlacklistManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -49,6 +51,12 @@
                 }
 
                 BlacklistManager::liftBlacklistRecord($blacklistUuid);
+                AuditLogManager::createEntry(AuditLogType::BLACKLIST_LIFTED, sprintf(
+                    'Blacklist record %s lifted by %s (%s)',
+                    $blacklistUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntity());
             }
             catch (DatabaseOperationException $e)
             {
