@@ -20,20 +20,19 @@
     {
         /**
          * @inheritDoc
-         * @throws RequestException
          */
         public static function handleRequest(): void
         {
-            $evidenceUuid = FederationServer::getParameter('evidence');
-            if($evidenceUuid === null)
+            $operator = FederationServer::requireAuthenticatedOperator();
+            if(!$operator->canManageBlacklist())
             {
-                throw new RequestException('Evidence UUID is required', 400);
+                throw new RequestException('Insufficient Permissions to upload attachments', 403);
             }
 
-            // Validate evidence UUID exists
-            if(!Validate::uuid($evidenceUuid) || !EvidenceManager::evidenceExists($evidenceUuid))
+            $evidenceUuid = FederationServer::getParameter('evidence');
+            if($evidenceUuid === null || !Validate::uuid($evidenceUuid))
             {
-                throw new RequestException('Invalid Evidence UUID', 400);
+                throw new RequestException('A valid evidence UUID is required', 400);
             }
 
             try
@@ -49,12 +48,6 @@
                 throw new RequestException('Evidence not found or database error', 404, $e);
             }
 
-            $operator = FederationServer::getAuthenticatedOperator();
-            if(!$operator->canManageBlacklist())
-            {
-                throw new RequestException('Insufficient Permissions to upload attachments', 403);
-            }
-
             // Verify the file upload field exists
             if(!isset($_FILES['file']))
             {
@@ -63,7 +56,7 @@
 
             // Ensure only a single file is uploaded
             $file = $_FILES['file'];
-            if (!is_array($file) || !isset($file['tmp_name']) || empty($file['tmp_name']) || is_array($file['tmp_name']))
+            if (!is_array($file) || empty($file['tmp_name']) || is_array($file['tmp_name']))
             {
                 throw new RequestException('Invalid file upload or multiple files detected', 400);
             }
@@ -74,10 +67,9 @@
                 throw new RequestException('Invalid file size');
             }
 
-            $maxUploadSize = Configuration::getServerConfiguration()->getMaxUploadSize();
-            if ($file['size'] > $maxUploadSize)
+            if ($file['size'] > Configuration::getServerConfiguration()->getMaxUploadSize())
             {
-                throw new RequestException("File exceeds maximum allowed size ({$maxUploadSize} bytes)", 401);
+                throw new RequestException(sprintf("File exceeds maximum allowed size (%d bytes)", Configuration::getServerConfiguration()->getMaxUploadSize()), 401);
             }
 
             // Validate file upload status
@@ -103,7 +95,7 @@
 
             // Additional check for path traversal attempts
             $realpath = realpath($file['tmp_name']);
-            if ($realpath === false || strpos($realpath, sys_get_temp_dir()) !== 0)
+            if ($realpath === false || !str_starts_with($realpath, sys_get_temp_dir()))
             {
                 throw new RequestException('Path traversal attempt detected');
             }
@@ -124,13 +116,8 @@
                 throw new RequestException('Storage directory is not writable', 500);
             }
 
-            // Generate a strong random UUID for the file
             $uuid = Uuid::v4()->toRfc4122();
-
-            // Prepare destination path (UUID only, no extension as per requirements)
             $destinationPath = $storagePath . DIRECTORY_SEPARATOR . $uuid;
-
-            // Use atomic operations where possible
             $tempDestination = $storagePath . DIRECTORY_SEPARATOR . uniqid('tmp_', true);
 
             if (!move_uploaded_file($file['tmp_name'], $tempDestination))
@@ -166,15 +153,15 @@
             {
                 // If database insertion fails, remove the file to maintain consistency
                 @unlink($destinationPath);
-
                 Logger::log()->error(sprintf('Failed to record file upload for evidence %s: %s', $evidenceUuid, $e->getMessage()), $e);
-                throw new RequestException('Failed to record file upload: ' . $e->getMessage());
+                throw new RequestException('Internal Server Error: Unable to create file attachment record', 500, $e);
             }
-            catch (Throwable $e) {
+            catch (Throwable $e)
+            {
                 // Handle any other unexpected errors
                 @unlink($destinationPath);
                 Logger::log()->error(sprintf('Unexpected error during file upload for evidence %s: %s', $evidenceUuid, $e->getMessage()));
-                throw new RequestException('Unexpected error during file upload: ' . $e->getMessage());
+                throw new RequestException('Internal Server Error', 500, $e);
             }
             finally
             {
