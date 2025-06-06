@@ -166,26 +166,26 @@
         /**
          * Deletes a blacklist entry for a specific entity.
          *
-         * @param string $entity The UUID of the entity to remove from the blacklist.
+         * @param string $uuid The UUID of the blacklist entry to delete.
          * @throws InvalidArgumentException If the entity is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function deleteBlacklistEntry(string $entity): void
+        public static function deleteBlacklistRecord(string $uuid): void
         {
-            if(empty($entity))
+            if(empty($uuid))
             {
-                throw new InvalidArgumentException("Entity cannot be empty.");
+                throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE entity = :entity");
-                $stmt->bindParam(':entity', $entity);
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to delete blacklist entry: " . $e->getMessage(), 0, $e);
+                throw new DatabaseOperationException("Failed to delete blacklist record: " . $e->getMessage(), 0, $e);
             }
         }
 
