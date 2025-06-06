@@ -3,6 +3,8 @@
     namespace FederationServer\Methods\Blacklist;
 
     use FederationServer\Classes\Configuration;
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\BlacklistManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -36,12 +38,19 @@
 
             try
             {
-                if(!BlacklistManager::blacklistExists($blacklistUuid))
+                $blacklistRecord = BlacklistManager::getBlacklistEntry($blacklistUuid);
+                if($blacklistRecord === null)
                 {
                     throw new RequestException('Blacklist record not found', 404);
                 }
 
                 BlacklistManager::deleteBlacklistRecord($blacklistUuid);
+                AuditLogManager::createEntry(AuditLogType::BLACKLIST_RECORD_DELETED, sprintf(
+                    'Blacklist record %s deleted by %s (%s)',
+                    $blacklistUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntity());
             }
             catch (DatabaseOperationException $e)
             {
