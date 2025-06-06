@@ -3,6 +3,7 @@
     namespace FederationServer;
 
     use Exception;
+    use FederationServer\Classes\Enums\HttpResponseCode;
     use FederationServer\Classes\Enums\Method;
     use FederationServer\Classes\Logger;
     use FederationServer\Classes\RequestHandler;
@@ -151,7 +152,7 @@
             $operator = self::getAuthenticatedOperator();
             if ($operator === null)
             {
-                throw new RequestException('Authentication required', 401);
+                throw new RequestException('Authentication required', HttpResponseCode::UNAUTHORIZED);
             }
 
             return $operator;
