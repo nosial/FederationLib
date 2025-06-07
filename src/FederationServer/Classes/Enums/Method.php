@@ -8,6 +8,7 @@
     use FederationServer\Methods\Attachments\UploadAttachment;
     use FederationServer\Methods\Audit\ListAuditLogs;
     use FederationServer\Methods\Audit\ViewAuditEntry;
+    use FederationServer\Methods\Blacklist\BlacklistAttachEvidence;
     use FederationServer\Methods\Blacklist\BlacklistEntity;
     use FederationServer\Methods\Blacklist\DeleteBlacklist;
     use FederationServer\Methods\Blacklist\GetBlacklistRecord;
@@ -187,7 +188,7 @@
                     SubmitEvidence::handleRequest();
                     break;
                 case self::GET_EVIDENCE_RECORD:
-                    GetEvidenceRecord::handleRequest();;
+                    GetEvidenceRecord::handleRequest();
                     break;
                 case self::DELETE_EVIDENCE:
                     DeleteEvidence::handleRequest();
@@ -207,6 +208,9 @@
                     break;
                 case self::GET_BLACKLIST_RECORD:
                     GetBlacklistRecord::handleRequest();
+                    break;
+                case self::BLACKLIST_ATTACH_EVIDENCE:
+                    BlacklistAttachEvidence::handleRequest();
                     break;
             }
         }

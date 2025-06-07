@@ -328,4 +328,37 @@
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries by entity: " . $e->getMessage(), 0, $e);
             }
         }
+
+        /**
+         * Attaches evidence to a blacklist entry.
+         *
+         * @param string $blacklist The UUID of the blacklist entry.
+         * @param string $evidence The UUID of the evidence to attach.
+         * @throws InvalidArgumentException If the blacklist or evidence UUIDs are empty or invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function attachEvidence(string $blacklist, string $evidence): void
+        {
+            if(empty($blacklist) || empty($evidence))
+            {
+                throw new InvalidArgumentException("Blacklist and evidence UUIDs cannot be empty.");
+            }
+
+            if(!Validate::uuid($blacklist) || !Validate::uuid($evidence))
+            {
+                throw new InvalidArgumentException("Blacklist and evidence must be valid UUIDs.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET evidence = :evidence WHERE uuid = :blacklist");
+                $stmt->bindParam(':blacklist', $blacklist);
+                $stmt->bindParam(':evidence', $evidence);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to attach evidence to blacklist: " . $e->getMessage(), 0, $e);
+            }
+        }
     }
