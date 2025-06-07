@@ -2,6 +2,8 @@
 
     namespace FederationServer\Methods\Evidence;
 
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -41,6 +43,12 @@
                 }
 
                 EvidenceManager::deleteEvidence($evidenceUuid);
+                AuditLogManager::createEntry(AuditLogType::EVIDENCE_DELETED, sprintf(
+                    'Evidence %s deleted by %s (%s)',
+                    $evidenceUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid(), $evidenceUuid);
             }
             catch(DatabaseOperationException $e)
             {

@@ -2,7 +2,8 @@
 
     namespace FederationServer\Methods\Operators;
 
-    use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -33,7 +34,27 @@
 
             try
             {
+                if($operatorUuid !== $authenticatedOperator->getUuid())
+                {
+                    $existingOperator = OperatorManager::getOperator($operatorUuid);
+                    if($existingOperator === null)
+                    {
+                        throw new RequestException('Operator Not Found', 404);
+                    }
+                }
+                else
+                {
+                    $existingOperator = $authenticatedOperator;
+                }
+
                 $newApiKey = OperatorManager::refreshApiKey($operatorUuid);
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
+                    'Operator %s (%s) refreshed API key by %s (%s)',
+                    $existingOperator->getName(),
+                    $existingOperator->getUuid(),
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)
             {

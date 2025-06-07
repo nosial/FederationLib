@@ -2,7 +2,9 @@
 
     namespace FederationServer\Methods\Operators;
 
+    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -38,7 +40,21 @@
 
             try
             {
+                $targetOperator = OperatorManager::getOperator($operatorUuid);
+                if($targetOperator === null)
+                {
+                    throw new RequestException('Operator Not Found', 404);
+                }
+
                 OperatorManager::setManageBlacklist($operatorUuid, $enabled);
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
+                    'Operator %s (%s) %s blacklist management permissions by %s (%s)',
+                    $targetOperator->getName(),
+                    $targetOperator->getUuid(),
+                    $enabled ? 'enabled' : 'disabled',
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)
             {

@@ -2,6 +2,8 @@
 
     namespace FederationServer\Methods\Entities;
 
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\DatabaseOperationException;
@@ -49,6 +51,12 @@
                 if(!EntitiesManager::entityExists($id, $domain))
                 {
                     $entityUuid = EntitiesManager::registerEntity($id, $domain);
+                    AuditLogManager::createEntry(AuditLogType::ENTITY_PUSHED, sprintf(
+                        'Entity %s registered by %s (%s)',
+                        $id,
+                        $authenticatedOperator->getName(),
+                        $authenticatedOperator->getUuid()
+                    ), $authenticatedOperator->getUuid(), $entityUuid);
                 }
                 else
                 {

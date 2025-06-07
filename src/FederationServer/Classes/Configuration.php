@@ -32,7 +32,7 @@
             self::$configuration->setDefault('server.list_evidence_max_items', 100);
             self::$configuration->setDefault('server.list_blacklist_max_items', 100);
             self::$configuration->setDefault('server.public_audit_logs', true);
-            self::$configuration->setDefault('server.public_audit_entries', array_map(fn($type) => $type->value, AuditLogType::cases()));
+            self::$configuration->setDefault('server.public_audit_entries', array_map(fn($type) => $type->value, AuditLogType::getDefaultPublic()));
             self::$configuration->setDefault('server.public_evidence', true);
             self::$configuration->setDefault('server.public_blacklist', true);
             self::$configuration->setDefault('server.public_entities', true);

@@ -2,6 +2,8 @@
 
     namespace FederationServer\Methods\Evidence;
 
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\RequestHandler;
@@ -54,12 +56,21 @@
                     throw new RequestException('Entity does not exist', 404);
                 }
 
-                self::successResponse(EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential));
+                $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential);
+                AuditLogManager::createEntry(AuditLogType::EVIDENCE_SUBMITTED, sprintf(
+                    'Evidence %s created for entity %s by %s (%s)',
+                    $evidenceUuid,
+                    $entityUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid(), $evidenceUuid);
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Failed to create evidence', 500, $e);
             }
+
+            self::successResponse($evidenceUuid);
         }
     }
 

@@ -46,6 +46,8 @@
                 {
                     throw new RequestException('Confidential evidence access is restricted', 403);
                 }
+
+                self::successResponse($evidenceRecord->toArray());
             }
             catch(DatabaseOperationException $e)
             {
