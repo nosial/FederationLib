@@ -3,7 +3,9 @@
     namespace FederationServer\Methods\Blacklist;
 
     use FederationServer\Classes\Configuration;
+    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Enums\BlacklistType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\BlacklistManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
@@ -77,6 +79,15 @@
                     expires: $expires,
                     evidence: $evidence
                 );
+
+                AuditLogManager::createEntry(AuditLogType::ENTITY_BLACKLISTED, sprintf(
+                    'Entity %s blacklisted by %s (%s) with type %s%s',
+                    $entityUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid(),
+                    $type->name,
+                    $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ''
+                ), $authenticatedOperator->getUuid(), $entityUuid);
             }
             catch(DatabaseOperationException $e)
             {

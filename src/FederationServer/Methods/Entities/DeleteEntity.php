@@ -2,6 +2,8 @@
 
     namespace FederationServer\Methods\Entities;
 
+    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -41,6 +43,13 @@
                 }
 
                 EntitiesManager::deleteEntity($entityUuid);
+
+                AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
+                    'Entity %s deleted by %s (%s)',
+                    $entityUuid,
+                    $authenticatedOperator->getName(),
+                    $authenticatedOperator->getUuid()
+                ), $authenticatedOperator->getUuid(), $entityUuid);
             }
             catch (DatabaseOperationException $e)
             {
