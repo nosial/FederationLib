@@ -12,6 +12,7 @@
   </component>
   <component name="PhpIncludePathManager">
     <include_path>
+      <path value="/usr/share/ncc" />
       <path value="/var/ncc/packages/com.symfony.uid=v7.2.0" />
       <path value="/var/ncc/packages/net.nosial.configlib=1.2.0" />
       <path value="/var/ncc/packages/net.nosial.loglib2=1.0.3" />
