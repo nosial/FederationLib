@@ -39,8 +39,10 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, id, domain) VALUES (:uuid, :id, :domain)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, hash, id, domain) VALUES (:uuid, :hash, :id, :domain)");
+                $hash = hash('sha256', is_null($domain) ? $id : sprintf('%s@%s', $id, $domain));
                 $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);
                 $stmt->bindParam(':domain', $domain);
                 $stmt->execute();
@@ -138,6 +140,40 @@
         }
 
         /**
+         * Retrieves an entity by its SHA-256 hash.
+         *
+         * @param string $hash The SHA-256 hash of the entity.
+         * @return EntityRecord|null The EntityRecord object if found, null otherwise.
+         * @throws InvalidArgumentException If the hash is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntityByHash(string $hash): ?EntityRecord
+        {
+            if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
+            {
+                throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash = :hash");
+                $stmt->bindParam(':hash', $hash);
+                $stmt->execute();
+
+                $data = $stmt->fetch(PDO::FETCH_ASSOC);
+                if($data)
+                {
+                    return new EntityRecord($data);
+                }
+                return null;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve entity by hash: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Checks if an entity exists by its ID and domain.
          *
          * @param string $id The ID of the entity.
@@ -210,6 +246,34 @@
         }
 
         /**
+         * Checks if an entity exists by its hash.
+         *
+         * @param string $hash The hash of the entity.
+         * @return bool True if the entity exists, false otherwise.
+         * @throws InvalidArgumentException If the hash is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function entityExistsByHash(string $hash): bool
+        {
+            if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
+            {
+                throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE hash = :hash");
+                $stmt->bindParam(':hash', $hash);
+                $stmt->execute();
+                return (bool)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check entity existence by hash: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Deletes an entity by its UUID.
          *
          * @param string $uuid The UUID of the entity to delete.
@@ -260,6 +324,32 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to delete entity by ID and domain: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Deletes an entity by its hash.
+         *
+         * @param string $hash The SHA-256 hash of the entity to delete.
+         * @throws InvalidArgumentException If the hash is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function deleteEntityByHash(string $hash): void
+        {
+            if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
+            {
+                throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE hash = :hash");
+                $stmt->bindParam(':hash', $hash);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to delete entity by hash: " . $e->getMessage(), $e->getCode(), $e);
             }
         }
 

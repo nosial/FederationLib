@@ -6,6 +6,7 @@
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Utilities;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -23,15 +24,18 @@
                 throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
-            if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', FederationServer::getPath(), $matches))
+            if(
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})/audit$#', FederationServer::getPath(), $matches)
+            )
             {
-                throw new RequestException('Entity UUID is required', 400);
+                throw new RequestException('Entity identifier is required', 400);
             }
 
-            $entityUuid = $matches[1];
-            if(!$entityUuid)
+            $entityIdentifier = $matches[1];
+            if(!$entityIdentifier)
             {
-                throw new RequestException('Entity UUID is required', 400);
+                throw new RequestException('Entity Identifier SHA-256/UUID is required', 400);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
@@ -60,13 +64,21 @@
 
             try
             {
-                if(!EntitiesManager::entityExistsByUuid($entityUuid))
+                if(Utilities::isUuid($entityIdentifier))
                 {
-                    throw new RequestException('Entity with the specified UUID does not exist', 404);
+                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
+                }
+                elseif(Utilities::isSha256($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
+                }
+                else
+                {
+                    throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
                 }
 
                 self::successResponse(array_map(fn($log) => $log->toArray(),
-                    AuditLogManager::getEntriesByEntity($entityUuid, $limit, $page, $filteredEntries))
+                    AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries))
                 );
             }
             catch (DatabaseOperationException $e)

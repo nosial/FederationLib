@@ -6,6 +6,7 @@
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Utilities;
     use FederationServer\Classes\Validate;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
@@ -24,32 +25,43 @@
                 throw new RequestException('Insufficient permissions to manage entities', 401);
             }
 
-            if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})$#', FederationServer::getPath(), $matches)
+            )
             {
                 throw new RequestException('Entity UUID is required', 400);
             }
 
-            $entityUuid = $matches[1];
-            if(!$entityUuid || !Validate::uuid($entityUuid))
+            $entityIdentifier = $matches[1];
+            if(!$entityIdentifier)
             {
-                throw new RequestException('Entity UUID is required', 400);
+                throw new RequestException('Entity Identifier SHA-256/UUID is required', 400);
             }
 
             try
             {
-                if(!EntitiesManager::entityExistsByUuid($entityUuid))
+                if(Utilities::isUuid($entityIdentifier))
                 {
-                    throw new RequestException('Entity does not exist', 404);
+                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
+                }
+                elseif(Utilities::isSha256($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
+                }
+                else
+                {
+                    throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
                 }
 
-                EntitiesManager::deleteEntity($entityUuid);
+                EntitiesManager::deleteEntity($entityRecord->getUuid());
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
                     'Entity %s deleted by %s (%s)',
-                    $entityUuid,
+                    $entityRecord->getUuid(),
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $entityUuid);
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid());
             }
             catch (DatabaseOperationException $e)
             {

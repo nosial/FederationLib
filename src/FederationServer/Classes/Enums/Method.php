@@ -21,7 +21,6 @@
     use FederationServer\Methods\Entities\ListEntityBlacklistRecords;
     use FederationServer\Methods\Entities\ListEntityEvidence;
     use FederationServer\Methods\Entities\PushEntity;
-    use FederationServer\Methods\Entities\QueryEntity;
     use FederationServer\Methods\Evidence\SubmitEvidence;
     use FederationServer\Methods\Evidence\DeleteEvidence;
     use FederationServer\Methods\Evidence\GetEvidenceRecord;
@@ -64,7 +63,6 @@
         case GET_ENTITY_RECORD;
         case DELETE_ENTITY;
         case LIST_ENTITIES;
-        case QUERY_ENTITY;
         case PUSH_ENTITY;
         case LIST_ENTITY_EVIDENCE;
         case LIST_ENTITY_AUDIT_LOGS;
@@ -115,9 +113,6 @@
 
                 case self::LIST_ENTITIES:
                     ListEntities::handleRequest();
-                    break;
-                case self::QUERY_ENTITY:
-                    QueryEntity::handleRequest();
                     break;
                 case self::GET_ENTITY_RECORD:
                     GetEntityRecord::handleRequest();
@@ -235,12 +230,17 @@
 
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
-                $path === '/entities/query' && $requestMethod === 'POST' => Method::QUERY_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
+                // SHA-256 hash of the entity ID is used for the blacklist
+                preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
+                preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
+                preg_match('#^/entities/([a-f0-9\-]{64})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
+                preg_match('#^/entities/([a-f0-9\-]{64})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
+                preg_match('#^/entities/([a-f0-9\-]{64})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
 
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
                 $path === '/blacklist' && $requestMethod === 'POST' => Method::BLACKLIST_ENTITY,

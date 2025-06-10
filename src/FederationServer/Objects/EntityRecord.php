@@ -9,7 +9,7 @@
     {
         private string $uuid;
         private string $id;
-        private string $domain;
+        private ?string $domain;
         private int $created;
 
         /**
@@ -25,7 +25,7 @@
         {
             $this->uuid = $data['uuid'] ?? '';
             $this->id = $data['id'] ?? '';
-            $this->domain = $data['domain'] ?? '';
+            $this->domain = $data['domain'] ?? null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
         }
 
@@ -37,6 +37,23 @@
         public function getUuid(): string
         {
             return $this->uuid;
+        }
+
+        /**
+         * Returns the hash of the entity record.
+         *
+         * @return string The SHA-256 hash of the entity record.
+         */
+        public function getHash(): string
+        {
+            if($this->domain === null)
+            {
+                return hash('sha256', $this->id);
+            }
+            else
+            {
+                return hash('sha256', sprintf('%s@%s', $this->id, $this->domain));
+            }
         }
 
         /**
@@ -52,9 +69,9 @@
         /**
          * Get the domain associated with the entity.
          *
-         * @return string The domain of the entity.
+         * @return string|null The domain of the entity. null if the entity is universal (e.g., IP address).
          */
-        public function getDomain(): string
+        public function getDomain(): ?string
         {
             return $this->domain;
         }
@@ -76,6 +93,7 @@
         {
             return [
                 'uuid' => $this->uuid,
+                'hash' => $this->getHash(),
                 'id' => $this->id,
                 'domain' => $this->domain,
                 'created' => $this->created,

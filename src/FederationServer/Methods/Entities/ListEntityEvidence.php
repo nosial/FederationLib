@@ -6,6 +6,7 @@
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Classes\Utilities;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -43,27 +44,37 @@
                 $page = 1;
             }
 
-
-            if(!preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches))
+            if(
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})/evidence$#', FederationServer::getPath(), $matches)
+            )
             {
-                throw new RequestException('Entity UUID is required', 400);
+                throw new RequestException('Entity identifier is required', 400);
             }
 
-            $entityUuid = $matches[1];
-            if(!$entityUuid)
+            $entityIdentifier = $matches[1];
+            if(!$entityIdentifier)
             {
-                throw new RequestException('Entity UUID is required', 400);
+                throw new RequestException('Entity Identifier SHA-256/UUID is required', 400);
             }
+
 
             try
             {
-                $existingEntity = EntitiesManager::getEntityByUuid($entityUuid);
-                if($existingEntity === null)
+                if(Utilities::isUuid($entityIdentifier))
                 {
-                    throw new RequestException('Entity does not exist', 404);
+                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
+                }
+                elseif(Utilities::isSha256($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
+                }
+                else
+                {
+                    throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
                 }
                 
-                $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page, $includeConfidential);
+                $evidenceRecords = EvidenceManager::getEvidenceByEntity($entityRecord->getUuid(), $limit, $page, $includeConfidential);
             }
             catch (DatabaseOperationException $e)
             {
