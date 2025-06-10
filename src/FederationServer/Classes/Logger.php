@@ -15,7 +15,7 @@
         {
             if (self::$logger === null)
             {
-                self::$logger = new \LogLib2\Logger('federation_server');
+                self::$logger = new \LogLib2\Logger('net.nosial.federation');
 
                 // Don't register handlers if we are testing. This conflicts with PHPUnit.
                 if(!defined('FS_TEST'))
