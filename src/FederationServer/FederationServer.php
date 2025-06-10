@@ -3,12 +3,14 @@
     namespace FederationServer;
 
     use Exception;
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Enums\HttpResponseCode;
     use FederationServer\Classes\Enums\Method;
     use FederationServer\Classes\Logger;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Objects\OperatorRecord;
+    use FederationServer\Objects\ServerInformation;
 
     class FederationServer extends RequestHandler
     {
@@ -156,5 +158,21 @@
             }
 
             return $operator;
+        }
+
+        /**
+         * Returns information about the Federation server instance
+         *
+         * @return ServerInformation The server information object containing details about the server.
+         */
+        public static function getServerInformation(): ServerInformation
+        {
+            return new ServerInformation([
+                'name' => Configuration::getServerConfiguration()->getName(),
+                'public_audit_logs' => Configuration::getServerConfiguration()->isAuditLogsPublic(),
+                'public_evidence' => Configuration::getServerConfiguration()->isEvidencePublic(),
+                'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
+                'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
+            ]);
         }
     }
