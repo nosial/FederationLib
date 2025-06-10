@@ -1,9 +1,9 @@
 <?php
 
-use FederationServer\Program;
-use ncc\Classes\Runtime;
+    use FederationServer\Program;
+    use ncc\Classes\Runtime;
 
-if (PHP_SAPI !== 'cli')
+    if (PHP_SAPI !== 'cli')
     {
         print('net.nosial.federation must be run from the command line.' . PHP_EOL);
         exit(1);
