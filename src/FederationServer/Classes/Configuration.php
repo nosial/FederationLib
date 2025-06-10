@@ -19,7 +19,7 @@
          */
         public static function initialize(): void
         {
-            self::$configuration = new \ConfigLib\Configuration('federation_server');
+            self::$configuration = new \ConfigLib\Configuration('federation');
 
             self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:6161');
             self::$configuration->setDefault('server.name', 'Federation Server');
