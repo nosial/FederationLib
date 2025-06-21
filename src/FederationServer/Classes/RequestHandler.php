@@ -52,12 +52,12 @@
             if (self::$uri)
             {
                 $query = parse_url(self::$uri, PHP_URL_QUERY);
-                parse_str($query, self::$parameters);
+                parse_str((string)$query, self::$parameters);
             }
 
             if (self::$inputContent && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/x-www-form-urlencoded'))
             {
-                parse_str(self::$inputContent, $postParams);
+                parse_str((string)self::$inputContent, $postParams);
                 self::$parameters = array_merge(self::$parameters, $postParams);
             }
 
