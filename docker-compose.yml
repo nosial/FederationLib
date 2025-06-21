@@ -1,0 +1,86 @@
+services:
+  federation:
+    container_name: federation_server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8500:8500"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal_network
+    restart: unless-stopped
+    volumes:
+      - ./federation/logs:/var/log
+      - ./federation/data:/etc/federation
+    environment:
+      # Logging Level, use "info", "debug", "error", "warning", or "critical"
+      LOG_LEVEL: debug
+      # Configurable Values
+      FEDERATION_NAME: ${FEDERATION_NAME:-federation}
+      FEDERATION_API_KEY: ${FEDERATION_API_KEY:-abcdefghijklmnopqrstuvwxyz123456}
+      FEDERATION_DATABASE_HOST: mariadb
+      FEDERATION_DATABASE_USERNAME: ${MYSQL_USER:-federation}
+      FEDERATION_DATABASE_PASSWORD: ${MYSQL_PASSWORD:-federation}
+      FEDERATION_DATABASE_NAME: ${MYSQL_DATABASE:-federation}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-H", "Request-Type: ping", "http://127.0.0.0:8500/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mariadb:
+    container_name: federation_mariadb
+    image: mariadb:10.5
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-federation_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-federation}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - internal_network
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "mariadb", "-u", "${MYSQL_USER:-federation}", "-p${MYSQL_PASSWORD:-federation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    container_name: federation_redis
+    image: redis:alpine
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    volumes:
+      - redis_data:/data
+      - ./docker/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - internal_network
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  mariadb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  internal_network:
+    driver: bridge
+    name: federation_network
