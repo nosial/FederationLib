@@ -25,6 +25,7 @@
     use FederationServer\Methods\Evidence\DeleteEvidence;
     use FederationServer\Methods\Evidence\GetEvidenceRecord;
     use FederationServer\Methods\Evidence\ListEvidence;
+    use FederationServer\Methods\GetServerInformation;
     use FederationServer\Methods\Operators\CreateOperator;
     use FederationServer\Methods\Operators\DeleteOperator;
     use FederationServer\Methods\Operators\DisableOperator;
@@ -42,6 +43,8 @@
 
     enum Method
     {
+        case GET_SERVER_INFORMATION;
+
         case LIST_AUDIT_LOGS;
         case VIEW_AUDIT_ENTRY;
 
@@ -94,6 +97,10 @@
         {
             switch($this)
             {
+                case self::GET_SERVER_INFORMATION:
+                    GetServerInformation::handleRequest();
+                    break;
+
                 case self::LIST_AUDIT_LOGS:
                     ListAuditLogs::handleRequest();
                     break;
@@ -222,6 +229,7 @@
             return match (true)
             {
                 $path === '/' && $requestMethod === 'GET' => Method::LIST_AUDIT_LOGS,
+                $path === '/info' && $requestMethod === 'GET' => Method::GET_SERVER_INFORMATION,
                 preg_match('#^/audit/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::VIEW_AUDIT_ENTRY,
 
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
