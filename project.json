@@ -69,7 +69,7 @@
             "execute": {
                 "working_directory": "%CWD%",
                 "silent": false,
-                "tty": true,
+                "tty": false,
                 "timeout": null,
                 "idle_timeout": null,
                 "target": "main"
