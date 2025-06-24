@@ -336,11 +336,11 @@ class MultiProtocolServer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Logging Server")
-    parser.add_argument("-p", "--port", type=int, default=8080, 
+    parser.add_argument("-p", "--port", type=int, default=8080,
                        help="Port to listen on")
-    parser.add_argument("-w", "--working-directory", type=str, 
+    parser.add_argument("-w", "--working-directory", type=str,
                        default="./logs", help="Directory to store log files")
     args = parser.parse_args()
-    
+
     server = MultiProtocolServer("0.0.0.0", args.port, args.working_directory)
     server.start()

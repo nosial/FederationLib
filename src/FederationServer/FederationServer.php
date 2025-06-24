@@ -33,6 +33,7 @@
                 if($requestMethod === null)
                 {
                     self::errorResponse('Invalid request method or path.', 400);
+                    return;
                 }
 
                 // Handle the request based on the matched method.

@@ -4,16 +4,22 @@
 
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\DatabaseConnection;
+    use FederationServer\Classes\Logger;
+    use FederationServer\Classes\RedisConnection;
     use FederationServer\Classes\Utilities;
+    use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\OperatorRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use RedisException;
     use Symfony\Component\Uid\Uuid;
 
     class OperatorManager
     {
+        private const string OPERATOR_CACHE_PREFIX = 'operator_';
+
         /**
          * Create a new operator with a unique API key.
          *
@@ -21,6 +27,7 @@
          * @return string The generated UUID for the operator.
          * @throws InvalidArgumentException If the name is empty or exceeds 255 characters.
          * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function createOperator(string $name): string
         {
@@ -49,6 +56,39 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to create operator '%s'", $name), 0, $e);
+            }
+
+            // If caching and pre-caching is enabled, retrieve the existing operator record and cache it
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+                // NOTE: We never ever have to check if the cache key exists here, because we are creating a new operator.
+
+                try
+                {
+                    // If the limit has not been exceeded, cache the operator record
+                    if (!RedisConnection::limitExceeded(self::OPERATOR_CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit()))
+                    {
+                        $operatorRecord = self::getOperator($uuid);
+                        Logger::log()->debug(sprintf("Pre-caching operator with UUID '%s'", $uuid));
+                        RedisConnection::getConnection()->hMSet($cacheKey, $operatorRecord->toArray());
+
+                        // Set the cache expiration if configured
+                        if(Configuration::getRedisConfiguration()->getOperatorCacheTtl() > 0)
+                        {
+                            Logger::log()->debug(sprintf("Setting expiration for operator cache key '%s' to %d seconds", $cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl()));
+                            RedisConnection::getConnection()->expire($cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl());
+                        }
+                    }
+                }
+                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
+                catch (RedisException $e)
+                {
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to pre-cache operator with UUID '%s'", $uuid), 0, $e);
+                    }
+                }
             }
 
             return $uuid;
@@ -447,5 +487,15 @@
             {
                 throw new DatabaseOperationException('Failed to retrieve operators', 0, $e);
             }
+        }
+
+        /**
+         * Returns True if caching & operator caching is enabled for this class
+         *
+         * @return bool True if caching & caching for operators is enabled, False otherwise
+         */
+        private static function isCachingEnabled(): bool
+        {
+            return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isOperatorCacheEnabled();
         }
     }

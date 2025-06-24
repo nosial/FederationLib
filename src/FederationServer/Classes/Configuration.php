@@ -51,6 +51,12 @@
             self::$configuration->setDefault('redis.port', 6379, 'FEDERATION_REDIS_PORT');
             self::$configuration->setDefault('redis.password', null, 'FEDERATION_REDIS_PASSWORD');
             self::$configuration->setDefault('redis.database', 0, 'FEDERATION_REDIS_DATABASE');
+            self::$configuration->setDefault('redis.throw_on_errors', true, 'FEDERATION_CACHE_THROW_ON_ERRORS');
+            // If enabled, some methods will attempt to pre-cache objects before they are called.
+            self::$configuration->setDefault('redis.pre_cache_enabled', true, 'FEDERATION_PRE_CACHE_ENABLED');
+            self::$configuration->setDefault('redis.operator_cache_enabled', true, 'FEDERATION_OPERATOR_CACHE_ENABLED');
+            self::$configuration->setDefault('redis.operator_cache_limit', 1000, 'FEDERATION_OPERATOR_CACHE_LIMIT');
+            self::$configuration->setDefault('redis.operator_cache_ttl', 600, 'FEDERATION_OPERATOR_CACHE_TTL');
             self::$configuration->save();
 
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
