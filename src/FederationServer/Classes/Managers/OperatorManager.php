@@ -84,6 +84,7 @@
                 // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
                 catch (RedisException $e)
                 {
+                    Logger::log()->error(sprintf("Failed to pre-cache operator with UUID '%s': %s", $uuid, $e->getMessage()), $e);
                     if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
                     {
                         throw new CacheOperationException(sprintf("Failed to pre-cache operator with UUID '%s'", $uuid), 0, $e);
@@ -142,6 +143,7 @@
          * @return OperatorRecord The master operator record.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws InvalidArgumentException If the API key for the master operator is not set in the configuration.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getMasterOperator(): OperatorRecord
         {
@@ -172,6 +174,7 @@
          * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getOperator(string $uuid): ?OperatorRecord
         {
@@ -193,19 +196,87 @@
                     return null; // No operator found with the given UUID
                 }
 
-                return new OperatorRecord($data);
+                $operatorRecord = new OperatorRecord($data);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to retrieve operator with UUID '%s'", $uuid), 0, $e);
             }
+
+            if(self::isCachingEnabled())
+            {
+                try
+                {
+                    $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+
+                    if (RedisConnection::limitExceeded(self::OPERATOR_CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit()))
+                    {
+                        return $operatorRecord; // Do not cache if the limit has been exceeded
+                    }
+
+                    if(RedisConnection::getConnection()->exists($cacheKey))
+                    {
+                        return $operatorRecord; // Return the cached record if it exists
+                    }
+
+                    Logger::log()->debug(sprintf("Caching operator with UUID '%s'", $uuid));
+                    RedisConnection::getConnection()->hMSet($cacheKey, $operatorRecord->toArray());
+
+                    // Set the cache expiration if configured
+                    if(Configuration::getRedisConfiguration()->getOperatorCacheTtl() > 0)
+                    {
+                        Logger::log()->debug(sprintf("Setting expiration for operator cache key '%s' to %d seconds", $cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl()));
+                        RedisConnection::getConnection()->expire($cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl());
+                    }
+                }
+                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
+                catch (RedisException $e)
+                {
+                    Logger::log()->error(sprintf("Failed to cache operator with UUID '%s': %s", $uuid, $e->getMessage()));
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to cache operator with UUID '%s'", $uuid), 0, $e);
+                    }
+                }
+            }
+
+            return $operatorRecord;
         }
 
+        /**
+         * Check if an operator exists by their UUID.
+         *
+         * @param string $uuid The UUID of the operator.
+         * @return bool True if the operator exists, false otherwise.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws CacheOperationException If there is an error during the caching operation.
+         */
         public static function operatorExists(string $uuid): bool
         {
             if(empty($uuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
+            }
+
+            if(self::isCachingEnabled())
+            {
+                $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+                try
+                {
+                    if (RedisConnection::getConnection()->exists($cacheKey))
+                    {
+                        return true; // If the operator is cached, it exists
+                    }
+                }
+                catch (RedisException $e)
+                {
+                    Logger::log()->error(sprintf("Failed to check cache for operator with UUID '%s': %s", $uuid, $e->getMessage()), $e);
+                    if (Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to check cache for operator with UUID '%s'", $uuid), 0, $e);
+                    }
+                }
             }
 
             try
@@ -214,12 +285,45 @@
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
 
-                return $stmt->fetchColumn() > 0; // Returns true if operator exists, false otherwise
+                $exists = $stmt->fetchColumn() > 0; // Returns true if operator exists, false otherwise
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to check existence of operator with UUID '%s'", $uuid), 0, $e);
             }
+
+            if($exists && self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                // If caching is enabled and the operator exists, pre-cache it
+                try
+                {
+                    $operatorRecord = self::getOperator($uuid);
+                    $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+
+                    if (!RedisConnection::limitExceeded(self::OPERATOR_CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit()))
+                    {
+                        Logger::log()->debug(sprintf("Pre-caching operator with UUID '%s'", $uuid));
+                        RedisConnection::getConnection()->hMSet($cacheKey, $operatorRecord->toArray());
+
+                        // Set the cache expiration if configured
+                        if(Configuration::getRedisConfiguration()->getOperatorCacheTtl() > 0)
+                        {
+                            Logger::log()->debug(sprintf("Setting expiration for operator cache key '%s' to %d seconds", $cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl()));
+                            RedisConnection::getConnection()->expire($cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl());
+                        }
+                    }
+                }
+                catch (RedisException $e)
+                {
+                    Logger::log()->error(sprintf("Failed to pre-cache operator with UUID '%s': %s", $uuid, $e->getMessage()), $e);
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to pre-cache operator with UUID '%s'", $uuid), 0, $e);
+                    }
+                }
+            }
+
+            return $exists;
         }
 
         /**
