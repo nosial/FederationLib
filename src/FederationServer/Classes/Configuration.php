@@ -46,7 +46,7 @@
             self::$configuration->setDefault('database.charset', 'utf8mb4', 'FEDERATION_DATABASE_CHARSET');
             self::$configuration->setDefault('database.collation', 'utf8mb4_unicode_ci', 'FEDERATION_DATABASE_COLLATION');
 
-            self::$configuration->setDefault('redis.enabled', true, 'FEDERATION_REDIS_ENABLED');
+            self::$configuration->setDefault('redis.enabled', false, 'FEDERATION_REDIS_ENABLED');
             self::$configuration->setDefault('redis.host', '127.0.1', 'FEDERATION_REDIS_HOST');
             self::$configuration->setDefault('redis.port', 6379, 'FEDERATION_REDIS_PORT');
             self::$configuration->setDefault('redis.password', null, 'FEDERATION_REDIS_PASSWORD');

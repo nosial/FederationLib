@@ -22,7 +22,7 @@
          */
         public function __construct(array $configuration)
         {
-            $this->enabled = $configuration['enabled'] ?? true;
+            $this->enabled = $configuration['enabled'] ?? false;
             $this->host = $configuration['host'] ?? '127.0.0.1';
             $this->port = $configuration['port'] ?? 6379;
             $this->password = $configuration['password'] ?? null;
