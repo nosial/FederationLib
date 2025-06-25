@@ -16,7 +16,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageOperators())
             {
                 throw new RequestException('Insufficient permissions to list operators', 403);

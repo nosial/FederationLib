@@ -2,10 +2,9 @@
 
     namespace FederationServer\Exceptions;
 
-    use Exception;
     use Throwable;
 
-    class CacheOperationException extends Exception
+    class CacheOperationException extends DatabaseOperationException
     {
         /**
          * @inheritDoc
