@@ -11,9 +11,14 @@
         private int $database;
         private bool $throwOnErrors;
         private bool $preCacheEnabled;
+
         private bool $operatorCacheEnabled;
         private int $operatorCacheLimit;
         private int $operatorCacheTtl;
+
+        private bool $entitiesCacheEnabled;
+        private int $entitiesCacheLimit;
+        private int $entitiesCacheTtl;
 
         /**
          * RedisConfiguration constructor.
@@ -32,6 +37,9 @@
             $this->operatorCacheEnabled = $configuration['operator_cache_enabled'] ?? true;
             $this->operatorCacheLimit = $configuration['operator_cache_limit'] ?? 1000;
             $this->operatorCacheTtl = $configuration['operator_cache_ttl'] ?? 600;
+            $this->entitiesCacheEnabled = $configuration['entity_cache_enabled'] ?? true;
+            $this->entitiesCacheLimit = $configuration['entity_cache_limit'] ?? 5000;
+            $this->entitiesCacheTtl = $configuration['entity_cache_ttl'] ?? 600;
         }
 
         /**
@@ -134,5 +142,35 @@
         public function getOperatorCacheTtl(): int
         {
             return $this->operatorCacheTtl;
+        }
+
+        /**
+         * Returns True if entities caching is enabled
+         *
+         * @return bool True if entities caching is Enabled, False otherwise
+         */
+        public function isEntitiesCacheEnabled(): bool
+        {
+            return $this->entitiesCacheEnabled;
+        }
+
+        /**
+         * Returns the entities cache limit for the cache
+         *
+         * @return int The maximum number of entities, anything 0 or less=no limit
+         */
+        public function getEntitiesCacheLimit(): int
+        {
+            return $this->entitiesCacheLimit;
+        }
+
+        /**
+         * Returns the entities cache TTL in seconds
+         *
+         * @return int The time to live in seconds for the entities cache
+         */
+        public function getEntitiesCacheTtl(): int
+        {
+            return $this->entitiesCacheTtl;
         }
     }

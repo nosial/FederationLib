@@ -54,9 +54,16 @@
             self::$configuration->setDefault('redis.throw_on_errors', true, 'FEDERATION_CACHE_THROW_ON_ERRORS');
             // If enabled, some methods will attempt to pre-cache objects before they are called.
             self::$configuration->setDefault('redis.pre_cache_enabled', true, 'FEDERATION_PRE_CACHE_ENABLED');
+            // Operators cache
             self::$configuration->setDefault('redis.operator_cache_enabled', true, 'FEDERATION_OPERATOR_CACHE_ENABLED');
             self::$configuration->setDefault('redis.operator_cache_limit', 1000, 'FEDERATION_OPERATOR_CACHE_LIMIT');
             self::$configuration->setDefault('redis.operator_cache_ttl', 600, 'FEDERATION_OPERATOR_CACHE_TTL');
+            // Entities cache
+            self::$configuration->setDefault('redis.entity_cache_enabled', true, 'FEDERATION_ENTITY_CACHE_ENABLED');
+            self::$configuration->setDefault('redis.entity_cache_limit', 5000, 'FEDERATION_ENTITY_CACHE_LIMIT');
+            self::$configuration->setDefault('redis.entity_cache_ttl', 600, 'FEDERATION_ENTITY_CACHE_TTL');
+
+            // Save
             self::$configuration->save();
 
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));

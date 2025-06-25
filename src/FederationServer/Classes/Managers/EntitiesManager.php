@@ -2,16 +2,24 @@
 
     namespace FederationServer\Classes\Managers;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\DatabaseConnection;
+    use FederationServer\Classes\Logger;
+    use FederationServer\Classes\RedisConnection;
+    use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\EntityRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
     use Symfony\Component\Uid\Uuid;
+    use RedisException;
+    use Throwable;
 
     class EntitiesManager
     {
+        private const string ENTITY_CACHE_PREFIX = 'entity_';
+
         /**
          * Registers a new entity with the given ID and domain.
          *
@@ -19,6 +27,7 @@
          * @param string|null $domain The domain of the entity, can be null.
          * @throws InvalidArgumentException If the ID exceeds 255 characters or if the domain is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function registerEntity(string $id, ?string $domain=null): string
         {
@@ -52,6 +61,20 @@
                 throw new DatabaseOperationException("Failed to register entity: " . $e->getMessage(), $e->getCode(), $e);
             }
 
+            // Cache the entity if caching is enabled and pre-caching is enabled
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                // If the limit has not been exceeded, cache the entity record
+                if (!RedisConnection::limitExceeded(self::ENTITY_CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
+                {
+                    $entity = self::getEntity($id, $domain);
+                    if ($entity !== null)
+                    {
+                        RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getUuid()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
+                    }
+                }
+            }
+
             return $uuid;
         }
 
@@ -62,6 +85,7 @@
          * @param string|null $domain The domain of the entity.
          * @return EntityRecord|null The EntityRecord object if found, null otherwise.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getEntity(string $id, ?string $domain): ?EntityRecord
         {
@@ -73,6 +97,20 @@
             if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
                 throw new InvalidArgumentException("Invalid domain format.");
+            }
+
+            // Try cache first
+            $hash = hash('sha256', is_null($domain) ? $id : sprintf('%s@%s', $id, $domain));
+            if(self::isCachingEnabled())
+            {
+                if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
+                {
+                    $cached = RedisConnection::getRecordFromCache(self::getCacheKey($hash));
+                    if (is_array($cached) && !empty($cached))
+                    {
+                        return new EntityRecord($cached);
+                    }
+                }
             }
 
             try
@@ -94,7 +132,14 @@
 
                 if($data)
                 {
-                    return new EntityRecord($data);
+                    $entity = new EntityRecord($data);
+                    // Cache the entity
+                    if(self::isCachingEnabled())
+                    {
+                        RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getHash()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
+                    }
+
+                    return $entity;
                 }
 
                 return null;
@@ -112,12 +157,25 @@
          * @return EntityRecord|null The EntityRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getEntityByUuid(string $uuid): ?EntityRecord
         {
             if(strlen($uuid) < 1)
             {
                 throw new InvalidArgumentException("Entity UUID must be provided.");
+            }
+
+            if(self::isCachingEnabled())
+            {
+                if (RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+                {
+                    $cached = RedisConnection::getRecordFromCache(self::getCacheKey($uuid));
+                    if (is_array($cached) && !empty($cached))
+                    {
+                        return new EntityRecord($cached);
+                    }
+                }
             }
 
             try
@@ -129,7 +187,12 @@
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($data)
                 {
-                    return new EntityRecord($data);
+                    $entity = new EntityRecord($data);
+                    if(self::isCachingEnabled())
+                    {
+                        RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getUuid()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
+                    }
+                    return $entity;
                 }
                 return null;
             }
@@ -146,12 +209,25 @@
          * @return EntityRecord|null The EntityRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the hash is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getEntityByHash(string $hash): ?EntityRecord
         {
             if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
             {
                 throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+            }
+
+            if(self::isCachingEnabled())
+            {
+                if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
+                {
+                    $cached = RedisConnection::getRecordFromCache(self::getCacheKey($hash));
+                    if (is_array($cached) && !empty($cached))
+                    {
+                        return new EntityRecord($cached);
+                    }
+                }
             }
 
             try
@@ -163,7 +239,12 @@
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($data)
                 {
-                    return new EntityRecord($data);
+                    $entity = new EntityRecord($data);
+                    if(self::isCachingEnabled())
+                    {
+                        RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getHash()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
+                    }
+                    return $entity;
                 }
                 return null;
             }
@@ -279,6 +360,7 @@
          * @param string $uuid The UUID of the entity to delete.
          * @throws InvalidArgumentException If the UUID is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function deleteEntity(string $uuid): void
         {
@@ -297,6 +379,18 @@
             {
                 throw new DatabaseOperationException("Failed to delete entity: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            // Remove from cache
+            if(self::isCachingEnabled())
+            {
+                try {
+                    if (RedisConnection::cacheRecordExists(self::getCacheKey($uuid))) {
+                        RedisConnection::getConnection()->del(self::getCacheKey($uuid));
+                    }
+                } catch (RedisException $e) {
+                    throw new CacheOperationException("Failed to delete entity from cache", 0, $e);
+                }
+            }
         }
 
         /**
@@ -306,12 +400,27 @@
          * @param string $domain The domain of the entity to delete.
          * @throws InvalidArgumentException If the ID or domain is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function deleteEntityById(string $id, string $domain): void
         {
             if(strlen($id) < 1 || strlen($domain) < 1)
             {
                 throw new InvalidArgumentException("Entity ID and domain must be provided.");
+            }
+
+            // Remove from cache
+            $hash = hash('sha256', sprintf('%s@%s', $id, $domain));
+            if(self::isCachingEnabled())
+            {
+                try
+                {
+                    if (RedisConnection::cacheRecordExists(self::getCacheKey($hash))) {
+                        RedisConnection::getConnection()->del(self::getCacheKey($hash));
+                    }
+                } catch (RedisException $e) {
+                    throw new CacheOperationException("Failed to delete entity by id/domain from cache", 0, $e);
+                }
             }
 
             try
@@ -333,12 +442,29 @@
          * @param string $hash The SHA-256 hash of the entity to delete.
          * @throws InvalidArgumentException If the hash is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function deleteEntityByHash(string $hash): void
         {
             if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
             {
                 throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+            }
+
+            // Remove from cache
+            if(self::isCachingEnabled())
+            {
+                try
+                {
+                    if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
+                    {
+                        RedisConnection::getConnection()->del(self::getCacheKey($hash));
+                    }
+                }
+                catch (RedisException $e)
+                {
+                    throw new CacheOperationException("Failed to delete entity by hash from cache", 0, $e);
+                }
             }
 
             try
@@ -391,5 +517,35 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve entities: " . $e->getMessage(), $e->getCode(), $e);
             }
+        }
+
+        /**
+         * Returns True if caching & entity caching is enabled for this class
+         *
+         * @return bool True if caching & caching for entities is enabled, False otherwise
+         */
+        private static function isCachingEnabled(): bool
+        {
+            // Ignore Configuration errors as requested
+            try
+            {
+                return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isEntitiesCacheEnabled();
+            }
+            catch (Throwable $e)
+            {
+                Logger::log()->error("Failed to check if caching is enabled: " . $e->getMessage(), $e);
+                return false;
+            }
+        }
+
+        /**
+         * Returns the cache key based off the given entity UUID or hash
+         *
+         * @param string $key The Entity UUID or hash
+         * @return string The returned cache key
+         */
+        private static function getCacheKey(string $key): string
+        {
+            return sprintf("%s%s", self::ENTITY_CACHE_PREFIX, $key);
         }
     }
