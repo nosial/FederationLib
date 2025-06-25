@@ -396,7 +396,7 @@
             if(self::isCachingEnabled() && self::cacheRecordExists($uuid))
             {
                 Logger::log()->debug(sprintf("Deleting cache for operator with UUID '%s'", $uuid));
-                $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+                $cacheKey = self::getCacheKey($uuid);
 
                 try
                 {
@@ -612,7 +612,7 @@
          */
         private static function cacheRecordExists(string $uuid): bool
         {
-            $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+            $cacheKey = self::getCacheKey($uuid);
 
             try
             {
@@ -639,7 +639,8 @@
          */
         private static function getOperatorFromCache(string $uuid): ?OperatorRecord
         {
-            $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+            $cacheKey = self::getCacheKey($uuid);
+
             try
             {
                 if (RedisConnection::getConnection()->exists($cacheKey))
@@ -668,7 +669,7 @@
          */
         private static function setOperatorCache(OperatorRecord $operatorRecord): void
         {
-            $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $operatorRecord->getUuid());
+            $cacheKey = self::getCacheKey($operatorRecord->getUuid());
 
             try
             {
@@ -712,7 +713,7 @@
          */
         private static function updateOperatorCache(string $uuid, string $field, mixed $value): void
         {
-            $cacheKey = sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
+            $cacheKey = self::getCacheKey($uuid);
 
             try
             {
@@ -739,5 +740,10 @@
                 Logger::log()->debug(sprintf("Pre-caching operator with UUID '%s' after update", $uuid));
                 self::getOperator($uuid);
             }
+        }
+
+        private static function getCacheKey(string $uuid): string
+        {
+            return sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
         }
     }
