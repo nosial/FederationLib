@@ -8,6 +8,7 @@
     use FederationServer\Classes\CLI\GetOperator;
     use FederationServer\Classes\CLI\InitializeCommand;
     use FederationServer\Classes\CLI\ListOperators;
+    use FederationServer\Classes\CLI\RefreshOperatorApiKey;
 
     enum CliCommands : string
     {
@@ -17,6 +18,7 @@
         case INITIALIZE = 'init';
         case EDIT_OPERATOR = 'edit-operator';
         case LIST_OPERATORS = 'list-operators';
+        case REFRESH_OPERATOR_API_KEY = 'refresh-operator-api-key';
 
         /**
          * Returns the class interface of the cli command
@@ -34,6 +36,7 @@
                 self::GET_OPERATOR => GetOperator::class,
                 self::INITIALIZE => InitializeCommand::class,
                 self::LIST_OPERATORS => ListOperators::class,
+                self::REFRESH_OPERATOR_API_KEY => RefreshOperatorApiKey::class
             };
         }
 
