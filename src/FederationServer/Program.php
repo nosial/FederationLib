@@ -35,21 +35,13 @@
                 return 0;
             }
 
-            if(isset($args[CliCommands::INITIALIZE->value]))
-            {
-                return CliCommands::INITIALIZE->handle($args);
-            }
-            elseif(isset($args[CliCommands::CREATE_OPERATOR->value]))
+            if(isset($args[CliCommands::CREATE_OPERATOR->value]))
             {
                 return CreateOperator::handle($args);
             }
             elseif(isset($args[CliCommands::DELETE_OPERATOR->value]))
             {
                 return CliCommands::DELETE_OPERATOR->handle($args);
-            }
-            elseif(isset($args[CliCommands::LIST_OPERATORS->value]))
-            {
-                return CliCommands::LIST_OPERATORS->handle($args);
             }
             elseif(isset($args[CliCommands::GET_OPERATOR->value]))
             {
@@ -58,6 +50,18 @@
             elseif(isset($args[CliCommands::EDIT_OPERATOR->value]))
             {
                 return CliCommands::EDIT_OPERATOR->handle($args);
+            }
+            if(isset($args[CliCommands::INITIALIZE->value]))
+            {
+                return CliCommands::INITIALIZE->handle($args);
+            }
+            elseif(isset($args[CliCommands::LIST_AUDIT_LOGS->value]))
+            {
+                return CliCommands::LIST_AUDIT_LOGS->handle($args);
+            }
+            elseif(isset($args[CliCommands::LIST_OPERATORS->value]))
+            {
+                return CliCommands::LIST_OPERATORS->handle($args);
             }
             elseif(isset($args[CliCommands::REFRESH_OPERATOR_API_KEY->value]))
             {
