@@ -13,7 +13,7 @@
         private static ?ServerConfiguration $serverConfiguration = null;
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
-        private static MaintenanceConfiguration $maintenanceConfiguration;
+        private static ?MaintenanceConfiguration $maintenanceConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
 
         /**
@@ -40,7 +40,7 @@
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
             // Maintenance configuration
-            self::$configuration->setDefault('maintenance.enabled', false, 'FEDERATION_MAINTENANCE_ENABLED');
+            self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
             self::$configuration->setDefault('maintenance.clean_audit_logs', true, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS');
             self::$configuration->setDefault('maintenance.clean_audit_logs_days', 30, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS_DAYS');
             self::$configuration->setDefault('maintenance.clean_blacklist', true, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST');

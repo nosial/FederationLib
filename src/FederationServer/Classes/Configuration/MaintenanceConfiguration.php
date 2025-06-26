@@ -17,10 +17,10 @@
          */
         public function __construct(array $configuration)
         {
-            $this->enabled = $configuration['enabled'] ?? false;
-            $this->cleanAuditLogs = $configuration['cleanAuditLogs'] ?? false;
+            $this->enabled = $configuration['enabled'] ?? true;
+            $this->cleanAuditLogs = $configuration['cleanAuditLogs'] ?? true;
             $this->cleanAuditLogsDays = $configuration['cleanAuditLogsDays'] ?? 30; // Default to 30 days
-            $this->cleanBlacklist = $configuration['cleanBlacklist'] ?? false;
+            $this->cleanBlacklist = $configuration['cleanBlacklist'] ?? true;
             $this->cleanBlacklistDays = $configuration['cleanBlacklistDays'] ?? 730; // Default to 2 years
         }
 
