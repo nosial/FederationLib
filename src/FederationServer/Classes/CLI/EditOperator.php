@@ -88,7 +88,7 @@
                 else
                 {
                     $masterOperator = OperatorManager::getMasterOperator();
-                    AuditLogManager::createEntry(AuditLogType::OPERATOR_EDITED, sprintf(
+                    AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
                         "Operator with UUID %s has been edited. Changes: %s",
                         $uuid,
                         json_encode($args)
