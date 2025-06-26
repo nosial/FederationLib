@@ -43,6 +43,10 @@
             {
                 return CreateOperator::handle($args);
             }
+            elseif(isset($args[CliCommands::DELETE_OPERATOR->value]))
+            {
+                return CliCommands::DELETE_OPERATOR->handle($args);
+            }
             elseif(isset($args[CliCommands::LIST_OPERATORS->value]))
             {
                 return CliCommands::LIST_OPERATORS->handle($args);
