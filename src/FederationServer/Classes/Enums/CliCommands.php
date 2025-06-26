@@ -3,12 +3,18 @@
     namespace FederationServer\Classes\Enums;
 
     use FederationServer\Classes\CLI\CreateOperator;
+    use FederationServer\Classes\CLI\EditOperator;
+    use FederationServer\Classes\CLI\GetOperator;
     use FederationServer\Classes\CLI\InitializeCommand;
+    use FederationServer\Classes\CLI\ListOperators;
 
     enum CliCommands : string
     {
         case INITIALIZE = 'init';
         case CREATE_OPERATOR = 'create-operator';
+        case LIST_OPERATORS = 'list-operators';
+        case GET_OPERATOR = 'get-operator';
+        case EDIT_OPERATOR = 'edit-operator';
 
         /**
          * Returns the class interface of the cli command
@@ -21,7 +27,10 @@
             return match ($this)
             {
                 self::INITIALIZE => InitializeCommand::class,
-                self::CREATE_OPERATOR => CreateOperator::class
+                self::CREATE_OPERATOR => CreateOperator::class,
+                self::LIST_OPERATORS => ListOperators::class,
+                self::GET_OPERATOR => GetOperator::class,
+                self::EDIT_OPERATOR => EditOperator::class,
             };
         }
 

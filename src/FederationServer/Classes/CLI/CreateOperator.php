@@ -64,14 +64,15 @@
          */
         public static function getHelp(): string
         {
-            return
-                "Usage: federationserver create-operator --name <name> --manage-operators --manage-blacklist --is-client\n" .
-                "Creates a new operator with the specified permissions.\n" .
-                "Options:\n" .
-                "  --name <name>            The name of the operator to create.\n" .
-                "  --manage-operators       Optional. If set, the operator can manage other operators.\n" .
-                "  --manage-blacklist       Optional. If set, the operator can manage the blacklist.\n" .
-                "  --is-client              Optional. If set, the operator is a client operator.";
+            return "Usage:\n" .
+                   "  federationserver create-operator --name <name> [--manage-operators] [--manage-blacklist] [--is-client]\n" .
+                   "\nDescription:\n" .
+                   "  Creates a new operator with the specified permissions.\n" .
+                   "\nOptions:\n" .
+                   "  --name <name>            The name of the operator to create. (required)\n" .
+                   "  --manage-operators       If set, the operator can manage other operators.\n" .
+                   "  --manage-blacklist       If set, the operator can manage the blacklist.\n" .
+                   "  --is-client              If set, the operator is a client operator.\n";
         }
 
         /**
@@ -87,7 +88,9 @@
          */
         public static function getExamples(): ?string
         {
-            return "Example: federationserver create-operator --name 'John Doe' --manage-operators --is-client\n" .
-                   "This command creates a new operator named 'John Doe' who can manage other operators and is a client operator.";
+            return "Examples:\n" .
+                   "  federationserver create-operator --name 'John Doe' --manage-operators --is-client\n" .
+                   "    Creates a new operator named 'John Doe' who can manage other operators and is a client operator.\n";
         }
     }
+

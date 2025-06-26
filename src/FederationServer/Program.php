@@ -43,6 +43,18 @@
             {
                 return CreateOperator::handle($args);
             }
+            elseif(isset($args[CliCommands::LIST_OPERATORS->value]))
+            {
+                return CliCommands::LIST_OPERATORS->handle($args);
+            }
+            elseif(isset($args[CliCommands::GET_OPERATOR->value]))
+            {
+                return CliCommands::GET_OPERATOR->handle($args);
+            }
+            elseif(isset($args[CliCommands::EDIT_OPERATOR->value]))
+            {
+                return CliCommands::EDIT_OPERATOR->handle($args);
+            }
 
             return self::displayHelp();
         }
