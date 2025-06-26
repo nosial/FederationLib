@@ -3,6 +3,7 @@
     namespace FederationServer\Classes;
 
     use FederationServer\Classes\Configuration\DatabaseConfiguration;
+    use FederationServer\Classes\Configuration\MaintenanceConfiguration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
     use FederationServer\Classes\Configuration\ServerConfiguration;
     use FederationServer\Classes\Enums\AuditLogType;
@@ -12,6 +13,7 @@
         private static ?ServerConfiguration $serverConfiguration = null;
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
+        private static MaintenanceConfiguration $maintenanceConfiguration;
         private static ?RedisConfiguration $redisConfiguration = null;
 
         /**
@@ -37,6 +39,12 @@
             self::$configuration->setDefault('server.public_blacklist', true, 'FEDERATION_PUBLIC_BLACKLIST');
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
+            // Maintenance configuration
+            self::$configuration->setDefault('maintenance.enabled', false, 'FEDERATION_MAINTENANCE_ENABLED');
+            self::$configuration->setDefault('maintenance.clean_audit_logs', true, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS');
+            self::$configuration->setDefault('maintenance.clean_audit_logs_days', 30, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS_DAYS');
+            self::$configuration->setDefault('maintenance.clean_blacklist', true, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST');
+            self::$configuration->setDefault('maintenance.clean_blacklist_days', 730, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST_DAYS'); // 2 years
 
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
             self::$configuration->setDefault('database.port', 3306, 'FEDERATION_DATABASE_PORT');
@@ -69,6 +77,7 @@
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
+            self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
         }
 
         /**
@@ -144,6 +153,21 @@
             }
 
             return self::$redisConfiguration;
+        }
+
+        /**
+         * Get the maintenance configuration.
+         *
+         * @return MaintenanceConfiguration
+         */
+        public static function getMaintenanceConfiguration(): MaintenanceConfiguration
+        {
+            if(self::$maintenanceConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$maintenanceConfiguration;
         }
     }
 

@@ -9,6 +9,7 @@
     use FederationServer\Classes\CLI\InitializeCommand;
     use FederationServer\Classes\CLI\ListAuditLogs;
     use FederationServer\Classes\CLI\ListOperators;
+    use FederationServer\Classes\CLI\MaintenanceCommand;
     use FederationServer\Classes\CLI\RefreshOperatorApiKey;
 
     enum CliCommands : string
@@ -20,6 +21,7 @@
         case LIST_AUDIT_LOGS = 'list-audit';
         case EDIT_OPERATOR = 'edit-operator';
         case LIST_OPERATORS = 'list-operators';
+        case MAINTENANCE = 'maintenance';
         case REFRESH_OPERATOR_API_KEY = 'refresh-operator-api-key';
 
         /**
@@ -39,6 +41,7 @@
                 self::INITIALIZE => InitializeCommand::class,
                 self::LIST_AUDIT_LOGS => ListAuditLogs::class,
                 self::LIST_OPERATORS => ListOperators::class,
+                self::MAINTENANCE => MaintenanceCommand::class,
                 self::REFRESH_OPERATOR_API_KEY => RefreshOperatorApiKey::class
             };
         }

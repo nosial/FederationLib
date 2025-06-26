@@ -63,6 +63,10 @@
             {
                 return CliCommands::LIST_OPERATORS->handle($args);
             }
+            elseif(isset($args[CliCommands::MAINTENANCE->value]))
+            {
+                return CliCommands::MAINTENANCE->handle($args);
+            }
             elseif(isset($args[CliCommands::REFRESH_OPERATOR_API_KEY->value]))
             {
                 return CliCommands::REFRESH_OPERATOR_API_KEY->handle($args);

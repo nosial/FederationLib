@@ -361,4 +361,36 @@
                 throw new DatabaseOperationException("Failed to attach evidence to blacklist: " . $e->getMessage(), 0, $e);
             }
         }
+
+        /**
+         * Cleans up blacklist entries that have expired based on the specified number of days.
+         *
+         * @param int $getCleanBlacklistDays The number of days to consider for cleaning expired entries.
+         * @return int The number of entries cleaned.
+         * @throws InvalidArgumentException If the number of days is less than or equal to zero.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $getCleanBlacklistDays): int
+        {
+            // Remove blacklist records older than $cleanBlacklistDays and if the expiriation hasn't been expired yet
+            if($getCleanBlacklistDays <= 0)
+            {
+                throw new InvalidArgumentException("Number of days must be greater than zero.");
+            }
+
+            // Mariadb uses Timestamp
+            $dateThreshold = date('Y-m-d H:i:s', strtotime("-$getCleanBlacklistDays days"));
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE (expires IS NOT NULL AND expires < :dateThreshold) OR (expires IS NULL AND created < :dateThreshold)");
+                $stmt->bindParam(':dateThreshold', $dateThreshold);
+                $stmt->execute();
+
+                return $stmt->rowCount(); // Return the number of rows affected
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clean blacklist entries: " . $e->getMessage(), 0, $e);
+            }
+        }
     }

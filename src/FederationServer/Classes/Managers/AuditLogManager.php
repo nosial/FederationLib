@@ -322,8 +322,9 @@
          * Deletes all audit log entries.
          *
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @return int The number of rows deleted.
          */
-        public static function cleanEntries(int $olderThanDays): void
+        public static function cleanEntries(int $olderThanDays): int
         {
             if($olderThanDays <= 0)
             {
@@ -338,6 +339,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM audit_log WHERE timestamp < :timestamp");
                 $stmt->bindParam(':timestamp', $timestamp);
                 $stmt->execute();
+                return $stmt->rowCount();
             }
             catch (PDOException $e)
             {
