@@ -11,12 +11,12 @@
 
     enum CliCommands : string
     {
-        case INITIALIZE = 'init';
         case CREATE_OPERATOR = 'create-operator';
         case DELETE_OPERATOR = 'delete-operator';
-        case LIST_OPERATORS = 'list-operators';
         case GET_OPERATOR = 'get-operator';
+        case INITIALIZE = 'init';
         case EDIT_OPERATOR = 'edit-operator';
+        case LIST_OPERATORS = 'list-operators';
 
         /**
          * Returns the class interface of the cli command
@@ -28,12 +28,12 @@
         {
             return match ($this)
             {
-                self::INITIALIZE => InitializeCommand::class,
-                self::DELETE_OPERATOR => DeleteOperator::class,
                 self::CREATE_OPERATOR => CreateOperator::class,
-                self::LIST_OPERATORS => ListOperators::class,
-                self::GET_OPERATOR => GetOperator::class,
+                self::DELETE_OPERATOR => DeleteOperator::class,
                 self::EDIT_OPERATOR => EditOperator::class,
+                self::GET_OPERATOR => GetOperator::class,
+                self::INITIALIZE => InitializeCommand::class,
+                self::LIST_OPERATORS => ListOperators::class,
             };
         }
 
