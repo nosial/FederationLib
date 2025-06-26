@@ -2,7 +2,9 @@
 
     namespace FederationServer\Classes\CLI;
 
+    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Interfaces\CommandLineInterface;
@@ -82,6 +84,15 @@
                 if (!$changed)
                 {
                     print("No changes specified.\n");
+                }
+                else
+                {
+                    $masterOperator = OperatorManager::getMasterOperator();
+                    AuditLogManager::createEntry(AuditLogType::OPERATOR_EDITED, sprintf(
+                        "Operator with UUID %s has been edited. Changes: %s",
+                        $uuid,
+                        json_encode($args)
+                    ), $masterOperator->getUuid());
                 }
             }
             catch (DatabaseOperationException $e)

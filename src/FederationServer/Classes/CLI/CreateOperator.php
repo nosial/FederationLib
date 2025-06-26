@@ -2,7 +2,9 @@
 
     namespace FederationServer\Classes\CLI;
 
+    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Interfaces\CommandLineInterface;
@@ -48,6 +50,17 @@
                     print("Setting client permissions\n");
                     OperatorManager::setClient($operatorUuid, true);
                 }
+
+                $masterOperator = OperatorManager::getMasterOperator();
+
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf(
+                    "Operator %s created with name '%s'. Manage Operators: %s, Manage Blacklist: %s, Is Client: %s",
+                    $operatorUuid,
+                    $name,
+                    $manageOperators ? 'true' : 'false',
+                    $manageBlacklist ? 'true' : 'false',
+                    $isClient ? 'true' : 'false'
+                ), $masterOperator->getUuid());
             }
             catch(DatabaseOperationException $e)
             {

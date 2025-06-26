@@ -2,7 +2,9 @@
 
     namespace FederationServer\Classes\CLI;
 
+    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Interfaces\CommandLineInterface;
@@ -30,7 +32,13 @@
                 }
 
                 OperatorManager::deleteOperator($uuid);
-                print("[OK] Operator with UUID $uuid has been deleted.\n");
+                print("Operator with UUID $uuid has been deleted.\n");
+                $masterOperator = OperatorManager::getMasterOperator();
+
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf(
+                    "Operator with UUID %s has been deleted.",
+                    $uuid
+                ), $masterOperator->getUuid());
             }
             catch (DatabaseOperationException $e)
             {

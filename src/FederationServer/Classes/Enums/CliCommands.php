@@ -17,7 +17,7 @@
         case DELETE_OPERATOR = 'delete-operator';
         case GET_OPERATOR = 'get-operator';
         case INITIALIZE = 'init';
-        case LIST_AUDIT_LOGS = 'list-audit-logs';
+        case LIST_AUDIT_LOGS = 'list-audit';
         case EDIT_OPERATOR = 'edit-operator';
         case LIST_OPERATORS = 'list-operators';
         case REFRESH_OPERATOR_API_KEY = 'refresh-operator-api-key';
