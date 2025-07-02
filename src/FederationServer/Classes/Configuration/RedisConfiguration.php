@@ -24,6 +24,10 @@
         private int $fileAttachmentCacheLimit;
         private int $fileAttachmentCacheTtl;
 
+        private bool $evidenceCacheEnabled;
+        private int $evidenceCacheLimit;
+        private int $evidenceCacheTtl;
+
         /**
          * RedisConfiguration constructor.
          *
@@ -47,6 +51,9 @@
             $this->fileAttachmentCacheEnabled = $configuration['file_attachment_cache_enabled'] ?? true;
             $this->fileAttachmentCacheLimit = $configuration['file_attachment_cache_limit'] ?? 2000;
             $this->fileAttachmentCacheTtl = $configuration['file_attachment_cache_ttl'] ?? 600;
+            $this->evidenceCacheEnabled = $configuration['evidence_cache_enabled'] ?? true;
+            $this->evidenceCacheLimit = $configuration['evidence_cache_limit'] ?? 3000;
+            $this->evidenceCacheTtl = $configuration['evidence_cache_ttl'] ?? 600;
         }
 
         /**
@@ -209,5 +216,35 @@
         public function getFileAttachmentCacheTtl(): int
         {
             return $this->fileAttachmentCacheTtl;
+        }
+
+        /**
+         * Returns True if evidence caching is enabled
+         *
+         * @return bool True if evidence caching is Enabled, False otherwise
+         */
+        public function isEvidenceCacheEnabled(): bool
+        {
+            return $this->evidenceCacheEnabled;
+        }
+
+        /**
+         * Returns the evidence cache limit for the cache
+         *
+         * @return int The maximum number of evidence records, anything 0 or less=no limit
+         */
+        public function getEvidenceCacheLimit(): int
+        {
+            return $this->evidenceCacheLimit;
+        }
+
+        /**
+         * Returns the evidence cache TTL in seconds
+         *
+         * @return int The time to live in seconds for the evidence cache
+         */
+        public function getEvidenceCacheTtl(): int
+        {
+            return $this->evidenceCacheTtl;
         }
     }

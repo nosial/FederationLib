@@ -74,6 +74,10 @@
             self::$configuration->setDefault('redis.file_attachment_cache_enabled', true, 'FEDERATION_FILE_ATTACHMENT_CACHE_ENABLED');
             self::$configuration->setDefault('redis.file_attachment_cache_limit', 2000, 'FEDERATION_FILE_ATTACHMENT_CACHE_LIMIT');
             self::$configuration->setDefault('redis.file_attachment_cache_ttl', 600, 'FEDERATION_FILE_ATTACHMENT_CACHE_TTL');
+            // Evidence cache
+            self::$configuration->setDefault('redis.evidence_cache_enabled', true, 'FEDERATION_EVIDENCE_CACHE_ENABLED');
+            self::$configuration->setDefault('redis.evidence_cache_limit', 3000, 'FEDERATION_EVIDENCE_CACHE_LIMIT');
+            self::$configuration->setDefault('redis.evidence_cache_ttl', 600, 'FEDERATION_EVIDENCE_CACHE_TTL');
 
             // Save
             self::$configuration->save();
