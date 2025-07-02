@@ -20,6 +20,10 @@
         private int $entitiesCacheLimit;
         private int $entitiesCacheTtl;
 
+        private bool $fileAttachmentCacheEnabled;
+        private int $fileAttachmentCacheLimit;
+        private int $fileAttachmentCacheTtl;
+
         /**
          * RedisConfiguration constructor.
          *
@@ -40,6 +44,9 @@
             $this->entitiesCacheEnabled = $configuration['entity_cache_enabled'] ?? true;
             $this->entitiesCacheLimit = $configuration['entity_cache_limit'] ?? 5000;
             $this->entitiesCacheTtl = $configuration['entity_cache_ttl'] ?? 600;
+            $this->fileAttachmentCacheEnabled = $configuration['file_attachment_cache_enabled'] ?? true;
+            $this->fileAttachmentCacheLimit = $configuration['file_attachment_cache_limit'] ?? 2000;
+            $this->fileAttachmentCacheTtl = $configuration['file_attachment_cache_ttl'] ?? 600;
         }
 
         /**
@@ -172,5 +179,35 @@
         public function getEntitiesCacheTtl(): int
         {
             return $this->entitiesCacheTtl;
+        }
+
+        /**
+         * Returns True if file attachment caching is enabled
+         *
+         * @return bool True if file attachment caching is Enabled, False otherwise
+         */
+        public function isFileAttachmentCacheEnabled(): bool
+        {
+            return $this->fileAttachmentCacheEnabled;
+        }
+
+        /**
+         * Returns the file attachment cache limit for the cache
+         *
+         * @return int The maximum number of file attachments, anything 0 or less=no limit
+         */
+        public function getFileAttachmentCacheLimit(): int
+        {
+            return $this->fileAttachmentCacheLimit;
+        }
+
+        /**
+         * Returns the file attachment cache TTL in seconds
+         *
+         * @return int The time to live in seconds for the file attachment cache
+         */
+        public function getFileAttachmentCacheTtl(): int
+        {
+            return $this->fileAttachmentCacheTtl;
         }
     }

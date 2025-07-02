@@ -70,6 +70,10 @@
             self::$configuration->setDefault('redis.entity_cache_enabled', true, 'FEDERATION_ENTITY_CACHE_ENABLED');
             self::$configuration->setDefault('redis.entity_cache_limit', 5000, 'FEDERATION_ENTITY_CACHE_LIMIT');
             self::$configuration->setDefault('redis.entity_cache_ttl', 600, 'FEDERATION_ENTITY_CACHE_TTL');
+            // File Attachments cache
+            self::$configuration->setDefault('redis.file_attachment_cache_enabled', true, 'FEDERATION_FILE_ATTACHMENT_CACHE_ENABLED');
+            self::$configuration->setDefault('redis.file_attachment_cache_limit', 2000, 'FEDERATION_FILE_ATTACHMENT_CACHE_LIMIT');
+            self::$configuration->setDefault('redis.file_attachment_cache_ttl', 600, 'FEDERATION_FILE_ATTACHMENT_CACHE_TTL');
 
             // Save
             self::$configuration->save();

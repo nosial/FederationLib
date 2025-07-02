@@ -2,20 +2,28 @@
 
     namespace FederationServer\Classes\Managers;
 
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\DatabaseConnection;
+    use FederationServer\Classes\Logger;
+    use FederationServer\Classes\RedisConnection;
+    use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\FileAttachmentRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use RedisException;
 
     class FileAttachmentManager
     {
+        private const string FILE_ATTACHMENT_CACHE_PREFIX = 'file_attachment_';
+
         /**
          * Creates a new file attachment record.
          *
          * @param string $uuid The UUID of the file attachment.
          * @param string $evidence The UUID of the evidence associated with the file attachment.
+         * @param string $fileMime The MIME type of the file.
          * @param string $fileName The name of the file being attached.
          * @param int $fileSize The size of the file in bytes.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
@@ -47,6 +55,16 @@
             {
                 throw new DatabaseOperationException("Failed to create file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            // If caching and pre-caching is enabled, retrieve the existing file attachment record and cache it
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                // If the limit has not been exceeded, cache the file attachment record
+                if (!RedisConnection::limitExceeded(self::FILE_ATTACHMENT_CACHE_PREFIX, Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit()))
+                {
+                    RedisConnection::setCacheRecord(self::getRecord($uuid), self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
+                }
+            }
         }
 
         /**
@@ -55,9 +73,21 @@
          * @param string $uuid The UUID of the file attachment record.
          * @return FileAttachmentRecord|null The FileAttachmentRecord object if found, null otherwise.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getRecord(string $uuid): ?FileAttachmentRecord
         {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('File attachment UUID cannot be empty.');
+            }
+
+            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            {
+                // If caching is enabled and the file attachment exists in the cache, return it
+                return new FileAttachmentRecord(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE uuid = :uuid");
@@ -70,12 +100,37 @@
                     return null; // No record found
                 }
 
-                return new FileAttachmentRecord($result);
+                $fileAttachmentRecord = new FileAttachmentRecord($result);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled())
+            {
+                try
+                {
+                    if(RedisConnection::getConnection()->exists(self::getCacheKey($uuid)))
+                    {
+                        return $fileAttachmentRecord; // Return the cached record if it exists
+                    }
+
+                    Logger::log()->debug(sprintf("Caching file attachment with UUID '%s'", $uuid));
+                    RedisConnection::setCacheRecord($fileAttachmentRecord, self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
+                }
+                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
+                catch (RedisException $e)
+                {
+                    Logger::log()->error(sprintf("Failed to cache file attachment with UUID '%s': %s", $uuid, $e->getMessage()));
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to cache file attachment with UUID '%s'", $uuid), 0, $e);
+                    }
+                }
+            }
+
+            return $fileAttachmentRecord;
         }
 
         /**
@@ -94,7 +149,33 @@
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                return array_map(fn($data) => new FileAttachmentRecord($data), $results);
+                $fileAttachments = array_map(fn($data) => new FileAttachmentRecord($data), $results);
+
+                // If caching is enabled and pre-caching is enabled, cache each file attachment
+                if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                {
+                    $currentCount = RedisConnection::countKeys(self::FILE_ATTACHMENT_CACHE_PREFIX);
+                    foreach($fileAttachments as $fileAttachment)
+                    {
+                        // If the cache limit has not been exceeded, cache the file attachment record
+                        if($currentCount < Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit())
+                        {
+                            $cacheKey = self::getCacheKey($fileAttachment->getUuid());
+                            if(!RedisConnection::cacheRecordExists($cacheKey))
+                            {
+                                Logger::log()->debug(sprintf("Caching file attachment with UUID '%s'", $fileAttachment->getUuid()));
+                                RedisConnection::setCacheRecord($fileAttachment, $cacheKey, Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
+                                $currentCount++;
+                            }
+                        }
+                        else
+                        {
+                            break; // Stop caching if the limit has been reached
+                        }
+                    }
+                }
+
+                return $fileAttachments;
             }
             catch (PDOException $e)
             {
@@ -107,9 +188,15 @@
          *
          * @param string $uuid The UUID of the file attachment record to delete.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws CacheOperationException If there was an error during the cache operation.
          */
         public static function deleteRecord(string $uuid): void
         {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('File attachment UUID cannot be empty.');
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE uuid = :uuid");
@@ -120,5 +207,44 @@
             {
                 throw new DatabaseOperationException("Failed to delete file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            {
+                Logger::log()->debug(sprintf("Deleting cache for file attachment with UUID '%s'", $uuid));
+                $cacheKey = self::getCacheKey($uuid);
+
+                try
+                {
+                    RedisConnection::getConnection()->del($cacheKey);
+                }
+                catch (RedisException $e)
+                {
+                    throw new CacheOperationException(sprintf("Failed to delete cache for file attachment with UUID '%s'", $uuid), 0, $e);
+                }
+            }
+        }
+
+        // Caching operations
+
+        /**
+         * Returns True if caching & file attachment caching is enabled for this class
+         *
+         * @return bool True if caching & caching for file attachments is enabled, False otherwise
+         */
+        private static function isCachingEnabled(): bool
+        {
+            return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isFileAttachmentCacheEnabled();
+        }
+
+        /**
+         * Returns the cache key based off the given file attachment UUID
+         *
+         * @param string $uuid The File Attachment UUID
+         * @return string The returned cache key
+         */
+        private static function getCacheKey(string $uuid): string
+        {
+            return sprintf("%s%s", self::FILE_ATTACHMENT_CACHE_PREFIX, $uuid);
         }
     }
+
