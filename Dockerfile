@@ -53,6 +53,7 @@ RUN rm -rf /tmp/build && rm -rf /var/www/html/*
 # Copy over the required files and set the correct permissions
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/logger.py /logger.py
 COPY public/index.php /var/www/html/index.php
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
 RUN mkdir -p /etc/config && chown -R www-data:www-data /etc/config && chmod -R 755 /etc/config
