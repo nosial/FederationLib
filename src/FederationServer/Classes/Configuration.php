@@ -79,8 +79,11 @@
             self::$configuration->setDefault('redis.evidence_cache_limit', 3000, 'FEDERATION_EVIDENCE_CACHE_LIMIT');
             self::$configuration->setDefault('redis.evidence_cache_ttl', 600, 'FEDERATION_EVIDENCE_CACHE_TTL');
 
-            // Save
-            self::$configuration->save();
+            // Only save if the configuration file does not exist or we're in CLI mode
+            if(!file_exists(self::$configuration->getPath()) || php_sapi_name() === 'cli')
+            {
+                self::$configuration->save();
+            }
 
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
