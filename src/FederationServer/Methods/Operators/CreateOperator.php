@@ -47,6 +47,6 @@
             }
 
             // Respond with the UUID of the newly created operator.
-            self::successResponse($operatorUuid);
+            self::successResponse($operatorUuid, 201);
         }
     }
