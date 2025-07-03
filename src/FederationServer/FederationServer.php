@@ -41,12 +41,12 @@
             }
             catch (RequestException $e)
             {
-                Logger::log()->error('Request Error: ' . $e->getMessage(), $e);
+                Logger::log()->verbose('Request Error: ' . $e->getMessage());
                 self::throwableResponse($e);
             }
             catch(Exception $e)
             {
-                Logger::log()->error('Uncaught Exception:' . $e->getMessage(), $e);
+                Logger::log()->critical('Uncaught Exception:' . $e->getMessage(), $e);
                 self::errorResponse('Internal Server Error');
             }
         }
