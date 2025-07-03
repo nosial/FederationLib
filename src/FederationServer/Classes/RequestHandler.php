@@ -7,7 +7,9 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Interfaces\RequestHandlerInterface;
     use FederationServer\Interfaces\SerializableInterface;
+    use FederationServer\Objects\ErrorResponse;
     use FederationServer\Objects\OperatorRecord;
+    use FederationServer\Objects\SuccessResponse;
     use InvalidArgumentException;
     use Throwable;
 
@@ -126,21 +128,19 @@
          * Respond with a success message and data.
          *
          * @param mixed $data Data to include in the response.
+         * @param int $responseCode HTTP status code (default is 200).
          * @return void
          */
-        protected static function successResponse(mixed $data=null): void
+        protected static function successResponse(mixed $data=null, int $responseCode=200): void
         {
             if($data instanceof SerializableInterface)
             {
                 $data = $data->toArray();
             }
 
-            http_response_code(200);
+            http_response_code($responseCode);
             self::returnHeaders();
-            print(json_encode([
-                'success' => true,
-                'results' => $data,
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            print(json_encode((new SuccessResponse($data))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         /**
@@ -154,11 +154,7 @@
         {
             http_response_code($code);
             self::returnHeaders();
-            print(json_encode([
-                'success' => false,
-                'code' => $code,
-                'message' => $message,
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            print(json_encode((new ErrorResponse($code, $message))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         /**
@@ -172,31 +168,9 @@
          */
         protected static function throwableResponse(Throwable $e): void
         {
-            $prefixMessage = match($e->getCode())
-            {
-                400 => 'Bad Request',
-                401 => 'Unauthorized',
-                403 => 'Forbidden',
-                404 => 'Not Found',
-                405 => 'Method Not Allowed',
-                409 => 'Conflict',
-                422 => 'Unprocessable Entity',
-                429 => 'Too Many Requests',
-                500 => 'Internal Server Error',
-                501 => 'Not Implemented',
-                502 => 'Bad Gateway',
-                503 => 'Service Unavailable',
-                504 => 'Gateway Timeout: ',
-                default => 'Request Error: ',
-            };
-
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
-            print(json_encode([
-                'success' => false,
-                'code' => $e->getCode() ?: 500,
-                'message' => $e->getMessage(),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            print(json_encode((new ErrorResponse($e->getCode() ?: 500, $e->getMessage()))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
 
         /**
