@@ -139,10 +139,17 @@
             return $decodedResponse->getData();
         }
 
+        /**
+         * Create a new operator
+         *
+         * @param string $operatorName The name of the operator to create
+         * @return string The UUID of the created operator
+         * @throws RequestException Throws an exception if the request fails or the operator cannot be created
+         */
         public function createOperator(string $operatorName): string
         {
             return $this->makeRequest('POST', '/operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
-                'Failed to create operator'
+                sprintf('Failed to create operator with name %s', $operatorName)
             );
         }
 
@@ -215,7 +222,7 @@
             return array_map(
                 fn($item) => OperatorRecord::fromArray($item),
                 $this->makeRequest('GET', '/operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
-                    'Failed to list operators'
+                    sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
                 )
             );
         }
