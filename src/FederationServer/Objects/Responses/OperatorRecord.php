@@ -146,7 +146,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): OperatorRecord
         {
             if(isset($array['created']) )
             {

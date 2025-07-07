@@ -7,6 +7,7 @@
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Interfaces\ResponseInterface;
     use FederationServer\Objects\ErrorResponse;
+    use FederationServer\Objects\Responses\AuditLog;
     use FederationServer\Objects\Responses\OperatorRecord;
     use FederationServer\Objects\SuccessResponse;
     use InvalidArgumentException;
@@ -168,19 +169,6 @@
         }
 
         /**
-         * Enable an operator
-         *
-         * @param string $operatorUuid The UUID of the operator to enable
-         * @throws RequestException Throws an exception if the request fails or the operator cannot be enabled
-         */
-        public function enableOperator(string $operatorUuid): void
-        {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
-                sprintf('Failed to enable operator with UUID %s', $operatorUuid)
-            );
-        }
-
-        /**
          * Disable an operator
          *
          * @param string $operatorUuid The UUID of the operator to disable
@@ -194,6 +182,18 @@
             );
         }
 
+        /**
+         * Enable an operator
+         *
+         * @param string $operatorUuid The UUID of the operator to enable
+         * @throws RequestException Throws an exception if the request fails or the operator cannot be enabled
+         */
+        public function enableOperator(string $operatorUuid): void
+        {
+            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
+                sprintf('Failed to enable operator with UUID %s', $operatorUuid)
+            );
+        }
 
         /**
          * Get an operator by UUID
@@ -207,6 +207,38 @@
             return OperatorRecord::fromArray($this->makeRequest('GET', '/operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
+        }
+
+        /**
+         * Get the self operator (the operator making the request)
+         *
+         * @return OperatorRecord The operator record of the self operator
+         * @throws RequestException Throws an exception if the request fails or if the self operator cannot be retrieved
+         */
+        public function getSelfOperator(): OperatorRecord
+        {
+            return OperatorRecord::fromArray($this->makeRequest('GET', '/operators/self', null, [HttpResponseCode::OK],
+                'Failed to get self operator'
+            ));
+        }
+
+        /**
+         * List audit logs for a specific operator
+         *
+         * @param string $operatorUuid The UUID of the operator to list audit logs for
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of audit logs per page (default is 100)
+         * @return AuditLog[] An array of AuditLog objects
+         * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the audit logs
+         */
+        public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
+        {
+            return array_map(
+                fn($item) => AuditLog::fromArray($item),
+                $this->makeRequest('GET', '/operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
+                )
+            );
         }
 
         /**
