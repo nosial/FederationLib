@@ -13,6 +13,7 @@
         private bool $confidential;
         private ?string $textContent;
         private ?string $note;
+        private ?string $tag;
         private int $created;
 
         /**
@@ -28,6 +29,7 @@
             $this->confidential = (bool)$data['confidential'] ?? false;
             $this->textContent = $data['text_content'] ?? null;
             $this->note = $data['note'] ?? null;
+            $this->tag = $data['tag'] ?? null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
         }
 
@@ -92,6 +94,16 @@
         }
 
         /**
+         * Get the tag name
+         *
+         * @return string|null
+         */
+        public function getTag(): ?string
+        {
+            return $this->tag;
+        }
+
+        /**
          * Get the created timestamp.
          *
          * @return int
@@ -100,7 +112,6 @@
         {
             return $this->created;
         }
-
 
         /**
          * @inheritDoc
@@ -114,6 +125,7 @@
                 'confidential' => $this->confidential,
                 'text_content' => $this->textContent,
                 'note' => $this->note,
+                'tag' => $this->tag,
                 'created' => $this->created,
             ];
         }

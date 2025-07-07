@@ -26,30 +26,34 @@
          * @param string $operator The UUID of the operator associated with the evidence.
          * @param string|null $textContent Optional text content, can be null.
          * @param string|null $note Optional note, can be null.
+         * @param string|null $tag Optional tag, must be underscore and alphanumeric
          * @param bool $confidential Whether the evidence is confidential (default is false).
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          * @return string The UUID of the newly created evidence record.
          */
-        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, bool $confidential=false): string
+        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false): string
         {
             if(strlen($entity) < 1 || strlen($operator) < 1)
             {
                 throw new InvalidArgumentException('Entity and operator must be provided.');
             }
 
+            // TODO: Validate $tag
+
             $uuid = UuidV4::v4()->toRfc4122();
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence (uuid, entity, operator, confidential, text_content, note) VALUES (:uuid, :entity, :operator, :confidential, :text_content, :note)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence (uuid, entity, operator, confidential, text_content, note, tag) VALUES (:uuid, :entity, :operator, :confidential, :text_content, :note, :tag)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
                 $stmt->bindParam(':confidential', $confidential);
                 $stmt->bindParam(':text_content', $textContent);
                 $stmt->bindParam(':note', $note);
+                $stmt->bindParam(':tag', $tag);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -314,6 +318,54 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence by operator: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Retrieves all evidence records associated with a specific tag.
+         *
+         * @param string $tagName The tag name
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
+         * @return EvidenceRecord[] An array of EvidenceRecord objects.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEvidenceByTag(string $tagName, int $limit=100, int $page=1, bool $includeConfidential=false): array
+        {
+            if(strlen($tagName) < 1)
+            {
+                throw new InvalidArgumentException('Tag name must be provided.');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $query = "SELECT * FROM evidence WHERE tag = :tag";
+                if(!$includeConfidential)
+                {
+                    $query .= " AND confidential = 0";
+                }
+                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($query);
+                $stmt->bindParam(':tag', $tagName);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $evidenceRecords = [];
+                foreach ($results as $data)
+                {
+                    $evidenceRecords[] = new EvidenceRecord($data);
+                }
+
+                return $evidenceRecords;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve evidence by entity: " . $e->getMessage(), $e->getCode(), $e);
             }
         }
 
