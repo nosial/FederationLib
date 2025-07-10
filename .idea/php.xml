@@ -12,6 +12,7 @@
   </component>
   <component name="PhpIncludePathManager">
     <include_path>
+      <path value="$USER_HOME$/phar" />
       <path value="/usr/share/ncc" />
       <path value="/var/ncc/packages/com.symfony.uid=v7.2.0" />
       <path value="/var/ncc/packages/net.nosial.configlib=1.2.0" />
@@ -22,6 +23,11 @@
   <component name="PhpProjectSharedConfiguration" php_language_level="8.3" />
   <component name="PhpStanOptionsConfiguration">
     <option name="transferred" value="true" />
+  </component>
+  <component name="PhpUnit">
+    <phpunit_settings>
+      <PhpUnitSettings load_method="PHPUNIT_PHAR" bootstrap_file_path="$PROJECT_DIR$/bootstrap.php" configuration_file_path="$PROJECT_DIR$/phpunit.xml" custom_loader_path="" phpunit_phar_path="$USER_HOME$/phar/phpunit.phar" use_bootstrap_file="true" use_configuration_file="true" />
+    </phpunit_settings>
   </component>
   <component name="PsalmOptionsConfiguration">
     <option name="transferred" value="true" />

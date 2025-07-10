@@ -4,6 +4,8 @@
 
     enum HttpResponseCode : int
     {
+        case NONE = 0;
+
         /**
          * This interim response indicates that the client should continue the request or ignore the response if
          * the request is already finished.

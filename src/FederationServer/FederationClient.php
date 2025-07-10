@@ -8,6 +8,7 @@
     use FederationServer\Interfaces\ResponseInterface;
     use FederationServer\Objects\ErrorResponse;
     use FederationServer\Objects\Responses\AuditLog;
+    use FederationServer\Objects\Responses\EvidenceRecord;
     use FederationServer\Objects\Responses\OperatorRecord;
     use FederationServer\Objects\SuccessResponse;
     use InvalidArgumentException;
@@ -84,7 +85,7 @@
                     curl_setopt($ch, CURLOPT_POST, true);
                     if ($data)
                     {
-                        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
                     }
                     break;
 
@@ -92,7 +93,7 @@
                     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
                     if ($data)
                     {
-                        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
                     }
                     break;
 
@@ -120,14 +121,15 @@
             $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
 
+            $decodedResponse = $this->decodeResponse($response);
+
             // Check if response code is expected
             if (!in_array($responseCode, $expectedStatusCodes))
             {
-                throw new RequestException($errorMessage . ', received response code: ' . $responseCode, $responseCode);
+                /** @var ErrorResponse $decodedResponse */
+                throw new RequestException($errorMessage . ', ' .  $decodedResponse->getMessage() . ' received response code: ' . $responseCode, $responseCode);
             }
 
-            // Decode and validate response
-            $decodedResponse = $this->decodeResponse($response);
             if ($decodedResponse instanceof ErrorResponse)
             {
                 throw new RequestException(
@@ -163,7 +165,7 @@
          */
         public function deleteOperator(string $operatorUuid): void
         {
-            $this->makeRequest('DELETE', '/operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            $this->makeRequest('DELETE', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete operator with UUID %s', $operatorUuid)
             );
         }
@@ -177,7 +179,7 @@
          */
         public function disableOperator(string $operatorUuid): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
                 sprintf('Failed to disable operator with UUID %s', $operatorUuid)
             );
         }
@@ -190,7 +192,7 @@
          */
         public function enableOperator(string $operatorUuid): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
                 sprintf('Failed to enable operator with UUID %s', $operatorUuid)
             );
         }
@@ -204,7 +206,7 @@
          */
         public function getOperator(string $operatorUuid): OperatorRecord
         {
-            return OperatorRecord::fromArray($this->makeRequest('GET', '/operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
         }
@@ -217,9 +219,27 @@
          */
         public function getSelfOperator(): OperatorRecord
         {
-            return OperatorRecord::fromArray($this->makeRequest('GET', '/operators/self', null, [HttpResponseCode::OK],
+            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
                 'Failed to get self operator'
             ));
+        }
+
+        /**
+         * List operators with pagination
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of operators per page (default is 100)
+         * @return OperatorRecord[] An array of OperatorRecord objects
+         * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the operators
+         */
+        public function listOperators(int $page=1, int $limit=100): array
+        {
+            return array_map(
+                fn($item) => OperatorRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
+                )
+            );
         }
 
         /**
@@ -235,26 +255,27 @@
         {
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', '/operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
         }
 
         /**
-         * List operators with pagination
+         * List evidence records submitted by a specific operator
          *
+         * @param string $operatorUuid The UUID of the operator to list evidence records for
          * @param int $page The page number to retrieve (default is 1)
-         * @param int $limit The number of operators per page (default is 100)
-         * @return OperatorRecord[] An array of OperatorRecord objects
-         * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the operators
+         * @param int $limit The number of audit logs per second (default is 100)
+         * @return EvidenceRecord[] An array of EvidenceRecord objects as a result
+         * @throws RequestException Throws an exception if the request fails or if there was an error retrieving the audit logs
          */
-        public function listOperators(int $page=1, int $limit=100): array
+        public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
-                fn($item) => OperatorRecord::fromArray($item),
-                $this->makeRequest('GET', '/operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
-                    sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
+                fn($item) => EvidenceRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list evidence records for operator with UUID %s, page %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
         }
@@ -298,7 +319,7 @@
          */
         private function buildCurl(string $path): CurlHandle
         {
-            $ch = curl_init($this->endpoint . $path);
+            $ch = curl_init($this->endpoint . '/' . $path);
 
             $headers = [
                 'Content-Type: application/json',
