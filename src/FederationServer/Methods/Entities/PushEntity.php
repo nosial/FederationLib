@@ -18,7 +18,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(!$authenticatedOperator->isClient() && !$authenticatedOperator->canManageOperators())
+            if(!$authenticatedOperator->isClient())
             {
                 throw new RequestException('Insufficient permissions to push entities', 403);
             }
