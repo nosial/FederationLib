@@ -1,8 +1,8 @@
 <?php
 
-namespace FederationServer\Objects\Responses;
+    namespace FederationServer\Objects\Responses;
 
-class EvidenceRecord extends \FederationServer\Objects\EvidenceRecord
-{
+    class EvidenceRecord extends \FederationServer\Objects\EvidenceRecord
+    {
 
-}
+    }

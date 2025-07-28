@@ -3,7 +3,6 @@
     namespace FederationServer\Methods\Operators;
 
     use FederationServer\Classes\Enums\AuditLogType;
-    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;

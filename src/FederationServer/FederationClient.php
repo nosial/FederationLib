@@ -8,6 +8,7 @@
     use FederationServer\Interfaces\ResponseInterface;
     use FederationServer\Objects\ErrorResponse;
     use FederationServer\Objects\Responses\AuditLog;
+    use FederationServer\Objects\Responses\BlacklistRecord;
     use FederationServer\Objects\Responses\EvidenceRecord;
     use FederationServer\Objects\Responses\OperatorRecord;
     use FederationServer\Objects\SuccessResponse;
@@ -279,6 +280,74 @@
                 )
             );
         }
+
+        /**
+         * Lists all blacklist records of a specific operator
+         *
+         * @param string $operatorUuid The UUID of the operator to query
+         * @param int $page The page number to query (Default: 1)
+         * @param int $limit The limit of items to display (Display: 100)
+         * @return BlacklistRecord[] An array of BlacklistRecord objects as the result, empty if no results.
+         * @throws RequestException Thrown if there was an error with the exception
+         */
+        public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100): array
+        {
+            return array_map(
+                fn($item) => BlacklistRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list operator blacklist records with UUID %s, page %d, limit %d', $operatorUuid, $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Enables/Disables the ability for an operator to manage other operators, note that the operator making
+         * this request must have the ability to manage other operators.
+         *
+         * @param string $operatorUuid The UUID of the operator to alter
+         * @param bool $manageOperators If True, this operator can manage other operators, otherwise False.
+         * @return void
+         * @throws RequestException Thrown if there was an error while making the request
+         */
+        public function setManageOperatorsPermission(string $operatorUuid, bool $manageOperators): void
+        {
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
+                sprintf('Failed to %s the operator\'s permission to manage other operators', ($manageOperators ? 'enable' : 'disable'))
+            );
+        }
+
+        /**
+         * Enables/Disable client permissions for the specified operator, note that the authenticated operator must
+         * have permissions to manage other operators
+         *
+         * @param string $operatorUuid The UUID of the operator to alter
+         * @param bool $isClient if True, this operator is a client operator; False otherwise.
+         * @return void
+         * @throws RequestException Thrown if there was a request exception
+         */
+        public function setClientPermission(string $operatorUuid, bool $isClient): void
+        {
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
+                sprintf('Failed to %s the operator\'s client permissions', ($isClient ? 'enable' : 'disable'))
+            );
+        }
+
+        /**
+         * Sets the permission for a specified operator to manage the blacklist, note the authenticated operator
+         * must have permissions to manage other operators
+         *
+         * @param string $operatorUuid The UUID of the operator to specify
+         * @param bool $manageBlacklist if True, this operator can manage the blacklist; False otherwise.
+         * @return void
+         * @throws RequestException Thrown if there was an exception with the request
+         */
+        public function setManageBlacklistPermission(string $operatorUuid, bool $manageBlacklist): void
+        {
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_blacklist', ['enabled' => $manageBlacklist], [HttpResponseCode::OK],
+                sprintf('Failed to %s operator\'s blacklist management permission', ($manageBlacklist ? 'enable' : 'disable'))
+            );
+        }
+
 
         /**
          * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the
