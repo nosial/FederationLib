@@ -3,13 +3,13 @@
     namespace FederationServer\Methods\Blacklist;
 
     use FederationServer\Classes\Configuration;
-    use FederationServer\Classes\Enums\AuditLogType;
-    use FederationServer\Classes\Enums\BlacklistType;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\BlacklistManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
+    use FederationServer\Enums\AuditLogType;
+    use FederationServer\Enums\BlacklistType;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
