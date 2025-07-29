@@ -3,8 +3,8 @@
     namespace FederationServer\Classes\Managers;
 
     use FederationServer\Classes\DatabaseConnection;
-    use FederationServer\Classes\Enums\BlacklistType;
     use FederationServer\Classes\Validate;
+    use FederationServer\Enums\BlacklistType;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\BlacklistRecord;
     use InvalidArgumentException;
