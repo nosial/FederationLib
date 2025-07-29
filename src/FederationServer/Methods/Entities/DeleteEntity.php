@@ -2,12 +2,11 @@
 
     namespace FederationServer\Methods\Entities;
 
-    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EntitiesManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Utilities;
-    use FederationServer\Classes\Validate;
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
@@ -26,8 +25,8 @@
             }
 
             if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})$#', FederationServer::getPath(), $matches)
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})/query$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})/query$#', FederationServer::getPath(), $matches)
             )
             {
                 throw new RequestException('Entity UUID is required', 400);
@@ -55,7 +54,6 @@
                 }
 
                 EntitiesManager::deleteEntity($entityRecord->getUuid());
-
                 AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
                     'Entity %s deleted by %s (%s)',
                     $entityRecord->getUuid(),
