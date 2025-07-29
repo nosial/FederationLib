@@ -18,7 +18,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('You must be authenticated to list blacklist records', 401);
