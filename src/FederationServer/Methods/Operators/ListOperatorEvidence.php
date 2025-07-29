@@ -17,7 +17,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator(false);
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             $listConfidential = false;
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
