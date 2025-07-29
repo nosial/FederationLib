@@ -6,7 +6,7 @@
     use FederationServer\Classes\Configuration\MaintenanceConfiguration;
     use FederationServer\Classes\Configuration\RedisConfiguration;
     use FederationServer\Classes\Configuration\ServerConfiguration;
-    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Enums\AuditLogType;
 
     class Configuration
     {
