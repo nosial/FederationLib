@@ -17,16 +17,18 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-            $includeConfidential = false;
-
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
-            if($authenticatedOperator !== null)
+            if(FederationServer::getParameter('include_confidential') !== null && $authenticatedOperator->canManageBlacklist())
             {
                 $includeConfidential = true;
+            }
+            else
+            {
+                $includeConfidential = false;
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
