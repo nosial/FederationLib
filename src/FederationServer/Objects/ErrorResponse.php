@@ -2,7 +2,7 @@
 
     namespace FederationServer\Objects;
 
-    use FederationServer\Classes\Enums\HttpResponseCode;
+    use FederationServer\Enums\HttpResponseCode;
     use FederationServer\Interfaces\ResponseInterface;
     use InvalidArgumentException;
 
