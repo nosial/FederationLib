@@ -3,7 +3,7 @@
     namespace FederationServer\Objects;
 
     use DateTime;
-    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Interfaces\SerializableInterface;
 
     class AuditLogRecord implements SerializableInterface
@@ -108,7 +108,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): AuditLogRecord
         {
             if(isset($array['timestamp']))
             {
