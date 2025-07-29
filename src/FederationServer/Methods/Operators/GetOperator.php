@@ -2,7 +2,6 @@
 
     namespace FederationServer\Methods\Operators;
 
-    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
@@ -42,14 +41,13 @@
                 throw new RequestException('Unable to get operator', 500, $e);
             }
 
-            if($authenticatedOperator?->canManageOperators())
+            if(!$authenticatedOperator?->canManageOperators())
             {
-                // If the authenticated operator can manage operators, return the full record
-                self::successResponse($existingOperator->toArray());
-                return;
+                // Clear API key if the authenticated operator does not have permission to manage operators
+                $existingOperator->clearApiKey();
             }
 
             // Respond with public record if the authenticated operator cannot manage operators
-            self::successResponse($existingOperator->toPublicRecord()->toArray());
+            self::successResponse($existingOperator->toArray());
         }
     }
