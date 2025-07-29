@@ -14,6 +14,7 @@
          */
         public static function handle(array $args): int
         {
+            /** @noinspection PhpConditionCheckedByNextConditionInspection */
             if (!isset($args['uuid']) || empty($args['uuid']))
             {
                 print("Error: Operator UUID is required.\n");
