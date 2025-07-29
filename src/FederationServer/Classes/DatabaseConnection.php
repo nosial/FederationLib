@@ -2,7 +2,7 @@
 
     namespace FederationServer\Classes;
 
-    use FederationServer\Classes\Enums\DatabaseTables;
+    use FederationServer\Enums\DatabaseTables;
     use FederationServer\Exceptions\DatabaseOperationException;
     use PDO;
     use PDOException;
@@ -57,13 +57,13 @@
                 $path = $sql->getPath();
                 if (!file_exists($path))
                 {
-                    throw new RuntimeException("SQL file for table {$sql->name} does not exist at path: {$path}");
+                    throw new RuntimeException("SQL file for table $sql->name does not exist at path: $path");
                 }
 
                 $sqlContent = @file_get_contents($path);
                 if ($sqlContent === false)
                 {
-                    throw new RuntimeException("Failed to read SQL file for table {$sql->name} at path: {$path}");
+                    throw new RuntimeException("Failed to read SQL file for table $sql->name at path: $path");
                 }
 
                 try
@@ -79,7 +79,7 @@
                 }
                 catch (PDOException $e)
                 {
-                    throw new DatabaseOperationException("Failed to execute SQL for table {$sql->name}: " . $e->getMessage());
+                    throw new DatabaseOperationException("Failed to execute SQL for table $sql->name: " . $e->getMessage());
                 }
             }
         }
