@@ -4,10 +4,10 @@
 
     use Exception;
     use FederationServer\Classes\Configuration;
-    use FederationServer\Classes\Enums\HttpResponseCode;
-    use FederationServer\Classes\Enums\Method;
     use FederationServer\Classes\Logger;
     use FederationServer\Classes\RequestHandler;
+    use FederationServer\Enums\HttpResponseCode;
+    use FederationServer\Enums\Method;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Objects\OperatorRecord;
     use FederationServer\Objects\ServerInformation;
