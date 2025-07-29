@@ -3,7 +3,7 @@
     namespace FederationServer\Objects;
 
     use DateTime;
-    use FederationServer\Classes\Enums\BlacklistType;
+    use FederationServer\Enums\BlacklistType;
     use FederationServer\Interfaces\SerializableInterface;
 
     class BlacklistRecord implements SerializableInterface
@@ -28,6 +28,7 @@
          *                    - 'type': BlacklistType, Type of blacklist (e.g., IP, domain).
          *                    - 'expires': int|null, Timestamp when the blacklist expires, null if permanent.
          *                    - 'created': int, Timestamp when the record was created.
+         * @noinspection PhpUnnecessaryBoolCastInspection
          */
         public function __construct(array $data)
         {
@@ -36,7 +37,7 @@
             $this->entity = $data['entity'] ?? '';
             $this->evidence = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
-            $this->lifted = isset($data['lifted']) ? (bool)$data['lifted'] : false;
+            $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
             $this->expires = isset($data['expires']) ? (int)$data['expires'] : null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
         }
@@ -101,7 +102,7 @@
          */
         public function isLifted(): bool
         {
-            return $this->lifted;
+            return $this->lifted || ($this->expires !== null && $this->expires < time());
         }
 
         /**
@@ -149,7 +150,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): BlacklistRecord
         {
             if(isset($array['expires']))
             {
