@@ -3,7 +3,7 @@
     namespace FederationServer;
 
     use FederationServer\Classes\CLI\CreateOperator;
-    use FederationServer\Classes\Enums\CliCommands;
+    use FederationServer\Enums\CliCommands;
     use OptsLib\Parse;
 
     class Program
