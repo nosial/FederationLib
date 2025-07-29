@@ -114,7 +114,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): FileAttachmentRecord
         {
             if(isset($array['created']))
             {
