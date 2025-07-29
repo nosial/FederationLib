@@ -3,14 +3,14 @@
     namespace FederationServer;
 
     use CurlHandle;
-    use FederationServer\Classes\Enums\HttpResponseCode;
+    use FederationServer\Enums\HttpResponseCode;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Interfaces\ResponseInterface;
+    use FederationServer\Objects\AuditLogRecord;
+    use FederationServer\Objects\BlacklistRecord;
     use FederationServer\Objects\ErrorResponse;
-    use FederationServer\Objects\Responses\AuditLog;
-    use FederationServer\Objects\Responses\BlacklistRecord;
-    use FederationServer\Objects\Responses\EvidenceRecord;
-    use FederationServer\Objects\Responses\OperatorRecord;
+    use FederationServer\Objects\EvidenceRecord;
+    use FederationServer\Objects\OperatorRecord;
     use FederationServer\Objects\SuccessResponse;
     use InvalidArgumentException;
 
@@ -249,13 +249,13 @@
          * @param string $operatorUuid The UUID of the operator to list audit logs for
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of audit logs per page (default is 100)
-         * @return AuditLog[] An array of AuditLog objects
+         * @return AuditLogRecord[] An array of AuditLog objects
          * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the audit logs
          */
         public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
-                fn($item) => AuditLog::fromArray($item),
+                fn($item) => AuditLogRecord::fromArray($item),
                 $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
@@ -348,6 +348,21 @@
             );
         }
 
+        /**
+         * Deletes an existing entity from the database, note the authenticated operator must have permissions
+         * to manage operators
+         *
+         * @param string $entityIdentifier
+         * @return void
+         * @throws RequestException
+         */
+        public function deleteEntity(string $entityIdentifier): void
+        {
+            $this->makeRequest(
+                'DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+                sprintf('Failed to delete the entity %s', $entityIdentifier)
+            );
+        }
 
         /**
          * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the
