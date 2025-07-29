@@ -4,8 +4,8 @@
 
     use DateTime;
     use FederationServer\Classes\DatabaseConnection;
-    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\AuditLogRecord;
     use InvalidArgumentException;
