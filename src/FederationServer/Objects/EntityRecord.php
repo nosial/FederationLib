@@ -103,7 +103,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): EntityRecord
         {
             if(isset($array['created']))
             {
