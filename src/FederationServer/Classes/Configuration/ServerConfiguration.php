@@ -2,7 +2,7 @@
 
     namespace FederationServer\Classes\Configuration;
 
-    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Enums\AuditLogType;
 
     class ServerConfiguration
     {
@@ -44,6 +44,7 @@
             $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
+            // TODO: Why not make operators a public record thing to see? could be implemented by default disabled.
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
