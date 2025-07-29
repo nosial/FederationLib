@@ -8,7 +8,9 @@
     use FederationServer\Classes\RedisConnection;
     use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
+    use FederationServer\Objects\EntityQueryResult;
     use FederationServer\Objects\EntityRecord;
+    use FederationServer\Objects\QueriedBlacklistRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
@@ -517,6 +519,52 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve entities: " . $e->getMessage(), $e->getCode(), $e);
             }
+        }
+
+        /**
+         * Queries an entity by its hash and retrieves all associated blacklist records, evidence, and audit logs.
+         *
+         * @param EntityRecord $entityRecord The entity record to query
+         * @param bool|null $includeConfidential Whether to include confidential evidence records. Defaults to true. (Note this does not exclude blacklist records, evidence records will be shown as null if they are confidential)
+         * @param bool|null $includeLifted Whether to include lifted blacklist records. Defaults to true.
+         * @return EntityQueryResult An EntityQueryResult object containing the entity record, queried blacklist records, evidence records, and audit logs.
+         * @throws CacheOperationException If there is an error during the caching operation.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function queryEntity(EntityRecord $entityRecord, ?bool $includeConfidential=true, ?bool $includeLifted=true): EntityQueryResult
+        {
+            // Build all the queried blacklist records
+            $queriedBlacklistRecords = [];
+            foreach(BlacklistManager::getEntriesByEntity($entityRecord->getUuid()) as $blacklistRecord)
+            {
+                if(!$includeLifted && $blacklistRecord->isLifted())
+                {
+                    continue;
+                }
+
+                $evidenceRecord = EvidenceManager::getEvidence($blacklistRecord->getUuid());
+                if(!$includeConfidential && ($evidenceRecord === null || $evidenceRecord->isConfidential()))
+                {
+                    $evidenceRecord = null; // Set to null if evidence is confidential or not available
+                }
+
+                $fileAttachments = [];
+                if($evidenceRecord !== null)
+                {
+                    // We automatically include the file attachments if the evidence record exists, because the
+                    // above check already checks for existence and confidentiality
+                    $fileAttachments = FileAttachmentManager::getRecordsByEvidence($evidenceRecord->getUuid());
+                }
+
+                $queriedBlacklistRecords[] = new QueriedBlacklistRecord($blacklistRecord, $evidenceRecord, $fileAttachments);
+            }
+
+            // Finally return the full EntityQueryResult object
+            return new EntityQueryResult(
+                $entityRecord, $queriedBlacklistRecords,
+                EvidenceManager::getEvidenceByEntity($entityRecord->getUuid()),
+                AuditLogManager::getEntriesByEntity($entityRecord->getUuid())
+            );
         }
 
         /**
