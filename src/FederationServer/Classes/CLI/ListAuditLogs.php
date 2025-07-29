@@ -3,7 +3,7 @@
     namespace FederationServer\Classes\CLI;
 
     use FederationServer\Classes\Managers\AuditLogManager;
-    use FederationServer\Classes\Enums\AuditLogType;
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Interfaces\CommandLineInterface;
     use FederationServer\Objects\AuditLogRecord;
     use InvalidArgumentException;
