@@ -8,7 +8,7 @@
     class OperatorRecord implements SerializableInterface
     {
         private string $uuid;
-        private string $apiKey;
+        private ?string $apiKey;
         private string $name;
         private bool $disabled;
         private bool $manageOperators;
@@ -48,11 +48,21 @@
         /**
          * Get the API key of the operator.
          *
-         * @return string
+         * @return string|null
          */
-        public function getApiKey(): string
+        public function getApiKey(): ?string
         {
             return $this->apiKey;
+        }
+
+        /**
+         * Clears the API key from the object, used to censor the sensitive information
+         *
+         * @return void
+         */
+        public function clearApiKey(): void
+        {
+            $this->apiKey = null;
         }
 
         /**
@@ -151,7 +161,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): OperatorRecord
         {
             if(isset($array['created']) )
             {
