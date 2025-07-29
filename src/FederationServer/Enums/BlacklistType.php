@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Classes\Enums;
+    namespace FederationServer\Enums;
 
     enum BlacklistType : string
     {

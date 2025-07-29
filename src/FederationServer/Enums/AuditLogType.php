@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Classes\Enums;
+    namespace FederationServer\Enums;
 
     enum AuditLogType : string
     {
@@ -8,7 +8,7 @@
         case OPERATOR_DELETED = 'OPERATOR_DELETED';
         case OPERATOR_DISABLED = 'OPERATOR_DISABLED';
         case OPERATOR_ENABLED = 'OPERATOR_ENABLED';
-        case OPERATOR_PERMISSIONS_CHANGED = 'OPERATOR_MANAGE_BLACKLIST_ENABLED';
+        case OPERATOR_PERMISSIONS_CHANGED = 'OPERATOR_PERMISSIONS_CHANGED';
 
         case ATTACHMENT_UPLOADED = 'ATTACHMENT_UPLOADED';
         case ATTACHMENT_DELETED = 'ATTACHMENT_DELETED';

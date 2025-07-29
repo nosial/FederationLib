@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer\Classes\Enums;
+    namespace FederationServer\Enums;
 
     use FederationServer\Classes\CLI\CreateOperator;
     use FederationServer\Classes\CLI\DeleteOperator;
