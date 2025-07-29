@@ -3,7 +3,7 @@
     namespace FederationServer\Exceptions;
 
     use Exception;
-    use FederationServer\Classes\Enums\HttpResponseCode;
+    use FederationServer\Enums\HttpResponseCode;
     use Throwable;
 
     class RequestException extends Exception
