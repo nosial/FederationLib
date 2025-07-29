@@ -2,10 +2,10 @@
 
     namespace FederationServer\Classes\CLI;
 
-    use FederationServer\Classes\Enums\AuditLogType;
     use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\OperatorManager;
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Interfaces\CommandLineInterface;
 
@@ -16,6 +16,7 @@
          */
         public static function handle(array $args): int
         {
+            /** @noinspection PhpConditionCheckedByNextConditionInspection */
             if (!isset($args['uuid']) || empty($args['uuid']))
             {
                 print("Error: Operator UUID is required.\n");
