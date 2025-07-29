@@ -181,6 +181,10 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), $e->getCode(), $e);
             }
+            catch (RedisException $e)
+            {
+                throw new CacheOperationException("Cache operation failed: " . $e->getMessage(), $e->getCode(), $e);
+            }
         }
 
         /**
