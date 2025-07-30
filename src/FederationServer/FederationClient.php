@@ -6,11 +6,11 @@
     use FederationServer\Enums\HttpResponseCode;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\Interfaces\ResponseInterface;
-    use FederationServer\Objects\AuditLogRecord;
+    use FederationServer\Objects\AuditLog;
     use FederationServer\Objects\BlacklistRecord;
     use FederationServer\Objects\ErrorResponse;
     use FederationServer\Objects\EvidenceRecord;
-    use FederationServer\Objects\OperatorRecord;
+    use FederationServer\Objects\Operator;
     use FederationServer\Objects\SuccessResponse;
     use InvalidArgumentException;
 
@@ -205,9 +205,9 @@
          * @return mixed
          * @throws RequestException Throws an exception if the request fails or the operator cannot be found
          */
-        public function getOperator(string $operatorUuid): OperatorRecord
+        public function getOperator(string $operatorUuid): Operator
         {
-            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            return Operator::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
         }
@@ -215,12 +215,12 @@
         /**
          * Get the self operator (the operator making the request)
          *
-         * @return OperatorRecord The operator record of the self operator
+         * @return Operator The operator record of the self operator
          * @throws RequestException Throws an exception if the request fails or if the self operator cannot be retrieved
          */
-        public function getSelfOperator(): OperatorRecord
+        public function getSelfOperator(): Operator
         {
-            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
+            return Operator::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
                 'Failed to get self operator'
             ));
         }
@@ -230,13 +230,13 @@
          *
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of operators per page (default is 100)
-         * @return OperatorRecord[] An array of OperatorRecord objects
+         * @return Operator[] An array of OperatorRecord objects
          * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the operators
          */
         public function listOperators(int $page=1, int $limit=100): array
         {
             return array_map(
-                fn($item) => OperatorRecord::fromArray($item),
+                fn($item) => Operator::fromArray($item),
                 $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
                 )
@@ -249,13 +249,13 @@
          * @param string $operatorUuid The UUID of the operator to list audit logs for
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of audit logs per page (default is 100)
-         * @return AuditLogRecord[] An array of AuditLog objects
+         * @return AuditLog[] An array of AuditLog objects
          * @throws RequestException Throws an exception if the request fails or if there is an error retrieving the audit logs
          */
         public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
-                fn($item) => AuditLogRecord::fromArray($item),
+                fn($item) => AuditLog::fromArray($item),
                 $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )

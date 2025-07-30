@@ -6,7 +6,7 @@
     use FederationServer\Enums\AuditLogType;
     use FederationServer\Interfaces\SerializableInterface;
 
-    class AuditLogRecord implements SerializableInterface
+    class AuditLog implements SerializableInterface
     {
         private string $uuid;
         private ?string $operator;
@@ -108,7 +108,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): AuditLogRecord
+        public static function fromArray(array $array): AuditLog
         {
             if(isset($array['timestamp']))
             {

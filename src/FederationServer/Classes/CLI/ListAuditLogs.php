@@ -5,7 +5,7 @@
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Enums\AuditLogType;
     use FederationServer\Interfaces\CommandLineInterface;
-    use FederationServer\Objects\AuditLogRecord;
+    use FederationServer\Objects\AuditLog;
     use InvalidArgumentException;
     use Throwable;
 
@@ -57,7 +57,7 @@
 
                 foreach ($entries as $entry)
                 {
-                    /** @var AuditLogRecord $entry */
+                    /** @var AuditLog $entry */
                     printf("[%s] %s | Operator: %s | Entity: %s | %s\n",
                         $entry->getTimestamp() ?? '-',
                         $entry->getType()->value ?? '-',

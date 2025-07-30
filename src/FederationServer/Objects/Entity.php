@@ -5,7 +5,7 @@
     use DateTime;
     use FederationServer\Interfaces\SerializableInterface;
 
-    class EntityRecord implements SerializableInterface
+    class Entity implements SerializableInterface
     {
         private string $uuid;
         private string $id;
@@ -103,7 +103,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): EntityRecord
+        public static function fromArray(array $array): Entity
         {
             if(isset($array['created']))
             {

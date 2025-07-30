@@ -9,7 +9,7 @@
     use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Objects\EntityQueryResult;
-    use FederationServer\Objects\EntityRecord;
+    use FederationServer\Objects\Entity;
     use FederationServer\Objects\QueriedBlacklistRecord;
     use InvalidArgumentException;
     use PDO;
@@ -85,11 +85,11 @@
          *
          * @param string $id The ID of the entity.
          * @param string|null $domain The domain of the entity.
-         * @return EntityRecord|null The EntityRecord object if found, null otherwise.
+         * @return Entity|null The EntityRecord object if found, null otherwise.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getEntity(string $id, ?string $domain): ?EntityRecord
+        public static function getEntity(string $id, ?string $domain): ?Entity
         {
             if(strlen($id) < 1)
             {
@@ -110,7 +110,7 @@
                     $cached = RedisConnection::getRecordFromCache(self::getCacheKey($hash));
                     if (is_array($cached) && !empty($cached))
                     {
-                        return new EntityRecord($cached);
+                        return new Entity($cached);
                     }
                 }
             }
@@ -134,7 +134,7 @@
 
                 if($data)
                 {
-                    $entity = new EntityRecord($data);
+                    $entity = new Entity($data);
                     // Cache the entity
                     if(self::isCachingEnabled())
                     {
@@ -156,12 +156,12 @@
          * Retrieves an entity by its UUID.
          *
          * @param string $uuid The UUID of the entity.
-         * @return EntityRecord|null The EntityRecord object if found, null otherwise.
+         * @return Entity|null The EntityRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getEntityByUuid(string $uuid): ?EntityRecord
+        public static function getEntityByUuid(string $uuid): ?Entity
         {
             if(strlen($uuid) < 1)
             {
@@ -175,7 +175,7 @@
                     $cached = RedisConnection::getRecordFromCache(self::getCacheKey($uuid));
                     if (is_array($cached) && !empty($cached))
                     {
-                        return new EntityRecord($cached);
+                        return new Entity($cached);
                     }
                 }
             }
@@ -189,7 +189,7 @@
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($data)
                 {
-                    $entity = new EntityRecord($data);
+                    $entity = new Entity($data);
                     if(self::isCachingEnabled())
                     {
                         RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getUuid()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
@@ -208,12 +208,12 @@
          * Retrieves an entity by its SHA-256 hash.
          *
          * @param string $hash The SHA-256 hash of the entity.
-         * @return EntityRecord|null The EntityRecord object if found, null otherwise.
+         * @return Entity|null The EntityRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the hash is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getEntityByHash(string $hash): ?EntityRecord
+        public static function getEntityByHash(string $hash): ?Entity
         {
             if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
             {
@@ -227,7 +227,7 @@
                     $cached = RedisConnection::getRecordFromCache(self::getCacheKey($hash));
                     if (is_array($cached) && !empty($cached))
                     {
-                        return new EntityRecord($cached);
+                        return new Entity($cached);
                     }
                 }
             }
@@ -241,7 +241,7 @@
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 if($data)
                 {
-                    $entity = new EntityRecord($data);
+                    $entity = new Entity($data);
                     if(self::isCachingEnabled())
                     {
                         RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getHash()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
@@ -486,7 +486,7 @@
          *
          * @param int $limit The maximum number of entities to retrieve per page.
          * @param int $page The page number to retrieve.
-         * @return EntityRecord[] An array of EntityRecord objects.
+         * @return Entity[] An array of EntityRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
         public static function getEntities(int $limit=100, int $page=1): array
@@ -511,7 +511,7 @@
                 $entities = [];
                 while($row = $stmt->fetch(PDO::FETCH_ASSOC))
                 {
-                    $entities[] = new EntityRecord($row);
+                    $entities[] = new Entity($row);
                 }
                 return $entities;
             }
@@ -524,14 +524,14 @@
         /**
          * Queries an entity by its hash and retrieves all associated blacklist records, evidence, and audit logs.
          *
-         * @param EntityRecord $entityRecord The entity record to query
+         * @param Entity $entityRecord The entity record to query
          * @param bool|null $includeConfidential Whether to include confidential evidence records. Defaults to true. (Note this does not exclude blacklist records, evidence records will be shown as null if they are confidential)
          * @param bool|null $includeLifted Whether to include lifted blacklist records. Defaults to true.
          * @return EntityQueryResult An EntityQueryResult object containing the entity record, queried blacklist records, evidence records, and audit logs.
          * @throws CacheOperationException If there is an error during the caching operation.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function queryEntity(EntityRecord $entityRecord, ?bool $includeConfidential=true, ?bool $includeLifted=true): EntityQueryResult
+        public static function queryEntity(Entity $entityRecord, ?bool $includeConfidential=true, ?bool $includeLifted=true): EntityQueryResult
         {
             // Build all the queried blacklist records
             $queriedBlacklistRecords = [];

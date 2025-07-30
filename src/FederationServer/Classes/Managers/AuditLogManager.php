@@ -7,7 +7,7 @@
     use FederationServer\Classes\Logger;
     use FederationServer\Enums\AuditLogType;
     use FederationServer\Exceptions\DatabaseOperationException;
-    use FederationServer\Objects\AuditLogRecord;
+    use FederationServer\Objects\AuditLog;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
@@ -79,11 +79,11 @@
          * Retrieves a specific audit log entry by its UUID.
          *
          * @param string $uuid The UUID of the audit log entry to retrieve.
-         * @return AuditLogRecord|null An AuditLogRecord object representing the entry, or null if not found.
+         * @return AuditLog|null An AuditLogRecord object representing the entry, or null if not found.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntry(string $uuid): ?AuditLogRecord
+        public static function getEntry(string $uuid): ?AuditLog
         {
             if(strlen($uuid) === 0)
             {
@@ -102,7 +102,7 @@
                     return null; // No entry found
                 }
 
-                return new AuditLogRecord($result);
+                return new AuditLog($result);
             }
             catch (PDOException $e)
             {
@@ -116,7 +116,7 @@
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
-         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
+         * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
         public static function getEntries(int $limit=100, int $page=1, ?array $filterType=null): array
@@ -164,7 +164,7 @@
                 $entries = [];
                 foreach ($results as $row)
                 {
-                    $entries[] = new AuditLogRecord($row);
+                    $entries[] = new AuditLog($row);
                 }
 
                 return $entries;
@@ -182,7 +182,7 @@
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
-         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
+         * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
         public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1, ?array $filterType=null): array
@@ -238,7 +238,7 @@
 
                 foreach ($results as $row)
                 {
-                    $entries[] = new AuditLogRecord($row);
+                    $entries[] = new AuditLog($row);
                 }
 
                 return $entries;
@@ -256,7 +256,7 @@
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
-         * @return AuditLogRecord[] An array of AuditLogRecord objects representing the entries.
+         * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
         public static function getEntriesByEntity(string $entity, int $limit=100, int $page=1, ?array $filterType=null): array
@@ -307,7 +307,7 @@
                 $entries = [];
                 foreach ($results as $row)
                 {
-                    $entries[] = new AuditLogRecord($row);
+                    $entries[] = new AuditLog($row);
                 }
 
                 return $entries;

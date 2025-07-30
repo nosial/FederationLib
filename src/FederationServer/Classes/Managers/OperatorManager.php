@@ -9,7 +9,7 @@
     use FederationServer\Classes\Utilities;
     use FederationServer\Exceptions\CacheOperationException;
     use FederationServer\Exceptions\DatabaseOperationException;
-    use FederationServer\Objects\OperatorRecord;
+    use FederationServer\Objects\Operator;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
@@ -116,12 +116,12 @@
          * This method checks if the master operator exists in the database.
          * If it does not exist, it creates one with a predefined API key.
          *
-         * @return OperatorRecord The master operator record.
+         * @return Operator The master operator record.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws InvalidArgumentException If the API key for the master operator is not set in the configuration.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getMasterOperator(): OperatorRecord
+        public static function getMasterOperator(): Operator
         {
             // This method retrieves the master operator from the database.
             // If the master operator does not exist, it creates one with a predefined API key.
@@ -147,12 +147,12 @@
          * Retrieve an operator by their UUID.
          *
          * @param string $uuid The UUID of the operator.
-         * @return OperatorRecord|null The operator record if found, null otherwise.
+         * @return Operator|null The operator record if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getOperator(string $uuid): ?OperatorRecord
+        public static function getOperator(string $uuid): ?Operator
         {
             if(empty($uuid))
             {
@@ -162,7 +162,7 @@
             if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
             {
                 // If caching is enabled and the operator exists in the cache, return it
-                return new OperatorRecord(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
+                return new Operator(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
             }
 
             try
@@ -178,7 +178,7 @@
                     return null; // No operator found with the given UUID
                 }
 
-                $operatorRecord = new OperatorRecord($data);
+                $operatorRecord = new Operator($data);
             }
             catch (PDOException $e)
             {
@@ -258,10 +258,10 @@
          * Retrieve an operator by their API key.
          *
          * @param string $apiKey The API key of the operator.
-         * @return OperatorRecord|null The operator record if found, null otherwise.
+         * @return Operator|null The operator record if found, null otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function getOperatorByApiKey(string $apiKey): ?OperatorRecord
+        public static function getOperatorByApiKey(string $apiKey): ?Operator
         {
             if(empty($apiKey))
             {
@@ -281,7 +281,7 @@
                     return null; // No operator found with the given API key
                 }
 
-                return new OperatorRecord($data);
+                return new Operator($data);
             }
             catch (PDOException $e)
             {
@@ -570,7 +570,7 @@
          *
          * @param int $limit The maximum number of operators to retrieve.
          * @param int $page The page number for pagination.
-         * @return OperatorRecord[] An array of OperatorRecord objects representing the operators.
+         * @return Operator[] An array of OperatorRecord objects representing the operators.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
         public static function getOperators(int $limit=100, int $page=1): array
@@ -592,7 +592,7 @@
                 $operators = [];
                 while($data = $stmt->fetch())
                 {
-                    $operators[] = new OperatorRecord($data);
+                    $operators[] = new Operator($data);
                 }
 
                 return $operators;

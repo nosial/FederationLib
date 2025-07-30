@@ -5,7 +5,7 @@
     use DateTime;
     use FederationServer\Interfaces\SerializableInterface;
     
-    class OperatorRecord implements SerializableInterface
+    class Operator implements SerializableInterface
     {
         private string $uuid;
         private ?string $apiKey;
@@ -135,11 +135,6 @@
             return $this->updated;
         }
 
-        public function toPublicRecord(): PublicOperatorRecord
-        {
-            return new PublicOperatorRecord($this);
-        }
-
         /**
          * @inheritDoc
          */
@@ -161,7 +156,7 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): OperatorRecord
+        public static function fromArray(array $array): Operator
         {
             if(isset($array['created']) )
             {

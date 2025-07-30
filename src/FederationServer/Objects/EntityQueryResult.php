@@ -6,7 +6,7 @@
 
     class EntityQueryResult implements SerializableInterface
     {
-        private EntityRecord $entityRecord;
+        private Entity $entityRecord;
         /**
          * @var QueriedBlacklistRecord[]
          */
@@ -16,19 +16,19 @@
          */
         private array $evidenceRecords;
         /**
-         * @var AuditLogRecord[]
+         * @var AuditLog[]
          */
         private array $auditLogs;
 
         /**
          * EntityQueryResult constructor.
          *
-         * @param EntityRecord $entityRecord The entity record associated with this query result.
+         * @param Entity $entityRecord The entity record associated with this query result.
          * @param QueriedBlacklistRecord[] $queriedBlacklistRecords An array of queried blacklist records associated with this entity.
          * @param EvidenceRecord[] $evidenceRecords An array of evidence records associated with this entity.
-         * @param AuditLogRecord[] $auditLogs An array of audit log records associated with this entity.
+         * @param AuditLog[] $auditLogs An array of audit log records associated with this entity.
          */
-        public function __construct(EntityRecord $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
+        public function __construct(Entity $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
         {
             $this->entityRecord = $entityRecord;
             $this->queriedBlacklistRecords = $queriedBlacklistRecords;
@@ -39,9 +39,9 @@
         /**
          * Returns the entity record associated with this query result.
          *
-         * @return EntityRecord The entity record associated with this query result.
+         * @return Entity The entity record associated with this query result.
          */
-        public function getEntityRecord(): EntityRecord
+        public function getEntityRecord(): Entity
         {
             return $this->entityRecord;
         }
@@ -94,7 +94,7 @@
         /**
          * Returns the audit logs associated with this entity.
          *
-         * @return AuditLogRecord[] The array of audit log records.
+         * @return AuditLog[] The array of audit log records.
          */
         public function getAuditLogs(): array
         {
@@ -125,7 +125,7 @@
          */
         public static function fromArray(array $array): SerializableInterface
         {
-            $entityRecord = EntityRecord::fromArray($array['entity_record']);
+            $entityRecord = Entity::fromArray($array['entity_record']);
             $queriedBlacklistRecords = array_map(
                 fn($item) => QueriedBlacklistRecord::fromArray($item),
                 $array['queried_blacklist_records']
@@ -135,7 +135,7 @@
                 $array['evidence_records']
             );
             $auditLogs = array_map(
-                fn($item) => AuditLogRecord::fromArray($item),
+                fn($item) => AuditLog::fromArray($item),
                 $array['audit_logs']
             );
 

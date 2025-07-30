@@ -9,7 +9,7 @@
     use FederationServer\Enums\HttpResponseCode;
     use FederationServer\Enums\Method;
     use FederationServer\Exceptions\RequestException;
-    use FederationServer\Objects\OperatorRecord;
+    use FederationServer\Objects\Operator;
     use FederationServer\Objects\ServerInformation;
 
     class FederationServer extends RequestHandler
@@ -133,10 +133,10 @@
          * This method retrieves the currently authenticated operator, if any.
          * If no operator is authenticated, it returns null.
          *
-         * @return OperatorRecord|null The authenticated operator record or null if not authenticated.
+         * @return Operator|null The authenticated operator record or null if not authenticated.
          * @throws RequestException If authentication is provided but is invalid/operator is disabled.
          */
-        public static function getAuthenticatedOperator(): ?OperatorRecord
+        public static function getAuthenticatedOperator(): ?Operator
         {
             return parent::getAuthenticatedOperator();
         }
@@ -147,10 +147,10 @@
          * This method retrieves the currently authenticated operator. If no operator is authenticated,
          * it throws a RequestException with a 401 Unauthorized status code.
          *
-         * @return OperatorRecord The authenticated operator record.
+         * @return Operator The authenticated operator record.
          * @throws RequestException If no operator is authenticated.
          */
-        public static function requireAuthenticatedOperator(): OperatorRecord
+        public static function requireAuthenticatedOperator(): Operator
         {
             $operator = self::getAuthenticatedOperator();
             if ($operator === null)
