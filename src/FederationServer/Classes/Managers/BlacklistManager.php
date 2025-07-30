@@ -193,10 +193,11 @@
          * Lifts a blacklist record, marking it as no longer active.
          *
          * @param string $uuid The UUID of the blacklist record to lift.
+         * @param string|null $operatorUuid The UUID of the operator that is lifting the blacklist, optional.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function liftBlacklistRecord(string $uuid): void
+        public static function liftBlacklistRecord(string $uuid, ?string $operatorUuid=null): void
         {
             if(empty($uuid))
             {
@@ -205,7 +206,8 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 WHERE uuid = :uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 AND lifted_by=:operator_uuid WHERE uuid=:uuid");
+                $stmt->bindParam(':operator_uuid', $operatorUuid);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
