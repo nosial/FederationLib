@@ -1,14 +1,15 @@
 create table blacklist
 (
-    uuid     varchar(36) default uuid()                                                                        not null comment 'The Unique Universal Identifier Primary Unique Index'
+    uuid      varchar(36) default uuid()                                                                        not null comment 'The Unique Universal Identifier Primary Unique Index'
         primary key,
-    operator varchar(36)                                                                                       not null comment 'The operator that created this blacklist record',
-    entity   varchar(36)                                                                                       not null comment 'The target entity that is blacklisted',
-    evidence varchar(36)                                                                                       null comment 'Optional. The evidence for the blacklist',
-    type     enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER') not null comment 'The blacklist reason type',
-    lifted   tinyint(1)  default 0                                                                             not null comment 'Default: 0, 1=The blacklist was lifted and is no longer in effect, 0=The blacklist is not lifted, it is in effect until it expires',
-    expires  timestamp                                                                                         null comment 'The timestamp for when the blacklist expires, if null the blacklist never expires',
-    created  timestamp   default current_timestamp()                                                           not null comment 'The Timestamp for when the record was created',
+    operator  varchar(36)                                                                                       not null comment 'The operator that created this blacklist record',
+    entity    varchar(36)                                                                                       not null comment 'The target entity that is blacklisted',
+    evidence  varchar(36)                                                                                       null comment 'Optional. The evidence for the blacklist',
+    type      enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER') not null comment 'The blacklist reason type',
+    lifted    tinyint(1)  default 0                                                                             not null comment 'Default: 0, 1=The blacklist was lifted and is no longer in effect, 0=The blacklist is not lifted, it is in effect until it expires',
+    lifted_by varchar(36)                                                                                       null comment 'Optional. If the blacklist was manually lifted by an operator, this column represents the operator UUID that made the change.',
+    expires   timestamp                                                                                         null comment 'The timestamp for when the blacklist expires, if null the blacklist never expires',
+    created   timestamp   default current_timestamp()                                                           not null comment 'The Timestamp for when the record was created',
     constraint blacklist_uuid_uindex
         unique (uuid) comment 'The Unique Universal Identifier Primary Unique Index',
     constraint blacklist_entities_uuid_fk
@@ -19,7 +20,10 @@ create table blacklist
             on update cascade on delete cascade,
     constraint blacklist_operators_uuid_fk
         foreign key (operator) references operators (uuid)
-            on update cascade on delete cascade
+            on update cascade on delete cascade,
+    constraint blacklist_operators_uuid_fk_2
+        foreign key (lifted_by) references operators (uuid)
+            on update cascade on delete set null
 )
     comment 'Table for housing one or more blacklist events';
 
