@@ -14,6 +14,7 @@
         private ?string $evidence;
         private BlacklistType $type;
         private bool $lifted;
+        private ?string $liftedBy;
         private ?int $expires;
         private int $created;
 
@@ -38,6 +39,7 @@
             $this->evidence = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
+            $this->liftedBy = $data['lifted_by'] ?? null;
             $this->expires = isset($data['expires']) ? (int)$data['expires'] : null;
             $this->created = isset($data['created']) ? (int)$data['created'] : time();
         }
@@ -103,6 +105,17 @@
         public function isLifted(): bool
         {
             return $this->lifted || ($this->expires !== null && $this->expires < time());
+        }
+
+        /**
+         * If an operator manually lifted the blacklist, this property would represent the UUID of the operator
+         * that made that action.
+         *
+         * @return string|null The Operator UUID that lifted the blacklist, null otherwise; even if it gets lifted automatically.
+         */
+        public function getLiftedBy(): ?string
+        {
+            return $this->liftedBy;
         }
 
         /**
