@@ -3,6 +3,7 @@
     namespace FederationServer\Objects;
 
     use DateTime;
+    use FederationServer\Classes\Configuration;
     use FederationServer\Interfaces\SerializableInterface;
 
     class FileAttachmentRecord implements SerializableInterface
@@ -95,6 +96,15 @@
             return $this->created;
         }
 
+        /**
+         * Returns the realpath of where the file is physically located on the disk
+         *
+         * @return string The realpath of the physical file location
+         */
+        public function getFilePath(): string
+        {
+            return realpath(rtrim(Configuration::getServerConfiguration()->getStoragePath(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $this->uuid);
+        }
 
         /**
          * @inheritDoc
