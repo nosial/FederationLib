@@ -2,10 +2,10 @@
 
     namespace FederationServer\Methods\Attachments;
 
+    use FederationServer\Classes\Logger;
     use FederationServer\Classes\Managers\AuditLogManager;
     use FederationServer\Classes\Managers\EvidenceManager;
     use FederationServer\Classes\Managers\FileAttachmentManager;
-    use FederationServer\Classes\Managers\OperatorManager;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Classes\Validate;
     use FederationServer\Enums\AuditLogType;
@@ -28,7 +28,7 @@
                 throw new RequestException('Insufficient permissions to delete attachments', 403);
             }
 
-            if(!preg_match('#^/attachment/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Attachment UUID required', 400);
             }
@@ -53,7 +53,7 @@
                     throw new RequestException('Associated evidence not found', 404);
                 }
 
-                OperatorManager::deleteOperator($attachmentUuid);
+                FileAttachmentManager::deleteRecord($attachmentUuid); // This will delete the file automatically
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Operator %s deleted attachment %s',
                     $authenticatedOperator->getUuid(),
                     $attachmentUuid
@@ -61,7 +61,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Unable to create operator', 500, $e);
+                throw new RequestException('Unable to delete file attachment', 500, $e);
             }
 
             // Respond with the UUID of the newly created operator.
