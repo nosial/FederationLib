@@ -65,6 +65,8 @@
                     RedisConnection::setCacheRecord(self::getRecord($uuid), self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
                 }
             }
+
+            // TODO: If caching is enabled, clear the current storage space cache size so it could be calculated again
         }
 
         /**
@@ -201,6 +203,9 @@
                 throw new InvalidArgumentException('File attachment UUID cannot be empty.');
             }
 
+            // Retrieve the attachment first before deleting it.
+            $existingAttachment = self::getRecord($uuid);
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE uuid = :uuid");
@@ -210,6 +215,19 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to delete file attachment record: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            // Check if the file is writable and or it exists
+            if(file_exists($existingAttachment->getFilePath()) && is_writeable($existingAttachment->getFilePath()))
+            {
+                if(!@unlink($existingAttachment->getFilePath()))
+                {
+                    Logger::log()->error(sprintf("Failed to delete file attachment %s from %s due to an IO error", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
+                }
+            }
+            else
+            {
+                Logger::log()->warning(sprintf("Unable to delete file attachment %s from %s, because the file cannot be deleted or does not exist.", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
             }
 
             if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
@@ -226,6 +244,12 @@
                     throw new CacheOperationException(sprintf("Failed to delete cache for file attachment with UUID '%s'", $uuid), 0, $e);
                 }
             }
+        }
+
+        public static function getUsedSpace(): int
+        {
+            // TODO: Implement a cachable (if configured) way to calculate the total size usage of the storage path (where all the files are uploaded to)
+            $storagePath = Configuration::getServerConfiguration()->getStoragePath();
         }
 
         // Caching operations
