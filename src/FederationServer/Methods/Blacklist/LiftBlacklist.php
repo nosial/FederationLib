@@ -49,7 +49,7 @@
                     throw new RequestException('Blacklist record is already lifted', 400);
                 }
 
-                BlacklistManager::liftBlacklistRecord($blacklistUuid);
+                BlacklistManager::liftBlacklistRecord($blacklistUuid, $authenticatedOperator->getUuid());
                 AuditLogManager::createEntry(AuditLogType::BLACKLIST_LIFTED, sprintf(
                     'Blacklist record %s lifted by %s (%s)',
                     $blacklistUuid,
