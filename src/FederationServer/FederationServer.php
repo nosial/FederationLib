@@ -204,6 +204,10 @@
                     'public_evidence' => Configuration::getServerConfiguration()->isEvidencePublic(),
                     'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
                     'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
+                    'public_audit_logs_visibility' => array_map(
+                        fn($type) => $type->value,
+                        Configuration::getServerConfiguration()->getPublicAuditEntries()
+                    ),
                     'audit_log_records' => AuditLogManager::countRecords(),
                     'blacklist_records' => BlacklistManager::countRecords(),
                     'known_entities' => EntitiesManager::countRecords(),

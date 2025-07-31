@@ -2,6 +2,7 @@
 
     namespace FederationServer\Objects;
 
+    use FederationServer\Enums\AuditLogType;
     use FederationServer\Interfaces\SerializableInterface;
 
     class ServerInformation implements SerializableInterface
@@ -12,6 +13,10 @@
         private bool $publicEvidence;
         private bool $publicBlacklist;
         private bool $publicEntities;
+        /**
+         * @var AuditLogType[]
+         */
+        private array $publicAuditLogsVisibility;
         private int $auditLogRecords;
         private int $blacklistRecords;
         private int $knownEntities;
@@ -32,6 +37,10 @@
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicAuditLogsVisibility = isset($config['public_audit_logs_visibility']) ? array_map(
+                fn($type) => AuditLogType::from($type),
+                $config['public_audit_logs_visibility']
+            ) : [];
             $this->auditLogRecords = $config['audit_log_records'] ?? 0;
             $this->blacklistRecords = $config['blacklist_records'] ?? 0;
             $this->knownEntities = $config['known_entities'] ?? 0;
@@ -172,6 +181,10 @@
                 'public_evidence' => $this->publicEvidence,
                 'public_blacklist' => $this->publicBlacklist,
                 'public_entities' => $this->publicEntities,
+                'public_audit_logs_visibility' => array_map(
+                    fn(AuditLogType $type) => $type->value,
+                    $this->publicAuditLogsVisibility
+                ),
                 'audit_log_records' => $this->auditLogRecords,
                 'blacklist_records' => $this->blacklistRecords,
                 'known_entities' => $this->knownEntities,
