@@ -3,6 +3,7 @@
     namespace FederationServer\Classes\Managers;
 
     use DateTime;
+    use FederationServer\Classes\Configuration;
     use FederationServer\Classes\DatabaseConnection;
     use FederationServer\Classes\Logger;
     use FederationServer\Enums\AuditLogType;
@@ -344,6 +345,45 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to clean audit log entries: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
+         * Counts the number of audit log records.
+         *
+         * @param AuditLogType|null $type Optional type to filter the count by.
+         * @return int The number of audit log records.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countRecords(?AuditLogType $type=null): int
+        {
+            try
+            {
+                $sql = "SELECT COUNT(*) FROM audit_log";
+                $params = [];
+
+                if ($type !== null)
+                {
+                    if (!$type instanceof AuditLogType)
+                    {
+                        throw new InvalidArgumentException("Type must be of type AuditLogType.");
+                    }
+                    $params[':type'] = $type->value;
+                    $sql .= " WHERE type = :type";
+                }
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                foreach ($params as $key => $value)
+                {
+                    $stmt->bindValue($key, $value);
+                }
+                $stmt->execute();
+
+                return (int) $stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count audit log records: " . $e->getMessage(), 0, $e);
             }
         }
     }

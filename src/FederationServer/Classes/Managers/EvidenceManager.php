@@ -451,6 +451,19 @@
             }
         }
 
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM evidence");
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
         /**
          * Checks if caching is enabled.
          *

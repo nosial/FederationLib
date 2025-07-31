@@ -395,4 +395,24 @@
                 throw new DatabaseOperationException("Failed to clean blacklist entries: " . $e->getMessage(), 0, $e);
             }
         }
+
+        /**
+         * Returns the total number of blacklist entries in the database.
+         *
+         * @return int The total number of blacklist entries.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist");
+                $stmt->execute();
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve total blacklist entries: " . $e->getMessage(), 0, $e);
+            }
+        }
     }

@@ -5,6 +5,13 @@
     use Exception;
     use FederationServer\Classes\Configuration;
     use FederationServer\Classes\Logger;
+    use FederationServer\Classes\Managers\AuditLogManager;
+    use FederationServer\Classes\Managers\BlacklistManager;
+    use FederationServer\Classes\Managers\EntitiesManager;
+    use FederationServer\Classes\Managers\EvidenceManager;
+    use FederationServer\Classes\Managers\FileAttachmentManager;
+    use FederationServer\Classes\Managers\OperatorManager;
+    use FederationServer\Classes\RedisConnection;
     use FederationServer\Classes\RequestHandler;
     use FederationServer\Enums\HttpResponseCode;
     use FederationServer\Enums\Method;
@@ -165,15 +172,65 @@
          * Returns information about the Federation server instance
          *
          * @return ServerInformation The server information object containing details about the server.
+         * @throws RequestException If there is an error retrieving server information, such as a database operation failure.
          */
         public static function getServerInformation(): ServerInformation
         {
-            return new ServerInformation([
-                'name' => Configuration::getServerConfiguration()->getName(),
-                'public_audit_logs' => Configuration::getServerConfiguration()->isAuditLogsPublic(),
-                'public_evidence' => Configuration::getServerConfiguration()->isEvidencePublic(),
-                'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
-                'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
-            ]);
+            $cacheKey = 'server_information';
+            if(Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isSystemCachingEnabled())
+            {
+                try
+                {
+                    $cachedInfo = RedisConnection::getRecordFromCache($cacheKey);
+                }
+                catch (Exceptions\CacheOperationException $e)
+                {
+                    Logger::log()->error('Failed to retrieve server information from cache: ' . $e->getMessage(), $e);
+                    // If caching is enabled but fails, we can still proceed to fetch the information
+                    $cachedInfo = false;
+                }
+
+                if ($cachedInfo !== false)
+                {
+                    return ServerInformation::fromArray(json_decode($cachedInfo, true));
+                }
+            }
+
+            try
+            {
+                $serverInformation = new ServerInformation([
+                    'name' => Configuration::getServerConfiguration()->getName(),
+                    'public_audit_logs' => Configuration::getServerConfiguration()->isAuditLogsPublic(),
+                    'public_evidence' => Configuration::getServerConfiguration()->isEvidencePublic(),
+                    'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
+                    'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
+                    'audit_log_records' => AuditLogManager::countRecords(),
+                    'blacklist_records' => BlacklistManager::countRecords(),
+                    'known_entities' => EntitiesManager::countRecords(),
+                    'evidence_records' => EvidenceManager::countRecords(),
+                    'file_attachment_records' => FileAttachmentManager::countRecords(),
+                    'operators' => OperatorManager::countRecords()
+                ]);
+            }
+            catch (Exceptions\DatabaseOperationException $e)
+            {
+                Logger::log()->error('Failed to retrieve server information: ' . $e->getMessage(), $e);
+                throw new RequestException('Unable to retrieve server information', HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
+            }
+
+            if(Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isSystemCachingEnabled())
+            {
+                try
+                {
+                    RedisConnection::setCacheRecord($serverInformation, $cacheKey, 200); // Cache for 200 seconds
+                }
+                catch (Exceptions\CacheOperationException $e)
+                {
+                    Logger::log()->error('Failed to cache server information: ' . $e->getMessage(), $e);
+                    // If caching fails, we can still return the server information without caching
+                }
+            }
+
+            return $serverInformation;
         }
     }

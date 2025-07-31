@@ -622,6 +622,25 @@
             }
         }
 
+        /**
+         * Count the total number of operator records in the database.
+         *
+         * @return int The total number of operator records.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM operators");
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to count operator records', 0, $e);
+            }
+        }
+
         // Caching operations
 
         /**

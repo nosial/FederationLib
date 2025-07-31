@@ -178,7 +178,7 @@
          * Retrieves a cached operator record by its UUID.
          *
          * @param string $cacheKey The cache key to retrieve the operator record from.
-         * @return Operator|null The cached operator record if found, null otherwise.
+         * @return array|null The cached operator record if found, null otherwise.
          * @throws CacheOperationException If there is an error during the operation.
          */
         public static function getRecordFromCache(string $cacheKey): ?array

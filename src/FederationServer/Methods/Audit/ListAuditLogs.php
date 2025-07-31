@@ -35,8 +35,6 @@
                 $page = 1;
             }
 
-            $results = [];
-
             if($authenticatedOperator === null)
             {
                 // Public audit logs are enabled, filter by public entries

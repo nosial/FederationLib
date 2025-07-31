@@ -252,6 +252,25 @@
             $storagePath = Configuration::getServerConfiguration()->getStoragePath();
         }
 
+        /**
+         * Counts the total number of file attachment records in the database.
+         *
+         * @return int The total number of file attachment records.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM file_attachments");
+                return (int) $stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
         // Caching operations
 
         /**

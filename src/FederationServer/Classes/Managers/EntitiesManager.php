@@ -568,6 +568,26 @@
         }
 
         /**
+         * Returns the total number of entities in the database.
+         *
+         * @return int The total number of entities.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities");
+                $stmt->execute();
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count entities: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Returns True if caching & entity caching is enabled for this class
          *
          * @return bool True if caching & caching for entities is enabled, False otherwise
