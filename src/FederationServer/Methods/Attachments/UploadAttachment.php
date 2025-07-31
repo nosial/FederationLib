@@ -12,6 +12,7 @@
     use FederationServer\Exceptions\DatabaseOperationException;
     use FederationServer\Exceptions\RequestException;
     use FederationServer\FederationServer;
+    use FederationServer\Objects\UploadResult;
     use Symfony\Component\Uid\Uuid;
     use Throwable;
 
@@ -143,10 +144,7 @@
                     $operator->getName(), $uuid, $originalName, $file['size'], $detectedMimeType, $evidenceUuid
                 ), $operator->getUuid(), $evidence->getEntity());
 
-                self::successResponse([
-                    'uuid' => $uuid,
-                    'url' => Configuration::getServerConfiguration()->getBaseUrl() . '/attachment/' . $uuid
-                ]);
+                self::successResponse(new UploadResult($uuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachment/' . $uuid), 201);
             }
             catch (DatabaseOperationException $e)
             {
