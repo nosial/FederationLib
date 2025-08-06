@@ -25,7 +25,7 @@
                 throw new RequestException('Insufficient permissions to manage the blacklist', 401);
             }
 
-            if(!preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/blacklist/([a-fA-F0-9\-]{36,})/attach_evidence$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Blacklist UUID required', 405);
             }
