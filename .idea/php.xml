@@ -15,7 +15,7 @@
       <path value="$USER_HOME$/phar" />
       <path value="/usr/share/ncc" />
       <path value="/var/ncc/packages/com.symfony.uid=v7.2.0" />
-      <path value="/var/ncc/packages/net.nosial.configlib=1.2.0" />
+      <path value="/var/ncc/packages/net.nosial.configlib=1.1.11" />
       <path value="/var/ncc/packages/net.nosial.loglib2=1.0.3" />
       <path value="/var/ncc/packages/net.nosial.optslib=1.1.3" />
     </include_path>

@@ -2,17 +2,17 @@
 <project version="4">
   <component name="SqlDialectMappings">
     <file url="file://$USER_HOME$/Desktop/2025.01.md" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/AuditLogManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/BlacklistManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/EntitiesManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/EvidenceManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/FileAttachmentManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Managers/OperatorManager.php" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/audit_log.sql" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/blacklist.sql" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/entities.sql" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/evidence.sql" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/file_attachments.sql" dialect="MariaDB" />
-    <file url="file://$PROJECT_DIR$/src/FederationServer/Classes/Resources/operators.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/AuditLogManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/BlacklistManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/EntitiesManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/EvidenceManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/FileAttachmentManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Managers/OperatorManager.php" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/audit_log.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/blacklist.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/entities.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/evidence.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/file_attachments.sql" dialect="MariaDB" />
+    <file url="file://$PROJECT_DIR$/src/FederationLib/Classes/Resources/operators.sql" dialect="MariaDB" />
   </component>
 </project>

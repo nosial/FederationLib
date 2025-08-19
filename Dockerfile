@@ -3,8 +3,8 @@ FROM git.n64.cc/nosial/ncc:latest-fpm AS base
 # ----------------------------- Metadata labels ------------------------------
 LABEL maintainer="Netkas <netkas@n64.cc>" \
       version="1.0" \
-      description="FederationServer Docker image based off ncc-fpm" \
-      application="FederationServer" \
+      description="FederationLib Docker image based off ncc-fpm" \
+      application="FederationLib" \
       base_image="ncc:latest-fpm"
 
 # Environment variable for non-interactive installations

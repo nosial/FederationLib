@@ -1,6 +1,6 @@
 <?php
 
-    namespace FederationServer;
+    namespace FederationLib;
 
     use PHPUnit\Framework\TestCase;
 

@@ -42,6 +42,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-federation_root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-federation}
+      MYSQL_USER: ${MYSQL_USER:-federation}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-federation}
     volumes:
       - mariadb_data:/var/lib/mysql
     networks:

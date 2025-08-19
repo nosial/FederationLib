@@ -1,6 +1,6 @@
 <?php
 
-    use FederationServer\Program;
+    use FederationLib\Program;
     use ncc\Classes\Runtime;
 
     if (PHP_SAPI !== 'cli')

@@ -1,12 +1,12 @@
 <?php
 
-    # This is the bootstrap file for FederationServer's HTTP API Handler, this is designed to be used with any
+    # This is the bootstrap file for FederationLib's HTTP API Handler, this is designed to be used with any
     # compatible web server such as Apache2/Nginx or anything that can handle HTTP requests,
     #
-    # All HTTP Requests must be directed to this single file, path matching is handled by FederationServer
+    # All HTTP Requests must be directed to this single file, path matching is handled by FederationLib
 
-    use FederationServer\Classes\Logger;
-    use FederationServer\FederationServer;
+    use FederationLib\Classes\Logger;
+    use FederationLib\FederationServer;
 
     // Require ncc runtime
     require 'ncc';

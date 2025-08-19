@@ -10,13 +10,13 @@
         }
     },
     "assembly": {
-        "name": "FederationServer",
+        "name": "FederationLib",
         "package": "net.nosial.federation",
         "version": "1.0.0",
         "uuid": "b93eb819-0eac-46c5-a721-9893a046bec9"
     },
     "build": {
-        "source_path": "src/FederationServer",
+        "source_path": "src/FederationLib",
         "default_configuration": "release",
         "main": "main_policy",
         "define_constants": {
