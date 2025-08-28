@@ -39,6 +39,9 @@
                 throw new InvalidArgumentException("Token cannot be an empty string");
             }
 
+            // Remove trailing slash from endpoint if present
+            $endpoint = rtrim($endpoint, '/');
+
             $this->endpoint = $endpoint;
             $this->token = $token;
         }
@@ -76,6 +79,12 @@
          */
         private function makeRequest(string $method, string $path, ?array $data = null, array $expectedStatusCodes = [200], string $errorMessage='Request failed'): mixed
         {
+            // Remove leading slash from path if present
+            $path = ltrim($path, '/');
+
+            // Convert any ResponseCode enums to their integer values
+            $expectedStatusCodes = array_map(fn($code) => $code instanceof HttpResponseCode ? $code->value : $code, $expectedStatusCodes);
+
             Logger::log()->debug(sprintf("%s Request to %s", $method, $this->buildUrl($path)));
 
             $ch = $this->buildCurl($path);
@@ -126,8 +135,11 @@
             // Check if response code is expected
             if (!in_array($responseCode, $expectedStatusCodes))
             {
-                /** @var ErrorResponse $decodedResponse */
-                throw new RequestException($errorMessage . ', ' .  $decodedResponse->getMessage() . ' received response code: ' . $responseCode, $responseCode);
+                $errorMsg = $errorMessage . ' received response code: ' . $responseCode;
+                if ($decodedResponse instanceof ErrorResponse) {
+                    $errorMsg = $errorMessage . ', ' . $decodedResponse->getMessage() . ' received response code: ' . $responseCode;
+                }
+                throw new RequestException($errorMsg, $responseCode);
             }
 
             if ($decodedResponse instanceof ErrorResponse)
@@ -144,21 +156,21 @@
 
         public function createOperator(string $operatorName): string
         {
-            return $this->makeRequest('POST', '/operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
+            return $this->makeRequest('POST', 'operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
                 sprintf('Failed to create operator with name %s', $operatorName)
             );
         }
 
         public function deleteOperator(string $operatorUuid): void
         {
-            $this->makeRequest('DELETE', '/operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            $this->makeRequest('DELETE', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete operator with UUID %s', $operatorUuid)
             );
         }
 
         public function disableOperator(string $operatorUuid): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
                 sprintf('Failed to disable operator with UUID %s', $operatorUuid)
             );
         }
@@ -166,21 +178,21 @@
 
         public function enableOperator(string $operatorUuid): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
                 sprintf('Failed to enable operator with UUID %s', $operatorUuid)
             );
         }
 
         public function getOperator(string $operatorUuid): Operator
         {
-            return Operator::fromArray($this->makeRequest('GET', '/operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            return Operator::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
         }
 
         public function getSelfOperator(): Operator
         {
-            return Operator::fromArray($this->makeRequest('GET', '/operators/self', null, [HttpResponseCode::OK],
+            return Operator::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
                 'Failed to get self operator'
             ));
         }
@@ -189,7 +201,7 @@
         {
             return array_map(
                 fn($item) => Operator::fromArray($item),
-                $this->makeRequest('GET', '/operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -199,7 +211,7 @@
         {
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', '/operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -210,7 +222,7 @@
         {
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', '/operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for operator with UUID %s, page %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -220,7 +232,7 @@
         {
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', '/operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list operator blacklist records with UUID %s, page %d, limit %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -229,14 +241,14 @@
 
         public function setManageOperatorsPermission(string $operatorUuid, bool $manageOperators): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s permission to manage other operators', ($manageOperators ? 'enable' : 'disable'))
             );
         }
 
         public function setClientPermission(string $operatorUuid, bool $isClient): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s client permissions', ($isClient ? 'enable' : 'disable'))
             );
         }
@@ -244,7 +256,7 @@
 
         public function setManageBlacklistPermission(string $operatorUuid, bool $manageBlacklist): void
         {
-            $this->makeRequest('POST', '/operators/' . $operatorUuid . '/manage_blacklist', ['enabled' => $manageBlacklist], [HttpResponseCode::OK],
+            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_blacklist', ['enabled' => $manageBlacklist], [HttpResponseCode::OK],
                 sprintf('Failed to %s operator\'s blacklist management permission', ($manageBlacklist ? 'enable' : 'disable'))
             );
         }
@@ -253,7 +265,7 @@
         public function deleteEntity(string $entityIdentifier): void
         {
             $this->makeRequest(
-                'DELETE', '/entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+                'DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete the entity %s', $entityIdentifier)
             );
         }
@@ -274,7 +286,7 @@
                 throw new RequestException('Failed to decode response: ' . json_last_error_msg());
             }
 
-            if(!isset($decoded['success']) || !$decoded['success'])
+            if(!isset($decoded['success']))
             {
                 throw new RequestException('Request failed: got unknown response from server; ' . $response, HttpResponseCode::from($decoded['code'] ?? HttpResponseCode::INTERNAL_SERVER_ERROR));
             }
