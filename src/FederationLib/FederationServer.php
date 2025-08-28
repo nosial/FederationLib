@@ -21,8 +21,6 @@
 
     class FederationServer extends RequestHandler
     {
-        private static ?string $decodedContent = null;
-
         /**
          * Handle incoming requests to the Federation Server.
          *
@@ -81,12 +79,13 @@
                 return trim($_GET[$name]);
             }
 
-            if(self::$decodedContent !== null && is_array(self::$decodedContent))
+            $decodedContent = self::getDecodedContent();
+            if($decodedContent !== null && is_array($decodedContent))
             {
                 // If the parameter is found in the decoded JSON content, return it.
-                if (isset(self::$decodedContent[$name]))
+                if (isset($decodedContent[$name]))
                 {
-                    return self::$decodedContent[$name];
+                    return $decodedContent[$name];
                 }
             }
 
