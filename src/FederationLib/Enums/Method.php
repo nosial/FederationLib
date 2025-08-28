@@ -2,6 +2,7 @@
 
     namespace FederationLib\Enums;
 
+    use FederationLib\Classes\Logger;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Methods\Attachments\DeleteAttachment;
     use FederationLib\Methods\Attachments\DownloadAttachment;
@@ -231,6 +232,8 @@
          */
         public static function matchHandle(string $requestMethod, string $path): ?Method
         {
+            Logger::log()->debug(sprintf("Attempting to match [%s] %s", $requestMethod, $path));
+
             return match (true)
             {
                 $path === '/' && $requestMethod === 'GET' => Method::LIST_AUDIT_LOGS,
