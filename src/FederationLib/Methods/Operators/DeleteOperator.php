@@ -2,6 +2,7 @@
 
     namespace FederationLib\Methods\Operators;
 
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RequestHandler;
@@ -26,7 +27,7 @@
                 throw new RequestException('Insufficient permissions to delete operators', 403);
             }
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/delete$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Operator UUID required', 400);
             }
@@ -34,7 +35,7 @@
             $operatorUuid = $matches[1];
             if(!$operatorUuid || !Validate::uuid($operatorUuid))
             {
-                throw new RequestException('a valid Operator UUID required', 400);
+                throw new RequestException('a valid Operator UUID is required', 400);
             }
 
             try
