@@ -39,9 +39,7 @@
                 throw new InvalidArgumentException("Token cannot be an empty string");
             }
 
-            // Remove trailing slash from endpoint if present
             $endpoint = rtrim($endpoint, '/');
-
             $this->endpoint = $endpoint;
             $this->token = $token;
         }
@@ -81,6 +79,13 @@
         {
             // Remove leading slash from path if present
             $path = ltrim($path, '/');
+
+            // For GET requests, append data as query parameters
+            if (strtoupper($method) === 'GET' && !empty($data))
+            {
+                $queryString = http_build_query($data);
+                $path .= '?' . $queryString;
+            }
 
             // Convert any ResponseCode enums to their integer values
             $expectedStatusCodes = array_map(fn($code) => $code instanceof HttpResponseCode ? $code->value : $code, $expectedStatusCodes);
@@ -154,49 +159,127 @@
             return $decodedResponse->getData();
         }
 
+        /**
+         * Creates a new operator with the given name, the name can be anything but must not be empty. The name
+         * is not required to be unique.
+         *
+         * @param string $operatorName The name of the operator to create
+         * @return string The UUID of the created operator
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator name is empty
+         */
         public function createOperator(string $operatorName): string
         {
+            if(empty($operatorName))
+            {
+                throw new InvalidArgumentException('Operator name cannot be empty');
+            }
+
             return $this->makeRequest('POST', 'operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
                 sprintf('Failed to create operator with name %s', $operatorName)
             );
         }
 
+        /**
+         * Deletes the operator with the given UUID.
+         *
+         * @param string $operatorUuid The UUID of the operator to delete
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function deleteOperator(string $operatorUuid): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('DELETE', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete operator with UUID %s', $operatorUuid)
             );
         }
 
+        /**
+         * Disables the operator with the given UUID.
+         *
+         * @param string $operatorUuid The UUID of the operator to disable
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function disableOperator(string $operatorUuid): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
                 sprintf('Failed to disable operator with UUID %s', $operatorUuid)
             );
         }
 
-
+        /**
+         * Enables the operator with the given UUID.
+         *
+         * @param string $operatorUuid The UUID of the operator to enable
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function enableOperator(string $operatorUuid): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
                 sprintf('Failed to enable operator with UUID %s', $operatorUuid)
             );
         }
 
+        /**
+         * Retrieves the operator with the given UUID.
+         *
+         * @param string $operatorUuid The UUID of the operator to retrieve
+         * @return Operator The retrieved operator object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function getOperator(string $operatorUuid): Operator
         {
+            IF(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             return Operator::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
         }
 
-        public function getSelfOperator(): Operator
+        /**
+         * Retrieves the operator associated with the current authentication token.
+         *
+         * @return Operator The retrieved operator object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the authentication token is not set
+         */
+        public function getSelf(): Operator
         {
             return Operator::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
                 'Failed to get self operator'
             ));
         }
 
+        /**
+         * Lists operators with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of operators per page (default is 100)
+         * @return Operator[] An array of Operator objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
         public function listOperators(int $page=1, int $limit=100): array
         {
             return array_map(
@@ -207,6 +290,16 @@
             );
         }
 
+        /**
+         * Lists audit logs for a specific operator with pagination support.
+         *
+         * @param string $operatorUuid The UUID of the operator whose audit logs are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of audit logs per page (default is 100)
+         * @return AuditLog[] An array of AuditLog objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
+         */
         public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
@@ -217,7 +310,16 @@
             );
         }
 
-
+        /**
+         * Lists evidence records for a specific operator with pagination support.
+         *
+         * @param string $operatorUuid The UUID of the operator whose evidence records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
+         */
         public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
@@ -228,6 +330,16 @@
             );
         }
 
+        /**
+         * Lists blacklist records for a specific operator with pagination support.
+         *
+         * @param string $operatorUuid The UUID of the operator whose blacklist records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of blacklist records per page (default is 100)
+         * @return BlacklistRecord[] An array of BlacklistRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
+         */
         public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100): array
         {
             return array_map(
@@ -238,7 +350,14 @@
             );
         }
 
-
+        /**
+         * Sets the permission for an operator to manage other operators.
+         *
+         * @param string $operatorUuid The UUID of the operator whose permission is to be set
+         * @param bool $manageOperators True to enable the permission, false to disable it
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function setManageOperatorsPermission(string $operatorUuid, bool $manageOperators): void
         {
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
@@ -246,6 +365,14 @@
             );
         }
 
+        /**
+         * Sets the permission for an operator to manage clients.
+         *
+         * @param string $operatorUuid The UUID of the operator whose permission is to be set
+         * @param bool $isClient True to enable the permission, false to disable it
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function setClientPermission(string $operatorUuid, bool $isClient): void
         {
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
@@ -253,17 +380,40 @@
             );
         }
 
-
+        /**
+         * Sets the permission for an operator to manage the blacklist.
+         *
+         * @param string $operatorUuid The UUID of the operator whose permission is to be set
+         * @param bool $manageBlacklist True to enable the permission, false to disable it
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
         public function setManageBlacklistPermission(string $operatorUuid, bool $manageBlacklist): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_blacklist', ['enabled' => $manageBlacklist], [HttpResponseCode::OK],
                 sprintf('Failed to %s operator\'s blacklist management permission', ($manageBlacklist ? 'enable' : 'disable'))
             );
         }
 
-
+        /**
+         * Deletes an entity with the given identifier.
+         *
+         * @param string $entityIdentifier The identifier of the entity to delete
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
         public function deleteEntity(string $entityIdentifier): void
         {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
             $this->makeRequest(
                 'DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete the entity %s', $entityIdentifier)
@@ -327,6 +477,12 @@
             return $ch;
         }
 
+        /**
+         * Builds the full URL for the given path by appending it to the endpoint.
+         *
+         * @param string $path The API endpoint path
+         * @return string The full URL
+         */
         private function buildUrl(string $path): string
         {
             return $this->endpoint . '/' . $path;
