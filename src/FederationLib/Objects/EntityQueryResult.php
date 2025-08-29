@@ -102,9 +102,7 @@
         }
 
         /**
-         * Converts the EntityQueryResult object to an associative array.
-         *
-         * @return array The associative array representation of the EntityQueryResult object.
+         * @inheritDoc
          */
         public function toArray(): array
         {
@@ -118,24 +116,18 @@
         }
 
         /**
-         * Creates an EntityQueryResult object from an associative array.
-         *
-         * @param array $array The associative array containing the entity query result data.
-         * @return SerializableInterface The EntityQueryResult object created from the array.
+         * @inheritDoc
          */
-        public static function fromArray(array $array): SerializableInterface
+        public static function fromArray(array $array): EntityQueryResult
         {
             $entityRecord = Entity::fromArray($array['entity_record']);
-            $queriedBlacklistRecords = array_map(
-                fn($item) => QueriedBlacklistRecord::fromArray($item),
+            $queriedBlacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
                 $array['queried_blacklist_records']
             );
-            $evidenceRecords = array_map(
-                fn($item) => EvidenceRecord::fromArray($item),
+            $evidenceRecords = array_map(fn($item) => EvidenceRecord::fromArray($item),
                 $array['evidence_records']
             );
-            $auditLogs = array_map(
-                fn($item) => AuditLog::fromArray($item),
+            $auditLogs = array_map(fn($item) => AuditLog::fromArray($item),
                 $array['audit_logs']
             );
 
