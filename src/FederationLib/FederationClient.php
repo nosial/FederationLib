@@ -12,6 +12,7 @@
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\Operator;
+    use FederationLib\Objects\ServerInformation;
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
 
@@ -157,6 +158,19 @@
 
             /** @var SuccessResponse $decodedResponse */
             return $decodedResponse->getData();
+        }
+
+        /**
+         * Retrieves server information.
+         *
+         * @return ServerInformation The server information object
+         * @throws RequestException If the request fails or the response is invalid
+         */
+        public function getServerInformation(): ServerInformation
+        {
+            return ServerInformation::fromArray($this->makeRequest('GET', 'info', null, [HttpResponseCode::OK],
+                'Failed to get server information'
+            ));
         }
 
         /**

@@ -110,6 +110,17 @@
         }
 
         /**
+         * Returns an array of AuditLogType enums representing the visibility of public audit logs that
+         * can be viewed without authentication.
+         *
+         * @return AuditLogType[]
+         */
+        public function getPublicAuditLogsVisibility(): array
+        {
+            return $this->publicAuditLogsVisibility;
+        }
+
+        /**
          * Returns the number of audit log records
          *
          * @return int The number of audit log records
