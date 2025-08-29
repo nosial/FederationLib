@@ -3,6 +3,7 @@
     namespace FederationLib\Methods\Operators;
 
     use FederationLib\Classes\Configuration;
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -24,6 +25,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            Logger::log()->debug("ListOperators: limit=$limit, page=$page");
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListOperatorsMaxItems())
             {
