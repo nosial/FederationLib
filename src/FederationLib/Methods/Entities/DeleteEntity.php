@@ -25,8 +25,8 @@
             }
 
             if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/query$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/query$#', FederationServer::getPath(), $matches)
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})$#', FederationServer::getPath(), $matches)
             )
             {
                 throw new RequestException('Entity UUID is required', 400);
@@ -51,6 +51,11 @@
                 else
                 {
                     throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
+                }
+
+                if($entityRecord === null)
+                {
+                    throw new RequestException('Entity not found', 404);
                 }
 
                 EntitiesManager::deleteEntity($entityRecord->getUuid());
