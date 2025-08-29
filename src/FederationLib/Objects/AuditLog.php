@@ -27,7 +27,22 @@
             $this->entity = $data['entity'] ?? null;
             $this->type = isset($data['type']) ? AuditLogType::from($data['type']) : AuditLogType::OTHER;
             $this->message = $data['message'] ?? '';
-            $this->timestamp = isset($data['timestamp']) ? (int)$data['timestamp'] : time();
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['timestamp']) && is_string($data['timestamp']))
+            {
+                $data['timestamp'] = strtotime($data['timestamp']);
+            }
+            elseif (isset($data['timestamp']) && $data['timestamp'] instanceof DateTime)
+            {
+                $data['timestamp'] = $data['timestamp']->getTimestamp();
+            }
+            else
+            {
+                $data['timestamp'] = $data['timestamp'] ?? time();
+            }
+
+            $this->timestamp = (int)($data['timestamp'] ?? time());
         }
 
         /**
