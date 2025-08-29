@@ -18,30 +18,30 @@
     class FederationClient
     {
         private string $endpoint;
-        private ?string $token;
+        private ?string $apiKey;
 
         /**
          * Constructor for FederationClient
          *
          * @param string $endpoint The endpoint URL for the federation server
-         * @param string|null $token Optional token for authentication
+         * @param string|null $apiKey Optional token for authentication
          * @throws InvalidArgumentException If the endpoint is not a valid URL or if the token is an empty string
          */
-        public function __construct(string $endpoint, ?string $token=null)
+        public function __construct(string $endpoint, ?string $apiKey=null)
         {
             if(empty($endpoint) || !filter_var($endpoint, FILTER_VALIDATE_URL))
             {
                 throw new InvalidArgumentException("Endpoint must be a valid URL");
             }
 
-            if($token !== null && strlen($token) === 0)
+            if($apiKey !== null && strlen($apiKey) === 0)
             {
                 throw new InvalidArgumentException("Token cannot be an empty string");
             }
 
             $endpoint = rtrim($endpoint, '/');
             $this->endpoint = $endpoint;
-            $this->token = $token;
+            $this->apiKey = $apiKey;
         }
 
         /**
@@ -59,9 +59,9 @@
          *
          * @return string|null The authentication token or null if not set
          */
-        public function getToken(): ?string
+        public function getApiKey(): ?string
         {
-            return $this->token;
+            return $this->apiKey;
         }
 
         /**
@@ -401,6 +401,42 @@
         }
 
         /**
+         * Refreshes the authentication token.
+         *
+         * @param bool $update If true, updates the client's token with the new token (default is true)
+         * @return string The new authentication token
+         * @throws RequestException If the request fails or the response is invalid
+         */
+        public function refreshApiKey(bool $update=True): string
+        {
+            $newToken = $this->makeRequest('POST', 'operators/refresh', null, [HttpResponseCode::OK],
+                'Failed to refresh API Key'
+            );
+
+            if($update)
+            {
+                $this->apiKey = $newToken;
+            }
+
+            return $this->apiKey;
+        }
+
+        /**
+         * Refreshes the API key for a specific operator.
+         *
+         * @param string $operatorUuid The UUID of the operator whose API key is to be refreshed
+         * @return string The new API key for the operator
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
+        public function refreshOperatorApiKey(string $operatorUuid): string
+        {
+            return $this->makeRequest('POST', 'operators/' . $operatorUuid . '/refresh', null,  [HttpResponseCode::OK],
+                sprintf('Failed to refresh API Key for operator with UUID %s', $operatorUuid)
+            );
+        }
+
+        /**
          * Deletes an entity with the given identifier.
          *
          * @param string $entityIdentifier The identifier of the entity to delete
@@ -466,9 +502,9 @@
                 'Accept: application/json'
             ];
 
-            if($this->token !== null)
+            if($this->apiKey !== null)
             {
-                $headers[] = 'Authorization: Bearer ' . $this->token;
+                $headers[] = 'Authorization: Bearer ' . $this->apiKey;
             }
 
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);

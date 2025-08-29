@@ -582,4 +582,27 @@
             }
         }
 
+        public function testRefreshToken()
+        {
+            $originalKey = $this->client->getApiKey();
+            $this->client->refreshApiKey();
+            $this->assertNotEquals($originalKey, $this->client->getApiKey());
+        }
+
+        public function testRefreshOperatorsToken()
+        {
+            // Create an operator to refresh token for
+            $uuid = $this->client->createOperator('test refresh-token');
+            $this->assertNotEmpty($uuid);
+            $originalOperator = $this->client->getOperator($uuid);
+            $originalApiKey = $originalOperator->getApiKey();
+            $this->client->refreshOperatorApiKey($uuid);
+
+            // Refersh the operator and verify API key has changed
+            $refreshedOperator = $this->client->getOperator($uuid);
+            $this->assertNotEquals($originalApiKey, $refreshedOperator->getApiKey());
+
+            // Clean up
+            $this->client->deleteOperator($uuid);
+        }
     }
