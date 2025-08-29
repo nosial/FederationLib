@@ -70,6 +70,11 @@
                     throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
                 }
 
+                if($entityRecord === null)
+                {
+                    throw new RequestException('Entity not found', 404);
+                }
+
                 $queriedEntity = EntitiesManager::queryEntity($entityRecord, $includeConfidential, $includeLifted);
             }
             catch(DatabaseOperationException $e)
