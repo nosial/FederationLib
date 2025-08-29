@@ -33,7 +33,22 @@
             $this->fileName = $data['file_name'] ?? '';
             $this->fileSize = isset($data['file_size']) ? (int)$data['file_size'] : 0;
             $this->fileMime = $data['file_mime'] ?? '';
-            $this->created = isset($data['created']) ? (int)$data['created'] : time();
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['created']) && is_string($data['created']))
+            {
+                $data['created'] = strtotime($data['created']);
+            }
+            elseif (isset($data['created']) && $data['created'] instanceof DateTime)
+            {
+                $data['created'] = $data['created']->getTimestamp();
+            }
+            else
+            {
+                $data['created'] = $data['created'] ?? time();
+            }
+
+            $this->created = (int)($data['created'] ?? time());
         }
 
         /**
