@@ -40,8 +40,37 @@
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
             $this->liftedBy = $data['lifted_by'] ?? null;
-            $this->expires = isset($data['expires']) ? (int)$data['expires'] : null;
-            $this->created = isset($data['created']) ? (int)$data['created'] : time();
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['expires']) && is_string($data['expires']))
+            {
+                $data['expires'] = strtotime($data['expires']);
+            }
+            elseif (isset($data['expires']) && $data['expires'] instanceof DateTime)
+            {
+                $data['expires'] = $data['expires']->getTimestamp();
+            }
+            else
+            {
+                $data['expires'] = $data['expires'] ?? time();
+            }
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['created']) && is_string($data['created']))
+            {
+                $data['created'] = strtotime($data['created']);
+            }
+            elseif (isset($data['created']) && $data['created'] instanceof DateTime)
+            {
+                $data['created'] = $data['created']->getTimestamp();
+            }
+            else
+            {
+                $data['created'] = $data['created'] ?? time();
+            }
+
+            $this->expires = (int)$data['expires'] ?? null;
+            $this->created = (int)$data['created'] ?? time();
         }
 
         /**
