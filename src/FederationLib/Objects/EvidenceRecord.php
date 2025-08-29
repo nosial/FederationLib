@@ -30,7 +30,22 @@
             $this->textContent = $data['text_content'] ?? null;
             $this->note = $data['note'] ?? null;
             $this->tag = $data['tag'] ?? null;
-            $this->created = isset($data['created']) ? (int)$data['created'] : time();
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['created']) && is_string($data['created']))
+            {
+                $data['created'] = strtotime($data['created']);
+            }
+            elseif (isset($data['created']) && $data['created'] instanceof DateTime)
+            {
+                $data['created'] = $data['created']->getTimestamp();
+            }
+            else
+            {
+                $data['created'] = $data['created'] ?? time();
+            }
+
+            $this->created = (int)($data['created'] ?? time());
         }
 
         /**
@@ -150,4 +165,3 @@
             return new self($array);
         }
     }
-
