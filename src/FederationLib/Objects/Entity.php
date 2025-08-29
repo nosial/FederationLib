@@ -26,7 +26,22 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->id = $data['id'] ?? '';
             $this->domain = $data['domain'] ?? null;
-            $this->created = isset($data['created']) ? (int)$data['created'] : time();
+
+            // Parse SQL datetime string to timestamp if necessary
+            if (isset($data['created']) && is_string($data['created']))
+            {
+                $data['created'] = strtotime($data['created']);
+            }
+            elseif (isset($data['created']) && $data['created'] instanceof DateTime)
+            {
+                $data['created'] = $data['created']->getTimestamp();
+            }
+            else
+            {
+                $data['created'] = $data['created'] ?? time();
+            }
+
+            $this->created = (int)($data['created'] ?? time());
         }
 
         /**
@@ -107,7 +122,7 @@
         {
             if(isset($array['created']))
             {
-                if(is_string($array['created))']))
+                if(is_string($array['created']))
                 {
                     $array['created'] = strtotime($array['created']);
                 }
