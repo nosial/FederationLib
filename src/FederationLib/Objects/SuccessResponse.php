@@ -61,7 +61,7 @@
 
             if (!isset($array['data']))
             {
-                throw new InvalidArgumentException("Array must contain 'data' key");
+                $array['data'] = null;
             }
 
             return new self($array['data']);
