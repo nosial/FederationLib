@@ -2,10 +2,13 @@
 
     namespace FederationLib;
 
+    use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Exceptions\RequestException;
     use PHPUnit\Framework\TestCase;
 
     class ClientTest extends TestCase
     {
+        private const string FAKE_OPERATOR_UUID = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
         private FederationClient $client;
 
         protected function setUp(): void
@@ -34,5 +37,33 @@
             $this->assertIsInt($serverInformation->getEvidenceRecords());
             $this->assertIsInt($serverInformation->getFileAttachmentRecords());
             $this->assertIsInt($serverInformation->getOperators());
+        }
+
+        public function testUnauthorizedCreateOperator()
+        {
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::UNAUTHORIZED->value);
+            $this->client->createOperator('testOperator unauthorized');
+        }
+
+        public function testUnauthorizedDeleteOperator()
+        {
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::UNAUTHORIZED->value);
+            $this->client->deleteOperator(self::FAKE_OPERATOR_UUID);
+        }
+
+        public function testUnauthorizedDisableOperator()
+        {
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::UNAUTHORIZED->value);
+            $this->client->disableOperator(self::FAKE_OPERATOR_UUID);
+        }
+
+        public function testUnauthorizedEnableOperator()
+        {
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::UNAUTHORIZED->value);
+            $this->client->enableOperator(self::FAKE_OPERATOR_UUID);
         }
     }
