@@ -77,6 +77,11 @@
                     throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
                 }
 
+                if($entityRecord === null)
+                {
+                    throw new RequestException('Entity not found', 404);
+                }
+
                 self::successResponse(array_map(fn($log) => $log->toArray(),
                     AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries))
                 );
