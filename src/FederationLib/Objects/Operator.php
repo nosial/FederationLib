@@ -31,8 +31,37 @@
             $this->manageOperators = (bool)$data['manage_operators'] ?? false;
             $this->manageBlacklist = (bool)$data['manage_blacklist'] ?? false;
             $this->isClient = (bool)$data['is_client'] ?? false;
-            $this->created = (int)$data['created'] ?? time();
-            $this->updated = (int)$data['updated'] ?? time();
+
+            // Parse SQL datetime string to timestamp if necessary for created
+            if (isset($data['created']) && is_string($data['created']))
+            {
+                $data['created'] = strtotime($data['created']);
+            }
+            elseif (isset($data['created']) && $data['created'] instanceof DateTime)
+            {
+                $data['created'] = $data['created']->getTimestamp();
+            }
+            else
+            {
+                $data['created'] = $data['created'] ?? time();
+            }
+
+            // Parse SQL datetime string to timestamp if necessary for updated
+            if (isset($data['updated']) && is_string($data['updated']))
+            {
+                $data['updated'] = strtotime($data['updated']);
+            }
+            elseif (isset($data['updated']) && $data['updated'] instanceof DateTime)
+            {
+                $data['updated'] = $data['updated']->getTimestamp();
+            }
+            else
+            {
+                $data['updated'] = $data['updated'] ?? time();
+            }
+
+            $this->created = (int)($data['created'] ?? time());
+            $this->updated = (int)($data['updated'] ?? time());
         }
 
         /**
@@ -186,4 +215,3 @@
             return new self($array);
         }
     }
-
