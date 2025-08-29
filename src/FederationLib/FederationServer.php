@@ -33,6 +33,13 @@
                 // Always call parent::handleRequest() to ensure the base request handling is done.
                 parent::handleRequest();
 
+                Logger::log()->debug(self::getPath() ?? 'No path detected');
+                if (self::getPath() !== null && str_ends_with(self::getPath(), 'favicon.ico'))
+                {
+                    self::handleFaviconRequest();
+                    return;
+                }
+
                 // Execute the request method
                 $requestMethod = Method::matchHandle(self::getRequestMethod(), self::getPath());
                 if($requestMethod === null)
@@ -235,5 +242,24 @@
             }
 
             return $serverInformation;
+        }
+
+        /**
+         * Handle requests for the favicon.ico file.
+         *
+         * This method serves the favicon.ico file located in the Resources directory.
+         * If the file does not exist, it responds with a 404 Not Found error.
+         *
+         * @return void
+         */
+        private static function handleFaviconRequest(): void
+        {
+            $faviconPath = __DIR__ . DIRECTORY_SEPARATOR . 'Classes' . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'favicon.ico';
+            if (file_exists($faviconPath))
+            {
+                header('Content-Type: image/x-icon');
+                header('Content-Length: ' . filesize($faviconPath));
+                readfile($faviconPath);
+            }
         }
     }
