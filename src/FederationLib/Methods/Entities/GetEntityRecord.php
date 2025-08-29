@@ -57,6 +57,11 @@
                 throw new RequestException('Unable to retrieve entity', 500, $e);
             }
 
+            if($entityRecord === null)
+            {
+                throw new RequestException('Entity not found', 404);
+            }
+
             self::successResponse($entityRecord->toArray());
         }
     }
