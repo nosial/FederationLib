@@ -44,8 +44,7 @@
                 throw new RequestException('Unable to retrieve operators', 500, $e);
             }
 
-            $result = array_map(fn($op) => $op->toArray(), $operators);
-            self::successResponse($result);
+            self::successResponse(array_map(fn($op) => $op->toArray(), $operators));
         }
     }
 
