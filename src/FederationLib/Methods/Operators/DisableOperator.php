@@ -26,7 +26,7 @@
                 throw new RequestException('Insufficient permissions to enable/disable operators', 403);
             }
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/disable$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/disable$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Operator UUID is required', 400);
             }

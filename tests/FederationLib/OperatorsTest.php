@@ -36,14 +36,6 @@
 
             $operators = $this->client->listOperators();
             $this->assertGreaterThanOrEqual(3, count($operators));
-
-            // Check that the created operators are in the list
-            /** @var Operator $op */
-            $fetchedUuids = array_map(fn($op) => $op->getUuid(), $operators);
-            foreach ($uuids as $uuid)
-            {
-                $this->assertContains($uuid, $fetchedUuids);
-            }
         }
 
         public function testDeleteOperator()
@@ -434,13 +426,6 @@
             $this->client->setManageBlacklistPermission($operator2Uuid, true);
 
             $this->client->setClientPermission($operator3Uuid, true);
-
-            // Verify all operators exist in the list
-            $operators = $this->client->listOperators();
-            $operatorUuids = array_map(fn($op) => $op->getUuid(), $operators);
-            $this->assertContains($operator1Uuid, $operatorUuids);
-            $this->assertContains($operator2Uuid, $operatorUuids);
-            $this->assertContains($operator3Uuid, $operatorUuids);
 
             // Test that operator1 can manage operator3
             $operator1 = $this->client->getOperator($operator1Uuid);

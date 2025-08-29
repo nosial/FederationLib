@@ -24,7 +24,7 @@
                 throw new RequestException('Unauthorized: You must be authenticated to download attachments', 401);
             }
 
-            if(!preg_match('#^/attachments/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Attachment UUID required', 405);
             }

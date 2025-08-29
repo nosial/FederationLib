@@ -593,6 +593,98 @@
             );
         }
 
+        public function listEntityAuditLogs(string $entityIdentifier, int $page=1, int $limit=100): array
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => AuditLog::fromArray($item),
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list audit logs for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
+                )
+            );
+        }
+
+        public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100): array
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => BlacklistRecord::fromArray($item),
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list blacklist records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
+                )
+            );
+        }
+
+        public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100): array
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => EvidenceRecord::fromArray($item),
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list evidence records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
+                )
+            );
+        }
+
+        public function pushEntity(string $domain, ?string $id=null): void
+        {
+            if($id !== null && empty($id))
+            {
+                throw new InvalidArgumentException('Entity ID cannot be an empty string');
+            }
+
+            if(empty($domain))
+            {
+                throw new InvalidArgumentException('Domain cannot be empty');
+            }
+
+            $this->makeRequest('POST', 'entities', ['domain' => $domain, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
+                sprintf('Failed to push entity with domain %s', $domain)
+            );
+        }
+
         /**
          * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the
          * `success` variable of the response, in both objects they can be referenced as ResponseInterface.

@@ -23,7 +23,7 @@
                 throw new RequestException('Public audit logs are disabled and no operator is authenticated', 403);
             }
 
-            if(!preg_match('#^/audit/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Audit UUID is required', 400);
             }

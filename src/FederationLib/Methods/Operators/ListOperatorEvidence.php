@@ -44,7 +44,7 @@
             }
 
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/evidence$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/evidence$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Operator UUID is required', 400);
             }

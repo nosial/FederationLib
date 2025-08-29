@@ -18,7 +18,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(preg_match('#^/operators/([a-fA-F0-9\-]{36,})/refresh$#', FederationServer::getPath(), $matches))
+            if(preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', FederationServer::getPath(), $matches))
             {
                 $operatorUuid = $matches[1];
                 // Ensure the authenticated operator has permission to refresh other operators' API keys.

@@ -23,7 +23,7 @@
                 throw new RequestException('You must be authenticated to access evidence', 401);
             }
 
-            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Evidence UUID required', 405);
             }

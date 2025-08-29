@@ -24,7 +24,7 @@
                 throw new RequestException('Insufficient permissions manage permissions', 403);
             }
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36,})/manage_client$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/manage_client$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Missing required parameters', 400);
             }

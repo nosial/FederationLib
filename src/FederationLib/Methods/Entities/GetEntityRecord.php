@@ -24,7 +24,7 @@
             }
 
             if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36,})$#', FederationServer::getPath(), $matches) &&
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches) &&
                 !preg_match('#^/entities/([a-f0-9\-]{64})$#', FederationServer::getPath(), $matches)
             )
             {
