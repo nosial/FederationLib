@@ -9,6 +9,7 @@
     use FederationLib\Interfaces\ResponseInterface;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
+    use FederationLib\Objects\Entity;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\Operator;
@@ -160,6 +161,8 @@
             return $decodedResponse->getData();
         }
 
+        // OPERATOR METHODS
+
         /**
          * Retrieves server information.
          *
@@ -296,6 +299,16 @@
          */
         public function listOperators(int $page=1, int $limit=100): array
         {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
             return array_map(
                 fn($item) => Operator::fromArray($item),
                 $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
@@ -316,6 +329,21 @@
          */
         public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
                 $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
@@ -336,6 +364,21 @@
          */
         public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100): array
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
                 $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
@@ -356,6 +399,21 @@
          */
         public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100): array
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
                 $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
@@ -374,6 +432,11 @@
          */
         public function setManageOperatorsPermission(string $operatorUuid, bool $manageOperators): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s permission to manage other operators', ($manageOperators ? 'enable' : 'disable'))
             );
@@ -389,6 +452,11 @@
          */
         public function setClientPermission(string $operatorUuid, bool $isClient): void
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s client permissions', ($isClient ? 'enable' : 'disable'))
             );
@@ -445,15 +513,22 @@
          */
         public function refreshOperatorApiKey(string $operatorUuid): string
         {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
             return $this->makeRequest('POST', 'operators/' . $operatorUuid . '/refresh', null,  [HttpResponseCode::OK],
                 sprintf('Failed to refresh API Key for operator with UUID %s', $operatorUuid)
             );
         }
 
+        // ENTITY METHODS
+
         /**
          * Deletes an entity with the given identifier.
          *
-         * @param string $entityIdentifier The identifier of the entity to delete
+         * @param string $entityIdentifier The entity UUID or entity hash to delete
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
@@ -464,9 +539,57 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest(
-                'DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+            $this->makeRequest('DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
                 sprintf('Failed to delete the entity %s', $entityIdentifier)
+            );
+        }
+
+        /**
+         * Retrieves an entity record with the given identifier.
+         *
+         * @param string $entityIdentifier The entity UUID or entity hash to retrieve
+         * @return Entity The retrieved entity object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
+        public function getEntityRecord(string $entityIdentifier): Entity
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            return Entity::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+                sprintf('Failed to get the entity record for %s', $entityIdentifier)
+            ));
+        }
+
+        /**
+         * Lists entities with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of entities per page (default is 100)
+         * @return Entity[] An array of Entity objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listEntities(int $page=1, int $limit=100): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => Entity::fromArray($item),
+                $this->makeRequest('GET', 'entities', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list entities, page: %d, limit: %d', $page, $limit)
+                )
             );
         }
 
