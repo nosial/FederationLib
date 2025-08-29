@@ -10,6 +10,7 @@
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
     use FederationLib\Objects\Entity;
+    use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\Operator;
@@ -593,6 +594,16 @@
             );
         }
 
+        /**
+         * Lists evidence records for a specific entity with pagination support.
+         *
+         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
+         */
         public function listEntityAuditLogs(string $entityIdentifier, int $page=1, int $limit=100): array
         {
             if(empty($entityIdentifier))
@@ -618,6 +629,16 @@
             );
         }
 
+        /**
+         * Lists evidence records for a specific entity with pagination support.
+         *
+         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
+         */
         public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100): array
         {
             if(empty($entityIdentifier))
@@ -643,6 +664,16 @@
             );
         }
 
+        /**
+         * Lists evidence records for a specific entity with pagination support.
+         *
+         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
+         */
         public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100): array
         {
             if(empty($entityIdentifier))
@@ -668,6 +699,14 @@
             );
         }
 
+        /**
+         * Pushes a new entity to the federation network.
+         *
+         * @param string $domain The domain of the entity to push
+         * @param string|null $id Optional ID of the entity to push
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the domain is empty or if the ID is an empty string
+         */
         public function pushEntity(string $domain, ?string $id=null): void
         {
             if($id !== null && empty($id))
@@ -684,6 +723,27 @@
                 sprintf('Failed to push entity with domain %s', $domain)
             );
         }
+
+        /**
+         * Queries information about an entity from the federation network.
+         *
+         * @param string $entityIdentifier The entity UUID or entity hash to query
+         * @return EntityQueryResult The result of the entity query
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
+        public function queryEntity(string $entityIdentifier): EntityQueryResult
+        {
+            if(empty($identifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            return EntityQueryResult::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query', null, [HttpResponseCode::OK],
+                sprintf('Failed to query entity %s', $entityIdentifier)
+            ));
+        }
+
 
         /**
          * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the
