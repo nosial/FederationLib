@@ -59,7 +59,6 @@
                 throw new RequestException('Unable to create operator', 500, $e);
             }
 
-            // Respond with the UUID of the newly created operator.
             self::successResponse();
         }
     }

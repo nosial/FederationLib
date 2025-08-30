@@ -47,7 +47,6 @@
                 $existingOperator->clearApiKey();
             }
 
-            // Respond with public record if the authenticated operator cannot manage operators
             self::successResponse($existingOperator->toArray());
         }
     }

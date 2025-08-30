@@ -41,4 +41,21 @@
             // Check if the input is a valid UUID (version 4)
             return preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $input) === 1;
         }
+
+        /**
+         * Calculates the SHA256 hash of an entity with the given domain and optional ID
+         *
+         * @param string $domain The domain of the entity
+         * @param string|null $id Optional. The unique identifier of the entity
+         * @return string The SHA256 calculated checksum of the 
+         */
+        public static function hashEntity(string $domain, ?string $id=null): string
+        {
+            if($id !== null)
+            {
+                return hash('sha256', sprintf("%s@%s", $id, $domain));
+            }
+
+            return hash('sha256', $domain);
+        }
     }

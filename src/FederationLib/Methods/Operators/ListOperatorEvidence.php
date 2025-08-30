@@ -69,8 +69,7 @@
                 throw new RequestException('Unable to retrieve evidence', 500, $e);
             }
 
-            $result = array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords);
-            self::successResponse($result);
+            self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $evidenceRecords));
         }
     }
 

@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityQueryResult;
@@ -51,7 +52,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, hash, id, domain) VALUES (:uuid, :hash, :id, :domain)");
-                $hash = hash('sha256', is_null($domain) ? $id : sprintf('%s@%s', $id, $domain));
+                $hash = Utilities::hashEntity($domain, $id);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);

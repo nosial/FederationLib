@@ -40,12 +40,13 @@
             try
             {
                 $operators = OperatorManager::getOperators($limit, $page);
-                self::successResponse(array_map(fn($op) => $op->toArray(), $operators));
             }
             catch (DatabaseOperationException $e)
             {
                 throw new RequestException('Unable to retrieve operators', 500, $e);
             }
+
+            self::successResponse(array_map(fn($op) => $op->toArray(), $operators));
         }
     }
 

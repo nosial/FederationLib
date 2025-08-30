@@ -61,7 +61,6 @@
                 throw new RequestException('Unable to refresh operator\'s API Key', 500, $e);
             }
 
-            // Respond with the UUID of the newly created operator.
             self::successResponse($newApiKey);
         }
     }
