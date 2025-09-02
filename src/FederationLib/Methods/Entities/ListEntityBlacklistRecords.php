@@ -26,6 +26,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $includeLifted = (bool) (FederationServer::getParameter('include_lifted') ?? false);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
@@ -71,7 +72,7 @@
                     throw new RequestException('Entity not found', 404);
                 }
 
-                $blacklistRecords = BlacklistManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page);
+                $blacklistRecords = BlacklistManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $includeLifted);
             }
             catch (DatabaseOperationException $e)
             {
