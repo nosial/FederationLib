@@ -3,6 +3,7 @@
     namespace FederationLib\Objects;
 
     use DateTime;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Interfaces\SerializableInterface;
 
     class Entity implements SerializableInterface
@@ -61,14 +62,7 @@
          */
         public function getHash(): string
         {
-            if($this->domain === null)
-            {
-                return hash('sha256', $this->id);
-            }
-            else
-            {
-                return hash('sha256', sprintf('%s@%s', $this->id, $this->domain));
-            }
+            return Utilities::hashEntity($this->id, $this->domain);
         }
 
         /**
