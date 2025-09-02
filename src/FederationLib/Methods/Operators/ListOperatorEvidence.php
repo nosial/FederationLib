@@ -18,20 +18,15 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-            $listConfidential = false;
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
-            if($authenticatedOperator !== null)
-            {
-                $listConfidential = true;
-            }
-
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $includeConfidential = (bool) (FederationServer::getParameter('include_confidential') ?? false);
             
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEvidenceMaxItems())
             {
@@ -62,7 +57,20 @@
                     throw new RequestException('Operator Not Found', 404);
                 }
 
-                $evidenceRecords = EvidenceManager::getEvidenceByOperator($operatorUuid, $limit, $page, $listConfidential);
+                if($includeConfidential)
+                {
+                    if($authenticatedOperator === null)
+                    {
+                        throw new RequestException('You must be authenticated to list evidence', 401);
+                    }
+
+                    if(!$authenticatedOperator->canManageBlacklist())
+                    {
+                        throw new RequestException('You do not have permission to list evidence', 403);
+                    }
+                }
+
+                $evidenceRecords = EvidenceManager::getEvidenceByOperator($operatorUuid, $limit, $page, $includeConfidential);
             }
             catch (DatabaseOperationException $e)
             {
