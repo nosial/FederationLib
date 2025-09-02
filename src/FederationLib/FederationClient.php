@@ -359,11 +359,12 @@
          * @param string $operatorUuid The UUID of the operator whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
+         * @param bool $includeConfidential if True, confidential results are included if you have permission to view them
          * @return EvidenceRecord[] An array of EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
          */
-        public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100): array
+        public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100, bool $includeConfidential=false): array
         {
             if(empty($operatorUuid))
             {
@@ -382,7 +383,7 @@
 
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for operator with UUID %s, page %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -394,11 +395,12 @@
          * @param string $operatorUuid The UUID of the operator whose blacklist records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of blacklist records per page (default is 100)
+         * @param bool $includeLifted If True, lifted blacklist records are included in the result
          * @return BlacklistRecord[] An array of BlacklistRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
          */
-        public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100): array
+        public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100, bool $includeLifted=false): array
         {
             if(empty($operatorUuid))
             {
@@ -417,7 +419,7 @@
 
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
                     sprintf('Failed to list operator blacklist records with UUID %s, page %d, limit %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -702,21 +704,21 @@
         /**
          * Pushes a new entity to the federation network.
          *
-         * @param string $domain The domain of the entity to push
-         * @param string|null $id Optional ID of the entity to push
+         * @param string $id ID of the entity to push
+         * @param string|null $domain Optional. The domain of the entity to push
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the domain is empty or if the ID is an empty string
          */
-        public function pushEntity(string $domain, ?string $id=null): void
+        public function pushEntity(string $id, ?string $domain=null): void
         {
-            if($id !== null && empty($id))
+            if(empty($id))
             {
-                throw new InvalidArgumentException('Entity ID cannot be an empty string');
+                throw new InvalidArgumentException('Entity ID cannot be empty');
             }
 
-            if(empty($domain))
+            if($domain !== null && empty($domain))
             {
-                throw new InvalidArgumentException('Domain cannot be empty');
+                throw new InvalidArgumentException('Domain cannot be an empty string');
             }
 
             $this->makeRequest('POST', 'entities', ['domain' => $domain, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
@@ -728,18 +730,21 @@
          * Queries information about an entity from the federation network.
          *
          * @param string $entityIdentifier The entity UUID or entity hash to query
+         * @param bool $includeConfidential if True, confidential results are shown if you have permission to access the records
+         * @param bool $includeLifted if True, lifted blacklist results are show  if you have permission to access the records
          * @return EntityQueryResult The result of the entity query
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function queryEntity(string $entityIdentifier): EntityQueryResult
+        public function queryEntity(string $entityIdentifier, bool $includeConfidential=false, bool $includeLifted=false): EntityQueryResult
         {
-            if(empty($identifier))
+            if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            return EntityQueryResult::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query', null, [HttpResponseCode::OK],
+            return EntityQueryResult::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query',
+                ['include_confidential' => $includeConfidential, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
                 sprintf('Failed to query entity %s', $entityIdentifier)
             ));
         }
@@ -758,7 +763,7 @@
             $decoded = json_decode($response, true);
             if(json_last_error() !== JSON_ERROR_NONE)
             {
-                throw new RequestException('Failed to decode response: ' . json_last_error_msg());
+                throw new RequestException('Failed to decode response: ' . json_last_error_msg() . "\n\n" . $response);
             }
 
             if(!isset($decoded['success']))
