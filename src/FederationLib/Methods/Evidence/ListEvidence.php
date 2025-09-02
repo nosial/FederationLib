@@ -22,17 +22,22 @@
                 throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
-            if(FederationServer::getParameter('include_confidential') !== null && $authenticatedOperator->canManageBlacklist())
-            {
-                $includeConfidential = true;
-            }
-            else
-            {
-                $includeConfidential = false;
-            }
-
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $includeConfidential = (bool) (FederationServer::getParameter('include_confidential') ?? false);
+
+            if($includeConfidential)
+            {
+                if($authenticatedOperator === null)
+                {
+                    throw new RequestException('You must be authenticated to include confidential evidence', 401);
+                }
+
+                if(!$authenticatedOperator->canManageBlacklist())
+                {
+                    throw new RequestException('You do not have permission to include confidential evidence', 403);
+                }
+            }
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEvidenceMaxItems())
             {

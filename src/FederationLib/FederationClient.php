@@ -752,6 +752,112 @@
             ));
         }
 
+        // EVIDENCE METHODS
+
+        /**
+         * Deletes an evidence record with the given UUID.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to delete
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function deleteEvidence(String $evidenceUuid): void
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            $this->makeRequest('DELETE', 'evidence/' . $evidenceUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to delete evidence with UUID %s', $evidenceUuid)
+            );
+        }
+
+        /**
+         * Retrieves an evidence record with the given UUID.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to retrieve
+         * @return EvidenceRecord The retrieved evidence record object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function getEvidenceRecord(string $evidenceUuid): EvidenceRecord
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            return EvidenceRecord::fromArray($this->makeRequest('GET', 'evidence/' . $evidenceUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to get evidence record with UUID %s', $evidenceUuid)
+            ));
+        }
+
+        /**
+         * Lists evidence records with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @param bool $includeConfidential if True, confidential results are included if you have permission to view them
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listEvidence(int $page=1, int $limit=100, bool $includeConfidential=false): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => EvidenceRecord::fromArray($item),
+                $this->makeRequest('GET', 'evidence', ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
+                    sprintf('Failed to list evidence records, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Submits new evidence for a specific entity.
+         *
+         * @param string $entityUuid The UUID of the entity the evidence is associated with
+         * @param string|null $textContent Optional. The textual content of the evidence
+         * @param string|null $note Optional. An optional note about the evidence
+         * @param bool $confidential Optional. If true, the evidence is marked as confidential (default is false)
+         * @return string The UUID of the created evidence record
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity UUID is empty
+         */
+        public function submitEvience(string $entityUuid, ?string $textContent=null, ?string $note=null, bool $confidential=false): string
+        {
+            if(empty($entityUuid))
+            {
+                throw new InvalidArgumentException('Entity UUID cannot be empty');
+            }
+
+            $data = ['entity_uuid' => $entityUuid, 'confidential' => $confidential];
+
+            if($textContent !== null)
+            {
+                $data['text_content'] = $textContent;
+            }
+
+            if($note !== null)
+            {
+                $data['note'] = $note;
+            }
+
+            return $this->makeRequest('POST', 'evidence', $data, [HttpResponseCode::CREATED],
+                sprintf('Failed to submit evidence for entity with UUID %s', $entityUuid)
+            );
+        }
+
 
         /**
          * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the

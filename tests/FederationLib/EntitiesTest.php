@@ -190,8 +190,8 @@
             // Query the entity
             $queryResult = $this->client->queryEntity($entityId);
             $this->assertInstanceOf(EntityQueryResult::class, $queryResult);
-            $this->assertNotNull($queryResult->getEntity());
-            $this->assertEquals($entityId, $queryResult->getEntity()->getId());
+            $this->assertNotNull($queryResult->getEntityRecord());
+            $this->assertEquals($entityId, $queryResult->getEntityRecord()->getId());
         }
 
         public function testQueryEntityWithOptions()
@@ -368,7 +368,7 @@
             // 3. Query entity
             $queryResult = $this->client->queryEntity($entityId);
             $this->assertInstanceOf(EntityQueryResult::class, $queryResult);
-            $this->assertEquals($entityId, $queryResult->getEntity()->getId());
+            $this->assertEquals($entityId, $queryResult->getEntityRecord()->getId());
 
             // 4. Check audit logs (should have creation log)
             $auditLogs = $this->client->listEntityAuditLogs($entityId);
