@@ -47,7 +47,10 @@
                 $page = 1;
             }
 
-            $results = [];
+            // TODO: All methods that uses getPublicAuditEntries should accept a parameter called 'filter' which can be
+            //       used as the value example: `FLAG1,FLAG2,FOO_BAR` and converted to valid Public Audit Entry Types
+            //       and then a utilities method could be created to only allow the items from getPublicAuditEntries
+            //       while removing everything else.
 
             if($authenticatedOperator === null)
             {
