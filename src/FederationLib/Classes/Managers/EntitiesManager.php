@@ -52,7 +52,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, hash, id, domain) VALUES (:uuid, :hash, :id, :domain)");
-                $hash = Utilities::hashEntity($domain, $id);
+                $hash = Utilities::hashEntity($id, $domain);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);
@@ -90,7 +90,7 @@
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getEntity(string $id, ?string $domain): ?Entity
+        public static function getEntity(string $id, ?string $domain=null): ?Entity
         {
             if(strlen($id) < 1)
             {
@@ -103,7 +103,7 @@
             }
 
             // Try cache first
-            $hash = hash('sha256', is_null($domain) ? $id : sprintf('%s@%s', $id, $domain));
+            $hash = Utilities::hashEntity($id, $domain);
             if(self::isCachingEnabled())
             {
                 if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
@@ -266,7 +266,7 @@
          * @throws InvalidArgumentException If the ID is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function entityExists(string $id, ?string $domain): bool
+        public static function entityExists(string $id, ?string $domain=null): bool
         {
             if(strlen($id) < 1)
             {
@@ -400,28 +400,31 @@
          * Deletes an entity by its ID and domain.
          *
          * @param string $id The ID of the entity to delete.
-         * @param string $domain The domain of the entity to delete.
+         * @param string $domain Optional. The domain of the entity to delete.
          * @throws InvalidArgumentException If the ID or domain is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function deleteEntityById(string $id, string $domain): void
+        public static function deleteEntityById(string $id, ?string $domain=null): void
         {
-            if(strlen($id) < 1 || strlen($domain) < 1)
+            if(strlen($id) < 1 || ($domain !== null && strlen($domain) < 1))
             {
                 throw new InvalidArgumentException("Entity ID and domain must be provided.");
             }
 
             // Remove from cache
-            $hash = hash('sha256', sprintf('%s@%s', $id, $domain));
+            $hash = Utilities::hashEntity($id, $domain);
             if(self::isCachingEnabled())
             {
                 try
                 {
-                    if (RedisConnection::cacheRecordExists(self::getCacheKey($hash))) {
+                    if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
+                    {
                         RedisConnection::getConnection()->del(self::getCacheKey($hash));
                     }
-                } catch (RedisException $e) {
+                }
+                catch (RedisException $e)
+                {
                     throw new CacheOperationException("Failed to delete entity by id/domain from cache", 0, $e);
                 }
             }
@@ -536,13 +539,8 @@
         {
             // Build all the queried blacklist records
             $queriedBlacklistRecords = [];
-            foreach(BlacklistManager::getEntriesByEntity($entityRecord->getUuid()) as $blacklistRecord)
+            foreach(BlacklistManager::getEntriesByEntity($entityRecord->getUuid(), includeLifted: $includeLifted) as $blacklistRecord)
             {
-                if(!$includeLifted && $blacklistRecord->isLifted())
-                {
-                    continue;
-                }
-
                 $evidenceRecord = EvidenceManager::getEvidence($blacklistRecord->getUuid());
                 if(!$includeConfidential && ($evidenceRecord === null || $evidenceRecord->isConfidential()))
                 {
