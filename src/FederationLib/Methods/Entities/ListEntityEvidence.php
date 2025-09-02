@@ -26,6 +26,7 @@
                 throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
+            // TODO: include_confidential should be configurable here
             if($authenticatedOperator !== null)
             {
                 $includeConfidential = true;
