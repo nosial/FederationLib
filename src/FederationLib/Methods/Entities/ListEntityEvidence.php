@@ -19,21 +19,28 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-            $includeConfidential = false;
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException('You must be authenticated to list evidence', 401);
             }
 
-            // TODO: include_confidential should be configurable here
-            if($authenticatedOperator !== null)
-            {
-                $includeConfidential = true;
-            }
-
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $includeConfidential = (bool) (FederationServer::getParameter('include_confidential') ?? false);
+
+            if($includeConfidential)
+            {
+                if($authenticatedOperator  === null)
+                {
+                    throw new RequestException('You must be authenticated to list evidence', 401);
+                }
+
+                if(!$authenticatedOperator->canManageBlacklist())
+                {
+                    throw new RequestException('You do not have permission to list confidential evidence', 403);
+                }
+            }
             
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListEvidenceMaxItems())
             {
