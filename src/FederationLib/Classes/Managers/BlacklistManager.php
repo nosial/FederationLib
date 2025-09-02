@@ -256,10 +256,11 @@
          * @param string $operator The UUID of the operator to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
+         * @param bool $includeLifted If True, lifted blacklist records are included in the result
          * @return BlacklistRecord[] An array of BlacklistRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByOperator(string $operator, int $limit = 100, int $page = 1): array
+        public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1, bool $includeLifted=false): array
         {
             if(empty($operator))
             {
@@ -272,11 +273,13 @@
             }
 
             $offset = ($page - 1) * $limit;
+            $includeLifted = (int)$includeLifted;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator = :operator ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
                 $stmt->bindParam(':operator', $operator);
+                $stmt->bindParam(':lifted', $includeLifted);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -296,11 +299,12 @@
          * @param string $entity The UUID of the entity.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
+         * @param bool $includeLifted If True, lifted entries will be included in the result
          * @return BlacklistRecord[] An array of BlacklistRecord objects.
          * @throws InvalidArgumentException If the entity is empty or limit/page are invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByEntity(string $entity, int $limit = 100, int $page = 1): array
+        public static function getEntriesByEntity(string $entity, int $limit = 100, int $page = 1, bool $includeLifted=false): array
         {
             if(empty($entity))
             {
@@ -313,11 +317,13 @@
             }
 
             $offset = ($page - 1) * $limit;
+            $includeLifted = (int)$includeLifted;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity = :entity ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
                 $stmt->bindParam(':entity', $entity);
+                $stmt->bindParam(':lifted', $includeLifted);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
