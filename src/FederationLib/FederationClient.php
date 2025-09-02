@@ -637,11 +637,12 @@
          * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
+         * @param bool $includeLifted Optional. If True, lifted records will be included in the results
          * @return EvidenceRecord[] An array of EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
-        public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100): array
+        public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeLifted=false): array
         {
             if(empty($entityIdentifier))
             {
@@ -660,7 +661,7 @@
 
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
                     sprintf('Failed to list blacklist records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
@@ -672,11 +673,12 @@
          * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
+         * @param bool $includeConfidential Optional. If True, confidential records will be included in the results
          * @return EvidenceRecord[] An array of EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
-        public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100): array
+        public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeConfidential=false): array
         {
             if(empty($entityIdentifier))
             {
@@ -695,7 +697,8 @@
 
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence',
+                    ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
