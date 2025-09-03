@@ -12,6 +12,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use InvalidArgumentException;
 
     class DeleteAttachment extends RequestHandler
     {
@@ -58,6 +59,10 @@
                     $authenticatedOperator->getUuid(),
                     $attachmentUuid
                 ), $authenticatedOperator->getUuid(), $existingEvidence->getEntity());
+            }
+            catch(InvalidArgumentException $e)
+            {
+                throw new RequestException($e->getMessage(), 400, $e);
             }
             catch(DatabaseOperationException $e)
             {
