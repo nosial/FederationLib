@@ -53,7 +53,7 @@
             }
             catch (RequestException $e)
             {
-                Logger::log()->verbose('Request Error: ' . $e->getMessage());
+                Logger::log()->error('Request Error: ' . $e->getMessage(), $e);
                 self::throwableResponse($e);
             }
             catch(Exception $e)
