@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Validate;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EvidenceRecord;
@@ -26,7 +27,7 @@
          * @param string $operator The UUID of the operator associated with the evidence.
          * @param string|null $textContent Optional text content, can be null.
          * @param string|null $note Optional note, can be null.
-         * @param string|null $tag Optional tag, must be underscore and alphanumeric
+         * @param string|null $tag Optional tag, must be underscored and alphanumeric
          * @param bool $confidential Whether the evidence is confidential (default is false).
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
@@ -40,7 +41,49 @@
                 throw new InvalidArgumentException('Entity and operator must be provided.');
             }
 
-            // TODO: Validate $tag
+            if($textContent !== null)
+            {
+                if(strlen($textContent) === 0)
+                {
+                    throw new InvalidArgumentException('Text content cannot be empty if provided');
+                }
+
+                if(strlen($note) > 65535)
+                {
+                    throw new InvalidArgumentException('Text content cannot be longer than 65535 characters');
+                }
+            }
+
+            if($note !== null)
+            {
+                if(strlen($note) === 0)
+                {
+                    throw new InvalidArgumentException('Note cannot be empty if provided');
+                }
+
+                if(strlen($note) > 65535)
+                {
+                    throw new InvalidArgumentException('Note cannot be longer than 65535 characters');
+                }
+            }
+
+            if($tag !== null)
+            {
+                if(strlen($tag) === 0)
+                {
+                    throw new InvalidArgumentException('Tag cannot be empty if provided');
+                }
+
+                if(strlen($tag) > 32)
+                {
+                    throw new InvalidArgumentException('Tag cannot be longer than 32 characters');
+                }
+
+                if(!Validate::evidenceTag($tag))
+                {
+                    throw new InvalidArgumentException('Tag must be alphanumeric and spaces must be underscores');
+                }
+            }
 
             $uuid = UuidV4::v4()->toRfc4122();
 
@@ -81,12 +124,18 @@
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
+         * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
         public static function deleteEvidence(string $uuid): void
         {
             if(strlen($uuid) < 1)
             {
-                throw new InvalidArgumentException('UUID must be provided.');
+                throw new InvalidArgumentException('Evidence UUID must be provided.');
+            }
+
+            if(!Validate::uuid($uuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID must be valid');
             }
 
             try
@@ -124,12 +173,18 @@
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
+         * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
         public static function getEvidence(string $uuid): ?EvidenceRecord
         {
             if(strlen($uuid) < 1)
             {
-                throw new InvalidArgumentException('UUID must be provided.');
+                throw new InvalidArgumentException('Evidence UUID must be provided');
+            }
+
+            if(!Validate::uuid($uuid))
+            {
+                throw new InvalidArgumentException('Invalid Evidence UUID');
             }
 
             if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
@@ -191,17 +246,30 @@
          * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
          * @return EvidenceRecord[] An array of EvidenceRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws InvalidArgumentException If the limit or page parameters are invalid.
          */
         public static function getEvidenceRecords(int $limit=100, int $page=1, bool $includeConfidential=false): array
         {
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
             try
             {
                 $offset = ($page - 1) * $limit;
                 $query = "SELECT * FROM evidence";
+
                 if(!$includeConfidential)
                 {
-                    $query .= " WHERE confidential = 0";
+                    $query .= " WHERE confidential=0";
                 }
+
                 $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
@@ -227,19 +295,36 @@
         /**
          * Retrieves all evidence records associated with a specific operator.
          *
-         * @param string $entity The UUID of the entity.
+         * @param string $entityUuid The UUID of the entity.
          * @param int $limit The maximum number of records to return (default is 100).
          * @param int $page The page number for pagination (default is 1).
          * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
          * @return EvidenceRecord[] An array of EvidenceRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws InvalidArgumentException If the entity UUID is not provided, is empty, or is not a valid UUID.
          */
-        public static function getEvidenceByEntity(string $entity, int $limit=100, int $page=1, bool $includeConfidential=false): array
+        public static function getEvidenceByEntity(string $entityUuid, int $limit=100, int $page=1, bool $includeConfidential=false): array
         {
-            if(strlen($entity) < 1)
+            if(strlen($entityUuid) < 1)
             {
-                throw new InvalidArgumentException('Entity must be provided.');
+                throw new InvalidArgumentException('Entity UUID must be provided.');
             }
+
+            if(!Validate::uuid($entityUuid))
+            {
+                throw new InvalidArgumentException('Entity UUID must be valid');
+            }
+
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
             
             try
             {
@@ -252,7 +337,7 @@
                 $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
-                $stmt->bindParam(':entity', $entity);
+                $stmt->bindParam(':entity', $entityUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -275,7 +360,7 @@
         /**
          * Retrieves all evidence records associated with a specific operator.
          *
-         * @param string $operator The UUID of the operator.
+         * @param string $operatorUuid The UUID of the operator.
          * @param int $limit The maximum number of records to return (default is 100).
          * @param int $page The page number for pagination (default is 1).
          * @param bool $includeConfidential Whether to include confidential evidence records (default is false).
@@ -283,12 +368,28 @@
          * @throws InvalidArgumentException If the operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEvidenceByOperator(string $operator, int $limit=100, int $page=1, bool $includeConfidential=false): array
+        public static function getEvidenceByOperator(string $operatorUuid, int $limit=100, int $page=1, bool $includeConfidential=false): array
         {
-            if(strlen($operator) < 1)
+            if(strlen($operatorUuid) < 1)
             {
                 throw new InvalidArgumentException('Operator must be provided.');
             }
+            
+            if(!Validate::uuid($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID must be valid');
+            }
+
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
 
             try
             {
@@ -301,7 +402,7 @@
                 $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
-                $stmt->bindParam(':operator', $operator);
+                $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -338,6 +439,11 @@
                 throw new InvalidArgumentException('Tag name must be provided.');
             }
 
+            if(!Validate::evidenceTag($tagName))
+            {
+                throw new InvalidArgumentException('Tag name must be alphanumeric and spaces must be underscores');
+            }
+
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -372,20 +478,25 @@
         /**
          * Checks if an evidence record exists by its UUID.
          *
-         * @param string $uuid The UUID of the evidence record to check.
+         * @param string $evidenceUuid The UUID of the evidence record to check.
          * @return bool True if the evidence exists, false otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function evidenceExists(string $uuid): bool
+        public static function evidenceExists(string $evidenceUuid): bool
         {
-            if(strlen($uuid) < 1)
+            if(strlen($evidenceUuid) < 1)
             {
-                throw new InvalidArgumentException('UUID must be provided.');
+                throw new InvalidArgumentException('Evidence UUID must be provided.');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            if(!Validate::uuid($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID must be valid');
+            }
+
+            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($evidenceUuid)))
             {
                 // If caching is enabled and the evidence exists in the cache, return true
                 return true;
@@ -394,7 +505,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM evidence WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->execute();
 
                 $exists = $stmt->fetchColumn() > 0; // Returns true if evidence exists, false otherwise
@@ -406,7 +517,7 @@
 
             if($exists && self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
-                self::getEvidence($uuid);
+                self::getEvidence($evidenceUuid);
             }
 
             return $exists;
@@ -415,15 +526,15 @@
         /**
          * Updates the confidentiality status of an evidence record.
          *
-         * @param string $uuid The UUID of the evidence record to update.
+         * @param string $evidenceUuid The UUID of the evidence record to update.
          * @param bool $confidential The new confidentiality status (true for confidential, false for non-confidential).
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function updateConfidentiality(string $uuid, bool $confidential): void
+        public static function updateConfidentiality(string $evidenceUuid, bool $confidential): void
         {
-            if(strlen($uuid) < 1)
+            if(strlen($evidenceUuid) < 1)
             {
                 throw new InvalidArgumentException('UUID must be provided.');
             }
@@ -431,7 +542,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET confidential = :confidential WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
                 $stmt->execute();
             }
@@ -442,15 +553,21 @@
 
             if(self::isCachingEnabled())
             {
-                Logger::log()->debug(sprintf("Updating cache for evidence with UUID '%s' after confidentiality update", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'confidential', $confidential);
+                Logger::log()->debug(sprintf("Updating cache for evidence with UUID '%s' after confidentiality update", $evidenceUuid));
+                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($evidenceUuid), 'confidential', $confidential);
                 if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
                 {
-                    self::getEvidence($uuid);
+                    self::getEvidence($evidenceUuid);
                 }
             }
         }
 
+        /**
+         * Counts the total number of evidence records in the database.
+         *
+         * @return int The total number of evidence records.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
         public static function countRecords(): int
         {
             try
