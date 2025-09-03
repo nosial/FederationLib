@@ -36,9 +36,9 @@
                 throw new InvalidArgumentException('Operator name cannot be empty.');
             }
 
-            if(strlen($name) > 255)
+            if(strlen($name) > 32)
             {
-                throw new InvalidArgumentException('Operator name cannot exceed 255 characters.');
+                throw new InvalidArgumentException('Operator name cannot exceed 32 characters.');
             }
 
             $uuid = Uuid::v7()->toRfc4122();
