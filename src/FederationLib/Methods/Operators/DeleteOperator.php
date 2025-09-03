@@ -56,7 +56,7 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Unable to create operator', 500, $e);
+                throw new RequestException('Unable to delete operator', 500, $e);
             }
 
             self::successResponse();
