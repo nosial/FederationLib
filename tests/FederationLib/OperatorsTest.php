@@ -590,4 +590,72 @@
             // Clean up
             $this->client->deleteOperator($uuid);
         }
+
+        public function testOperatorEvidence()
+        {
+            $publicEvidenceRecords = [];
+            $confidentialEvidenceRecords = [];
+
+            // Push a few entities and evidence to the database first
+            for($i = 0; $i < 3; $i++)
+            {
+                $entityUuid = $this->client->pushEntity("test-entity-ls-$i", "example.com");
+                $this->assertNotEmpty($entityUuid);
+                $publicEvidenceRecords[] = $this->client->submitEvidence($entityUuid, "Subscribe to my newsletter $i", "Spam detected from chat");
+            }
+
+            // Do the same but for confidential evidence
+            // Push a few entities and evidence to the database first
+            for($i = 0; $i < 3; $i++)
+            {
+                $entityUuid = $this->client->pushEntity("test-entity-lsc-$i", "example.com");
+                $this->assertNotEmpty($entityUuid);
+                $confidentialEvidenceRecords[] = $this->client->submitEvidence($entityUuid, "Subscribe to my super secret newsletter $i", "Spam detected from chat", true);
+            }
+
+            // Create an operator to get evidence for
+            $selfOperator = $this->client->getSelf();
+            $this->assertNotEmpty($selfOperator->getUuid());
+
+            // Create an anonymous client for testing
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+
+            // Get evidence records for the operator
+            $evidence = $this->client->listOperatorEvidence($selfOperator->getUuid());
+            $this->assertIsArray($evidence);
+            $this->assertGreaterThanOrEqual(3, count($evidence)); // At
+            foreach($publicEvidenceRecords as $record)
+            {
+                $found = false;
+                foreach($evidence as $e)
+                {
+                    if($e->getUuid() === $record->getUuid())
+                    {
+                        $found = true;
+                        $this->assertFalse($e->isConfidential());
+                    }
+                }
+                $this->assertTrue($found, "Public evidence record {$record->getUuid()} not found in operator evidence list");
+            }
+
+            // Ensure confidential evidence is not visible to the operator
+            foreach($confidentialEvidenceRecords as $record)
+            {
+                $found = false;
+                foreach($evidence as $e)
+                {
+                    if($e->getUuid() === $record)
+                    {
+                        $found = true;
+                        $this->assertTrue($e->isConfidential());
+                    }
+                }
+                $this->assertFalse($found, "Confidential evidence record {$record->getUuid()} should not be visible to the operator");
+            }
+
+            // Ensure confidential evidence is not visible to anonymous clients
+            $this->expectException(RequestException::class);
+            $anonymousEvidence = $anonymousClient->listOperatorEvidence($selfOperator->getUuid());
+            $this->assertIsArray($anonymousEvidence);
+        }
     }
