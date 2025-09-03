@@ -27,6 +27,7 @@
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
     use FederationLib\Methods\Evidence\ListEvidence;
     use FederationLib\Methods\Evidence\SubmitEvidence;
+    use FederationLib\Methods\Evidence\UpdateConfidentiality;
     use FederationLib\Methods\GetServerInformation;
     use FederationLib\Methods\Operators\CreateOperator;
     use FederationLib\Methods\Operators\DeleteOperator;
@@ -77,6 +78,7 @@
         case LIST_EVIDENCE;
         case SUBMIT_EVIDENCE;
         case GET_EVIDENCE_RECORD;
+        case UPDATE_CONFIDENTIALITY;
         case DELETE_EVIDENCE;
 
         case LIST_BLACKLIST;
@@ -198,6 +200,9 @@
                 case self::GET_EVIDENCE_RECORD:
                     GetEvidenceRecord::handleRequest();
                     break;
+                case self::UPDATE_CONFIDENTIALITY:
+                    UpdateConfidentiality::handleRequest();
+                    break;
                 case self::DELETE_EVIDENCE:
                     DeleteEvidence::handleRequest();
                     break;
@@ -270,6 +275,7 @@
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
                 $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update_confidentiality$#', $path) && $requestMethod === 'POST' => Method::UPDATE_CONFIDENTIALITY,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
 
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
