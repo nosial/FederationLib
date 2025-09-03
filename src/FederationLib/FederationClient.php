@@ -711,10 +711,11 @@
          *
          * @param string $id ID of the entity to push
          * @param string|null $domain Optional. The domain of the entity to push
+         * @return string The UUID of the pushed entity
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the domain is empty or if the ID is an empty string
          */
-        public function pushEntity(string $id, ?string $domain=null): void
+        public function pushEntity(string $id, ?string $domain=null): string
         {
             if(empty($id))
             {
@@ -726,7 +727,7 @@
                 throw new InvalidArgumentException('Domain cannot be an empty string');
             }
 
-            $this->makeRequest('POST', 'entities', ['domain' => $domain, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
+            return $this->makeRequest('POST', 'entities', ['domain' => $domain, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
                 sprintf('Failed to push entity with domain %s', $domain)
             );
         }
@@ -836,27 +837,52 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity UUID is empty
          */
-        public function submitEvience(string $entityUuid, ?string $textContent=null, ?string $note=null, bool $confidential=false): string
+        public function submitEvidence(string $entityUuid, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false): string
         {
             if(empty($entityUuid))
             {
                 throw new InvalidArgumentException('Entity UUID cannot be empty');
             }
 
-            $data = ['entity_uuid' => $entityUuid, 'confidential' => $confidential];
+            $parameters = ['entity_uuid' => $entityUuid, 'confidential' => $confidential];
 
             if($textContent !== null)
             {
-                $data['text_content'] = $textContent;
+                $parameters['text_content'] = $textContent;
             }
 
             if($note !== null)
             {
-                $data['note'] = $note;
+                $parameters['note'] = $note;
             }
 
-            return $this->makeRequest('POST', 'evidence', $data, [HttpResponseCode::CREATED],
+            if($tag !== null)
+            {
+                $parameters['tag'] = $tag;
+            }
+
+            return $this->makeRequest('POST', 'evidence', $parameters, [HttpResponseCode::CREATED],
                 sprintf('Failed to submit evidence for entity with UUID %s', $entityUuid)
+            );
+        }
+
+        /**
+         * Updates the confidentiality flag of an existing Evidence record
+         *
+         * @param string $evidenceUuid The Evidence UUID record to update
+         * @param bool $confidential True if the evidence is confidential, False otherwise
+         * @throws RequestException The request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function updateEvidenceConfidentiality(string $evidenceUuid, bool $confidential): void
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            $this->makeRequest('POST', 'evidence/' . $evidenceUuid . '/update_confidentiality', ['confidential' => $confidential], [HttpResponseCode::OK],
+                sprintf('Failed to %s confidentiality for evidence with UUID %s', ($confidential ? 'set' : 'unset'), $evidenceUuid)
             );
         }
 
