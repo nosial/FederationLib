@@ -996,8 +996,6 @@
             }
 
             // User provided a directory path, so we need to determine the filename
-            $filename = '';
-            
             if($suggestedFilename !== null)
             {
                 // Use the server's suggested filename
