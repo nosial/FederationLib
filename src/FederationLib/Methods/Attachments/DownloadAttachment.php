@@ -2,6 +2,7 @@
 
     namespace FederationLib\Methods\Attachments;
 
+    use Exception;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\FileAttachmentManager;
@@ -9,6 +10,7 @@
     use FederationLib\Classes\Validate;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use InvalidArgumentException;
     use Throwable;
 
     class DownloadAttachment extends RequestHandler
@@ -63,7 +65,15 @@
                     }
                 }
             }
-            catch(Throwable $e)
+            catch(InvalidArgumentException $e)
+            {
+                throw new RequestException($e->getMessage(), 400, $e);
+            }
+            catch(RequestException $e)
+            {
+                throw $e;
+            }
+            catch(Exception $e)
             {
                 throw new RequestException('Internal server error while retrieving attachment', 500, $e);
             }
