@@ -11,6 +11,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use InvalidArgumentException;
 
     class SubmitEvidence extends RequestHandler
     {
@@ -31,17 +32,9 @@
                 throw new RequestException('Entity UUID is required and must be valid', 400);
             }
 
-            $textContent = FederationServer::getParameter('text_content');
-            if(!is_null($textContent) && strlen($textContent) > 65535)
-            {
-                throw new RequestException('Text content must not exceed 65535 characters', 400);
-            }
-
-            $note = FederationServer::getParameter('note');
-            if(!is_null($note) && strlen($note) > 65535)
-            {
-                throw new RequestException('Note must not exceed 65535 characters', 400);
-            }
+            $textContent = FederationServer::getParameter('text_content') ?? null;
+            $note = FederationServer::getParameter('note') ?? null;
+            $tag = FederationServer::getParameter('tag') ?? null;
 
             $confidential = false;
             if(FederationServer::getParameter('confidential') === 'true')
@@ -56,7 +49,7 @@
                     throw new RequestException('Entity does not exist', 404);
                 }
 
-                $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $confidential);
+                $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $tag, $confidential);
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_SUBMITTED, sprintf(
                     'Evidence %s created for entity %s by %s (%s)',
                     $evidenceUuid,
@@ -64,6 +57,10 @@
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
                 ), $authenticatedOperator->getUuid(), $evidenceUuid);
+            }
+            catch(InvalidArgumentException $e)
+            {
+                throw new RequestException($e->getMessage(), 400, $e);
             }
             catch (DatabaseOperationException $e)
             {
