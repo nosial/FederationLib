@@ -58,4 +58,67 @@
 
             return hash('sha256', $id);
         }
+
+        /**
+         * Get file extension from MIME type
+         *
+         * @param string $mimeType The MIME type
+         * @return string The file extension (with dot) or empty string if unknown
+         */
+        public static function getExtensionFromMimeType(string $mimeType): string
+        {
+            $mimeToExtension = [
+                // Images
+                'image/jpeg' => '.jpg',
+                'image/jpg' => '.jpg',
+                'image/png' => '.png',
+                'image/gif' => '.gif',
+                'image/bmp' => '.bmp',
+                'image/webp' => '.webp',
+                'image/svg+xml' => '.svg',
+                'image/tiff' => '.tiff',
+
+                // Documents
+                'application/pdf' => '.pdf',
+                'application/msword' => '.doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => '.docx',
+                'application/vnd.ms-excel' => '.xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => '.xlsx',
+                'application/vnd.ms-powerpoint' => '.ppt',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation' => '.pptx',
+                'text/plain' => '.txt',
+                'text/csv' => '.csv',
+                'application/rtf' => '.rtf',
+
+                // Archives
+                'application/zip' => '.zip',
+                'application/x-rar-compressed' => '.rar',
+                'application/x-7z-compressed' => '.7z',
+                'application/x-tar' => '.tar',
+                'application/gzip' => '.gz',
+
+                // Audio
+                'audio/mpeg' => '.mp3',
+                'audio/wav' => '.wav',
+                'audio/ogg' => '.ogg',
+                'audio/flac' => '.flac',
+
+                // Video
+                'video/mp4' => '.mp4',
+                'video/avi' => '.avi',
+                'video/quicktime' => '.mov',
+                'video/x-msvideo' => '.avi',
+                'video/webm' => '.webm',
+
+                // Other
+                'application/json' => '.json',
+                'application/xml' => '.xml',
+                'text/html' => '.html',
+                'text/css' => '.css',
+                'application/javascript' => '.js',
+                'application/octet-stream' => '.bin'
+            ];
+
+            return $mimeToExtension[$mimeType] ?? '';
+        }
     }

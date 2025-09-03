@@ -2,6 +2,7 @@
 
     namespace FederationLib;
 
+    use CURLFile;
     use CurlHandle;
     use FederationLib\Classes\Logger;
     use FederationLib\Enums\HttpResponseCode;
@@ -16,6 +17,7 @@
     use FederationLib\Objects\Operator;
     use FederationLib\Objects\ServerInformation;
     use FederationLib\Objects\SuccessResponse;
+    use FederationLib\Objects\UploadResult;
     use InvalidArgumentException;
 
     class FederationClient
@@ -856,6 +858,496 @@
             return $this->makeRequest('POST', 'evidence', $data, [HttpResponseCode::CREATED],
                 sprintf('Failed to submit evidence for entity with UUID %s', $entityUuid)
             );
+        }
+
+        // ATTACHMENT METHODS
+
+        public function deleteAttachment(string $attachmentUuid): void
+        {
+            if(empty($attachmentUuid))
+            {
+                throw new InvalidArgumentException('Attachment UUID cannot be empty');
+            }
+
+            $this->makeRequest('DELETE', 'attachments/' . $attachmentUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to delete attachment with UUID %s', $attachmentUuid)
+            );
+        }
+
+        public function downloadAttachment(string $attachmentUuid, string $filePath): void
+        {
+            if(empty($attachmentUuid))
+            {
+                throw new InvalidArgumentException('Attachment UUID cannot be empty');
+            }
+
+            if(empty($filePath))
+            {
+                throw new InvalidArgumentException('File path cannot be empty');
+            }
+
+            $ch = $this->buildCurl('attachments/' . $attachmentUuid);
+            curl_setopt($ch, CURLOPT_HTTPGET, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_FAILONERROR, true);
+            curl_setopt($ch, CURLOPT_HEADER, true); // Include headers in output to extract filename
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return the transfer as a string
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if($response === false)
+            {
+                throw new RequestException('Curl error while downloading attachment: ' . $curlError);
+            }
+
+            if($httpCode !== HttpResponseCode::OK->value)
+            {
+                throw new RequestException('Failed to download attachment, HTTP code: ' . $httpCode, HttpResponseCode::from($httpCode));
+            }
+
+            // Extract headers and body
+            $headers = substr($response, 0, $headerSize);
+            $body = substr($response, $headerSize);
+
+            // Extract filename from Content-Disposition header
+            $suggestedFilename = $this->extractFilenameFromHeaders($headers);
+            
+            // Extract MIME type from Content-Type header
+            $mimeType = $this->extractMimeTypeFromHeaders($headers);
+
+            // Determine the final file path
+            $finalFilePath = $this->determineFinalFilePath($filePath, $suggestedFilename, $mimeType, $attachmentUuid);
+
+            // Write the file
+            $fileHandle = fopen($finalFilePath, 'wb');
+            if($fileHandle === false)
+            {
+                throw new InvalidArgumentException('Failed to open file for writing: ' . $finalFilePath);
+            }
+
+            if(fwrite($fileHandle, $body) === false)
+            {
+                fclose($fileHandle);
+                unlink($finalFilePath); // Remove incomplete file
+                throw new RequestException('Failed to write attachment data to file: ' . $finalFilePath);
+            }
+
+            fclose($fileHandle);
+        }
+
+
+        /**
+         * Extract filename from Content-Disposition header
+         *
+         * @param string $headers The HTTP headers
+         * @return string|null The extracted filename or null if not found
+         */
+        private function extractFilenameFromHeaders(string $headers): ?string
+        {
+            if(preg_match('/Content-Disposition:.*filename="([^"]+)"/i', $headers, $matches))
+            {
+                return $matches[1];
+            }
+            
+            // Try without quotes
+            if(preg_match('/Content-Disposition:.*filename=([^\s;]+)/i', $headers, $matches))
+            {
+                return trim($matches[1]);
+            }
+
+            return null;
+        }
+
+        /**
+         * Extract MIME type from Content-Type header
+         *
+         * @param string $headers The HTTP headers
+         * @return string|null The extracted MIME type or null if not found
+         */
+        private function extractMimeTypeFromHeaders(string $headers): ?string
+        {
+            if(preg_match('/Content-Type:\s*([^\s;]+)/i', $headers, $matches))
+            {
+                return trim($matches[1]);
+            }
+
+            return null;
+        }
+
+        /**
+         * Determine the final file path based on user input and server suggestions
+         *
+         * @param string $userFilePath The path provided by the user
+         * @param string|null $suggestedFilename The filename suggested by the server
+         * @param string|null $mimeType The MIME type from server
+         * @param string $attachmentUuid The attachment UUID as fallback
+         * @return string The final file path to use
+         */
+        private function determineFinalFilePath(string $userFilePath, ?string $suggestedFilename, ?string $mimeType, string $attachmentUuid): string
+        {
+            // If user provided a full file path (has extension or doesn't end with separator), use it as-is
+            if(pathinfo($userFilePath, PATHINFO_EXTENSION) !== '' || !str_ends_with($userFilePath, DIRECTORY_SEPARATOR))
+            {
+                return $userFilePath;
+            }
+
+            // User provided a directory path, so we need to determine the filename
+            $filename = '';
+            
+            if($suggestedFilename !== null)
+            {
+                // Use the server's suggested filename
+                $filename = $suggestedFilename;
+            }
+            elseif($mimeType !== null)
+            {
+                // Generate filename based on MIME type
+                $extension = Classes\Utilities::getExtensionFromMimeType($mimeType);
+                $filename = $attachmentUuid . $extension;
+            }
+            else
+            {
+                // Last resort: use attachment UUID as filename
+                $filename = $attachmentUuid;
+            }
+
+            return rtrim($userFilePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+        }
+
+        /**
+         * Uploads a file attachment from local disk to the federation server
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to attach the file to
+         * @param string $localFilePath Path to the local file to upload
+         * @return UploadResult The upload result containing UUID and download URL
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the file doesn't exist or evidence UUID is invalid
+         */
+        public function uploadFileAttachment(string $evidenceUuid, string $localFilePath): UploadResult
+        {
+            if (empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            if (!file_exists($localFilePath))
+            {
+                throw new InvalidArgumentException('File does not exist: ' . $localFilePath);
+            }
+
+            if (!is_readable($localFilePath))
+            {
+                throw new InvalidArgumentException('File is not readable: ' . $localFilePath);
+            }
+
+            $fileSize = filesize($localFilePath);
+            if ($fileSize === false || $fileSize === 0)
+            {
+                throw new InvalidArgumentException('Invalid file or empty file: ' . $localFilePath);
+            }
+
+            // Remove leading slash from path
+            $path = ltrim('attachments', '/');
+            Logger::log()->debug(sprintf("PUT Request to %s for file upload", $this->buildUrl($path)));
+
+            $ch = curl_init($this->buildUrl($path));
+
+            // Set up headers for file upload
+            $headers = [
+                'Accept: application/json'
+            ];
+
+            if ($this->apiKey !== null)
+            {
+                $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+            }
+
+            // Create CURLFile for the upload
+            $file = new CURLFile($localFilePath, mime_content_type($localFilePath) ?: 'application/octet-stream', basename($localFilePath));
+
+            // Prepare multipart form data
+            $postData = [
+                'evidence_uuid' => $evidenceUuid,
+                'file' => $file
+            ];
+
+            curl_setopt_array($ch, [
+                CURLOPT_CUSTOMREQUEST => 'PUT',
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POSTFIELDS => $postData,
+                CURLOPT_TIMEOUT => 300, // 5 minutes timeout for large files
+                CURLOPT_UPLOAD_BUFFERSIZE => 65536, // 64KB buffer for better performance
+                CURLOPT_NOPROGRESS => false,
+                CURLOPT_PROGRESSFUNCTION => function($resource, $download_size, $downloaded, $upload_size, $uploaded)
+                {
+                    if ($upload_size > 0)
+                    {
+                        $percent = round(($uploaded / $upload_size) * 100, 2);
+                        Logger::log()->debug("Upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                    }
+                    return 0; // Continue upload
+                }
+            ]);
+
+            $response = curl_exec($ch);
+
+            // Handle cURL errors
+            if (curl_errno($ch))
+            {
+                $curlError = curl_error($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                curl_close($ch);
+                throw new RequestException('File upload failed: ' . $curlError, HttpResponseCode::from($httpCode));
+            }
+
+            $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            $decodedResponse = $this->decodeResponse($response);
+
+            // Check if response code is expected (201 Created for successful upload)
+            $expectedStatusCodes = [201, HttpResponseCode::CREATED->value];
+            if (!in_array($responseCode, $expectedStatusCodes))
+            {
+                $errorMsg = 'File upload failed, received response code: ' . $responseCode;
+                if ($decodedResponse instanceof ErrorResponse)
+                {
+                    $errorMsg = 'File upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                }
+                throw new RequestException($errorMsg, $responseCode);
+            }
+
+            if ($decodedResponse instanceof ErrorResponse)
+            {
+                throw new RequestException('File upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
+            }
+
+            /** @var SuccessResponse $decodedResponse */
+            return UploadResult::fromArray($decodedResponse->getData());
+        }
+
+        /**
+         * Uploads a file attachment from a URL to the federation server
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to attach the file to
+         * @param string $fileUrl URL of the file to download and upload
+         * @param int $maxFileSize Maximum file size in bytes (default: 50MB)
+         * @return UploadResult The upload result containing UUID and download URL
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the URL is invalid or evidence UUID is invalid
+         */
+        public function uploadFileAttachmentFromUrl(string $evidenceUuid, string $fileUrl, int $maxFileSize = 52428800): UploadResult
+        {
+            if (empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            if (empty($fileUrl) || !filter_var($fileUrl, FILTER_VALIDATE_URL))
+            {
+                throw new InvalidArgumentException('Invalid URL provided: ' . $fileUrl);
+            }
+
+            if ($maxFileSize <= 0)
+            {
+                throw new InvalidArgumentException('Maximum file size must be greater than 0');
+            }
+
+            Logger::log()->debug(sprintf("Downloading file from URL: %s", $fileUrl));
+
+            // Create a temporary file to store the downloaded content
+            $tempFile = tempnam(sys_get_temp_dir(), 'federation_upload_');
+            if ($tempFile === false)
+            {
+                throw new RequestException('Failed to create temporary file for download');
+            }
+
+            try
+            {
+                // Download the file with streaming to handle large files
+                $downloadCh = curl_init();
+                $fileHandle = fopen($tempFile, 'wb');
+
+                if ($fileHandle === false)
+                {
+                    throw new RequestException('Failed to open temporary file for writing');
+                }
+
+                curl_setopt_array($downloadCh, [
+                    CURLOPT_URL => $fileUrl,
+                    CURLOPT_FILE => $fileHandle,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 5,
+                    CURLOPT_TIMEOUT => 600, // 10 minutes timeout for download
+                    CURLOPT_USERAGENT => 'FederationLib/1.0 File Downloader',
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
+                    CURLOPT_NOPROGRESS => false,
+                    CURLOPT_PROGRESSFUNCTION => function($resource, $download_size, $downloaded, $upload_size, $uploaded) use ($maxFileSize) {
+                        // Check file size limit during download
+                        if ($downloaded > $maxFileSize)
+                        {
+                            Logger::log()->warning("Download exceeded maximum file size limit");
+                            return 1; // Abort download
+                        }
+
+                        if ($download_size > 0)
+                        {
+                            $percent = round(($downloaded / $download_size) * 100, 2);
+                            Logger::log()->debug("Download progress: {$percent}% ({$downloaded}/{$download_size} bytes)");
+                        }
+                        return 0; // Continue download
+                    }
+                ]);
+
+                $downloadResult = curl_exec($downloadCh);
+                $downloadHttpCode = curl_getinfo($downloadCh, CURLINFO_RESPONSE_CODE);
+                $downloadError = curl_error($downloadCh);
+
+                curl_close($downloadCh);
+                fclose($fileHandle);
+
+                if ($downloadResult === false || !empty($downloadError))
+                {
+                    throw new RequestException('Failed to download file from URL: ' . ($downloadError ?: 'Unknown error'));
+                }
+
+                if ($downloadHttpCode !== 200)
+                {
+                    throw new RequestException('Failed to download file, HTTP response code: ' . $downloadHttpCode);
+                }
+
+                // Verify the downloaded file
+                $fileSize = filesize($tempFile);
+                if ($fileSize === false || $fileSize === 0)
+                {
+                    throw new RequestException('Downloaded file is empty or invalid');
+                }
+
+                if ($fileSize > $maxFileSize) {
+                    throw new RequestException('Downloaded file exceeds maximum size limit of ' . $maxFileSize . ' bytes');
+                }
+
+                Logger::log()->debug(sprintf("Successfully downloaded file (%d bytes), uploading to server", $fileSize));
+
+                // Get filename from URL or use a default
+                $filename = basename(parse_url($fileUrl, PHP_URL_PATH)) ?: 'downloaded_file';
+
+                // Detect MIME type
+                $mimeType = 'application/octet-stream';
+                if (function_exists('finfo_open'))
+                {
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $detectedMime = finfo_file($finfo, $tempFile);
+                    finfo_close($finfo);
+                    if ($detectedMime)
+                    {
+                        $mimeType = $detectedMime;
+                    }
+                } elseif (function_exists('mime_content_type'))
+                {
+                    $detectedMime = mime_content_type($tempFile);
+                    if ($detectedMime)
+                    {
+                        $mimeType = $detectedMime;
+                    }
+                }
+
+                // Upload the downloaded file
+                $path = ltrim('attachments', '/');
+                Logger::log()->debug(sprintf("PUT Request to %s for URL-based file upload", $this->buildUrl($path)));
+                $ch = curl_init($this->buildUrl($path));
+
+                // Set up headers for file upload
+                $headers = [
+                    'Accept: application/json'
+                ];
+
+                if ($this->apiKey !== null)
+                {
+                    $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                }
+
+                // Create CURLFile for the upload
+                $file = new CURLFile($tempFile, $mimeType, $filename);
+
+                // Prepare multipart form data
+                $postData = [
+                    'evidence_uuid' => $evidenceUuid,
+                    'file' => $file
+                ];
+
+                curl_setopt_array($ch, [
+                    CURLOPT_CUSTOMREQUEST => 'PUT',
+                    CURLOPT_HTTPHEADER => $headers,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POSTFIELDS => $postData,
+                    CURLOPT_TIMEOUT => 300, // 5 minutes timeout for upload
+                    CURLOPT_UPLOAD_BUFFERSIZE => 65536, // 64KB buffer for better performance
+                    CURLOPT_NOPROGRESS => false,
+                    CURLOPT_PROGRESSFUNCTION => function($resource, $download_size, $downloaded, $upload_size, $uploaded)
+                    {
+                        if ($upload_size > 0)
+                        {
+                            $percent = round(($uploaded / $upload_size) * 100, 2);
+                            Logger::log()->debug("Upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                        }
+
+                        return 0; // Continue upload
+                    }
+                ]);
+
+                $response = curl_exec($ch);
+
+                // Handle cURL errors
+                if (curl_errno($ch))
+                {
+                    $curlError = curl_error($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                    curl_close($ch);
+                    throw new RequestException('File upload failed: ' . $curlError, HttpResponseCode::from($httpCode));
+                }
+
+                $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                curl_close($ch);
+
+                $decodedResponse = $this->decodeResponse($response);
+
+                // Check if response code is expected (201 Created for successful upload)
+                $expectedStatusCodes = [201, HttpResponseCode::CREATED->value];
+                if (!in_array($responseCode, $expectedStatusCodes))
+                {
+                    $errorMsg = 'File upload failed, received response code: ' . $responseCode;
+                    if ($decodedResponse instanceof ErrorResponse)
+                    {
+                        $errorMsg = 'File upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                    }
+
+                    throw new RequestException($errorMsg, $responseCode);
+                }
+
+                if ($decodedResponse instanceof ErrorResponse)
+                {
+                    throw new RequestException('File upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
+                }
+
+                /** @var SuccessResponse $decodedResponse */
+                return UploadResult::fromArray($decodedResponse->getData());
+
+            }
+            finally
+            {
+                // Clean up temporary file
+                if (file_exists($tempFile))
+                {
+                    unlink($tempFile);
+                }
+            }
         }
 
 

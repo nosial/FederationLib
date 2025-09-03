@@ -29,7 +29,7 @@
                 throw new RequestException('Insufficient Permissions to upload attachments', 403);
             }
 
-            $evidenceUuid = FederationServer::getParameter('evidence');
+            $evidenceUuid = FederationServer::getParameter('evidence_uuid');
             if($evidenceUuid === null || !Validate::uuid($evidenceUuid))
             {
                 throw new RequestException('A valid evidence UUID is required', 400);
