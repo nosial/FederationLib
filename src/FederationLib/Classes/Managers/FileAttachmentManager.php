@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Validate;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\FileAttachmentRecord;
@@ -201,6 +202,11 @@
             if(empty($uuid))
             {
                 throw new InvalidArgumentException('File attachment UUID cannot be empty.');
+            }
+
+            if(!Validate::uuid($uuid))
+            {
+                throw new InvalidArgumentException('File attachment UUID must be valid');
             }
 
             // Retrieve the attachment first before deleting it.
