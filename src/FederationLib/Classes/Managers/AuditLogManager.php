@@ -43,19 +43,19 @@
 
             if($operator !== null && $entity !== null)
             {
-                Logger::log()->info(sprintf("Audit Entry [%s] %s by %s on %s", $type->value, $message, $operator, $entity));
+                Logger::log()->info(sprintf("[%s] %s by %s on %s", $type->value, $message, $operator, $entity));
             }
             elseif($operator !== null)
             {
-                Logger::log()->info(sprintf("Audit Entry [%s] %s by %s", $type->value, $message, $operator));
+                Logger::log()->info(sprintf("[%s] %s by %s", $type->value, $message, $operator));
             }
             elseif($entity !== null)
             {
-                Logger::log()->info(sprintf("Audit Entry [%s] %s on %s", $type->value, $message, $entity));
+                Logger::log()->info(sprintf("[%s] %s on %s", $type->value, $message, $entity));
             }
             else
             {
-                Logger::log()->info(sprintf("Audit Entry [%s] %s", $type->value, $message));
+                Logger::log()->info(sprintf("[%s] %s", $type->value, $message));
             }
 
             try
