@@ -93,7 +93,7 @@
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
-                $stmt->bindParam(':confidential', $confidential);
+                $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
                 $stmt->bindParam(':text_content', $textContent);
                 $stmt->bindParam(':note', $note);
                 $stmt->bindParam(':tag', $tag);
