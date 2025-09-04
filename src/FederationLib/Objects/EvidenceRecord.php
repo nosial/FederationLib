@@ -63,7 +63,7 @@
          *
          * @return string
          */
-        public function getEntity(): string
+        public function getEntityUuid(): string
         {
             return $this->entity;
         }
