@@ -965,83 +965,6 @@
             fclose($fileHandle);
         }
 
-
-        /**
-         * Extract filename from Content-Disposition header
-         *
-         * @param string $headers The HTTP headers
-         * @return string|null The extracted filename or null if not found
-         */
-        private function extractFilenameFromHeaders(string $headers): ?string
-        {
-            if(preg_match('/Content-Disposition:.*filename="([^"]+)"/i', $headers, $matches))
-            {
-                return $matches[1];
-            }
-            
-            // Try without quotes
-            if(preg_match('/Content-Disposition:.*filename=([^\s;]+)/i', $headers, $matches))
-            {
-                return trim($matches[1]);
-            }
-
-            return null;
-        }
-
-        /**
-         * Extract MIME type from Content-Type header
-         *
-         * @param string $headers The HTTP headers
-         * @return string|null The extracted MIME type or null if not found
-         */
-        private function extractMimeTypeFromHeaders(string $headers): ?string
-        {
-            if(preg_match('/Content-Type:\s*([^\s;]+)/i', $headers, $matches))
-            {
-                return trim($matches[1]);
-            }
-
-            return null;
-        }
-
-        /**
-         * Determine the final file path based on user input and server suggestions
-         *
-         * @param string $userFilePath The path provided by the user
-         * @param string|null $suggestedFilename The filename suggested by the server
-         * @param string|null $mimeType The MIME type from server
-         * @param string $attachmentUuid The attachment UUID as fallback
-         * @return string The final file path to use
-         */
-        private function determineFinalFilePath(string $userFilePath, ?string $suggestedFilename, ?string $mimeType, string $attachmentUuid): string
-        {
-            // If user provided a full file path (has extension or doesn't end with separator), use it as-is
-            if(pathinfo($userFilePath, PATHINFO_EXTENSION) !== '' || !str_ends_with($userFilePath, DIRECTORY_SEPARATOR))
-            {
-                return $userFilePath;
-            }
-
-            // User provided a directory path, so we need to determine the filename
-            if($suggestedFilename !== null)
-            {
-                // Use the server's suggested filename
-                $filename = $suggestedFilename;
-            }
-            elseif($mimeType !== null)
-            {
-                // Generate filename based on MIME type
-                $extension = Classes\Utilities::getExtensionFromMimeType($mimeType);
-                $filename = $attachmentUuid . $extension;
-            }
-            else
-            {
-                // Last resort: use attachment UUID as filename
-                $filename = $attachmentUuid;
-            }
-
-            return rtrim($userFilePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
-        }
-
         /**
          * Uploads a file attachment from local disk to the federation server
          *
@@ -1372,6 +1295,82 @@
                     unlink($tempFile);
                 }
             }
+        }
+
+        /**
+         * Extract filename from Content-Disposition header
+         *
+         * @param string $headers The HTTP headers
+         * @return string|null The extracted filename or null if not found
+         */
+        private function extractFilenameFromHeaders(string $headers): ?string
+        {
+            if(preg_match('/Content-Disposition:.*filename="([^"]+)"/i', $headers, $matches))
+            {
+                return $matches[1];
+            }
+
+            // Try without quotes
+            if(preg_match('/Content-Disposition:.*filename=([^\s;]+)/i', $headers, $matches))
+            {
+                return trim($matches[1]);
+            }
+
+            return null;
+        }
+
+        /**
+         * Extract MIME type from Content-Type header
+         *
+         * @param string $headers The HTTP headers
+         * @return string|null The extracted MIME type or null if not found
+         */
+        private function extractMimeTypeFromHeaders(string $headers): ?string
+        {
+            if(preg_match('/Content-Type:\s*([^\s;]+)/i', $headers, $matches))
+            {
+                return trim($matches[1]);
+            }
+
+            return null;
+        }
+
+        /**
+         * Determine the final file path based on user input and server suggestions
+         *
+         * @param string $userFilePath The path provided by the user
+         * @param string|null $suggestedFilename The filename suggested by the server
+         * @param string|null $mimeType The MIME type from server
+         * @param string $attachmentUuid The attachment UUID as fallback
+         * @return string The final file path to use
+         */
+        private function determineFinalFilePath(string $userFilePath, ?string $suggestedFilename, ?string $mimeType, string $attachmentUuid): string
+        {
+            // If user provided a full file path (has extension or doesn't end with separator), use it as-is
+            if(pathinfo($userFilePath, PATHINFO_EXTENSION) !== '' || !str_ends_with($userFilePath, DIRECTORY_SEPARATOR))
+            {
+                return $userFilePath;
+            }
+
+            // User provided a directory path, so we need to determine the filename
+            if($suggestedFilename !== null)
+            {
+                // Use the server's suggested filename
+                $filename = $suggestedFilename;
+            }
+            elseif($mimeType !== null)
+            {
+                // Generate filename based on MIME type
+                $extension = Classes\Utilities::getExtensionFromMimeType($mimeType);
+                $filename = $attachmentUuid . $extension;
+            }
+            else
+            {
+                // Last resort: use attachment UUID as filename
+                $filename = $attachmentUuid;
+            }
+
+            return rtrim($userFilePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
         }
 
 
