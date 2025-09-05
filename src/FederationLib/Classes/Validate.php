@@ -36,7 +36,35 @@
          */
         public static function host(string $host): bool
         {
-            return filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_NULL_ON_FAILURE) !== null ||
-                   filter_var($host, FILTER_VALIDATE_IP, FILTER_NULL_ON_FAILURE) !== null;
+            // Trim whitespace
+            $host = trim($host);
+
+            // Check if it's empty or contains whitespace
+            if (empty($host) || preg_match('/\s/', $host))
+            {
+                return false;
+            }
+
+            // Check for valid IPv4
+            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
+            {
+                return true;
+            }
+
+            // Check for valid IPv6
+            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
+            {
+                return true;
+            }
+
+            // Check for valid domain name
+            // Domain validation: must not start/end with hyphen, valid characters only
+            if (filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false)
+            {
+                // Additional check to ensure it's a proper domain format
+                return preg_match('/^(?!-)(?:[a-zA-Z0-9-]{1,63}(?<!-)\.)*[a-zA-Z0-9-]{1,63}(?<!-)$/', $host) === 1;
+            }
+
+            return false;
         }
     }
