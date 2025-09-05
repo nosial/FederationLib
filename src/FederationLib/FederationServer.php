@@ -18,6 +18,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Objects\Operator;
     use FederationLib\Objects\ServerInformation;
+    use InvalidArgumentException;
 
     class FederationServer extends RequestHandler
     {
@@ -50,6 +51,11 @@
 
                 // Handle the request based on the matched method.
                 $requestMethod->handleRequest();
+            }
+            catch(InvalidArgumentException $e)
+            {
+                Logger::log()->warning($e->getMessage(), $e);
+                self::throwableResponse(new RequestException($e->getMessage(), 400, $e));
             }
             catch (RequestException $e)
             {
