@@ -3,6 +3,7 @@
     namespace FederationLib\Classes;
 
     use FederationLib\Classes\Managers\OperatorManager;
+     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\RequestHandlerInterface;
@@ -128,11 +129,16 @@
          * Respond with a success message and data.
          *
          * @param mixed $data Data to include in the response.
-         * @param int $responseCode HTTP status code (default is 200).
+         * @param int|HttpResponseCode $responseCode HTTP status code (default is 200).
          * @return void
          */
-        protected static function successResponse(mixed $data=null, int $responseCode=200): void
+        protected static function successResponse(mixed $data=null, int|HttpResponseCode $responseCode=200): void
         {
+            if($responseCode instanceof HttpResponseCode)
+            {
+                $responseCode = $responseCode->value;
+            }
+
             if($data instanceof SerializableInterface)
             {
                 $data = $data->toArray();
