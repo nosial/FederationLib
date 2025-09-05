@@ -156,7 +156,7 @@
             $this->assertFalse($operatorRecord->isClient());
 
             // Using the root operator, push an entity
-            $entityUuid = $this->client->pushEntity(uniqid('john_doe_'), 'example.com');
+            $entityUuid = $this->client->pushEntity('example.com', uniqid('john_doe_'));
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
 
@@ -198,7 +198,7 @@
             $this->assertFalse($operatorRecord->isClient());
 
             // Using the root operator, push an entity
-            $entityUuid = $this->client->pushEntity(uniqid('john_doe_'), 'example.com');
+            $entityUuid = $this->client->pushEntity('example.com', uniqid('john_doe_'));
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
 
@@ -212,7 +212,6 @@
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
             $operatorClient->submitEvidence($entityUuid, 'This is some test evidence', 'Test note', 'test_tag', false);
         }
-
 
         public function testOperatorManageOperatorsPermissionAuthorized(): void
         {
@@ -300,7 +299,7 @@
             $this->assertNotEmpty($operatorClient);
 
             // Now try to push an entity using that operator's API key
-            $entityUuid = $operatorClient->pushEntity(uniqid('john_doe_'), 'example.com');
+            $entityUuid = $operatorClient->pushEntity('example.com', uniqid('john_doe_'));
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
         }
@@ -329,7 +328,7 @@
             // Now try to push an entity using that operator's API key, which should fail
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
-            $operatorClient->pushEntity(uniqid('john_doe_'), 'example.com');
+            $operatorClient->pushEntity('example.com', uniqid('john_doe_'));
         }
 
         public function testDeleteOperator(): void
