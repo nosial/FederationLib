@@ -7,6 +7,7 @@
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Classes\Validate;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityQueryResult;
@@ -26,21 +27,21 @@
         /**
          * Registers a new entity with the given ID and domain.
          *
-         * @param string $id The ID of the entity.
-         * @param string|null $domain The domain of the entity, can be null.
+         * @param string $domain The domain of the entity
+         * @param string|null $id Optional. The ID of the entity if it belongs to the specific domain
          * @throws InvalidArgumentException If the ID exceeds 255 characters or if the domain is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function registerEntity(string $id, ?string $domain=null): string
+        public static function registerEntity(string $domain, ?string $id=null): string
         {
-            if(strlen($id) > 255)
+            if($id !== null && strlen($id) > 255)
             {
                 throw new InvalidArgumentException("Entity ID cannot exceed 255 characters.");
             }
-            if(!filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) && $domain !== null)
+            if(!filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
-                throw new InvalidArgumentException("Invalid domain format.");
+                throw new InvalidArgumentException("Entity domain format must be valid");
             }
             if(strlen($domain) > 255)
             {
@@ -52,7 +53,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, hash, id, domain) VALUES (:uuid, :hash, :id, :domain)");
-                $hash = Utilities::hashEntity($id, $domain);
+                $hash = Utilities::hashEntity($domain, $id);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);
@@ -70,7 +71,7 @@
                 // If the limit has not been exceeded, cache the entity record
                 if (!RedisConnection::limitExceeded(self::ENTITY_CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
                 {
-                    $entity = self::getEntity($id, $domain);
+                    $entity = self::getEntity($domain, $id);
                     if ($entity !== null)
                     {
                         RedisConnection::setCacheRecord($entity, self::getCacheKey($entity->getUuid()), Configuration::getRedisConfiguration()->getEntitiesCacheTtl());
@@ -84,26 +85,26 @@
         /**
          * Retrieves an entity by its ID and domain.
          *
-         * @param string $id The ID of the entity.
-         * @param string|null $domain The domain of the entity.
+         * @param string $domain The domain of the entity.
+         * @param string|null $id Optional. The ID of the entity if it belongs to the specific domain
          * @return Entity|null The EntityRecord object if found, null otherwise.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntity(string $id, ?string $domain=null): ?Entity
+        public static function getEntity(string $domain, ?string $id=null): ?Entity
         {
-            if(strlen($id) < 1)
+            if(!is_null($id) && strlen($id) < 1)
             {
                 throw new InvalidArgumentException("Entity ID and domain must be provided.");
             }
 
-            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+            if(!filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
-                throw new InvalidArgumentException("Invalid domain format.");
+                throw new InvalidArgumentException("Entity domain format must be valid");
             }
 
             // Try cache first
-            $hash = Utilities::hashEntity($id, $domain);
+            $hash = Utilities::hashEntity($domain, $id);
             if(self::isCachingEnabled())
             {
                 if (RedisConnection::cacheRecordExists(self::getCacheKey($hash)))
@@ -118,19 +119,10 @@
 
             try
             {
-                if(is_null($domain))
-                {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE id = :id");
-                    $stmt->bindParam(':id', $id);
-                }
-                else
-                {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE id = :id AND domain = :domain");
-                    $stmt->bindParam(':id', $id);
-                    $stmt->bindParam(':domain', $domain);
-                }
-
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash=:hash");
+                $stmt->bindParam(':hash', $hash);
                 $stmt->execute();
+
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if($data)
@@ -167,6 +159,11 @@
             if(strlen($uuid) < 1)
             {
                 throw new InvalidArgumentException("Entity UUID must be provided.");
+            }
+
+            if(!Validate::uuid($uuid))
+            {
+                throw new InvalidArgumentException('A valid Entity UUID must be provided');
             }
 
             if(self::isCachingEnabled())
@@ -260,39 +257,31 @@
         /**
          * Checks if an entity exists by its ID and domain.
          *
-         * @param string $id The ID of the entity.
-         * @param string|null $domain The domain of the entity, can be null.
+         * @param string $domain The domain of the entity, can be null.
+         * @param string|null $id Optional. The ID of the entity if it belongs to the specific domain
          * @return bool True if the entity exists, false otherwise.
-         * @throws InvalidArgumentException If the ID is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function entityExists(string $id, ?string $domain=null): bool
+        public static function entityExists(string $domain, ?string $id=null): bool
         {
-            if(strlen($id) < 1)
+            if(!is_null($id) && strlen($id) < 1)
             {
                 throw new InvalidArgumentException("Entity ID must be provided.");
             }
 
-            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+            if(!filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
             {
                 throw new InvalidArgumentException("Invalid domain format.");
             }
 
+            $hash = Utilities::hashEntity($domain, $id);
+
             try
             {
-                if(is_null($domain))
-                {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE id = :id");
-                    $stmt->bindParam(':id', $id);
-                }
-                else
-                {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE id = :id AND domain = :domain");
-                    $stmt->bindParam(':id', $id);
-                    $stmt->bindParam(':domain', $domain);
-                }
-
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM entities WHERE hash=:hash LIMIT 1");
+                $stmt->bindParam(':hash', $hash);
                 $stmt->execute();
+
                 return (bool)$stmt->fetchColumn();
             }
             catch (PDOException $e)
@@ -399,21 +388,21 @@
         /**
          * Deletes an entity by its ID and domain.
          *
-         * @param string $id The ID of the entity to delete.
-         * @param string $domain Optional. The domain of the entity to delete.
+         * @param string $domain The domain of the entity to delete.
+         * @param string|null $id Optional. The ID of the entity if associated with a specific domain
          * @throws InvalidArgumentException If the ID or domain is not provided or is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function deleteEntityById(string $id, ?string $domain=null): void
+        public static function deleteEntityById(string $domain, ?string $id=null): void
         {
-            if(strlen($id) < 1 || ($domain !== null && strlen($domain) < 1))
+            if(strlen($domain) < 1 || ($id !== null && strlen($id) < 1))
             {
                 throw new InvalidArgumentException("Entity ID and domain must be provided.");
             }
 
             // Remove from cache
-            $hash = Utilities::hashEntity($id, $domain);
+            $hash = Utilities::hashEntity($domain, $id);
             if(self::isCachingEnabled())
             {
                 try
@@ -431,9 +420,8 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE id = :id AND domain = :domain");
-                $stmt->bindParam(':id', $id);
-                $stmt->bindParam(':domain', $domain);
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE hash=:hash");
+                $stmt->bindParam(':hash', $hash);
                 $stmt->execute();
             }
             catch (PDOException $e)
