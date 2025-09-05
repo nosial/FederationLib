@@ -60,13 +60,13 @@
             $userEntityRecordUuid = $this->client->getEntityRecord($userEntityUuid);
             $this->assertEquals($userEntityUuid, $userEntityRecordUuid->getUuid());
             $this->assertEquals('john123', $userEntityRecordUuid->getId());
-            $this->assertEquals('example.com', $userEntityRecordUuid->getDomain());
+            $this->assertEquals('example.com', $userEntityRecordUuid->getHost());
 
             // Query the entity back by their hash
             $userEntityRecordHash = $this->client->getEntityRecord(Utilities::hashEntity('example.com', 'john123'));
             $this->assertEquals($userEntityUuid, $userEntityRecordHash->getUuid());
             $this->assertEquals('john123', $userEntityRecordHash->getId());
-            $this->assertEquals('example.com', $userEntityRecordHash->getDomain());
+            $this->assertEquals('example.com', $userEntityRecordHash->getHost());
 
             // Push a global entity
             $globalEntityUuid = $this->client->pushEntity('example.com');
@@ -77,14 +77,14 @@
             // Query the global entity back by their UUID
             $globalEntityRecordUuid = $this->client->getEntityRecord($globalEntityUuid);
             $this->assertEquals($globalEntityUuid, $globalEntityRecordUuid->getUuid());
-            $this->assertEquals('example.com', $globalEntityRecordUuid->getDomain());
-            $this->assertNotNull($globalEntityRecordUuid->getDomain());
+            $this->assertEquals('example.com', $globalEntityRecordUuid->getHost());
+            $this->assertNotNull($globalEntityRecordUuid->getHost());
 
             // Query the global entity back by their hash
             $globalEntityRecordHash = $this->client->getEntityRecord(Utilities::hashEntity('example.com'));
             $this->assertEquals($globalEntityUuid, $globalEntityRecordHash->getUuid());
-            $this->assertEquals('example.com', $globalEntityRecordHash->getDomain());
-            $this->assertNotNull($globalEntityRecordHash->getDomain());
+            $this->assertEquals('example.com', $globalEntityRecordHash->getHost());
+            $this->assertNotNull($globalEntityRecordHash->getHost());
 
             // Ensure that pushing the same entity again returns the same UUID
             $duplicateUserEntityUuid = $this->client->pushEntity('example.com', 'john123');

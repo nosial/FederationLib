@@ -9,7 +9,7 @@
     class Entity implements SerializableInterface
     {
         private string $uuid;
-        private string $domain;
+        private string $host;
         private ?string $id;
         private int $created;
 
@@ -25,7 +25,7 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->domain = $data['domain'] ?? '';
+            $this->host = $data['host'] ?? '';
             $this->id = $data['id'] ?? null;
 
             // Parse SQL datetime string to timestamp if necessary
@@ -62,24 +62,24 @@
          */
         public function getHash(): string
         {
-            return Utilities::hashEntity($this->domain, $this->id);
+            return Utilities::hashEntity($this->host, $this->id);
         }
 
         /**
-         * Get the domain associated with the entity.
+         * Get the host associated with the entity.
          *
-         * @return string The domain of the entity. null if the entity is universal (e.g., IP address).
+         * @return string The host of the entity.
          */
-        public function getDomain(): string
+        public function getHost(): string
         {
-            return $this->domain;
+            return $this->host;
         }
 
 
         /**
          * Get the unique identifier of the entity.
          *
-         * @return string|null The unique identifier of the entity.
+         * @return string|null The unique identifier of the entity. Null if the host is the only identifier.
          */
         public function getId(): ?string
         {
@@ -104,8 +104,8 @@
             return [
                 'uuid' => $this->uuid,
                 'hash' => $this->getHash(),
+                'host' => $this->host,
                 'id' => $this->id,
-                'domain' => $this->domain,
                 'created' => $this->created,
             ];
         }

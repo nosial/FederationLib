@@ -709,25 +709,25 @@
         /**
          * Pushes a new entity to the federation network.
          *
-         * @param string $domain The domain of the entity to push
+         * @param string $host The host/domain of the entity to push
          * @param string|null $id Optional. ID of the entity to push if it belongs to the specified domain
          * @return string The UUID of the pushed entity
          * @throws RequestException If the request fails or the response is invalid
          */
-        public function pushEntity(string $domain, ?string $id=null): string
+        public function pushEntity(string $host, ?string $id=null): string
         {
             if($id !== null && empty($id))
             {
                 throw new InvalidArgumentException('Entity ID cannot be empty');
             }
 
-            if(empty($domain))
+            if(empty($host))
             {
-                throw new InvalidArgumentException('Domain cannot be an empty string');
+                throw new InvalidArgumentException('Host cannot be an empty string');
             }
 
-            return $this->makeRequest('POST', 'entities', ['domain' => $domain, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
-                sprintf('Failed to push entity with domain %s', $domain)
+            return $this->makeRequest('POST', 'entities', ['host' => $host, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
+                sprintf('Failed to push entity with domain %s', $host)
             );
         }
 

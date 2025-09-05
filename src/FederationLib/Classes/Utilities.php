@@ -45,18 +45,18 @@
         /**
          * Calculates the SHA256 hash of an entity with the given domain and optional ID
          *
-         * @param string $domain The domain of the entity
+         * @param string $host The host/domain of the entity
          * @param string|null $id Optional. The ID of the entity if they belong to a specific domain
          * @return string The SHA256 calculated checksum of the
          */
-        public static function hashEntity(string $domain, ?string $id=null): string
+        public static function hashEntity(string $host, ?string $id=null): string
         {
             if($id !== null)
             {
-                return hash('sha256', sprintf("%s@%s", $id, $domain));
+                return hash('sha256', sprintf("%s@%s", $id, $host));
             }
 
-            return hash('sha256', $domain);
+            return hash('sha256', $host);
         }
 
         /**

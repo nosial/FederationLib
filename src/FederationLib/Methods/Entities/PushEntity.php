@@ -24,14 +24,14 @@
                 throw new RequestException('Insufficient permissions to push entities', 403);
             }
 
-            $domain = FederationServer::getParameter('domain');
+            $host = FederationServer::getParameter('host');
             $id = FederationServer::getParameter('id') ?? null;
 
             try
             {
-                if(!EntitiesManager::entityExists($domain, $id))
+                if(!EntitiesManager::entityExists($host, $id))
                 {
-                    $entityUuid = EntitiesManager::registerEntity($domain, $id);
+                    $entityUuid = EntitiesManager::registerEntity($host, $id);
                     AuditLogManager::createEntry(AuditLogType::ENTITY_PUSHED, sprintf(
                         'Entity %s registered by %s (%s)',
                         $id,
@@ -41,7 +41,7 @@
                 }
                 else
                 {
-                    $entityUuid = EntitiesManager::getEntity($domain, $id)->getUuid();
+                    $entityUuid = EntitiesManager::getEntity($host, $id)->getUuid();
                 }
             }
             catch (DatabaseOperationException $e)

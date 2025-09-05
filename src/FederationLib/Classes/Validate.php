@@ -27,4 +27,16 @@
         {
             return preg_match('/^[a-zA-Z0-9_-]{1,32}$/', $evidenceTag) === 1;
         }
+
+        /**
+         * Validates if the given host is a valid domain name or IP address
+         *
+         * @param string $host The host to validate
+         * @return bool True if valid, False otherwise
+         */
+        public static function host(string $host): bool
+        {
+            return filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_NULL_ON_FAILURE) !== null ||
+                   filter_var($host, FILTER_VALIDATE_IP, FILTER_NULL_ON_FAILURE) !== null;
+        }
     }
