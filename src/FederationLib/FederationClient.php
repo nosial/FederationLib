@@ -709,20 +709,19 @@
         /**
          * Pushes a new entity to the federation network.
          *
-         * @param string $id ID of the entity to push
-         * @param string|null $domain Optional. The domain of the entity to push
+         * @param string $domain The domain of the entity to push
+         * @param string|null $id Optional. ID of the entity to push if it belongs to the specified domain
          * @return string The UUID of the pushed entity
          * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the domain is empty or if the ID is an empty string
          */
-        public function pushEntity(string $id, ?string $domain=null): string
+        public function pushEntity(string $domain, ?string $id=null): string
         {
-            if(empty($id))
+            if($id !== null && empty($id))
             {
                 throw new InvalidArgumentException('Entity ID cannot be empty');
             }
 
-            if($domain !== null && empty($domain))
+            if(empty($domain))
             {
                 throw new InvalidArgumentException('Domain cannot be an empty string');
             }
