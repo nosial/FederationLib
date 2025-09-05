@@ -9,6 +9,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use InvalidArgumentException;
 
     class PushEntity extends RequestHandler
     {
@@ -23,34 +24,14 @@
                 throw new RequestException('Insufficient permissions to push entities', 403);
             }
 
-            $id = FederationServer::getParameter('id');
-            $domain = FederationServer::getParameter('domain') ?? null;
-
-            if(!$id)
-            {
-                throw new RequestException('Entity ID is required', 400);
-            }
-
-            if(strlen($id) > 255)
-            {
-                throw new RequestException('Entity ID exceeds maximum length of 255 characters', 400);
-            }
-
-            if(!is_null($domain) && !filter_var($domain, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
-            {
-                throw new RequestException('Invalid domain format', 400);
-            }
-
-            if(!is_null($domain) && strlen($domain) > 255)
-            {
-                throw new RequestException('Domain exceeds maximum length of 255 characters', 400);
-            }
+            $domain = FederationServer::getParameter('domain');
+            $id = FederationServer::getParameter('id') ?? null;
 
             try
             {
-                if(!EntitiesManager::entityExists($id, $domain))
+                if(!EntitiesManager::entityExists($domain, $id))
                 {
-                    $entityUuid = EntitiesManager::registerEntity($id, $domain);
+                    $entityUuid = EntitiesManager::registerEntity($domain, $id);
                     AuditLogManager::createEntry(AuditLogType::ENTITY_PUSHED, sprintf(
                         'Entity %s registered by %s (%s)',
                         $id,
@@ -60,7 +41,7 @@
                 }
                 else
                 {
-                    $entityUuid = EntitiesManager::getEntity($id, $domain)->getUuid();
+                    $entityUuid = EntitiesManager::getEntity($domain, $id)->getUuid();
                 }
             }
             catch (DatabaseOperationException $e)
