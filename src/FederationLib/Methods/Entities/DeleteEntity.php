@@ -59,12 +59,13 @@
                 }
 
                 EntitiesManager::deleteEntity($entityRecord->getUuid());
+
                 AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
                     'Entity %s deleted by %s (%s)',
                     $entityRecord->getUuid(),
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid());
+                ), $authenticatedOperator->getUuid());
             }
             catch (DatabaseOperationException $e)
             {
@@ -74,4 +75,3 @@
             self::successResponse();
         }
     }
-
