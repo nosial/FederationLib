@@ -8,6 +8,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -56,7 +57,7 @@
                     $entityUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $evidenceUuid);
+                ), $authenticatedOperator->getUuid(), $entityUuid);
             }
             catch(InvalidArgumentException $e)
             {
@@ -67,7 +68,6 @@
                 throw new RequestException('Failed to create evidence', 500, $e);
             }
 
-            self::successResponse($evidenceUuid);
+            self::successResponse($evidenceUuid, HttpResponseCode::CREATED);
         }
     }
-
