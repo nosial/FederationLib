@@ -73,7 +73,7 @@
          *
          * @return string
          */
-        public function getOperator(): string
+        public function getOperatorUuid(): string
         {
             return $this->operator;
         }
