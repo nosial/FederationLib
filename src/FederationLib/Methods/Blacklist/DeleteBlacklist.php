@@ -7,6 +7,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -21,18 +22,18 @@
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!$authenticatedOperator->canManageBlacklist())
             {
-                throw new RequestException('Insufficient permissions to manage the blacklist', 401);
+                throw new RequestException('Insufficient permissions to manage the blacklist', HttpResponseCode::FORBIDDEN);
             }
 
             if(!preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
-                throw new RequestException('Blacklist UUID required', 405);
+                throw new RequestException('Blacklist UUID required', HttpResponseCode::BAD_REQUEST);
             }
 
             $blacklistUuid = $matches[1];
             if(!$blacklistUuid || !Validate::uuid($blacklistUuid))
             {
-                throw new RequestException('Invalid blacklist UUID', 400);
+                throw new RequestException('Invalid blacklist UUID', HttpResponseCode::BAD_REQUEST);
             }
 
             try
@@ -40,7 +41,7 @@
                 $blacklistRecord = BlacklistManager::getBlacklistEntry($blacklistUuid);
                 if($blacklistRecord === null)
                 {
-                    throw new RequestException('Blacklist record not found', 404);
+                    throw new RequestException('Blacklist record not found', HttpResponseCode::NOT_FOUND);
                 }
 
                 BlacklistManager::deleteBlacklistRecord($blacklistUuid);
@@ -53,7 +54,7 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Unable to retrieve blacklist records', 500, $e);
+                throw new RequestException('Unable to retrieve blacklist records', HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
             self::successResponse();
