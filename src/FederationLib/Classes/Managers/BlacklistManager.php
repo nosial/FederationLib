@@ -17,18 +17,18 @@
         /**
          * Blacklists an entity with the specified operator and type.
          *
-         * @param string $entity The UUID of the entity to blacklist.
-         * @param string $operator The UUID of the operator performing the blacklisting.
+         * @param string $entityUuid The UUID of the entity to blacklist.
+         * @param string $operator_uuid The UUID of the operator performing the blacklisting.
          * @param BlacklistType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
-         * @param string|null $evidence Optional evidence UUID, must be a valid UUID if provided.
+         * @param string|null $evidenceUuid Optional evidence UUID, must be a valid UUID if provided.
          * @return string The UUID of the created blacklist entry.
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistEntity(string $entity, string $operator, BlacklistType $type, ?int $expires=null, ?string $evidence=null): string
+        public static function blacklistEntity(string $entityUuid, string $operator_uuid, BlacklistType $type, ?int $expires=null, ?string $evidenceUuid=null): string
         {
-            if(empty($entity) || empty($operator))
+            if(empty($entityUuid) || empty($operator_uuid))
             {
                 throw new InvalidArgumentException("Entity and operator cannot be empty.");
             }
@@ -38,7 +38,7 @@
                 throw new InvalidArgumentException("Expiration time must be in the future or null for permanent blacklisting.");
             }
 
-            if(!is_null($evidence) && !Validate::uuid($evidence))
+            if(!is_null($evidenceUuid) && !Validate::uuid($evidenceUuid))
             {
                 throw new InvalidArgumentException("Evidence must be a valid UUID.");
             }
@@ -47,13 +47,13 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (uuid, entity, operator, type, expires, evidence) VALUES (:uuid, :entity, :operator, :type, :expires, :evidence)");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (uuid, entity, operator, type, expires, evidence) VALUES (:blacklist_uuid, :entity_uuid, :operator_uuid, :type, :expires, :evidence)");
+                $stmt->bindParam(':blacklist_uuid', $uuid);
                 $type = $type->value;
-                $stmt->bindParam(':entity', $entity);
-                $stmt->bindParam(':operator', $operator);
+                $stmt->bindParam(':entity_uuid', $entityUuid);
+                $stmt->bindParam(':operator_uuid', $operator_uuid);
                 $stmt->bindParam(':type', $type);
-                $stmt->bindParam(':evidence', $evidence);
+                $stmt->bindParam(':evidence', $evidenceUuid);
 
                 // Convert expires to datetime
                 if(is_null($expires))
@@ -76,22 +76,22 @@
         /**
          * Checks if an entity is currently blacklisted.
          *
-         * @param string $entity The UUID of the entity to check.
+         * @param string $entityUuid The UUID of the entity to check.
          * @return bool True if the entity is blacklisted, false otherwise.
          * @throws InvalidArgumentException If the entity is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function isBlacklisted(string $entity): bool
+        public static function isBlacklisted(string $entityUuid): bool
         {
-            if(empty($entity))
+            if(empty($entityUuid))
             {
                 throw new InvalidArgumentException("Entity cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE entity = :entity AND (expires IS NULL OR expires > NOW())");
-                $stmt->bindParam(':entity', $entity);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE entity = :entity_uuid AND (expires IS NULL OR expires > NOW())");
+                $stmt->bindParam(':entity_uuid', $entityUuid);
                 $stmt->execute();
                 return $stmt->fetchColumn() > 0;
             }
@@ -104,22 +104,22 @@
         /**
          * Checks if a blacklist entry exists for a specific UUID.
          *
-         * @param string $uuid The UUID of the blacklist entry.
+         * @param string $blacklistUuid The UUID of the blacklist entry.
          * @return bool True if the blacklist entry exists, false otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistExists(string $uuid): bool
+        public static function blacklistExists(string $blacklistUuid): bool
         {
-            if(empty($uuid))
+            if(empty($blacklistUuid))
             {
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid=:blacklist_uuid");
+                $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
                 return $stmt->fetchColumn() > 0;
             }
@@ -132,22 +132,22 @@
         /**
          * Retrieves a blacklist entry by its UUID.
          *
-         * @param string $uuid The UUID of the blacklist entry.
+         * @param string $blacklistUuid The UUID of the blacklist entry.
          * @return BlacklistRecord|null The BlacklistRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getBlacklistEntry(string $uuid): ?BlacklistRecord
+        public static function getBlacklistEntry(string $blacklistUuid): ?BlacklistRecord
         {
-            if(empty($uuid))
+            if(empty($blacklistUuid))
             {
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE uuid = :blacklist_uuid");
+                $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -166,21 +166,21 @@
         /**
          * Deletes a blacklist entry for a specific entity.
          *
-         * @param string $uuid The UUID of the blacklist entry to delete.
+         * @param string $blacklistUuid The UUID of the blacklist entry to delete.
          * @throws InvalidArgumentException If the entity is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function deleteBlacklistRecord(string $uuid): void
+        public static function deleteBlacklistRecord(string $blacklistUuid): void
         {
-            if(empty($uuid))
+            if(empty($blacklistUuid))
             {
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE uuid = :blacklist_uuid");
+                $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -192,23 +192,23 @@
         /**
          * Lifts a blacklist record, marking it as no longer active.
          *
-         * @param string $uuid The UUID of the blacklist record to lift.
+         * @param string $blacklistUuid The UUID of the blacklist record to lift.
          * @param string|null $operatorUuid The UUID of the operator that is lifting the blacklist, optional.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function liftBlacklistRecord(string $uuid, ?string $operatorUuid=null): void
+        public static function liftBlacklistRecord(string $blacklistUuid, ?string $operatorUuid=null): void
         {
-            if(empty($uuid))
+            if(empty($blacklistUuid))
             {
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 AND lifted_by=:operator_uuid WHERE uuid=:uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 AND lifted_by=:operator_uuid WHERE uuid=:blacklist_uuid");
                 $stmt->bindParam(':operator_uuid', $operatorUuid);
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -253,16 +253,16 @@
         /**
          * Retrieves all blacklist entries for a specific entity.
          *
-         * @param string $operator The UUID of the operator to filter by.
+         * @param string $operatorUuid The UUID of the operator to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param bool $includeLifted If True, lifted blacklist records are included in the result
          * @return BlacklistRecord[] An array of BlacklistRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1, bool $includeLifted=false): array
+        public static function getEntriesByOperator(string $operatorUuid, int $limit=100, int $page=1, bool $includeLifted=false): array
         {
-            if(empty($operator))
+            if(empty($operatorUuid))
             {
                 throw new InvalidArgumentException("Operator cannot be empty.");
             }
@@ -277,8 +277,8 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':operator', $operator);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':operator_uuid', $operatorUuid);
                 $stmt->bindParam(':lifted', $includeLifted);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -296,7 +296,7 @@
         /**
          * Retrieves all blacklist entries associated with a specific entity.
          *
-         * @param string $entity The UUID of the entity.
+         * @param string $entityUuid The UUID of the entity.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param bool $includeLifted If True, lifted entries will be included in the result
@@ -304,9 +304,9 @@
          * @throws InvalidArgumentException If the entity is empty or limit/page are invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByEntity(string $entity, int $limit = 100, int $page = 1, bool $includeLifted=false): array
+        public static function getEntriesByEntity(string $entityUuid, int $limit=100, int $page=1, bool $includeLifted=false): array
         {
-            if(empty($entity))
+            if(empty($entityUuid))
             {
                 throw new InvalidArgumentException("Entity cannot be empty.");
             }
@@ -321,8 +321,8 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':entity', $entity);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':entity_uuid', $entityUuid);
                 $stmt->bindParam(':lifted', $includeLifted);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -380,7 +380,7 @@
          */
         public static function cleanEntries(int $getCleanBlacklistDays): int
         {
-            // Remove blacklist records older than $cleanBlacklistDays and if the expiriation hasn't been expired yet
+            // Remove blacklist records older than $cleanBlacklistDays and if the expiration hasn't been expired yet
             if($getCleanBlacklistDays <= 0)
             {
                 throw new InvalidArgumentException("Number of days must be greater than zero.");
@@ -390,8 +390,8 @@
             $dateThreshold = date('Y-m-d H:i:s', strtotime("-$getCleanBlacklistDays days"));
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE (expires IS NOT NULL AND expires < :dateThreshold) OR (expires IS NULL AND created < :dateThreshold)");
-                $stmt->bindParam(':dateThreshold', $dateThreshold);
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE (expires IS NOT NULL AND expires < :date_threshold) OR (expires IS NULL AND created < :date_threshold)");
+                $stmt->bindParam(':date_threshold', $dateThreshold);
                 $stmt->execute();
 
                 return $stmt->rowCount(); // Return the number of rows affected
