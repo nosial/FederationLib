@@ -85,7 +85,6 @@
         case BLACKLIST_ENTITY;
         case DELETE_BLACKLIST;
         case LIFT_BLACKLIST;
-        case BLACKLIST_ATTACH_EVIDENCE;
         case GET_BLACKLIST_RECORD;
 
         case UPLOAD_ATTACHMENT;
@@ -222,9 +221,6 @@
                 case self::GET_BLACKLIST_RECORD:
                     GetBlacklistRecord::handleRequest();
                     break;
-                case self::BLACKLIST_ATTACH_EVIDENCE:
-                    BlacklistAttachEvidence::handleRequest();
-                    break;
             }
         }
 
@@ -270,7 +266,6 @@
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST_RECORD,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', $path) && $requestMethod === 'POST' => Method::LIFT_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/attach_evidence$#', $path) && $requestMethod === 'POST' => Method::BLACKLIST_ATTACH_EVIDENCE,
 
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
                 $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
