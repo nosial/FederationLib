@@ -36,12 +36,7 @@
             $textContent = FederationServer::getParameter('text_content') ?? null;
             $note = FederationServer::getParameter('note') ?? null;
             $tag = FederationServer::getParameter('tag') ?? null;
-
-            $confidential = false;
-            if(FederationServer::getParameter('confidential') === 'true')
-            {
-                $confidential = true;
-            }
+            $confidential = (bool)FederationServer::getParameter('confidential') ?? false;
 
             try
             {
