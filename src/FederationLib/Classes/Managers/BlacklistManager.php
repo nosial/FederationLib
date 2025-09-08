@@ -18,7 +18,7 @@
          * Blacklists an entity with the specified operator and type.
          *
          * @param string $entityUuid The UUID of the entity to blacklist.
-         * @param string $operator_uuid The UUID of the operator performing the blacklisting.
+         * @param string $operatorUuid The UUID of the operator performing the blacklisting.
          * @param BlacklistType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
          * @param string|null $evidenceUuid Optional evidence UUID, must be a valid UUID if provided.
@@ -26,9 +26,9 @@
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistEntity(string $entityUuid, string $operator_uuid, BlacklistType $type, ?int $expires=null, ?string $evidenceUuid=null): string
+        public static function blacklistEntity(string $entityUuid, string $operatorUuid, BlacklistType $type, ?int $expires=null, ?string $evidenceUuid=null): string
         {
-            if(empty($entityUuid) || empty($operator_uuid))
+            if(empty($entityUuid) || empty($operatorUuid))
             {
                 throw new InvalidArgumentException("Entity and operator cannot be empty.");
             }
@@ -51,7 +51,7 @@
                 $stmt->bindParam(':blacklist_uuid', $uuid);
                 $type = $type->value;
                 $stmt->bindParam(':entity_uuid', $entityUuid);
-                $stmt->bindParam(':operator_uuid', $operator_uuid);
+                $stmt->bindParam(':operator_uuid', $operatorUuid);
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':evidence', $evidenceUuid);
 

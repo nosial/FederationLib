@@ -97,6 +97,21 @@
         }
 
         /**
+         * Get the full address of the entity in the format "id@host" or just "host" if id is null.
+         *
+         * @return string The full address of the entity.
+         */
+        public function getAddress(): string
+        {
+            if($this->id !== null)
+            {
+                return $this->id . '@' . $this->host;
+            }
+
+            return $this->host;
+        }
+
+        /**
          * @inheritDoc
          */
         public function toArray(): array

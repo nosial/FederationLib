@@ -7,6 +7,7 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\BlacklistType;
@@ -29,15 +30,14 @@
                 throw new RequestException('Insufficient permissions to manage the blacklist', HttpResponseCode::FORBIDDEN);
             }
 
-            // TODO: All forms of entities should be both identifiable as their UUID and SHA256 hash
-            $entityUuid = FederationServer::getParameter('entity_uuid');
+            $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
             $type = BlacklistType::tryFrom(FederationServer::getParameter('type') ?? '');
             $expires = FederationServer::getParameter('expires');
             $evidence = FederationServer::getParameter('evidence_uuid') ?? null;
 
-            if($entityUuid !== null && !Validate::uuid($entityUuid))
+            if($entityIdentifier === null)
             {
-                throw new RequestException('A valid entity UUID is required', HttpResponseCode::BAD_REQUEST);
+                throw new RequestException('Entity UUID is required', HttpResponseCode::BAD_REQUEST);
             }
 
             if($type === null)
@@ -60,9 +60,22 @@
 
             try
             {
-                if(!EntitiesManager::entityExistsByUuid($entityUuid))
+                if(Utilities::isUuid($entityIdentifier))
                 {
-                    throw new RequestException(sprintf("Entity UUID %s not found", $entityUuid), HttpResponseCode::NOT_FOUND);
+                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
+                }
+                elseif(Utilities::isSha256($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
+                }
+                else
+                {
+                    throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
+                }
+
+                if($entityRecord === null)
+                {
+                    throw new RequestException('Entity not found', 404);
                 }
 
                 if($evidence !== null && !EntitiesManager::entityExistsByUuid($evidence))
@@ -71,8 +84,8 @@
                 }
 
                 $blacklistUuid = BlacklistManager::blacklistEntity(
-                    entityUuid: $entityUuid,
-                    operator_uuid: $authenticatedOperator->getUuid(),
+                    entityUuid: $entityRecord->getUuid(),
+                    operatorUuid: $authenticatedOperator->getUuid(),
                     type: $type,
                     expires: $expires,
                     evidenceUuid: $evidence
@@ -80,12 +93,12 @@
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_BLACKLISTED, sprintf(
                     'Entity %s blacklisted by %s (%s) with type %s%s',
-                    $entityUuid,
+                    $entityRecord->getAddress(),
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid(),
                     $type->name,
                     $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ' as a permanent'
-                ), $authenticatedOperator->getUuid(), $entityUuid);
+                ), $authenticatedOperator->getUuid(), $entityIdentifier);
             }
             catch(DatabaseOperationException $e)
             {

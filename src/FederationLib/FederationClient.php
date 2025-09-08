@@ -1296,6 +1296,12 @@
             }
         }
 
+        // BLACKLIST METHODS
+
+        public function blacklistEntity(string $entityIdentifier, ?string $reaso)
+
+        // INTERNAL METHODS
+
         /**
          * Extract filename from Content-Disposition header
          *
