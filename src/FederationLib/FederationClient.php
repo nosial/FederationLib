@@ -5,6 +5,7 @@
     use CURLFile;
     use CurlHandle;
     use FederationLib\Classes\Logger;
+    use FederationLib\Enums\BlacklistType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\ResponseInterface;
@@ -940,7 +941,7 @@
 
             // Extract filename from Content-Disposition header
             $suggestedFilename = $this->extractFilenameFromHeaders($headers);
-            
+
             // Extract MIME type from Content-Type header
             $mimeType = $this->extractMimeTypeFromHeaders($headers);
 
@@ -1298,7 +1299,129 @@
 
         // BLACKLIST METHODS
 
-        public function blacklistEntity(string $entityIdentifier, ?string $reaso)
+        /**
+         * Blacklists an entity with the given identifier using specified evidence and type.
+         *
+         * @param string $entityIdentifier The UUID or hash of the entity to blacklist
+         * @param string $evidenceUuid The UUID of the evidence record supporting the blacklist action
+         * @param BlacklistType $type The type of blacklist action (e.g., SPAM, MALWARE)
+         * @param int|null $expires Optional. Expiration time in seconds for the blacklist entry (null for permanent)
+         * @return string The UUID of the created blacklist record
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If any of the parameters are invalid
+         */
+        public function blacklistEntity(string $entityIdentifier, string $evidenceUuid, BlacklistType $type, ?int $expires=null): string
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('The entity identifier must not be empty');
+            }
+
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('The evidence UUID must not be empty');
+            }
+
+            if($expires < 0)
+            {
+                throw new InvalidArgumentException('The expires parameter must be a positive integer or null');
+            }
+
+            return $this->makeRequest('POST', 'blacklist', [
+                'entity_identifier' => $entityIdentifier,
+                'evidence_uuid' => $evidenceUuid,
+                'type' => $type->value,
+                'expires' => $expires
+            ], [HttpResponseCode::CREATED], sprintf('Failed to blacklist entity %s', $entityIdentifier));
+        }
+
+        /**
+         * Deletes a blacklist record with the given UUID.
+         *
+         * @param string $blacklistRecordUuid The UUID of the blacklist record to delete
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the blacklist record UUID is empty
+         */
+        public function deleteBlacklistRecord(string $blacklistRecordUuid): void
+        {
+            if(empty($blacklistRecordUuid))
+            {
+                throw new InvalidArgumentException('Blacklist record UUID cannot be empty');
+            }
+
+            $this->makeRequest('DELETE', 'blacklist/' . $blacklistRecordUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to delete blacklist record with UUID %s', $blacklistRecordUuid)
+            );
+        }
+
+        /**
+         * Retrieves a blacklist record with the given UUID.
+         *
+         * @param string $blacklistRecordUuid The UUID of the blacklist record to retrieve
+         * @return BlacklistRecord The retrieved blacklist record object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the blacklist record UUID is empty
+         */
+        public function getBlacklistRecord(string $blacklistRecordUuid): BlacklistRecord
+        {
+            if(empty($blacklistRecordUuid))
+            {
+                throw new InvalidArgumentException('Blacklist record UUID cannot be empty');
+            }
+
+            return BlacklistRecord::fromArray($this->makeRequest('GET', 'blacklist/' . $blacklistRecordUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to get blacklist record with UUID %s', $blacklistRecordUuid)
+            ));
+        }
+
+        /**
+         * Lifts (removes) a blacklist record with the given UUID.
+         *
+         * @param string $blacklistRecordUuid The UUID of the blacklist record to lift
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the blacklist record UUID is empty
+         */
+        public function liftBlacklistRecord(string $blacklistRecordUuid): void
+        {
+            if(empty($blacklistRecordUuid))
+            {
+                throw new InvalidArgumentException('Blacklist record UUID cannot be empty');
+            }
+
+            $this->makeRequest('POST', 'blacklist/' . $blacklistRecordUuid . '/lift', null, [HttpResponseCode::OK],
+                sprintf('Failed to lift blacklist record with UUID %s', $blacklistRecordUuid)
+            );
+        }
+
+        /**
+         * Lists blacklist records with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of blacklist records per page (default is 100)
+         * @param bool $includeLifted if True, lifted blacklist records are included if you have permission to view them
+         * @return BlacklistRecord[] An array of BlacklistRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listBlacklistRecords(int $page=1, int $limit=100, bool $includeLifted=false): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => BlacklistRecord::fromArray($item),
+                $this->makeRequest('GET', 'blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
+                    sprintf('Failed to list blacklist records, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
 
         // INTERNAL METHODS
 
