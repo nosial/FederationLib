@@ -2,7 +2,6 @@
 
     namespace FederationLib\Methods\Blacklist;
 
-    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
@@ -31,9 +30,9 @@
             }
 
             $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
+            $evidence = FederationServer::getParameter('evidence_uuid') ?? null;
             $type = BlacklistType::tryFrom(FederationServer::getParameter('type') ?? '');
             $expires = FederationServer::getParameter('expires');
-            $evidence = FederationServer::getParameter('evidence_uuid') ?? null;
 
             if($entityIdentifier === null)
             {
@@ -75,7 +74,7 @@
 
                 if($entityRecord === null)
                 {
-                    throw new RequestException('Entity not found', 404);
+                    throw new RequestException('Entity not found', HttpResponseCode::NOT_FOUND);
                 }
 
                 if($evidence !== null && !EntitiesManager::entityExistsByUuid($evidence))
@@ -105,6 +104,6 @@
                 throw new RequestException('Failed to blacklist entity', 500, $e);
             }
 
-            self::successResponse($blacklistUuid);
+            self::successResponse($blacklistUuid, HttpResponseCode::CREATED);
         }
     }
