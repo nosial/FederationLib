@@ -182,11 +182,11 @@
             $this->assertNotEmpty($entityUuid);
 
             // Create 10 evidence records
-            $createdEntires = [];
+            $createdEntries = [];
             for ($i = 0; $i < 10; $i++)
             {
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence ' . $i, 'Note ' . $i, 'tag' . ($i % 3));
-                $createdEntires[] = $evidenceUuid;
+                $createdEntries[] = $evidenceUuid;
                 $this->createEvidenceRecords[] = $evidenceUuid;
                 $this->assertNotNull($evidenceUuid);
                 $this->assertNotEmpty($evidenceUuid);
@@ -207,14 +207,14 @@
 
                 foreach ($evidenceList as $evidenceRecord)
                 {
-                    $this->assertContains($evidenceRecord->getUuid(), $createdEntires);
+                    $this->assertContains($evidenceRecord->getUuid(), $createdEntries);
                     $this->assertEquals($selfOperator->getUuid(), $evidenceRecord->getOperatorUuid());
                 }
 
                 $page++;
             } while (count($evidenceList) === 5);
 
-            $this->assertGreaterThanOrEqual(10, count($createdEntires));
+            $this->assertGreaterThanOrEqual(10, count($createdEntries));
         }
 
         public function testListEntityEvidence(): void
