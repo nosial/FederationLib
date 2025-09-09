@@ -9,9 +9,9 @@
     class BlacklistRecord implements SerializableInterface
     {
         private string $uuid;
-        private string $operator;
+        private string $operatorUuid;
         private string $entityUuid;
-        private ?string $evidence;
+        private ?string $evidenceUuid;
         private BlacklistType $type;
         private bool $lifted;
         private ?string $liftedBy;
@@ -34,9 +34,9 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->operator = $data['operator'] ?? '';
+            $this->operatorUuid = $data['operator'] ?? '';
             $this->entityUuid = $data['entity'] ?? '';
-            $this->evidence = $data['evidence'] ?? null;
+            $this->evidenceUuid = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
             $this->liftedBy = $data['lifted_by'] ?? null;
@@ -88,9 +88,9 @@
          *
          * @return string The UUID of the operator.
          */
-        public function getOperator(): string
+        public function getOperatorUuid(): string
         {
-            return $this->operator;
+            return $this->operatorUuid;
         }
 
         /**
@@ -111,9 +111,9 @@
         /**
          * @return string|null
          */
-        public function getEvidence(): ?string
+        public function getEvidenceUuid(): ?string
         {
-            return $this->evidence;
+            return $this->evidenceUuid;
         }
 
         /**
@@ -174,9 +174,9 @@
         {
             $data = [
                 'uuid' => $this->uuid,
-                'operator' => $this->operator,
+                'operator' => $this->operatorUuid,
                 'entity' => $this->entityUuid,
-                'evidence' => $this->evidence,
+                'evidence' => $this->evidenceUuid,
                 'type' => $this->type->value,
                 'created' => $this->created,
             ];

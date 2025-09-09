@@ -8,8 +8,8 @@
     class EvidenceRecord implements SerializableInterface
     {
         private string $uuid;
-        private string $entity;
-        private string $operator;
+        private string $entityUuid;
+        private string $operatorUuid;
         private bool $confidential;
         private ?string $textContent;
         private ?string $note;
@@ -24,8 +24,8 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->entity = $data['entity'] ?? '';
-            $this->operator = $data['operator'] ?? '';
+            $this->entityUuid = $data['entity'] ?? '';
+            $this->operatorUuid = $data['operator'] ?? '';
             $this->confidential = (bool)$data['confidential'] ?? false;
             $this->textContent = $data['text_content'] ?? null;
             $this->note = $data['note'] ?? null;
@@ -65,7 +65,7 @@
          */
         public function getEntityUuid(): string
         {
-            return $this->entity;
+            return $this->entityUuid;
         }
 
         /**
@@ -75,7 +75,7 @@
          */
         public function getOperatorUuid(): string
         {
-            return $this->operator;
+            return $this->operatorUuid;
         }
 
         /**
@@ -135,8 +135,8 @@
         {
             return [
                 'uuid' => $this->uuid,
-                'entity' => $this->entity,
-                'operator' => $this->operator,
+                'entity' => $this->entityUuid,
+                'operator' => $this->operatorUuid,
                 'confidential' => $this->confidential,
                 'text_content' => $this->textContent,
                 'note' => $this->note,

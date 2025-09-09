@@ -48,7 +48,7 @@
                     throw new RequestException('Attachment not found', 404);
                 }
 
-                $existingEvidence = EvidenceManager::getEvidence($existingAttachment->getEvidence());
+                $existingEvidence = EvidenceManager::getEvidence($existingAttachment->getEvidenceUuid());
                 if($existingEvidence === null)
                 {
                     throw new RequestException('Associated evidence not found', 404);

@@ -9,7 +9,7 @@
     class FileAttachmentRecord implements SerializableInterface
     {
         private string $uuid;
-        private string $evidence;
+        private string $evidenceUuid;
         private string $fileName;
         private int $fileSize;
         private string $fileMime;
@@ -29,7 +29,7 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->evidence = $data['evidence'] ?? '';
+            $this->evidenceUuid = $data['evidence'] ?? '';
             $this->fileName = $data['file_name'] ?? '';
             $this->fileSize = isset($data['file_size']) ? (int)$data['file_size'] : 0;
             $this->fileMime = $data['file_mime'] ?? '';
@@ -66,9 +66,9 @@
          *
          * @return string
          */
-        public function getEvidence(): string
+        public function getEvidenceUuid(): string
         {
-            return $this->evidence;
+            return $this->evidenceUuid;
         }
 
         /**
@@ -128,7 +128,7 @@
         {
             return [
                 'uuid' => $this->uuid,
-                'evidence' => $this->evidence,
+                'evidence' => $this->evidenceUuid,
                 'file_name' => $this->fileName,
                 'file_size' => $this->fileSize,
                 'file_mime' => $this->fileMime,

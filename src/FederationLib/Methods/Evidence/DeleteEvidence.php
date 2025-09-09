@@ -48,7 +48,7 @@
                     $evidenceUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $evidenceUuid);
+                ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)
             {

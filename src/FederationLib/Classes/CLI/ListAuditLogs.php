@@ -61,8 +61,8 @@
                     printf("[%s] %s | Operator: %s | Entity: %s | %s\n",
                         $entry->getTimestamp() ?? '-',
                         $entry->getType()->value ?? '-',
-                        $entry->getOperator() ?? '-',
-                        $entry->getEntity() ?? '-',
+                        $entry->getOperatorUuid() ?? '-',
+                        $entry->getEntityUuid() ?? '-',
                         $entry->getMessage() ?? '-'
                     );
                 }

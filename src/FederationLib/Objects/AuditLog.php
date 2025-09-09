@@ -9,8 +9,8 @@
     class AuditLog implements SerializableInterface
     {
         private string $uuid;
-        private ?string $operator;
-        private ?string $entity;
+        private ?string $operatorUuid;
+        private ?string $entityUuid;
         private AuditLogType $type;
         private string $message;
         private int $timestamp;
@@ -23,8 +23,8 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->operator = $data['operator'] ?? null;
-            $this->entity = $data['entity'] ?? null;
+            $this->operatorUuid = $data['operator'] ?? null;
+            $this->entityUuid = $data['entity'] ?? null;
             $this->type = isset($data['type']) ? AuditLogType::from($data['type']) : AuditLogType::OTHER;
             $this->message = $data['message'] ?? '';
 
@@ -60,9 +60,9 @@
          *
          * @return string|null
          */
-        public function getOperator(): ?string
+        public function getOperatorUuid(): ?string
         {
-            return $this->operator;
+            return $this->operatorUuid;
         }
 
         /**
@@ -70,9 +70,9 @@
          *
          * @return string|null
          */
-        public function getEntity(): ?string
+        public function getEntityUuid(): ?string
         {
-            return $this->entity;
+            return $this->entityUuid;
         }
 
         /**
@@ -112,8 +112,8 @@
         {
             return [
                 'uuid' => $this->uuid,
-                'operator' => $this->operator,
-                'entity' => $this->entity,
+                'operator' => $this->operatorUuid,
+                'entity' => $this->entityUuid,
                 'type' => $this->type->value,
                 'message' => $this->message,
                 'timestamp' => $this->timestamp,
