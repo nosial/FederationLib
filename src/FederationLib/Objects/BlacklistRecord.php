@@ -10,7 +10,7 @@
     {
         private string $uuid;
         private string $operator;
-        private string $entity;
+        private string $entityUuid;
         private ?string $evidence;
         private BlacklistType $type;
         private bool $lifted;
@@ -35,7 +35,7 @@
         {
             $this->uuid = $data['uuid'] ?? '';
             $this->operator = $data['operator'] ?? '';
-            $this->entity = $data['entity'] ?? '';
+            $this->entityUuid = $data['entity'] ?? '';
             $this->evidence = $data['evidence'] ?? null;
             $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
@@ -98,9 +98,9 @@
          *
          * @return string The entity being blacklisted (e.g., IP address, domain).
          */
-        public function getEntity(): string
+        public function getEntityUuid(): string
         {
-            return $this->entity;
+            return $this->entityUuid;
         }
 
         /**
@@ -175,7 +175,7 @@
             $data = [
                 'uuid' => $this->uuid,
                 'operator' => $this->operator,
-                'entity' => $this->entity,
+                'entity' => $this->entityUuid,
                 'evidence' => $this->evidence,
                 'type' => $this->type->value,
                 'created' => $this->created,
