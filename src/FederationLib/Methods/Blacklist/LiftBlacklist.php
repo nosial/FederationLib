@@ -24,7 +24,7 @@
                 throw new RequestException('Insufficient permissions to manage the blacklist', 401);
             }
 
-            if(!preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException('Blacklist UUID required', 405);
             }
@@ -55,7 +55,7 @@
                     $blacklistUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntity());
+                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid());
             }
             catch (DatabaseOperationException $e)
             {
