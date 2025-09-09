@@ -20,38 +20,38 @@
          *
          * @param AuditLogType $type The type of the audit log entry.
          * @param string $message The message to log.
-         * @param string|null $operator The UUID of the operator performing the action, or null if not applicable.
-         * @param string|null $entity The UUID of the entity being acted upon, or null if not applicable.
+         * @param string|null $operatorUuid The UUID of the operator performing the action, or null if not applicable.
+         * @param string|null $entityUuid The UUID of the entity being acted upon, or null if not applicable.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function createEntry(AuditLogType $type, string $message, ?string $operator=null, ?string $entity=null): void
+        public static function createEntry(AuditLogType $type, string $message, ?string $operatorUuid=null, ?string $entityUuid=null): void
         {
             if(strlen($message) === 0)
             {
                 throw new InvalidArgumentException("Message cannot be empty.");
             }
 
-            if($operator !== null && strlen($operator) === 0)
+            if($operatorUuid !== null && strlen($operatorUuid) === 0)
             {
                 throw new InvalidArgumentException("Operator UUID cannot be empty.");
             }
 
-            if($entity !== null && strlen($entity) === 0)
+            if($entityUuid !== null && strlen($entityUuid) === 0)
             {
                 throw new InvalidArgumentException("Entity UUID cannot be empty.");
             }
 
-            if($operator !== null && $entity !== null)
+            if($operatorUuid !== null && $entityUuid !== null)
             {
-                Logger::log()->info(sprintf("[%s] %s by %s on %s", $type->value, $message, $operator, $entity));
+                Logger::log()->info(sprintf("[%s] %s by %s on %s", $type->value, $message, $operatorUuid, $entityUuid));
             }
-            elseif($operator !== null)
+            elseif($operatorUuid !== null)
             {
-                Logger::log()->info(sprintf("[%s] %s by %s", $type->value, $message, $operator));
+                Logger::log()->info(sprintf("[%s] %s by %s", $type->value, $message, $operatorUuid));
             }
-            elseif($entity !== null)
+            elseif($entityUuid !== null)
             {
-                Logger::log()->info(sprintf("[%s] %s on %s", $type->value, $message, $entity));
+                Logger::log()->info(sprintf("[%s] %s on %s", $type->value, $message, $entityUuid));
             }
             else
             {
@@ -65,8 +65,8 @@
                 $type = $type->value;
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':message', $message);
-                $stmt->bindParam(':operator', $operator);
-                $stmt->bindParam(':entity', $entity);
+                $stmt->bindParam(':operator', $operatorUuid);
+                $stmt->bindParam(':entity', $entityUuid);
 
                 $stmt->execute();
             }
@@ -79,14 +79,14 @@
         /**
          * Retrieves a specific audit log entry by its UUID.
          *
-         * @param string $uuid The UUID of the audit log entry to retrieve.
+         * @param string $auditLogUuid The UUID of the audit log entry to retrieve.
          * @return AuditLog|null An AuditLogRecord object representing the entry, or null if not found.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntry(string $uuid): ?AuditLog
+        public static function getEntry(string $auditLogUuid): ?AuditLog
         {
-            if(strlen($uuid) === 0)
+            if(strlen($auditLogUuid) === 0)
             {
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
@@ -94,7 +94,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':uuid', $auditLogUuid);
                 $stmt->execute();
 
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -179,16 +179,16 @@
         /**
          * Retrieves a specific audit log entry by its UUID.
          *
-         * @param string $operator The UUID of the operator to filter by.
+         * @param string $operatorUuid The UUID of the operator to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
          * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByOperator(string $operator, int $limit=100, int $page=1, ?array $filterType=null): array
+        public static function getEntriesByOperator(string $operatorUuid, int $limit=100, int $page=1, ?array $filterType=null): array
         {
-            if(strlen($operator) === 0)
+            if(strlen($operatorUuid) === 0)
             {
                 throw new InvalidArgumentException("Operator UUID cannot be empty.");
             }
@@ -203,7 +203,7 @@
             try
             {
                 $sql = "SELECT * FROM audit_log WHERE operator = :operator";
-                $params = [':operator' => $operator];
+                $params = [':operator' => $operatorUuid];
 
                 if ($filterType !== null && count($filterType) > 0)
                 {
@@ -253,16 +253,16 @@
         /**
          * Retrieves audit log entries by entity.
          *
-         * @param string $entity The UUID of the entity to filter by.
+         * @param string $entityUuid The UUID of the entity to filter by.
          * @param int $limit The maximum number of entries to retrieve.
          * @param int $page The page number for pagination.
          * @param AuditLogType[]|null $filterType Optional array of AuditLogType to filter by.
          * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByEntity(string $entity, int $limit=100, int $page=1, ?array $filterType=null): array
+        public static function getEntriesByEntity(string $entityUuid, int $limit=100, int $page=1, ?array $filterType=null): array
         {
-            if(strlen($entity) === 0)
+            if(strlen($entityUuid) === 0)
             {
                 throw new InvalidArgumentException("Entity UUID cannot be empty.");
             }
@@ -276,7 +276,7 @@
             try
             {
                 $sql = "SELECT * FROM audit_log WHERE entity = :entity";
-                $params = [':entity' => $entity];
+                $params = [':entity' => $entityUuid];
 
                 if ($filterType !== null && count($filterType) > 0)
                 {
