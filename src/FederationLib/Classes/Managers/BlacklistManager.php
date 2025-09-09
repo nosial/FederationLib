@@ -64,6 +64,8 @@
                 {
                     $stmt->bindValue(':expires', date('Y-m-d H:i:s', $expires));
                 }
+                
+                $stmt->execute();
             }
             catch (PDOException $e)
             {
