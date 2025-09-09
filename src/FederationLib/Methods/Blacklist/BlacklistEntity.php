@@ -5,6 +5,7 @@
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
+    use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
@@ -77,9 +78,9 @@
                     throw new RequestException('Entity not found', HttpResponseCode::NOT_FOUND);
                 }
 
-                if($evidence !== null && !EntitiesManager::entityExistsByUuid($evidence))
+                if($evidence !== null && !EvidenceManager::evidenceExists($evidence))
                 {
-                    throw new RequestException('Evidence entity not found', HttpResponseCode::NOT_FOUND);
+                    throw new RequestException('Evidence not found', HttpResponseCode::NOT_FOUND);
                 }
 
                 $blacklistUuid = BlacklistManager::blacklistEntity(
@@ -91,7 +92,7 @@
                 );
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_BLACKLISTED, sprintf(
-                    'Entity %s blacklisted by %s (%s) with type %s%s',
+                    'Entity %s blacklisted by operator %s (%s) with type %s%s',
                     $entityRecord->getAddress(),
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid(),
