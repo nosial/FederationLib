@@ -37,7 +37,14 @@
             $this->operatorUuid = $data['operator'] ?? '';
             $this->entityUuid = $data['entity'] ?? '';
             $this->evidenceUuid = $data['evidence'] ?? null;
-            $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
+            if(isset($data['type']) && $data['type'] instanceof BlacklistType)
+            {
+                $this->type = $data['type'];
+            }
+            else
+            {
+                $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
+            }
             $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
             $this->liftedBy = $data['lifted_by'] ?? null;
 
