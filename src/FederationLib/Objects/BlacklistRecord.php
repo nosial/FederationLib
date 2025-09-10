@@ -45,39 +45,44 @@
             {
                 $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
             }
-            $this->lifted = isset($data['lifted']) && (bool)$data['lifted'];
+            /** @noinspection PhpTernaryExpressionCanBeReplacedWithConditionInspection */
+            $this->lifted = isset($data['lifted']) ? (bool)$data['lifted'] : false;
             $this->liftedBy = $data['lifted_by'] ?? null;
 
-            // Parse SQL datetime string to timestamp if necessary
-            if (isset($data['expires']) && is_string($data['expires']))
+            // Handle expires field - can be null for permanent blacklists
+            if (isset($data['expires']) && $data['expires'] !== null)
             {
-                $data['expires'] = strtotime($data['expires']);
-            }
-            elseif (isset($data['expires']) && $data['expires'] instanceof DateTime)
-            {
-                $data['expires'] = $data['expires']->getTimestamp();
+                if (is_string($data['expires']))
+                {
+                    $this->expires = strtotime($data['expires']);
+                }
+                elseif ($data['expires'] instanceof DateTime)
+                {
+                    $this->expires = $data['expires']->getTimestamp();
+                }
+                else
+                {
+                    $this->expires = (int)$data['expires'];
+                }
             }
             else
             {
-                $data['expires'] = $data['expires'] ?? time();
+                $this->expires = null; // Permanent blacklist
             }
 
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
             {
-                $data['created'] = strtotime($data['created']);
+                $this->created = strtotime($data['created']);
             }
             elseif (isset($data['created']) && $data['created'] instanceof DateTime)
             {
-                $data['created'] = $data['created']->getTimestamp();
+                $this->created = $data['created']->getTimestamp();
             }
             else
             {
-                $data['created'] = $data['created'] ?? time();
+                $this->created = $data['created'] ?? time();
             }
-
-            $this->expires = (int)$data['expires'] ?? null;
-            $this->created = (int)$data['created'] ?? time();
         }
 
         /**
@@ -185,6 +190,8 @@
                 'entity' => $this->entityUuid,
                 'evidence' => $this->evidenceUuid,
                 'type' => $this->type->value,
+                'lifted' => $this->lifted,
+                'lifted_by' => $this->liftedBy,
                 'created' => $this->created,
             ];
 
