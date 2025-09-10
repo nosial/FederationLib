@@ -5,17 +5,20 @@
     use Exception;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class EvidenceClientTest extends TestCase
     {
         private FederationClient $client;
+        private Logger $logger;
         private array $createEvidenceRecords = [];
         private array $createdEntityRecords = [];
         private array $createdOperatorRecords = [];
 
         protected function setUp(): void
         {
+            $this->logger = new Logger('tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -27,9 +30,13 @@
                 {
                     $this->client->deleteEvidence($evidenceId);
                 }
-                catch (Exception)
+                catch (RequestException $e)
                 {
-                    // Ignore exceptions during cleanup
+                    $this->logger->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
+                }
+                catch (Exception $e)
+                {
+                    $this->logger->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -39,9 +46,13 @@
                 {
                     $this->client->deleteEntity($entityId);
                 }
-                catch (Exception)
+                catch (RequestException $e)
                 {
-                    // Ignore exceptions during cleanup
+                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
+                }
+                catch (Exception $e)
+                {
+                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -51,9 +62,13 @@
                 {
                     $this->client->deleteOperator($operatorId);
                 }
-                catch (Exception)
+                catch (RequestException $e)
                 {
-                    // Ignore exceptions during cleanup
+                    $this->logger->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
+                }
+                catch (Exception $e)
+                {
+                    $this->logger->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -145,7 +160,8 @@
                 $this->assertNotEmpty($evidenceUuid);
             }
 
-            // List all evidence records page by page and verify each entry
+            // List all evidence records page by page and collect all UUIDs
+            $allEvidenceUuids = [];
             $page = 1;
             do
             {
@@ -160,11 +176,15 @@
 
                 foreach ($evidenceList as $evidenceRecord)
                 {
-                    $this->assertContains($evidenceRecord->getUuid(), $createdEntires);
+                    $allEvidenceUuids[] = $evidenceRecord->getUuid();
                 }
 
                 $page++;
             } while (count($evidenceList) === 5);
+            foreach ($createdEntires as $uuid)
+            {
+                $this->assertContains($uuid, $allEvidenceUuids);
+            }
 
             $this->assertGreaterThanOrEqual(10, count($createdEntires));
         }
@@ -192,7 +212,8 @@
                 $this->assertNotEmpty($evidenceUuid);
             }
 
-            // List all evidence records for the operator page by page and verify each entry
+            // List all evidence records for the operator page by page and collect all UUIDs
+            $allEvidenceUuids = [];
             $page = 1;
             do
             {
@@ -207,13 +228,16 @@
 
                 foreach ($evidenceList as $evidenceRecord)
                 {
-                    $this->assertContains($evidenceRecord->getUuid(), $createdEntries);
+                    $allEvidenceUuids[] = $evidenceRecord->getUuid();
                     $this->assertEquals($selfOperator->getUuid(), $evidenceRecord->getOperatorUuid());
                 }
 
                 $page++;
             } while (count($evidenceList) === 5);
 
+            foreach ($createdEntries as $uuid) {
+                $this->assertContains($uuid, $allEvidenceUuids);
+            }
             $this->assertGreaterThanOrEqual(10, count($createdEntries));
         }
 
@@ -345,5 +369,251 @@
             $this->assertEquals($largeTextContent, $evidenceRecord->getTextContent());
             $this->assertEquals('Note for large content', $evidenceRecord->getNote());
             $this->assertEquals('large_content_tag', $evidenceRecord->getTag());
+        }
+
+        // DURABILITY TESTS
+
+        public function testEvidenceLifecycleIntegrity(): void
+        {
+            // Test complete evidence lifecycle: create entity, submit evidence, update, delete
+            $entityUuid = $this->client->pushEntity('evidence-lifecycle.com', 'evidence_lifecycle_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            // Submit evidence
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Original evidence content', 'Original note', 'lifecycle_test');
+            $this->createEvidenceRecords[] = $evidenceUuid;
+
+            // Verify evidence creation
+            $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertNotNull($evidenceRecord);
+            $this->assertEquals('Original evidence content', $evidenceRecord->getTextContent());
+            $this->assertFalse($evidenceRecord->isConfidential());
+
+            // Update confidentiality
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, true);
+            $updatedRecord = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertTrue($updatedRecord->isConfidential());
+
+            // Update back to non-confidential
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, false);
+            $revertedRecord = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertFalse($revertedRecord->isConfidential());
+
+            // Verify all other data remained intact
+            $this->assertEquals($evidenceRecord->getEntityUuid(), $revertedRecord->getEntityUuid());
+            $this->assertEquals($evidenceRecord->getTextContent(), $revertedRecord->getTextContent());
+            $this->assertEquals($evidenceRecord->getNote(), $revertedRecord->getNote());
+            $this->assertEquals($evidenceRecord->getTag(), $revertedRecord->getTag());
+
+            // Delete evidence
+            $this->client->deleteEvidence($evidenceUuid);
+
+            // Verify deletion
+            try {
+                $this->client->getEvidenceRecord($evidenceUuid);
+                $this->fail("Expected RequestException for deleted evidence");
+            } catch (RequestException $e) {
+                $this->assertEquals(404, $e->getCode());
+            }
+
+            // Remove from cleanup array since already deleted
+            array_splice($this->createEvidenceRecords, array_search($evidenceUuid, $this->createEvidenceRecords), 1);
+        }
+
+        public function testHighVolumeEvidenceOperations(): void
+        {
+            // Test creating and managing large numbers of evidence records
+            $entityUuid = $this->client->pushEntity('high-volume-evidence.com', 'high_volume_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $batchSize = 15;
+            $evidenceUuids = [];
+
+            // Create evidence records in batch
+            for ($i = 0; $i < $batchSize; $i++) {
+                $evidenceUuid = $this->client->submitEvidence(
+                    $entityUuid, 
+                    "Batch evidence content $i", 
+                    "Batch note $i", 
+                    "batch_$i",
+                    $i % 2 === 0 // Alternate confidentiality
+                );
+                $this->createEvidenceRecords[] = $evidenceUuid;
+                $evidenceUuids[] = $evidenceUuid;
+            }
+
+            // Verify all evidence records were created
+            foreach ($evidenceUuids as $uuid) {
+                $record = $this->client->getEvidenceRecord($uuid);
+                $this->assertNotNull($record);
+                $this->assertEquals($entityUuid, $record->getEntityUuid());
+            }
+
+            // Test pagination through evidence records
+            $allEvidence = [];
+            $page = 1;
+            $pageSize = 5;
+            do {
+                $evidencePage = $this->client->listEvidence($page, $pageSize, true);
+                $allEvidence = array_merge($allEvidence, $evidencePage);
+                $page++;
+            } while (count($evidencePage) === $pageSize && $page <= 10); // Safety limit
+
+            // Verify our evidence records are in the results
+            $foundUuids = array_map(fn($evidence) => $evidence->getUuid(), $allEvidence);
+            foreach ($evidenceUuids as $uuid) {
+                $this->assertContains($uuid, $foundUuids);
+            }
+
+            // Test entity-specific evidence listing
+            $entityEvidence = $this->client->listEntityEvidenceRecords($entityUuid, 1, 100, true);
+            $this->assertGreaterThanOrEqual($batchSize, count($entityEvidence));
+        }
+
+        public function testEvidenceContentVariations(): void
+        {
+            // Test evidence with various content types and edge cases
+            $entityUuid = $this->client->pushEntity('content-variations.com', 'content_test_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $testCases = [
+                ['content' => 'Single word', 'note' => 'Single word test', 'tag' => 'single'],
+                ['content' => str_repeat('Long content ', 100), 'note' => 'Repetitive content', 'tag' => 'repetitive'],
+                ['content' => "Multi\nline\ncontent\ntest", 'note' => 'Multiline test', 'tag' => 'multiline'],
+                ['content' => 'Special chars: @#$%^&*()[]{}|;:\'",.<>?/', 'note' => 'Special chars', 'tag' => 'special'],
+                ['content' => 'Unicode content: 你好世界 🌍', 'note' => 'Unicode test', 'tag' => 'unicode'],
+            ];
+
+            $evidenceUuids = [];
+            foreach ($testCases as $index => $testCase) {
+                $evidenceUuid = $this->client->submitEvidence(
+                    $entityUuid,
+                    $testCase['content'],
+                    $testCase['note'],
+                    $testCase['tag']
+                );
+                $this->createEvidenceRecords[] = $evidenceUuid;
+                $evidenceUuids[] = $evidenceUuid;
+
+                // Verify content preservation
+                $record = $this->client->getEvidenceRecord($evidenceUuid);
+                $this->assertEquals($testCase['content'], $record->getTextContent());
+                $this->assertEquals($testCase['note'], $record->getNote());
+                $this->assertEquals($testCase['tag'], $record->getTag());
+            }
+
+            // Verify all evidence records exist
+            $this->assertEquals(count($testCases), count($evidenceUuids));
+        }
+
+        public function testEvidenceConfidentialityConsistency(): void
+        {
+            // Test confidentiality settings and access control
+            $entityUuid = $this->client->pushEntity('confidentiality-test.com', 'confidentiality_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            // Create confidential evidence
+            $confidentialUuid = $this->client->submitEvidence($entityUuid, 'Confidential content', 'Confidential note', 'confidential', true);
+            $this->createEvidenceRecords[] = $confidentialUuid;
+
+            // Create non-confidential evidence
+            $publicUuid = $this->client->submitEvidence($entityUuid, 'Public content', 'Public note', 'public', false);
+            $this->createEvidenceRecords[] = $publicUuid;
+
+            // Verify confidentiality settings
+            $confidentialRecord = $this->client->getEvidenceRecord($confidentialUuid);
+            $this->assertTrue($confidentialRecord->isConfidential());
+
+            $publicRecord = $this->client->getEvidenceRecord($publicUuid);
+            $this->assertFalse($publicRecord->isConfidential());
+
+            // Test toggling confidentiality multiple times
+            for ($i = 0; $i < 3; $i++) {
+                $this->client->updateEvidenceConfidentiality($publicUuid, true);
+                $toggledRecord = $this->client->getEvidenceRecord($publicUuid);
+                $this->assertTrue($toggledRecord->isConfidential());
+
+                $this->client->updateEvidenceConfidentiality($publicUuid, false);
+                $revertedRecord = $this->client->getEvidenceRecord($publicUuid);
+                $this->assertFalse($revertedRecord->isConfidential());
+            }
+
+            // Verify content integrity after confidentiality changes
+            $finalRecord = $this->client->getEvidenceRecord($publicUuid);
+            $this->assertEquals($publicRecord->getTextContent(), $finalRecord->getTextContent());
+            $this->assertEquals($publicRecord->getNote(), $finalRecord->getNote());
+            $this->assertEquals($publicRecord->getTag(), $finalRecord->getTag());
+        }
+
+        public function testEvidenceAssociationIntegrity(): void
+        {
+            // Test evidence associations with entities and operators
+            $selfOperator = $this->client->getSelf();
+            $operatorUuid = $selfOperator->getUuid();
+
+            // Create multiple entities
+            $entityUuids = [];
+            for ($i = 0; $i < 3; $i++) {
+                $entityUuid = $this->client->pushEntity("association-test-$i.com", "association_user_$i");
+                $this->createdEntityRecords[] = $entityUuid;
+                $entityUuids[] = $entityUuid;
+            }
+
+            // Create evidence for each entity
+            $evidenceMapping = [];
+            foreach ($entityUuids as $index => $entityUuid) {
+                $evidenceUuid = $this->client->submitEvidence($entityUuid, "Evidence for entity $index", "Note $index", "association");
+                $this->createEvidenceRecords[] = $evidenceUuid;
+                $evidenceMapping[$entityUuid] = $evidenceUuid;
+            }
+
+            // Verify associations
+            foreach ($evidenceMapping as $entityUuid => $evidenceUuid) {
+                $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
+                $this->assertEquals($entityUuid, $evidenceRecord->getEntityUuid());
+                $this->assertEquals($operatorUuid, $evidenceRecord->getOperatorUuid());
+            }
+
+            // Test listing evidence by operator
+            $operatorEvidence = $this->client->listOperatorEvidence($operatorUuid, 1, 100, true);
+            $operatorEvidenceUuids = array_map(fn($evidence) => $evidence->getUuid(), $operatorEvidence);
+            
+            foreach ($evidenceMapping as $evidenceUuid) {
+                $this->assertContains($evidenceUuid, $operatorEvidenceUuids);
+            }
+
+            // Test listing evidence by entity
+            foreach ($evidenceMapping as $entityUuid => $evidenceUuid) {
+                $entityEvidence = $this->client->listEntityEvidenceRecords($entityUuid);
+                $entityEvidenceUuids = array_map(fn($evidence) => $evidence->getUuid(), $entityEvidence);
+                $this->assertContains($evidenceUuid, $entityEvidenceUuids);
+            }
+        }
+
+        public function testEvidenceConcurrentOperations(): void
+        {
+            // Test concurrent operations on evidence records
+            $entityUuid = $this->client->pushEntity('concurrent-evidence.com', 'concurrent_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            // Create evidence record
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Concurrent test content', 'Concurrent note', 'concurrent');
+            $this->createEvidenceRecords[] = $evidenceUuid;
+
+            // Perform multiple operations rapidly
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, true);
+            $record1 = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertTrue($record1->isConfidential());
+
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, false);
+            $record2 = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertFalse($record2->isConfidential());
+
+            // Verify data integrity
+            $this->assertEquals($record1->getTextContent(), $record2->getTextContent());
+            $this->assertEquals($record1->getNote(), $record2->getNote());
+            $this->assertEquals($record1->getTag(), $record2->getTag());
+            $this->assertEquals($record1->getEntityUuid(), $record2->getEntityUuid());
+            $this->assertEquals($record1->getOperatorUuid(), $record2->getOperatorUuid());
         }
     }
