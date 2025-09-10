@@ -25,7 +25,18 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->operatorUuid = $data['operator'] ?? null;
             $this->entityUuid = $data['entity'] ?? null;
-            $this->type = isset($data['type']) ? AuditLogType::from($data['type']) : AuditLogType::OTHER;
+            if(isset($data['type']))
+            {
+                if($data['type'] instanceof AuditLogType)
+                {
+                    $this->type = $data['type'];
+                }
+                else
+                {
+                    $this->type = AuditLogType::tryFrom($data['type']) ?? AuditLogType::OTHER;
+                }
+            }
+
             $this->message = $data['message'] ?? '';
 
             // Parse SQL datetime string to timestamp if necessary
