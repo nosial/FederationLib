@@ -42,7 +42,7 @@
                     throw new RequestException('Evidence Not Found', 404);
                 }
 
-                if($evidenceRecord->isConfidential() && $authenticatedOperator === null)
+                if($evidenceRecord->isConfidential() && ($authenticatedOperator === null || !$authenticatedOperator->canManageBlacklist()))
                 {
                     throw new RequestException('Confidential evidence access is restricted', 403);
                 }
