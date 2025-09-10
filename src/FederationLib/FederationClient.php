@@ -141,6 +141,13 @@
             $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
 
+            // Check the response Content-Type and ensure it's application/json
+            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            if (strpos($contentType, 'application/json') === false)
+            {
+                throw new RequestException($response, $responseCode);
+            }
+
             $decodedResponse = $this->decodeResponse($response);
 
             // Check if response code is expected
@@ -163,6 +170,57 @@
 
             /** @var SuccessResponse $decodedResponse */
             return $decodedResponse->getData();
+        }
+
+        // AUDIT METHODS
+
+        /**
+         * Lists audit logs with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of audit logs per page (default is 100)
+         * @return AuditLog[] An array of AuditLog objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listAuditLogs(int $page=1, int $limit=100): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => AuditLog::fromArray($item),
+                $this->makeRequest('GET', 'audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list audit logs, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Retrieves an audit log record with the given UUID.
+         *
+         * @param string $auditLogUuid The UUID of the audit log to retrieve
+         * @return AuditLog The retrieved AuditLog object
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the audit log UUID is empty
+         */
+        public function getAuditLogRecord(string $auditLogUuid): AuditLog
+        {
+            if(empty($auditLogUuid))
+            {
+                throw new InvalidArgumentException('Audit log UUID cannot be empty');
+            }
+
+            return AuditLog::fromArray($this->makeRequest('GET', 'audit/' . $auditLogUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to get audit log record for UUID %s', $auditLogUuid)
+            ));
         }
 
         // OPERATOR METHODS
@@ -422,7 +480,7 @@
 
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
                     sprintf('Failed to list operator blacklist records with UUID %s, page %d, limit %d', $operatorUuid, $page, $limit)
                 )
             );
