@@ -233,7 +233,7 @@
          */
         public static function matchHandle(string $requestMethod, string $path): ?Method
         {
-            Logger::log()->debug(sprintf("Attempting to match [%s] %s", $requestMethod, $path));
+            Logger::log()->debug(sprintf("Handling request [%s] %s", $requestMethod, $path));
 
             return match (true)
             {
