@@ -24,6 +24,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $includeLifted = (bool) (FederationServer::getParameter('include_lifted') ?? false);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
@@ -37,7 +38,7 @@
 
             try
             {
-                $blacklistRecords = BlacklistManager::getEntries($limit, $page);
+                $blacklistRecords = BlacklistManager::getEntries($limit, $page, $includeLifted);
             }
             catch (DatabaseOperationException $e)
             {
