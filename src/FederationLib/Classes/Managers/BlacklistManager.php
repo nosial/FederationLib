@@ -120,7 +120,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid=:blacklist_uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid=:blacklist_uuid LIMIT 1");
                 $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
                 return $stmt->fetchColumn() > 0;
@@ -148,7 +148,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE uuid = :blacklist_uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE uuid=:blacklist_uuid LIMIT 1");
                 $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -157,6 +157,7 @@
                 {
                     return new BlacklistRecord($data);
                 }
+
                 return null;
             }
             catch (PDOException $e)
@@ -208,10 +209,14 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1 AND lifted_by=:operator_uuid WHERE uuid=:blacklist_uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET lifted=1, lifted_by=:operator_uuid WHERE uuid=:blacklist_uuid");
                 $stmt->bindParam(':operator_uuid', $operatorUuid);
                 $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
-                $stmt->execute();
+
+                if(!$stmt->execute() || $stmt->rowCount() === 0)
+                {
+                    throw new DatabaseOperationException("No blacklist record found with the specified UUID to lift.");
+                }
             }
             catch (PDOException $e)
             {
@@ -224,10 +229,11 @@
          *
          * @param int $limit The total amount of records to return in this database query
          * @param int $page The current page, must start from 1.
+         * @param bool $includeLifted If True, lifted blacklist records are included in the result
          * @return BlacklistRecord[] An array of blacklist records as the result
          * @throws DatabaseOperationException Thrown if there was a database issue
          */
-        public static function getEntries(int $limit=100, int $page=1): array
+        public static function getEntries(int $limit=100, int $page=1, bool $includeLifted=false): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -238,9 +244,15 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                if ($includeLifted) {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                } else {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                }
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -248,7 +260,7 @@
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to retrieve blacklist entries by operator: " . $e->getMessage(), 0, $e);
+                throw new DatabaseOperationException("Failed to retrieve blacklist entries: " . $e->getMessage(), 0, $e);
             }
         }
 
@@ -275,15 +287,20 @@
             }
 
             $offset = ($page - 1) * $limit;
-            $includeLifted = (int)$includeLifted;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':operator_uuid', $operatorUuid);
-                $stmt->bindParam(':lifted', $includeLifted);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                if ($includeLifted) {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':operator_uuid', $operatorUuid);
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                } else {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':operator_uuid', $operatorUuid);
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                }
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -319,15 +336,20 @@
             }
 
             $offset = ($page - 1) * $limit;
-            $includeLifted = (int)$includeLifted;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=:lifted ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                $stmt->bindParam(':entity_uuid', $entityUuid);
-                $stmt->bindParam(':lifted', $includeLifted);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                if ($includeLifted) {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':entity_uuid', $entityUuid);
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                } else {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt->bindParam(':entity_uuid', $entityUuid);
+                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                }
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
