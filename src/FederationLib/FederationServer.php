@@ -34,7 +34,6 @@
                 // Always call parent::handleRequest() to ensure the base request handling is done.
                 parent::handleRequest();
 
-                Logger::log()->debug(self::getPath() ?? 'No path detected');
                 if (self::getPath() !== null && str_ends_with(self::getPath(), 'favicon.ico'))
                 {
                     self::handleFaviconRequest();
