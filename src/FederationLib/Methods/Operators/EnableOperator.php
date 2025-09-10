@@ -37,6 +37,11 @@
                 throw new RequestException('a valid operator UUID is required', 400);
             }
 
+            if($operatorUuid === $authenticatedOperator->getUuid())
+            {
+                throw new RequestException('You cannot enable yourself', 405);
+            }
+
             try
             {
                 $existingOperator = OperatorManager::getOperator($operatorUuid);
