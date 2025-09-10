@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="MessDetector">
+    <phpmd_settings>
+      <phpmd_by_interpreter asDefaultInterpreter="true" interpreter_id="ba75d334-8aba-4c7c-8e17-c246c78a7a84" timeout="30000" />
+    </phpmd_settings>
+  </component>
   <component name="MessDetectorOptionsConfiguration">
     <option name="transferred" value="true" />
   </component>
@@ -10,17 +15,27 @@
     <option name="highlightLevel" value="WARNING" />
     <option name="transferred" value="true" />
   </component>
+  <component name="PhpCodeSniffer">
+    <phpcs_settings>
+      <phpcs_by_interpreter asDefaultInterpreter="true" interpreter_id="ba75d334-8aba-4c7c-8e17-c246c78a7a84" timeout="30000" />
+    </phpcs_settings>
+  </component>
   <component name="PhpIncludePathManager">
     <include_path>
       <path value="$USER_HOME$/phar" />
       <path value="/usr/share/ncc" />
-      <path value="/var/ncc/packages/com.symfony.uid=v7.2.0" />
+      <path value="/var/ncc/packages/com.symfony.uid=v7.3.1" />
       <path value="/var/ncc/packages/net.nosial.configlib=1.1.11" />
       <path value="/var/ncc/packages/net.nosial.loglib2=1.0.3" />
       <path value="/var/ncc/packages/net.nosial.optslib=1.1.3" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.3" />
+  <component name="PhpStan">
+    <PhpStan_settings>
+      <phpstan_by_interpreter asDefaultInterpreter="true" interpreter_id="ba75d334-8aba-4c7c-8e17-c246c78a7a84" timeout="60000" />
+    </PhpStan_settings>
+  </component>
   <component name="PhpStanOptionsConfiguration">
     <option name="transferred" value="true" />
   </component>
@@ -28,6 +43,11 @@
     <phpunit_settings>
       <PhpUnitSettings load_method="PHPUNIT_PHAR" bootstrap_file_path="$PROJECT_DIR$/bootstrap.php" configuration_file_path="$PROJECT_DIR$/phpunit.xml" custom_loader_path="" phpunit_phar_path="$USER_HOME$/phar/phpunit.phar" use_bootstrap_file="true" use_configuration_file="true" />
     </phpunit_settings>
+  </component>
+  <component name="Psalm">
+    <Psalm_settings>
+      <psalm_fixer_by_interpreter asDefaultInterpreter="true" interpreter_id="ba75d334-8aba-4c7c-8e17-c246c78a7a84" timeout="60000" />
+    </Psalm_settings>
   </component>
   <component name="PsalmOptionsConfiguration">
     <option name="transferred" value="true" />
