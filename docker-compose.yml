@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./federation/logs:/var/log
-      - ./federation/data:/etc/federation
+      - ./federation/uploads:/var/www/uploads
     environment:
       # Logging Level, use "info", "debug", "error", "warning", or "critical"
       LOG_LEVEL: debug
