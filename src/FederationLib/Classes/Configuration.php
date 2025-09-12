@@ -23,7 +23,7 @@
         {
             self::$configuration = new \ConfigLib\Configuration('federation');
 
-            self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:6161', 'FEDERATION_BASE_URL');
+            self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:8500', 'FEDERATION_BASE_URL');
             self::$configuration->setDefault('server.name', 'Federation Server', 'FEDERATION_NAME');
             self::$configuration->setDefault('server.api_key', Utilities::generateString(), 'FEDERATION_API_KEY');
             self::$configuration->setDefault('server.max_upload_size', 52428800, 'FEDERATION_MAX_UPLOAD_SIZE'); // 50MB default
