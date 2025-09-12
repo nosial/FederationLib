@@ -330,7 +330,7 @@
         {
             // Test handling of excessively large payloads
             $largeContent = str_repeat('A', 1024 * 1024); // 1MB of data
-            $veryLargeContent = str_repeat('B', 10 * 1024 * 1024); // 10MB of data
+            $veryLargeContent = str_repeat('B', 120 * 1024 * 1024); // 120MB of data, default limit should be 100MB
 
             // Create test entity
             $entityUuid = $this->authorizedClient->pushEntity('large-payload-test.com', 'test-user');
