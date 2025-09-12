@@ -33,7 +33,7 @@
          */
         public function __construct(array $config)
         {
-            $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:6161';
+            $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:8500';
             $this->name = $config['name'] ?? 'Federation Server';
             $this->apiKey = $config['api_key'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
