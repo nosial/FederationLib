@@ -111,6 +111,20 @@
         }
 
         /**
+         * Check if the given UUID belongs to the master operator.
+         *
+         * @param string $uuid The UUID to check.
+         * @return bool True if the UUID belongs to the master operator, false otherwise.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws CacheOperationException If there is an error during the caching operation.
+         */
+        public static function isMasterOperator(string $uuid): bool
+        {
+            return self::getMasterOperator()->getUuid() === $uuid;
+        }
+
+        /**
          * Retrieve the master operator.
          *
          * This method checks if the master operator exists in the database.
