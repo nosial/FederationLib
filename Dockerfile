@@ -54,6 +54,7 @@ RUN rm -rf /tmp/build && rm -rf /var/www/html/*
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/logger.py /logger.py
+COPY docker/php.ini /usr/local/etc/php/conf.d/php.ini
 COPY public/index.php /var/www/html/index.php
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
 RUN mkdir /var/www/uploads && chown -R www-data:www-data /var/www/uploads && chmod -R 777 /var/www/uploads
