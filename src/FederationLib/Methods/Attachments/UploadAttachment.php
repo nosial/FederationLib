@@ -29,23 +29,26 @@
                 throw new RequestException('Insufficient Permissions to upload attachments', 403);
             }
 
-            $evidenceUuid = FederationServer::getParameter('evidence_uuid');
-            if($evidenceUuid === null || !Validate::uuid($evidenceUuid))
+            $evidenceUuid = FederationServer::getParameter('evidence_uuid') ?? null;
+
+            if($evidenceUuid !== null && !Validate::uuid($evidenceUuid))
             {
-                throw new RequestException('A valid evidence UUID is required', 400);
+                throw new RequestException('A valid evidence UUID is required if one is provided', 400);
             }
 
-            try
+            if($evidenceUuid !== null)
             {
-                $evidence = EvidenceManager::getEvidence($evidenceUuid);
-                if($evidence === null)
+                try
                 {
-                    throw new RequestException('Evidence not found', 404);
+                    if(!EvidenceManager::evidenceExists($evidenceUuid))
+                    {
+                        throw new RequestException('Evidence not found', 404);
+                    }
                 }
-            }
-            catch (DatabaseOperationException $e)
-            {
-                throw new RequestException('Evidence not found or database error', 404, $e);
+                catch (DatabaseOperationException $e)
+                {
+                    throw new RequestException('Evidence not found or database error', 404, $e);
+                }
             }
 
             // Verify the file upload field exists
@@ -136,15 +139,22 @@
                     throw new RequestException('Failed to finalize file upload', 500);
                 }
 
+                // Extract the entityUuid if evidenceUuid is provided
+                $entityUuid = null;
+                if ($evidenceUuid !== null)
+                {
+                    $entityUuid = EvidenceManager::getEvidence($evidenceUuid)->getEntityUuid();
+                }
+
                 // Create a record in the database
                 FileAttachmentManager::createRecord($uuid, $evidenceUuid, $detectedMimeType, $originalName, $file['size']);
 
                 // Log upload success
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_UPLOADED, sprintf('Operator %s uploaded file %s (%s %s) Type %s | For Evidence %s',
                     $operator->getName(), $uuid, $originalName, $file['size'], $detectedMimeType, $evidenceUuid
-                ), $operator->getUuid(), $evidence->getEntityUuid());
+                ), $operator->getUuid(), $entityUuid);
 
-                self::successResponse(new UploadResult($uuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachment/' . $uuid), 201);
+                self::successResponse(new UploadResult($uuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachments/' . $uuid), 201);
             }
             catch (DatabaseOperationException $e)
             {
