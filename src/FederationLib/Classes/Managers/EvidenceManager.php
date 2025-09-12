@@ -48,9 +48,9 @@
                     throw new InvalidArgumentException('Text content cannot be empty if provided');
                 }
 
-                if(strlen($note) > 65535)
+                if(strlen($textContent) > 16777215)
                 {
-                    throw new InvalidArgumentException('Text content cannot be longer than 65535 characters');
+                    throw new InvalidArgumentException('Text content cannot be longer than 16777215 characters');
                 }
             }
 
