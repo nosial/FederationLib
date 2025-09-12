@@ -47,6 +47,11 @@
                     $existingOperator = $authenticatedOperator;
                 }
 
+                if(OperatorManager::isMasterOperator($operatorUuid))
+                {
+                    throw new RequestException('Cannot refresh API key for master operator', 403);
+                }
+
                 $newApiKey = OperatorManager::refreshApiKey($operatorUuid);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
                     'Operator %s (%s) refreshed API key by %s (%s)',
