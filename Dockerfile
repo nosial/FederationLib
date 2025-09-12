@@ -56,6 +56,7 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/logger.py /logger.py
 COPY public/index.php /var/www/html/index.php
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
+RUN mkdir /var/www/uploads && chown -R www-data:www-data /var/www/uploads && chmod -R 777 /var/www/uploads
 RUN mkdir -p /etc/config && chown -R www-data:www-data /etc/config && chmod -R 755 /etc/config
 
 # ----------------------------- Cleanup ---------------------
