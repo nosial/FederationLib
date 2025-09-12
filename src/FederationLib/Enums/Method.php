@@ -6,6 +6,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Methods\Attachments\DeleteAttachment;
     use FederationLib\Methods\Attachments\DownloadAttachment;
+    use FederationLib\Methods\Attachments\GetAttachmentInfo;
     use FederationLib\Methods\Attachments\UploadAttachment;
     use FederationLib\Methods\Audit\ListAuditLogs;
     use FederationLib\Methods\Audit\ViewAuditEntry;
@@ -89,6 +90,7 @@
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
+        case GET_ATTACHMENT_INFO;
         case DELETE_ATTACHMENT;
 
         /**
@@ -120,6 +122,9 @@
                     break;
                 case self::DELETE_ATTACHMENT:
                     DeleteAttachment::handleRequest();
+                    break;
+                case self::GET_ATTACHMENT_INFO:
+                    GetAttachmentInfo::handleRequest();
                     break;
 
                 case self::LIST_ENTITIES:
@@ -243,6 +248,7 @@
 
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
+                preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) && $requestMethod === 'GET' => Method::GET_ATTACHMENT_INFO,
                 $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
 
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
