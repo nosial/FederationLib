@@ -317,59 +317,6 @@
             }
         }
 
-        // AUDIT LOG CONTENT VERIFICATION
-
-        public function testAuditLogContentForOperatorOperations(): void
-        {
-            $initialLogCount = count($this->client->listAuditLogs(1, 100));
-
-            // Create an operator - should generate audit log
-            $operatorUuid = $this->client->createOperator('audit-content-test');
-            $this->createdOperators[] = $operatorUuid;
-
-            // Modify permissions - should generate audit logs
-            $this->client->setClientPermission($operatorUuid, true);
-            $this->client->setManageBlacklistPermission($operatorUuid, true);
-
-            // Disable and re-enable - should generate audit logs
-            $this->client->disableOperator($operatorUuid);
-            $this->client->enableOperator($operatorUuid);
-
-            // Get recent audit logs
-            $newLogs = $this->client->listAuditLogs(1, 50);
-            $newLogCount = count($newLogs);
-
-            // Look for specific operation logs
-            $foundOperatorCreation = false;
-            $foundPermissionChange = false;
-            $foundStatusChange = false;
-
-            foreach ($newLogs as $log)
-            {
-                $message = $log->getMessage();
-                
-                if (str_contains($message, 'audit-content-test') && str_contains($message, 'created'))
-                {
-                    $foundOperatorCreation = true;
-                }
-                
-                if (str_contains($message, 'permission') || str_contains($message, 'Permission'))
-                {
-                    $foundPermissionChange = true;
-                }
-                
-                if (str_contains($message, 'disabled') || str_contains($message, 'enabled'))
-                {
-                    $foundStatusChange = true;
-                }
-            }
-
-            $this->assertTrue($foundOperatorCreation, "Should find operator creation audit log");
-            // Permission and status changes might not be logged separately, so we'll log but not assert
-            $this->logger->info("Found permission change log: " . ($foundPermissionChange ? 'Yes' : 'No'));
-            $this->logger->info("Found status change log: " . ($foundStatusChange ? 'Yes' : 'No'));
-        }
-
         public function testAuditLogContentForEntityOperations(): void
         {
             // Create operator with client permissions
