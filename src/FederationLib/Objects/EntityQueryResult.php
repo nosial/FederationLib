@@ -6,7 +6,7 @@
 
     class EntityQueryResult implements SerializableInterface
     {
-        private Entity $entityRecord;
+        private EntityRecord $entityRecord;
         /**
          * @var QueriedBlacklistRecord[]
          */
@@ -23,12 +23,12 @@
         /**
          * EntityQueryResult constructor.
          *
-         * @param Entity $entityRecord The entity record associated with this query result.
+         * @param EntityRecord $entityRecord The entity record associated with this query result.
          * @param QueriedBlacklistRecord[] $queriedBlacklistRecords An array of queried blacklist records associated with this entity.
          * @param EvidenceRecord[] $evidenceRecords An array of evidence records associated with this entity.
          * @param AuditLog[] $auditLogs An array of audit log records associated with this entity.
          */
-        public function __construct(Entity $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
+        public function __construct(EntityRecord $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
         {
             $this->entityRecord = $entityRecord;
             $this->queriedBlacklistRecords = $queriedBlacklistRecords;
@@ -39,9 +39,9 @@
         /**
          * Returns the entity record associated with this query result.
          *
-         * @return Entity The entity record associated with this query result.
+         * @return EntityRecord The entity record associated with this query result.
          */
-        public function getEntityRecord(): Entity
+        public function getEntityRecord(): EntityRecord
         {
             return $this->entityRecord;
         }
@@ -120,7 +120,7 @@
          */
         public static function fromArray(array $array): EntityQueryResult
         {
-            $entityRecord = Entity::fromArray($array['entity_record']);
+            $entityRecord = EntityRecord::fromArray($array['entity_record']);
             $queriedBlacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
                 $array['queried_blacklist_records']
             );
