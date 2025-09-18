@@ -6,6 +6,7 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
+    use FederationLib\Classes\RedisConnection;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\AuditLog;
@@ -15,6 +16,8 @@
 
     class AuditLogManager
     {
+        public const string CACHE_PREFIX = "audit_log:";
+
         /**
          * Creates a new audit log entry.
          *
@@ -58,11 +61,11 @@
                 Logger::log()->info(sprintf("[%s] %s", $type->value, $message));
             }
 
+            $type = $type->value;
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (type, message, operator, entity) VALUES (:type, :message, :operator, :entity)");
-
-                $type = $type->value;
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':message', $message);
                 $stmt->bindParam(':operator', $operatorUuid);
@@ -91,6 +94,15 @@
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
+            if(self::isCachingEnabled())
+            {
+                $cached = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $auditLogUuid));
+                if($cached !== null)
+                {
+                    return new AuditLog($cached);
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE uuid = :uuid");
@@ -103,12 +115,23 @@
                     return null; // No entry found
                 }
 
-                return new AuditLog($result);
+                $result = new AuditLog($result);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entry: " . $e->getMessage(), 0, $e);
             }
+
+            // If caching is enabled and limit not reached
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0))
+            {
+                RedisConnection::setRecord(
+                    record: $result, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $result->getUuid()),
+                    ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
+                );
+            }
+
+            return $result;
         }
 
         /**
@@ -149,7 +172,6 @@
                 }
 
                 $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
-
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
 
                 foreach ($params as $key => $value)
@@ -167,13 +189,22 @@
                 {
                     $entries[] = new AuditLog($row);
                 }
-
-                return $entries;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $entries, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
+                    ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
+                );
+            }
+
+            return $entries;
         }
 
         /**
@@ -241,13 +272,22 @@
                 {
                     $entries[] = new AuditLog($row);
                 }
-
-                return $entries;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries by operator: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $entries, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
+                    ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
+                );
+            }
+
+            return $entries;
         }
 
         /**
@@ -310,13 +350,22 @@
                 {
                     $entries[] = new AuditLog($row);
                 }
-
-                return $entries;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries by entity: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $entries, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
+                    ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
+                );
+            }
+
+            return $entries;
         }
 
         /**
@@ -345,6 +394,13 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to clean audit log entries: " . $e->getMessage(), 0, $e);
+            }
+            finally
+            {
+                if (self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -385,5 +441,15 @@
             {
                 throw new DatabaseOperationException("Failed to count audit log records: " . $e->getMessage(), 0, $e);
             }
+        }
+
+        /**
+         * Checks if caching is enabled based on the configuration.
+         *
+         * @return bool True if caching is enabled, false otherwise.
+         */
+        private static function isCachingEnabled(): bool
+        {
+            return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isAuditLogCacheEnabled();
         }
     }
