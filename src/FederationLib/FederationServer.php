@@ -16,7 +16,7 @@
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\Method;
     use FederationLib\Exceptions\RequestException;
-    use FederationLib\Objects\Operator;
+    use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ServerInformation;
     use InvalidArgumentException;
 
@@ -151,10 +151,10 @@
          * This method retrieves the currently authenticated operator, if any.
          * If no operator is authenticated, it returns null.
          *
-         * @return Operator|null The authenticated operator record or null if not authenticated.
+         * @return OperatorRecord|null The authenticated operator record or null if not authenticated.
          * @throws RequestException If authentication is provided but is invalid/operator is disabled.
          */
-        public static function getAuthenticatedOperator(): ?Operator
+        public static function getAuthenticatedOperator(): ?OperatorRecord
         {
             return parent::getAuthenticatedOperator();
         }
@@ -165,10 +165,10 @@
          * This method retrieves the currently authenticated operator. If no operator is authenticated,
          * it throws a RequestException with a 401 Unauthorized status code.
          *
-         * @return Operator The authenticated operator record.
+         * @return OperatorRecord The authenticated operator record.
          * @throws RequestException If no operator is authenticated.
          */
-        public static function requireAuthenticatedOperator(): Operator
+        public static function requireAuthenticatedOperator(): OperatorRecord
         {
             $operator = self::getAuthenticatedOperator();
             if ($operator === null)
@@ -187,26 +187,6 @@
          */
         public static function getServerInformation(): ServerInformation
         {
-            $cacheKey = 'server_information';
-            if(Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isSystemCachingEnabled())
-            {
-                try
-                {
-                    $cachedInfo = RedisConnection::getRecordFromCache($cacheKey);
-                }
-                catch (Exceptions\CacheOperationException $e)
-                {
-                    Logger::log()->error('Failed to retrieve server information from cache: ' . $e->getMessage(), $e);
-                    // If caching is enabled but fails, we can still proceed to fetch the information
-                    $cachedInfo = false;
-                }
-
-                if ($cachedInfo !== false)
-                {
-                    return ServerInformation::fromArray(json_decode($cachedInfo, true));
-                }
-            }
-
             try
             {
                 $serverInformation = new ServerInformation([
@@ -231,19 +211,6 @@
             {
                 Logger::log()->error('Failed to retrieve server information: ' . $e->getMessage(), $e);
                 throw new RequestException('Unable to retrieve server information', HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-            }
-
-            if(Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isSystemCachingEnabled())
-            {
-                try
-                {
-                    RedisConnection::setCacheRecord($serverInformation, $cacheKey, 200); // Cache for 200 seconds
-                }
-                catch (Exceptions\CacheOperationException $e)
-                {
-                    Logger::log()->error('Failed to cache server information: ' . $e->getMessage(), $e);
-                    // If caching fails, we can still return the server information without caching
-                }
             }
 
             return $serverInformation;
