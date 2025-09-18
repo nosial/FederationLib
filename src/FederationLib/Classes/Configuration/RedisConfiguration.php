@@ -12,22 +12,24 @@
         private bool $throwOnErrors;
         private bool $preCacheEnabled;
         private bool $systemCachingEnabled;
-
         private bool $operatorCacheEnabled;
         private int $operatorCacheLimit;
         private int $operatorCacheTtl;
-
         private bool $entitiesCacheEnabled;
         private int $entitiesCacheLimit;
         private int $entitiesCacheTtl;
-
         private bool $fileAttachmentCacheEnabled;
         private int $fileAttachmentCacheLimit;
         private int $fileAttachmentCacheTtl;
-
         private bool $evidenceCacheEnabled;
         private int $evidenceCacheLimit;
         private int $evidenceCacheTtl;
+        private bool $auditLogCacheEnabled;
+        private int $auditLogCacheLimit;
+        private int $auditLogCacheTtl;
+        private bool $blacklistCacheEnabled;
+        private int $blacklistCacheLimit;
+        private int $blacklistCacheTtl;
 
         /**
          * RedisConfiguration constructor.
@@ -56,6 +58,12 @@
             $this->evidenceCacheEnabled = $configuration['evidence_cache_enabled'] ?? true;
             $this->evidenceCacheLimit = $configuration['evidence_cache_limit'] ?? 3000;
             $this->evidenceCacheTtl = $configuration['evidence_cache_ttl'] ?? 600;
+            $this->auditLogCacheEnabled = $configuration['audit_log_cache_enabled'] ?? true;
+            $this->auditLogCacheLimit = $configuration['audit_log_cache_limit'] ?? 1000;
+            $this->auditLogCacheTtl = $configuration['audit_log_cache_ttl'] ?? 600;
+            $this->blacklistCacheEnabled = $configuration['blacklist_cache_enabled'] ?? true;
+            $this->blacklistCacheLimit = $configuration['blacklist_cache_limit'] ?? 3000;
+            $this->blacklistCacheTtl = $configuration['blacklist_cache_ttl'] ?? 600;
         }
 
         /**
@@ -260,5 +268,65 @@
         public function getEvidenceCacheTtl(): int
         {
             return $this->evidenceCacheTtl;
+        }
+
+        /**
+         * Returns True if audit log caching is enabled
+         *
+         * @return bool True if audit log caching is Enabled, False otherwise
+         */
+        public function isAuditLogCacheEnabled(): bool
+        {
+            return $this->auditLogCacheEnabled;
+        }
+
+        /**
+         * Returns the audit log cache limit for the cache
+         *
+         * @return int The maximum number of audit log records, anything 0 or less=no limit
+         */
+        public function getAuditLogCacheLimit(): int
+        {
+            return $this->auditLogCacheLimit;
+        }
+
+        /**
+         * Returns the audit log cache TTL in seconds
+         *
+         * @return int The time to live in seconds for the audit log cache
+         */
+        public function getAuditLogCacheTtl(): int
+        {
+            return $this->auditLogCacheTtl;
+        }
+
+        /**
+         * Returns True if caching for blacklist records are enabled
+         *
+         * @return bool True if caching blacklists is Enabled, False otherwise.
+         */
+        public function isBlacklistCacheEnabled(): bool
+        {
+            return $this->blacklistCacheEnabled;
+        }
+
+        /**
+         * Returns the limit of the amount of records that are allowed to be cached at once
+         *
+         * @return int The limit of the blacklist cache records
+         */
+        public function getBlacklistCacheLimit(): int
+        {
+            return $this->blacklistCacheLimit;
+        }
+
+        /**
+         * Returns the Time-To-Live (TTL) of the Blacklist cache record.
+         *
+         * @return int The Time-To-Live for the cache entry
+         */
+        public function getBlacklistCacheTtl(): int
+        {
+            return $this->blacklistCacheTtl;
         }
     }
