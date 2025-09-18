@@ -9,7 +9,7 @@
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
     use FederationLib\Objects\ErrorResponse;
-    use FederationLib\Objects\Operator;
+    use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
     use Throwable;
@@ -201,10 +201,10 @@
          * This method retrieves the API key from the request headers or query parameters,
          * validates it, and returns the corresponding OperatorRecord object if found and enabled.
          *
-         * @return Operator|null Returns the authenticated OperatorRecord object or null if not found or disabled.
+         * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if not found or disabled.
          * @throws RequestException If the API key is missing, invalid, or the operator is disabled.
          */
-        protected static function getAuthenticatedOperator(): ?Operator
+        protected static function getAuthenticatedOperator(): ?OperatorRecord
         {
             $apiKey = null;
             if (isset($_SERVER['HTTP_AUTHORIZATION']))
