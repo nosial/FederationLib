@@ -65,7 +65,7 @@
          * @param string $mimeType The MIME type
          * @return string The file extension (with dot) or empty string if unknown
          */
-        public static function getExtensionFromMimeType(string $mimeType): string
+        public static function extensionFromMime(string $mimeType): string
         {
             $mimeToExtension = [
                 // Images
