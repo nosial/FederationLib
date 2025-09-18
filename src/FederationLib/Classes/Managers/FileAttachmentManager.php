@@ -17,7 +17,7 @@
 
     class FileAttachmentManager
     {
-        private const string FILE_ATTACHMENT_CACHE_PREFIX = 'file_attachment_';
+        public const string CACHE_PREFIX = 'file_attachment:';
 
         /**
          * Creates a new file attachment record.
@@ -56,18 +56,6 @@
             {
                 throw new DatabaseOperationException("Failed to create file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
-
-            // If caching and pre-caching is enabled, retrieve the existing file attachment record and cache it
-            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                // If the limit has not been exceeded, cache the file attachment record
-                if (!RedisConnection::limitExceeded(self::FILE_ATTACHMENT_CACHE_PREFIX, Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit()))
-                {
-                    RedisConnection::setCacheRecord(self::getRecord($uuid), self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
-                }
-            }
-
-            // TODO: If caching is enabled, clear the current storage space cache size so it could be calculated again
         }
 
         /**
@@ -85,12 +73,6 @@
                 throw new InvalidArgumentException('File attachment UUID cannot be empty.');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
-            {
-                // If caching is enabled and the file attachment exists in the cache, return it
-                return new FileAttachmentRecord(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
-            }
-
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE uuid = :uuid");
@@ -103,37 +85,22 @@
                     return null; // No record found
                 }
 
-                $fileAttachmentRecord = new FileAttachmentRecord($result);
+                $result = new FileAttachmentRecord($result);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
 
-            if(self::isCachingEnabled())
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit()))
             {
-                try
-                {
-                    if(RedisConnection::getConnection()->exists(self::getCacheKey($uuid)))
-                    {
-                        return $fileAttachmentRecord; // Return the cached record if it exists
-                    }
-
-                    Logger::log()->debug(sprintf("Caching file attachment with UUID '%s'", $uuid));
-                    RedisConnection::setCacheRecord($fileAttachmentRecord, self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
-                }
-                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
-                catch (RedisException $e)
-                {
-                    Logger::log()->error(sprintf("Failed to cache file attachment with UUID '%s': %s", $uuid, $e->getMessage()));
-                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
-                    {
-                        throw new CacheOperationException(sprintf("Failed to cache file attachment with UUID '%s'", $uuid), 0, $e);
-                    }
-                }
+                RedisConnection::setRecord(
+                    record: $result, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $uuid),
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                );
             }
 
-            return $fileAttachmentRecord;
+            return $result;
         }
 
         /**
@@ -151,34 +118,7 @@
                 $stmt->bindParam(':evidence', $evidence);
                 $stmt->execute();
 
-                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $fileAttachments = array_map(fn($data) => new FileAttachmentRecord($data), $results);
-
-                // If caching is enabled and pre-caching is enabled, cache each file attachment
-                if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-                {
-                    $currentCount = RedisConnection::countKeys(self::FILE_ATTACHMENT_CACHE_PREFIX);
-                    foreach($fileAttachments as $fileAttachment)
-                    {
-                        // If the cache limit has not been exceeded, cache the file attachment record
-                        if($currentCount < Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit())
-                        {
-                            $cacheKey = self::getCacheKey($fileAttachment->getUuid());
-                            if(!RedisConnection::cacheRecordExists($cacheKey))
-                            {
-                                Logger::log()->debug(sprintf("Caching file attachment with UUID '%s'", $fileAttachment->getUuid()));
-                                RedisConnection::setCacheRecord($fileAttachment, $cacheKey, Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl());
-                                $currentCount++;
-                            }
-                        }
-                        else
-                        {
-                            break; // Stop caching if the limit has been reached
-                        }
-                    }
-                }
-
-                return $fileAttachments;
+                $results = array_map(fn($data) => new FileAttachmentRecord($data), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
@@ -188,6 +128,17 @@
             {
                 throw new CacheOperationException("Cache operation failed: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                );
+            }
+
+            return $results;
         }
 
         /**
@@ -222,41 +173,28 @@
             {
                 throw new DatabaseOperationException("Failed to delete file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
-
-            // Check if the file is writable and or it exists
-            if(file_exists($existingAttachment->getFilePath()) && is_writeable($existingAttachment->getFilePath()))
+            finally
             {
-                if(!@unlink($existingAttachment->getFilePath()))
+                // Check if the file is writable and or it exists
+                if(file_exists($existingAttachment->getFilePath()) && is_writeable($existingAttachment->getFilePath()))
                 {
-                    Logger::log()->error(sprintf("Failed to delete file attachment %s from %s due to an IO error", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
+                    if(!@unlink($existingAttachment->getFilePath()))
+                    {
+                        Logger::log()->error(sprintf("Failed to delete file attachment %s from %s due to an IO error", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
+                    }
+                }
+                else
+                {
+                    Logger::log()->warning(sprintf("Unable to delete file attachment %s from %s, because the file cannot be deleted or does not exist.", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
                 }
             }
-            else
-            {
-                Logger::log()->warning(sprintf("Unable to delete file attachment %s from %s, because the file cannot be deleted or does not exist.", $existingAttachment->getUuid(), $existingAttachment->getFilePath()));
-            }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            if(self::isCachingEnabled())
             {
-                Logger::log()->debug(sprintf("Deleting cache for file attachment with UUID '%s'", $uuid));
-                $cacheKey = self::getCacheKey($uuid);
-
-                try
-                {
-                    RedisConnection::getConnection()->del($cacheKey);
-                }
-                catch (RedisException $e)
-                {
-                    throw new CacheOperationException(sprintf("Failed to delete cache for file attachment with UUID '%s'", $uuid), 0, $e);
-                }
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
             }
         }
 
-        public static function getUsedSpace(): int
-        {
-            // TODO: Implement a cachable (if configured) way to calculate the total size usage of the storage path (where all the files are uploaded to)
-            $storagePath = Configuration::getServerConfiguration()->getStoragePath();
-        }
 
         /**
          * Counts the total number of file attachment records in the database.
@@ -277,8 +215,6 @@
             }
         }
 
-        // Caching operations
-
         /**
          * Returns True if caching & file attachment caching is enabled for this class
          *
@@ -287,17 +223,6 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isFileAttachmentCacheEnabled();
-        }
-
-        /**
-         * Returns the cache key based off the given file attachment UUID
-         *
-         * @param string $uuid The File Attachment UUID
-         * @return string The returned cache key
-         */
-        private static function getCacheKey(string $uuid): string
-        {
-            return sprintf("%s%s", self::FILE_ATTACHMENT_CACHE_PREFIX, $uuid);
         }
     }
 
