@@ -4,21 +4,18 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
-    use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
-    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EvidenceRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use RedisException;
     use Symfony\Component\Uid\UuidV4;
 
     class EvidenceManager
     {
-        private const string EVIDENCE_CACHE_PREFIX = 'evidence_';
+        public const string CACHE_PREFIX = 'evidence:';
 
         /**
          * Adds a new evidence record to the database.
@@ -31,7 +28,6 @@
          * @param bool $confidential Whether the evidence is confidential (default is false).
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws CacheOperationException If there is an error during the caching operation.
          * @return string The UUID of the newly created evidence record.
          */
         public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false): string
@@ -104,16 +100,6 @@
                 throw new DatabaseOperationException("Failed to add evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
 
-            // If caching and pre-caching is enabled, retrieve the existing evidence record and cache it
-            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                // If the limit has not been exceeded, cache the evidence record
-                if (!RedisConnection::limitExceeded(self::EVIDENCE_CACHE_PREFIX, Configuration::getRedisConfiguration()->getEvidenceCacheLimit()))
-                {
-                    RedisConnection::setCacheRecord(self::getEvidence($uuid), self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getEvidenceCacheTtl());
-                }
-            }
-
             return $uuid;
         }
 
@@ -123,7 +109,6 @@
          * @param string $uuid The UUID of the evidence record to delete.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws CacheOperationException If there is an error during the caching operation.
          * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
         public static function deleteEvidence(string $uuid): void
@@ -148,19 +133,13 @@
             {
                 throw new DatabaseOperationException("Failed to delete evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
-
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            finally
             {
-                Logger::log()->debug(sprintf("Deleting cache for evidence with UUID '%s'", $uuid));
-                $cacheKey = self::getCacheKey($uuid);
-
-                try
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del($cacheKey);
-                }
-                catch (RedisException $e)
-                {
-                    throw new CacheOperationException(sprintf("Failed to delete cache for evidence with UUID '%s'", $uuid), 0, $e);
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'evidence', $uuid);
+                    RedisConnection::deleteRecordsByField(FileAttachmentManager::CACHE_PREFIX, 'evidence', $uuid);
                 }
             }
         }
@@ -168,35 +147,33 @@
         /**
          * Retrieves a specific evidence record by its UUID.
          *
-         * @param string $uuid The UUID of the evidence record.
+         * @param string $evidenceUuid The UUID of the evidence record.
          * @return EvidenceRecord|null The EvidenceRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws CacheOperationException If there is an error during the caching operation.
          * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
-        public static function getEvidence(string $uuid): ?EvidenceRecord
+        public static function getEvidence(string $evidenceUuid): ?EvidenceRecord
         {
-            if(strlen($uuid) < 1)
+            if(strlen($evidenceUuid) < 1)
             {
                 throw new InvalidArgumentException('Evidence UUID must be provided');
             }
 
-            if(!Validate::uuid($uuid))
+            if(!Validate::uuid($evidenceUuid))
             {
                 throw new InvalidArgumentException('Invalid Evidence UUID');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
             {
-                // If caching is enabled and the evidence exists in the cache, return it
-                return new EvidenceRecord(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
+                return new EvidenceRecord(RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)));
             }
 
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM evidence WHERE uuid = :uuid");
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->execute();
 
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -205,37 +182,22 @@
                     return null; // No evidence found with the given UUID
                 }
 
-                $evidenceRecord = new EvidenceRecord($data);
+                $data = new EvidenceRecord($data);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
 
-            if(self::isCachingEnabled())
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getEvidenceCacheLimit()))
             {
-                try
-                {
-                    if(RedisConnection::getConnection()->exists(self::getCacheKey($uuid)))
-                    {
-                        return $evidenceRecord; // Return the cached record if it exists
-                    }
-
-                    Logger::log()->debug(sprintf("Caching evidence with UUID '%s'", $uuid));
-                    RedisConnection::setCacheRecord($evidenceRecord, self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getEvidenceCacheTtl());
-                }
-                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
-                catch (RedisException $e)
-                {
-                    Logger::log()->error(sprintf("Failed to cache evidence with UUID '%s': %s", $uuid, $e->getMessage()));
-                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
-                    {
-                        throw new CacheOperationException(sprintf("Failed to cache evidence with UUID '%s'", $uuid), 0, $e);
-                    }
-                }
+                RedisConnection::setRecord(
+                    record: $data, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $data->getUuid()),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
             }
 
-            return $evidenceRecord;
+            return $data;
         }
         
         /**
@@ -283,13 +245,22 @@
                 {
                     $evidenceRecords[] = new EvidenceRecord($data);
                 }
-
-                return $evidenceRecords;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence records: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
         }
 
         /**
@@ -325,7 +296,6 @@
                 throw new InvalidArgumentException('Page must be greater than 0');
             }
 
-            
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -348,13 +318,22 @@
                 {
                     $evidenceRecords[] = new EvidenceRecord($data);
                 }
-
-                return $evidenceRecords;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence by entity: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
         }
 
         /**
@@ -390,7 +369,6 @@
                 throw new InvalidArgumentException('Page must be greater than 0');
             }
 
-
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -414,12 +392,22 @@
                     $evidenceRecords[] = new EvidenceRecord($data);
                 }
 
-                return $evidenceRecords;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence by operator: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
         }
 
         /**
@@ -466,13 +454,22 @@
                 {
                     $evidenceRecords[] = new EvidenceRecord($data);
                 }
-
-                return $evidenceRecords;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence by entity: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
         }
 
         /**
@@ -482,7 +479,6 @@
          * @return bool True if the evidence exists, false otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function evidenceExists(string $evidenceUuid): bool
         {
@@ -496,9 +492,8 @@
                 throw new InvalidArgumentException('Evidence UUID must be valid');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($evidenceUuid)))
+            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
             {
-                // If caching is enabled and the evidence exists in the cache, return true
                 return true;
             }
 
@@ -515,11 +510,6 @@
                 throw new DatabaseOperationException("Failed to check evidence existence: " . $e->getMessage(), $e->getCode(), $e);
             }
 
-            if($exists && self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                self::getEvidence($evidenceUuid);
-            }
-
             return $exists;
         }
 
@@ -530,7 +520,6 @@
          * @param bool $confidential The new confidentiality status (true for confidential, false for non-confidential).
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function updateConfidentiality(string $evidenceUuid, bool $confidential): void
         {
@@ -550,14 +539,11 @@
             {
                 throw new DatabaseOperationException("Failed to update confidentiality: " . $e->getMessage(), $e->getCode(), $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for evidence with UUID '%s' after confidentiality update", $evidenceUuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($evidenceUuid), 'confidential', $confidential);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
                 {
-                    self::getEvidence($evidenceUuid);
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
                 }
             }
         }
@@ -582,23 +568,12 @@
         }
 
         /**
-         * Checks if caching is enabled.
+         * Checks if caching is enabled based on the configuration.
          *
          * @return bool True if caching is enabled, false otherwise.
          */
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isEvidenceCacheEnabled();
-        }
-
-        /**
-         * Generates a cache key for the given UUID.
-         *
-         * @param string $uuid The UUID of the evidence record.
-         * @return string The cache key.
-         */
-        private static function getCacheKey(string $uuid): string
-        {
-            return sprintf("%s%s", self::EVIDENCE_CACHE_PREFIX, $uuid);
         }
     }
