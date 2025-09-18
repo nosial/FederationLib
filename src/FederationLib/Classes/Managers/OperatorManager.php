@@ -4,21 +4,20 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
-    use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
-    use FederationLib\Objects\Operator;
+    use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use RedisException;
     use Symfony\Component\Uid\Uuid;
 
     class OperatorManager
     {
-        private const string OPERATOR_CACHE_PREFIX = 'operator_';
+        public const string CACHE_PREFIX = 'operator:';
+        public const string API_KEY_POINTER_PREFIX = 'operator_api_key:';
 
         /**
          * Create a new operator with a unique API key.
@@ -56,16 +55,6 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to create operator '%s'", $name), 0, $e);
-            }
-
-            // If caching and pre-caching is enabled, retrieve the existing operator record and cache it
-            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                // If the limit has not been exceeded, cache the operator record
-                if (!RedisConnection::limitExceeded(self::OPERATOR_CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit()))
-                {
-                    RedisConnection::setCacheRecord(self::getOperator($uuid), self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getOperatorCacheTtl());
-                }
             }
 
             return $uuid;
@@ -130,12 +119,12 @@
          * This method checks if the master operator exists in the database.
          * If it does not exist, it creates one with a predefined API key.
          *
-         * @return Operator The master operator record.
+         * @return OperatorRecord The master operator record.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws InvalidArgumentException If the API key for the master operator is not set in the configuration.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getMasterOperator(): Operator
+        public static function getMasterOperator(): OperatorRecord
         {
             // This method retrieves the master operator from the database.
             // If the master operator does not exist, it creates one with a predefined API key.
@@ -147,7 +136,6 @@
             }
 
             $operator = self::getOperatorByApiKey($apiKey);
-
             if($operator === null)
             {
                 $uuid = self::createMasterOperator($apiKey);
@@ -161,22 +149,25 @@
          * Retrieve an operator by their UUID.
          *
          * @param string $uuid The UUID of the operator.
-         * @return Operator|null The operator record if found, null otherwise.
+         * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function getOperator(string $uuid): ?Operator
+        public static function getOperator(string $uuid): ?OperatorRecord
         {
             if(empty($uuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            if(self::isCachingEnabled())
             {
-                // If caching is enabled and the operator exists in the cache, return it
-                return new Operator(RedisConnection::getRecordFromCache(self::getCacheKey($uuid)));
+                $cached = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                if($cached !== null)
+                {
+                    return new OperatorRecord($cached);
+                }
             }
 
             try
@@ -192,34 +183,28 @@
                     return null; // No operator found with the given UUID
                 }
 
-                $operatorRecord = new Operator($data);
+                $operatorRecord = new OperatorRecord($data);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to retrieve operator with UUID '%s'", $uuid), 0, $e);
             }
 
-            if(self::isCachingEnabled())
+            // Cache the operator record if caching is enabled and limit not reached
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
             {
-                try
-                {
-                    if(RedisConnection::getConnection()->exists($uuid))
-                    {
-                        return $operatorRecord; // Return the cached record if it exists
-                    }
+                RedisConnection::setRecord(
+                    record: $operatorRecord, 
+                    cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $uuid),
+                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                );
 
-                    Logger::log()->debug(sprintf("Caching operator with UUID '%s'", $uuid));
-                    RedisConnection::setCacheRecord($operatorRecord, self::getCacheKey($uuid), Configuration::getRedisConfiguration()->getOperatorCacheTtl());
-                }
-                // Database operations can fail, but we don't want to throw cache exceptions if it could be ignored
-                catch (RedisException $e)
-                {
-                    Logger::log()->error(sprintf("Failed to cache operator with UUID '%s': %s", $uuid, $e->getMessage()));
-                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
-                    {
-                        throw new CacheOperationException(sprintf("Failed to cache operator with UUID '%s'", $uuid), 0, $e);
-                    }
-                }
+                // Create API key pointer for quick lookups
+                RedisConnection::getConnection()->setex(
+                    key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()),
+                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                    value: $uuid
+                );
             }
 
             return $operatorRecord;
@@ -241,10 +226,13 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            if(self::isCachingEnabled())
             {
-                // If caching is enabled and the operator exists in the cache, return true
-                return true;
+                $cached = RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                if($cached)
+                {
+                    return true;
+                }
             }
 
             try
@@ -260,11 +248,6 @@
                 throw new DatabaseOperationException(sprintf("Failed to check existence of operator with UUID '%s'", $uuid), 0, $e);
             }
 
-            if($exists && self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                self::getOperator($uuid);
-            }
-
             return $exists;
         }
 
@@ -272,14 +255,34 @@
          * Retrieve an operator by their API key.
          *
          * @param string $apiKey The API key of the operator.
-         * @return Operator|null The operator record if found, null otherwise.
+         * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function getOperatorByApiKey(string $apiKey): ?Operator
+        public static function getOperatorByApiKey(string $apiKey): ?OperatorRecord
         {
             if(empty($apiKey))
             {
                 throw new InvalidArgumentException('API key cannot be empty.');
+            }
+
+            // Try cache with API key pointer first
+            if(self::isCachingEnabled())
+            {
+                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey));
+                if($cachedUuid !== false && strlen($cachedUuid) > 0)
+                {
+                    $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
+                    if($data !== null)
+                    {
+                        return new OperatorRecord($data);
+                    }
+                    else
+                    {
+                        // API key pointer exists but operator record is missing from cache
+                        // Remove the stale API key pointer to prevent future inconsistencies
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey));
+                    }
+                }
             }
 
             try
@@ -295,12 +298,32 @@
                     return null; // No operator found with the given API key
                 }
 
-                return new Operator($data);
+                $operatorRecord = new OperatorRecord($data);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException(sprintf("Failed to retrieve operator with API key '%s'", $apiKey), 0, $e);
             }
+
+            // Cache the operator record and create API key pointer if caching is enabled and limit not reached
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
+            {
+                RedisConnection::setRecord(
+                    record: $operatorRecord,
+                    cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operatorRecord->getUuid()),
+                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                );
+
+                // Create a pointer from API key to UUID for quick lookups
+                // Only set the API key pointer if the operator record was successfully cached
+                RedisConnection::getConnection()->setex(
+                    key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey),
+                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                    value: $operatorRecord->getUuid()
+                );
+            }
+
+            return $operatorRecord;
         }
 
         /**
@@ -328,14 +351,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to disable operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for disabled operator with UUID '%s'", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'disabled', 1);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -365,14 +394,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to enable operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for enabled operator with UUID '%s'", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'disabled', 0);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -402,19 +437,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to delete operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled() && RedisConnection::cacheRecordExists(self::getCacheKey($uuid)))
+            finally
             {
-                Logger::log()->debug(sprintf("Deleting cache for operator with UUID '%s'", $uuid));
-                $cacheKey = self::getCacheKey($uuid);
-
-                try
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del($cacheKey);
-                }
-                catch (RedisException $e)
-                {
-                    throw new CacheOperationException(sprintf("Failed to delete cache for operator with UUID '%s'", $uuid), 0, $e);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -435,6 +471,17 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
 
+            // Get the current operator to access the old API key for cache invalidation
+            $oldOperator = null;
+            if(self::isCachingEnabled())
+            {
+                $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                if($cachedOperator !== null)
+                {
+                    $oldOperator = new OperatorRecord($cachedOperator);
+                }
+            }
+
             $newApiKey = Utilities::generateString();
 
             try
@@ -448,14 +495,18 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to refresh API key for operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for operator with UUID '%s' after API key refresh", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'api_key', $newApiKey);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    // Remove old API key pointer if we have the old operator data
+                    if($oldOperator !== null)
+                    {
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $oldOperator->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
 
@@ -489,14 +540,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to set operator management permissions for operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for operator with UUID '%s' after management permissions update", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'manage_operators', $canManageOperators);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -528,14 +585,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to set blacklist management permissions for operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for operator with UUID '%s' after blacklist management permissions update", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'manage_blacklist', (int)$canManageBlacklist);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -567,14 +630,20 @@
             {
                 throw new DatabaseOperationException(sprintf("Failed to set client status for operator with UUID '%s'", $uuid), 0, $e);
             }
-
-            if(self::isCachingEnabled())
+            finally
             {
-                Logger::log()->debug(sprintf("Updating cache for operator with UUID '%s' after client status update", $uuid));
-                $updateSuccess = RedisConnection::updateCacheRecord(self::getCacheKey($uuid), 'is_client', (int)$isClient);
-                if(!$updateSuccess && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
                 {
-                    self::getOperator($uuid);
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove API key pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
         }
@@ -584,7 +653,7 @@
          *
          * @param int $limit The maximum number of operators to retrieve.
          * @param int $page The page number for pagination.
-         * @return Operator[] An array of OperatorRecord objects representing the operators.
+         * @return OperatorRecord[] An array of OperatorRecord objects representing the operators.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
         public static function getOperators(int $limit=100, int $page=1): array
@@ -606,15 +675,38 @@
                 $operators = [];
                 while($data = $stmt->fetch())
                 {
-                    $operators[] = new Operator($data);
+                    $operators[] = new OperatorRecord($data);
                 }
-
-                return $operators;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve operators', 0, $e);
             }
+
+            // Pre-cache operators if caching is enabled and pre-caching is enabled
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                foreach($operators as $operator)
+                {
+                    if(!RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
+                    {
+                        RedisConnection::setRecord(
+                            record: $operator,
+                            cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
+                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                        );
+
+                        // Create API key pointer for quick lookups
+                        RedisConnection::getConnection()->setex(
+                            key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operator->getApiKey()),
+                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                            value: $operator->getUuid()
+                        );
+                    }
+                }
+            }
+
+            return $operators;
         }
 
         /**
@@ -665,16 +757,5 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isOperatorCacheEnabled();
-        }
-
-        /**
-         * Returns the cache key based off the given operator UUID
-         *
-         * @param string $uuid The Operator UUID
-         * @return string The returned cache key
-         */
-        private static function getCacheKey(string $uuid): string
-        {
-            return sprintf("%s%s", self::OPERATOR_CACHE_PREFIX, $uuid);
         }
     }
