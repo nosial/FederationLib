@@ -15,8 +15,7 @@ services:
       - internal_network
     restart: unless-stopped
     volumes:
-      - ./federation/logs:/var/log
-      - ./federation/uploads:/var/www/uploads
+      - federation_uploads:/var/www/uploads
     environment:
       # Logging Level, use "info", "debug", "error", "warning", or "critical"
       LOG_LEVEL: debug
@@ -27,6 +26,9 @@ services:
       FEDERATION_DATABASE_USERNAME: ${MYSQL_USER:-federation}
       FEDERATION_DATABASE_PASSWORD: ${MYSQL_PASSWORD:-federation}
       FEDERATION_DATABASE_NAME: ${MYSQL_DATABASE:-federation}
+      FEDERATION_REDIS_ENABLED: 'true'
+      FEDERATION_REDIS_HOST: redis
+      FEDERATION_REDIS_PASSWORD: root
 
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "Request-Type: ping", "http://127.0.0.0:8500/"]
@@ -77,6 +79,8 @@ services:
       start_period: 5s
 
 volumes:
+  federation_uploads:
+    driver: local
   mariadb_data:
     driver: local
   redis_data:
