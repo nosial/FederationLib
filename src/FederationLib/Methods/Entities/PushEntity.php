@@ -9,7 +9,6 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
-    use InvalidArgumentException;
 
     class PushEntity extends RequestHandler
     {
