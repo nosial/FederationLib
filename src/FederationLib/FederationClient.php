@@ -5,18 +5,19 @@
     use CURLFile;
     use CurlHandle;
     use FederationLib\Classes\Logger;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Enums\BlacklistType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\ResponseInterface;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
-    use FederationLib\Objects\Entity;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
-    use FederationLib\Objects\Operator;
+    use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ServerInformation;
     use FederationLib\Objects\SuccessResponse;
     use FederationLib\Objects\UploadResult;
@@ -331,18 +332,18 @@
          * Retrieves the operator with the given UUID.
          *
          * @param string $operatorUuid The UUID of the operator to retrieve
-         * @return Operator The retrieved operator object
+         * @return OperatorRecord The retrieved operator object
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function getOperator(string $operatorUuid): Operator
+        public function getOperator(string $operatorUuid): OperatorRecord
         {
             IF(empty($operatorUuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            return Operator::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
+            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/' . $operatorUuid, null, [HttpResponseCode::OK],
                 'Failed to get operator'
             ));
         }
@@ -350,13 +351,13 @@
         /**
          * Retrieves the operator associated with the current authentication token.
          *
-         * @return Operator The retrieved operator object
+         * @return OperatorRecord The retrieved operator object
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the authentication token is not set
          */
-        public function getSelf(): Operator
+        public function getSelf(): OperatorRecord
         {
-            return Operator::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
+            return OperatorRecord::fromArray($this->makeRequest('GET', 'operators/self', null, [HttpResponseCode::OK],
                 'Failed to get self operator'
             ));
         }
@@ -366,7 +367,7 @@
          *
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of operators per page (default is 100)
-         * @return Operator[] An array of Operator objects
+         * @return OperatorRecord[] An array of Operator objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
@@ -383,7 +384,7 @@
             }
 
             return array_map(
-                fn($item) => Operator::fromArray($item),
+                fn($item) => OperatorRecord::fromArray($item),
                 $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
                 )
@@ -623,18 +624,18 @@
          * Retrieves an entity record with the given identifier.
          *
          * @param string $entityIdentifier The entity UUID or entity hash to retrieve
-         * @return Entity The retrieved entity object
+         * @return EntityRecord The retrieved entity object
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function getEntityRecord(string $entityIdentifier): Entity
+        public function getEntityRecord(string $entityIdentifier): EntityRecord
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            return Entity::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+            return EntityRecord::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
                 sprintf('Failed to get the entity record for %s', $entityIdentifier)
             ));
         }
@@ -644,7 +645,7 @@
          *
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of entities per page (default is 100)
-         * @return Entity[] An array of Entity objects
+         * @return EntityRecord[] An array of Entity objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
@@ -661,7 +662,7 @@
             }
 
             return array_map(
-                fn($item) => Entity::fromArray($item),
+                fn($item) => EntityRecord::fromArray($item),
                 $this->makeRequest('GET', 'entities', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list entities, page: %d, limit: %d', $page, $limit)
                 )
@@ -1589,7 +1590,7 @@
             elseif($mimeType !== null)
             {
                 // Generate filename based on MIME type
-                $extension = Utilities::getExtensionFromMimeType($mimeType);
+                $extension = Utilities::extensionFromMime($mimeType);
                 $filename = $attachmentUuid . $extension;
             }
             else
@@ -1613,6 +1614,7 @@
         private function decodeResponse(string $response): ResponseInterface
         {
             $decoded = json_decode($response, true);
+
             if(json_last_error() !== JSON_ERROR_NONE)
             {
                 throw new RequestException('Failed to decode response: ' . json_last_error_msg() . "\n\n" . $response);
