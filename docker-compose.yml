@@ -28,7 +28,6 @@ services:
       FEDERATION_DATABASE_NAME: ${MYSQL_DATABASE:-federation}
       FEDERATION_REDIS_ENABLED: 'true'
       FEDERATION_REDIS_HOST: redis
-      FEDERATION_REDIS_PASSWORD: root
 
     healthcheck:
       test: ["CMD", "curl", "-f", "-H", "Request-Type: ping", "http://127.0.0.0:8500/"]
@@ -66,7 +65,6 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
     volumes:
       - redis_data:/data
-      - ./docker/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - internal_network
     expose:
