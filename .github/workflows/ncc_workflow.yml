@@ -196,7 +196,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt update -yqq
-          apt install git libpq-dev libzip-dev zip make wget gnupg -yqq
+          apt install git libpq-dev libzip-dev zip make wget gnupg docker.io docker-compose -yqq
           curl -sSLf -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
           chmod +x /usr/local/bin/install-php-extensions
           install-php-extensions zip
@@ -231,17 +231,48 @@ jobs:
         run: |
           ncc package install --package="release/net.nosial.federation.ncc" --build-source --reinstall -y --log-level debug
 
+      - name: Build test environment
+        run: |
+          docker-compose -f docker-compose.yml build
+
       - name: Run PHPUnit tests
         run: |
+          check_service() {
+              local port=$1
+              local max_attempts=30
+              local wait_seconds=2
+              local attempt=1
+          
+              while [ $attempt -le $max_attempts ]; do
+              echo "Checking service on port $port (attempt $attempt/$max_attempts)..."
+              if curl -s -o /dev/null -w "%{http_code}" http://172.17.0.1:$port/ | grep -q "200"; then
+                echo "Service on port $port is available!"
+                return 0
+              fi
+          
+              echo "Service on port $port not yet available. Waiting ${wait_seconds}s before next attempt..."
+              sleep $wait_seconds
+              attempt=$((attempt + 1))
+              done
+          
+              echo "Error: Service on port $port not available after $max_attempts attempts"
+              return 1
+          }
+
+          # Prepare phpunit
           wget https://phar.phpunit.de/phpunit-11.3.phar
+          docker-compose -f docker-compose.yml up -d
+          check_service 8500 || exit 1
+          
+          # Run the tests and tare down the test environment
           php phpunit-11.3.phar --configuration phpunit.xml --log-junit reports/junit.xml --log-teamcity reports/teamcity --testdox-html reports/testdox.html --testdox-text reports/testdox.txt
+          docker-compose -f docker-compose.yml down
 
       - name: Upload test reports
         uses: actions/upload-artifact@v4
         with:
           name: reports
           path: reports
-
 
   release-documentation:
     needs: generate-phpdoc
@@ -264,10 +295,10 @@ jobs:
       - name: Upload documentation artifact
         uses: softprops/action-gh-release@v1
         with:
-            files: |
-                documentation/*
+          files: |
+            documentation/*
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
   release-artifacts:
@@ -290,10 +321,10 @@ jobs:
       - name: Upload release artifact to release
         uses: softprops/action-gh-release@v1
         with:
-            files: |
-                release/*
+          files: |
+            release/*
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Download debug artifact
         uses: actions/download-artifact@v4
         with:
@@ -302,7 +333,7 @@ jobs:
       - name: Upload debug artifact to release
         uses: softprops/action-gh-release@v1
         with:
-            files: |
-                debug/*
+          files: |
+            debug/*
         env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
