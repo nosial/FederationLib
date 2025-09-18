@@ -264,6 +264,9 @@ jobs:
           docker-compose -f docker-compose.yml up -d
           check_service 8500 || exit 1
           
+          # Show docker-compose logs for debugging while tests run
+          docker-compose -f docker-compose.yml logs -f &
+          
           # Run the tests and tare down the test environment
           php phpunit-11.3.phar --configuration phpunit.xml --log-junit reports/junit.xml --log-teamcity reports/teamcity --testdox-html reports/testdox.html --testdox-text reports/testdox.txt
           docker-compose -f docker-compose.yml down
