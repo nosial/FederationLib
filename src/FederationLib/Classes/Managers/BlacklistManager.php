@@ -2,7 +2,9 @@
 
     namespace FederationLib\Classes\Managers;
 
+    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\BlacklistType;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -14,6 +16,8 @@
 
     class BlacklistManager
     {
+        public const string CACHE_PREFIX = 'blacklist:';
+
         /**
          * Blacklists an entity with the specified operator and type.
          *
@@ -118,6 +122,15 @@
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
+            if(self::isCachingEnabled())
+            {
+                $recordExists = RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                if($recordExists)
+                {
+                    return true;
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE uuid=:blacklist_uuid LIMIT 1");
@@ -146,6 +159,15 @@
                 throw new InvalidArgumentException("UUID cannot be empty.");
             }
 
+            if(self::isCachingEnabled())
+            {
+                $cachedRecord = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                if($cachedRecord !== null)
+                {
+                    return new BlacklistRecord($cachedRecord);
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE uuid=:blacklist_uuid LIMIT 1");
@@ -153,17 +175,27 @@
                 $stmt->execute();
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                if($data)
+                if(!$data)
                 {
-                    return new BlacklistRecord($data);
+                    return null;
                 }
 
-                return null;
+                $result = new BlacklistRecord($data);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entry: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getBlacklistCacheLimit()))
+            {
+                RedisConnection::setRecord(
+                    record: $result, cacheKey: self::CACHE_PREFIX,
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
+            }
+
+            return $result;
         }
 
         /**
@@ -189,6 +221,13 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to delete blacklist record: " . $e->getMessage(), 0, $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                }
             }
         }
 
@@ -222,6 +261,13 @@
             {
                 throw new DatabaseOperationException("Failed to lift blacklist record: " . $e->getMessage(), 0, $e);
             }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                }
+            }
         }
 
         /**
@@ -244,24 +290,36 @@
 
             try
             {
-                if ($includeLifted) {
+                if ($includeLifted)
+                {
                     $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-                } else {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 }
-                $stmt->execute();
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                }
 
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                return array_map(fn($data) => new BlacklistRecord($data), $results);
+                $results = array_map(fn($data) => new BlacklistRecord($data), $results);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
+            }
+
+            return $results;
         }
 
         /**
@@ -290,26 +348,38 @@
 
             try
             {
-                if ($includeLifted) {
+                if ($includeLifted)
+                {
                     $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':operator_uuid', $operatorUuid);
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-                } else {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':operator_uuid', $operatorUuid);
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                }
+
+                $stmt->bindParam(':operator_uuid', $operatorUuid);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                return array_map(fn($data) => new BlacklistRecord($data), $results);
+                $results = array_map(fn($data) => new BlacklistRecord($data), $results);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries by operator: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
+            }
+
+            return $results;
         }
 
         /**
@@ -339,59 +409,38 @@
 
             try
             {
-                if ($includeLifted) {
+                if ($includeLifted)
+                {
                     $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':entity_uuid', $entityUuid);
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-                } else {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
-                    $stmt->bindParam(':entity_uuid', $entityUuid);
-                    $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                }
+
+                $stmt->bindParam(':entity_uuid', $entityUuid);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
                 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                return array_map(fn($data) => new BlacklistRecord($data), $results);
+                $results = array_map(fn($data) => new BlacklistRecord($data), $results);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries by entity: " . $e->getMessage(), 0, $e);
             }
-        }
 
-        /**
-         * Attaches evidence to a blacklist entry.
-         *
-         * @param string $blacklist The UUID of the blacklist entry.
-         * @param string $evidence The UUID of the evidence to attach.
-         * @throws InvalidArgumentException If the blacklist or evidence UUIDs are empty or invalid.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function attachEvidence(string $blacklist, string $evidence): void
-        {
-            if(empty($blacklist) || empty($evidence))
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
-                throw new InvalidArgumentException("Blacklist and evidence UUIDs cannot be empty.");
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX,
+                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
             }
 
-            if(!Validate::uuid($blacklist) || !Validate::uuid($evidence))
-            {
-                throw new InvalidArgumentException("Blacklist and evidence must be valid UUIDs.");
-            }
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET evidence = :evidence WHERE uuid = :blacklist");
-                $stmt->bindParam(':blacklist', $blacklist);
-                $stmt->bindParam(':evidence', $evidence);
-                $stmt->execute();
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to attach evidence to blacklist: " . $e->getMessage(), 0, $e);
-            }
+            return $results;
         }
 
         /**
@@ -424,6 +473,13 @@
             {
                 throw new DatabaseOperationException("Failed to clean blacklist entries: " . $e->getMessage(), 0, $e);
             }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                }
+            }
         }
 
         /**
@@ -444,5 +500,15 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve total blacklist entries: " . $e->getMessage(), 0, $e);
             }
+        }
+
+        /**
+         * Checks if caching is enabled based on the configuration.
+         *
+         * @return bool True if caching is enabled, false otherwise.
+         */
+        private static function isCachingEnabled(): bool
+        {
+            return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isBlacklistCacheEnabled();
         }
     }
