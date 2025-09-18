@@ -6,7 +6,7 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class Entity implements SerializableInterface
+    class EntityRecord implements SerializableInterface
     {
         private string $uuid;
         private string $host;
@@ -26,23 +26,34 @@
         {
             $this->uuid = $data['uuid'] ?? '';
             $this->host = $data['host'] ?? '';
-            $this->id = $data['id'] ?? null;
+            $this->id = (isset($data['id']) && $data['id'] !== '') ? $data['id'] : null;
 
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
             {
-                $data['created'] = strtotime($data['created']);
+                // Check if it's a numeric string (from Redis cache)
+                if (is_numeric($data['created']))
+                {
+                    $this->created = (int)$data['created'];
+                }
+                else
+                {
+                    // SQL datetime string - convert using strtotime
+                    $this->created = strtotime($data['created']);
+                }
             }
             elseif (isset($data['created']) && $data['created'] instanceof DateTime)
             {
-                $data['created'] = $data['created']->getTimestamp();
+                $this->created = $data['created']->getTimestamp();
+            }
+            elseif (isset($data['created']) && is_int($data['created']))
+            {
+                $this->created = $data['created'];
             }
             else
             {
-                $data['created'] = $data['created'] ?? time();
+                $this->created = time();
             }
-
-            $this->created = (int)($data['created'] ?? time());
         }
 
         /**
@@ -128,20 +139,8 @@
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): Entity
+        public static function fromArray(array $array): EntityRecord
         {
-            if(isset($array['created']))
-            {
-                if(is_string($array['created']))
-                {
-                    $array['created'] = strtotime($array['created']);
-                }
-                elseif($array['created'] instanceof DateTime)
-                {
-                    $array['created'] = $array['created']->getTimestamp();
-                }
-            }
-
             return new self($array);
         }
     }
