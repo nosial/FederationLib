@@ -135,11 +135,8 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for URL attachment', 'URL attachment test', 'url_attachment');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Use a small, publicly accessible file (e.g., a small text file or JSON)
-            $testUrl = 'https://httpbin.org/json';
-
             // Upload the attachment from URL
-            $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, $testUrl);
+            $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'http://ipv4.download.thinkbroadband.com/5MB.zip');
             $this->assertNotNull($uploadResult);
             $this->assertNotEmpty($uploadResult->getUuid());
             $this->assertNotEmpty($uploadResult->getUrl());
@@ -438,13 +435,10 @@
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence', 'Test', 'test');
             $this->createdEvidenceRecords[] = $evidenceUuid;
-
-            // Test with maximum file size limit for URL uploads (should fail)
-            $testUrl = 'https://httpbin.org/json';
             
             $this->expectException(RequestException::class);
             // Try to upload with a very small max size (1 byte) - should fail
-            $this->client->uploadFileAttachmentFromUrl($evidenceUuid, $testUrl, 1);
+            $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'http://ipv4.download.thinkbroadband.com/5MB.zip', 1);
         }
 
         // DURABILITY AND STRESS TESTS

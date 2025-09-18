@@ -114,20 +114,20 @@
             $this->generateSampleAuditLogs();
 
             // Test pagination
-            $page1 = $this->client->listAuditLogs(1, 5);
-            $page2 = $this->client->listAuditLogs(2, 5);
+            $page1 = $this->client->listAuditLogs(1, 3);
+            $page2 = $this->client->listAuditLogs(2, 3);
 
             $this->assertIsArray($page1);
             $this->assertIsArray($page2);
-            $this->assertLessThanOrEqual(5, count($page1));
-            $this->assertLessThanOrEqual(5, count($page2));
+            $this->assertLessThanOrEqual(3, count($page1));
+            $this->assertLessThanOrEqual(3, count($page2));
 
             // Verify pages contain different records (if we have enough)
             if (count($page1) > 0 && count($page2) > 0)
             {
                 $page1Uuids = array_map(fn($log) => $log->getUuid(), $page1);
                 $page2Uuids = array_map(fn($log) => $log->getUuid(), $page2);
-                $this->assertEmpty(array_intersect($page1Uuids, $page2Uuids), "Pages should contain different records");
+                $this->assertCount(0, array_intersect($page1Uuids, $page2Uuids), "Pages should contain different records");
             }
         }
 

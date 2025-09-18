@@ -108,7 +108,7 @@
             
             // Test getEntityRecord response
             $entityRecord = $this->client->getEntityRecord($entityUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\Entity::class, $entityRecord);
+            $this->assertInstanceOf(\FederationLib\Objects\EntityRecord::class, $entityRecord);
             
             // Test required properties
             $this->assertIsString($entityRecord->getUuid());
@@ -165,7 +165,7 @@
             $this->assertGreaterThanOrEqual(3, count($foundEntities));
             
             foreach ($foundEntities as $entity) {
-                $this->assertInstanceOf(\FederationLib\Objects\Entity::class, $entity);
+                $this->assertInstanceOf(\FederationLib\Objects\EntityRecord::class, $entity);
                 $this->assertIsString($entity->getUuid());
                 $this->assertIsString($entity->getHost());
                 $this->assertIsInt($entity->getCreated());
@@ -187,7 +187,7 @@
             
             // Test getOperator response
             $operator = $this->client->getOperator($operatorUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\Operator::class, $operator);
+            $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $operator);
             
             // Test required properties
             $this->assertIsString($operator->getUuid());
@@ -210,7 +210,7 @@
         public function testSelfOperatorResponseStructure(): void
         {
             $selfOperator = $this->client->getSelf();
-            $this->assertInstanceOf(\FederationLib\Objects\Operator::class, $selfOperator);
+            $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $selfOperator);
             
             // Self operator should have all standard properties
             $this->assertIsString($selfOperator->getUuid());
@@ -240,7 +240,7 @@
             $this->assertGreaterThanOrEqual(3, count($operators));
             
             foreach ($operators as $operator) {
-                $this->assertInstanceOf(\FederationLib\Objects\Operator::class, $operator);
+                $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $operator);
                 $this->assertIsString($operator->getUuid());
                 $this->assertIsString($operator->getName());
                 $this->assertIsString($operator->getApiKey());
