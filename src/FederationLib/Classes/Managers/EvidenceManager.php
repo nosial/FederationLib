@@ -254,7 +254,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
                     ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
                 );
@@ -327,7 +327,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
                     ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
                 );
@@ -401,7 +401,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
                     ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
                 );
@@ -463,7 +463,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $evidenceRecords, prefix: self::CACHE_PREFIX,
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
                     ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
                 );
