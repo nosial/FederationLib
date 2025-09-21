@@ -121,4 +121,82 @@
 
             return $mimeToExtension[$mimeType] ?? '';
         }
+
+        /**
+         * Parse an email address into its components
+         *
+         * @param string $email The email address to parse
+         * @return array|null Array with 'domain' and 'username' keys, or null if invalid email
+         */
+        public static function parseEmail(string $email): ?array
+        {
+            $pattern = '/^(?<username>[a-zA-Z0-9._%+-]+)@(?<domain>[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/';
+
+            if (preg_match($pattern, $email, $matches))
+            {
+                return [
+                    'domain' => $matches['domain'],
+                    'username' => $matches['username']
+                ];
+            }
+
+            return null;
+        }
+
+        /**
+         * Extract the domain from a given URL.
+         *
+         * This function attempts to robustly extract the domain from various URL formats,
+         * including those with or without protocols, ports, paths, query parameters, and fragments.
+         * It also handles some malformed URLs by making reasonable assumptions.
+         *
+         * @param string $url The input URL from which to extract the domain.
+         * @return string|null The extracted domain in lowercase, or null if no valid domain can be determined.
+         * @noinspection HttpUrlsUsage (for handling http and https)
+         */
+        public static function extractDomainFromUrl(string $url): ?string
+        {
+            // Trim whitespace and remove common protocol prefixes to handle malformed input
+            $url = trim($url);
+            if (!preg_match('/^https?:\/\//i', $url))
+            {
+                $url = 'http://' . $url;
+            }
+
+            $parsedUrl = parse_url($url);
+            if ($parsedUrl === false)
+            {
+                return null;
+            }
+
+            // Attempt to get the 'host' component.
+            $host = $parsedUrl['host'] ?? null;
+            if ($host !== null)
+            {
+                return strtolower($host);
+            }
+
+            // If the 'host' is not found, check if the first path component could be the domain.
+            // This handles cases like "example.com/path".
+            $path = $parsedUrl['path'] ?? null;
+            if ($path !== null)
+            {
+                $pathParts = explode('/', $path);
+                $potentialHost = $pathParts[0];
+
+                // A basic check to see if the path part looks like a hostname.
+                if (str_contains($potentialHost, '.'))
+                {
+                    // Ensure it's not a path fragment by validating.
+                    // An IPv4 or IPv6 address is also a valid host.
+                    if (filter_var($potentialHost, FILTER_VALIDATE_IP) || filter_var($potentialHost, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME))
+                    {
+                        return strtolower($potentialHost);
+                    }
+                }
+            }
+
+            // If no host can be determined, return null.
+            return null;
+        }
     }
