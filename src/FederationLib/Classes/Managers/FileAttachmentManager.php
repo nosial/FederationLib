@@ -132,7 +132,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $results, prefix: self::CACHE_PREFIX,
+                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
                     ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
                 );
