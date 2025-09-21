@@ -17,6 +17,7 @@
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
+    use FederationLib\Objects\NamedEntity;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ServerInformation;
     use FederationLib\Objects\SuccessResponse;
@@ -182,6 +183,31 @@
 
             /** @var SuccessResponse $decodedResponse */
             return $decodedResponse->getData();
+        }
+
+        // CORE METHODS
+
+        /**
+         * Scans the given text content and attempts to identify entities within the text content such as URLs
+         * email addresses, ip addresses, etc.
+         *
+         * @param string $content The text content to scan
+         * @return NamedEntity[] The named entity results of the scna
+         * @throws RequestException Thrown if the request fails
+         */
+        public function scanContent(string $content): array
+        {
+            if(empty($content))
+            {
+                return [];
+            }
+
+            return array_map(
+                fn($item) => NamedEntity::fromArray($item),
+                $this->makeRequest('POST', 'scan', ['content' => $content], [HttpResponseCode::OK],
+                    'Failed to scan content'
+                )
+            );
         }
 
         // AUDIT METHODS
