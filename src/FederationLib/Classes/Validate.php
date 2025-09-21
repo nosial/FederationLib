@@ -67,4 +67,40 @@
 
             return false;
         }
+
+        public static function domain(string $domain): bool
+        {
+            // Basic validation - check length and structure
+            if (strlen($domain) > 253) return false;
+
+            $parts = explode('.', $domain);
+            if (count($parts) < 2) return false;
+
+            foreach ($parts as $part) {
+                if (strlen($part) > 63 || strlen($part) < 1) return false;
+                if (!preg_match('/^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?$/', $part)) return false;
+            }
+
+            return true;
+        }
+
+        public static function url(string $url): bool
+        {
+            return filter_var($url, FILTER_VALIDATE_URL) !== false;
+        }
+
+        public static function email(string $email): bool
+        {
+            return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+        }
+
+        public static function ipv4(string $ip): bool
+        {
+            return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+        }
+
+        public static function ipv6(string $ip): bool
+        {
+            return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+        }
     }
