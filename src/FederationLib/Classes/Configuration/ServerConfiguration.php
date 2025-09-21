@@ -23,7 +23,8 @@
         private array $publicAuditEntries;
         private bool $publicEvidence;
         private bool $publicBlacklist;
-        private bool $publicEntities = true;
+        private bool $publicEntities;
+        private bool $publicScanContent;
         private int $minBlacklistTime;
 
         /**
@@ -49,6 +50,7 @@
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicScanContent = $config['public_scan_content'] ?? false;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
         }
 
@@ -200,6 +202,16 @@
         public function isEntitiesPublic(): bool
         {
             return $this->publicEntities;
+        }
+
+        /**
+         * Checks if scan content is publicly accessible
+         *
+         * @return bool True if public scan content is enabled, false otherwise
+         */
+        public function isScanContentPublic(): bool
+        {
+            return $this->publicScanContent;
         }
 
         /**
