@@ -198,7 +198,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $entries, prefix: self::CACHE_PREFIX,
+                    records: $entries, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
                     ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
                 );
@@ -281,7 +281,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $entries, prefix: self::CACHE_PREFIX,
+                    records: $entries, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
                     ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
                 );
@@ -359,7 +359,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $entries, prefix: self::CACHE_PREFIX,
+                    records: $entries, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
                     ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
                 );
