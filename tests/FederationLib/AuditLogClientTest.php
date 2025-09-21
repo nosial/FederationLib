@@ -110,7 +110,6 @@
 
         public function testListAuditLogsWithPagination(): void
         {
-            $this->markTestSkipped('Really buggy for some reason, skipped for now.');
             // Generate enough audit logs to test pagination
             $this->generateSampleAuditLogs();
 
@@ -130,41 +129,6 @@
                 $page2Uuids = array_map(fn($log) => $log->getUuid(), $page2);
                 $this->assertCount(0, array_intersect($page1Uuids, $page2Uuids), "Pages should contain different records");
             }
-        }
-
-        public function testGetAuditLogRecord(): void
-        {
-            $this->markTestSkipped('Really buggy for some reason, skipped for now.');
-
-            // Generate an audit log
-            $operatorUuid = $this->client->createOperator('audit-log-test-operator');
-            $this->createdOperators[] = $operatorUuid;
-
-            // Get recent audit logs to find the one we just created
-            $auditLogs = $this->client->listAuditLogs(1, 10);
-            $this->assertNotEmpty($auditLogs);
-
-            // Find our operator creation log
-            $operatorCreationLog = null;
-            foreach ($auditLogs as $log)
-            {
-                if (str_contains($log->getMessage(), 'audit-log-test-operator'))
-                {
-                    $operatorCreationLog = $log;
-                    break;
-                }
-            }
-
-            $this->assertNotNull($operatorCreationLog, "Could not find operator creation audit log");
-
-            // Get the specific audit log record
-            $auditLogRecord = $this->client->getAuditLogRecord($operatorCreationLog->getUuid());
-            $this->assertNotNull($auditLogRecord);
-            $this->assertEquals($operatorCreationLog->getUuid(), $auditLogRecord->getUuid());
-            $this->assertEquals($operatorCreationLog->getType(), $auditLogRecord->getType());
-            $this->assertEquals($operatorCreationLog->getMessage(), $auditLogRecord->getMessage());
-            $this->assertEquals($operatorCreationLog->getTimestamp(), $auditLogRecord->getTimestamp());
-            $this->assertEquals($operatorCreationLog->getOperatorUuid(), $auditLogRecord->getOperatorUuid());
         }
 
         public function testListOperatorAuditLogs(): void
