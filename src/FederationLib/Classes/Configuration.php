@@ -38,6 +38,7 @@
             self::$configuration->setDefault('server.public_evidence', true, 'FEDERATION_PUBLIC_EVIDENCE');
             self::$configuration->setDefault('server.public_blacklist', true, 'FEDERATION_PUBLIC_BLACKLIST');
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
+            self::$configuration->setDefault('server.public_scan_content', true, 'FEDERATION_PUBLIC_SCAN_CONTENT');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
             // Maintenance configuration
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
