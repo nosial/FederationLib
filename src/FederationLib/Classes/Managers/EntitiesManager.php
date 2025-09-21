@@ -613,7 +613,7 @@
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
                 RedisConnection::setRecords(
-                    records: $entities, prefix: self::CACHE_PREFIX,
+                    records: $entities, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     ttl: Configuration::getRedisConfiguration()->getEntitiesCacheTtl() ?? 0
                 );
             }
