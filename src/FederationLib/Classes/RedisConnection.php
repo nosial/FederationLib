@@ -4,6 +4,7 @@
 
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Interfaces\SerializableInterface;
+    use InvalidArgumentException;
     use Redis;
     use RedisException;
 
@@ -356,12 +357,13 @@
          *
          * @param SerializableInterface[] $records Array of records to cache.
          * @param string $prefix The cache prefix to use.
+         * @param string $propertyName
          * @param int $limit The maximum number of records allowed in cache (0 = no limit).
          * @param int|null $ttl Optional TTL for cached records.
          * @return int The number of records actually cached.
          * @throws CacheOperationException If there is an error during the operation.
          */
-        public static function setRecords(array $records, string $prefix, int $limit=0, ?int $ttl=null): int
+        public static function setRecords(array $records, string $prefix, string $propertyName, int $limit=0, ?int $ttl=null): int
         {
             if (empty($records))
             {
@@ -369,6 +371,13 @@
             }
 
             $cached = 0;
+
+            // Check if the propertyName method exists on the record
+            $firstRecord = reset($records);
+            if (!method_exists($firstRecord, $propertyName))
+            {
+                throw new InvalidArgumentException(sprintf("Property method '%s' does not exist on the record class", $propertyName));
+            }
 
             if ($limit === 0)
             {
@@ -380,7 +389,8 @@
                         continue;
                     }
 
-                    self::setRecord($record, $prefix, $ttl);
+                    // Get the unique identifier value by dynamically calling the method
+                    self::setRecord($record, sprintf('%s%s', $prefix, $record->$propertyName()), $ttl);
                     $cached++;
                 }
             }
@@ -401,7 +411,8 @@
                             continue;
                         }
 
-                        self::setRecord($record, $prefix, $ttl);
+                        // Get the unique identifier value by dynamically calling the method
+                        self::setRecord($record, sprintf('%s%s', $prefix, $record->$propertyName()), $ttl);
                         $cached++;
                     }
                 }
@@ -409,4 +420,5 @@
 
             return $cached;
         }
+
     }
