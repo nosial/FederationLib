@@ -44,10 +44,13 @@
     use FederationLib\Methods\Operators\ManageClientPermission;
     use FederationLib\Methods\Operators\ManageOperatorsPermission;
     use FederationLib\Methods\Operators\RefreshOperatorApiKey;
+    use FederationLib\Methods\ScanContent;
 
     enum Method
     {
         case GET_SERVER_INFORMATION;
+
+        case SCAN_CONTENT;
 
         case LIST_AUDIT_LOGS;
         case VIEW_AUDIT_ENTRY;
@@ -105,6 +108,10 @@
             {
                 case self::GET_SERVER_INFORMATION:
                     GetServerInformation::handleRequest();
+                    break;
+
+                case self::SCAN_CONTENT:
+                    ScanContent::handleRequest();;
                     break;
 
                 case self::LIST_AUDIT_LOGS:
@@ -244,6 +251,7 @@
             {
                 $path === '/' && $requestMethod === 'GET' => Method::LIST_AUDIT_LOGS,
                 $path === '/info' && $requestMethod === 'GET' => Method::GET_SERVER_INFORMATION,
+                $path === '/scan' && $requestMethod === 'POST' => Method::SCAN_CONTENT,
                 preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::VIEW_AUDIT_ENTRY,
 
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
