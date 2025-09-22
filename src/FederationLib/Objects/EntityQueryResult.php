@@ -109,7 +109,7 @@
             return [
                 'entity_record' => $this->entityRecord->toArray(),
                 'is_blacklisted' => $this->isBlacklisted(),
-                'queried_blacklist_records' => array_map(fn($record) => $record->toArray(), $this->queriedBlacklistRecords),
+                'blacklist_records' => array_map(fn($record) => $record->toArray(), $this->queriedBlacklistRecords),
                 'evidence_records' => array_map(fn($record) => $record->toArray(), $this->evidenceRecords),
                 'audit_logs' => array_map(fn($log) => $log->toArray(), $this->auditLogs),
             ];
@@ -122,7 +122,7 @@
         {
             $entityRecord = EntityRecord::fromArray($array['entity_record']);
             $queriedBlacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
-                $array['queried_blacklist_records']
+                $array['blacklist_records']
             );
             $evidenceRecords = array_map(fn($item) => EvidenceRecord::fromArray($item),
                 $array['evidence_records']
