@@ -530,7 +530,7 @@
 
             $content = "Contact admin@example.com or admin@example.com for support at admin@example.com";
             $results = $this->client->scanContent($content);
-            
+                
             $this->assertIsArray($results);
             
             // Should find all instances, even if they're duplicates
