@@ -121,7 +121,7 @@
         public static function fromArray(array $array): EntityQueryResult
         {
             $entityRecord = EntityRecord::fromArray($array['entity_record']);
-            $queriedBlacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
+            $blacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
                 $array['blacklist_records']
             );
             $evidenceRecords = array_map(fn($item) => EvidenceRecord::fromArray($item),
@@ -131,6 +131,6 @@
                 $array['audit_logs']
             );
 
-            return new self($entityRecord, $queriedBlacklistRecords, $evidenceRecords, $auditLogs);
+            return new self($entityRecord, $blacklistRecords, $evidenceRecords, $auditLogs);
         }
     }
