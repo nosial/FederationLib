@@ -10,7 +10,7 @@
         /**
          * @var QueriedBlacklistRecord[]
          */
-        private array $queriedBlacklistRecords;
+        private array $blacklistRecords;
         /**
          * @var EvidenceRecord[]
          */
@@ -31,7 +31,7 @@
         public function __construct(EntityRecord $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
         {
             $this->entityRecord = $entityRecord;
-            $this->queriedBlacklistRecords = $queriedBlacklistRecords;
+            $this->blacklistRecords = $queriedBlacklistRecords;
             $this->evidenceRecords = $evidenceRecords;
             $this->auditLogs = $auditLogs;
         }
@@ -55,12 +55,12 @@
          */
         public function isBlacklisted(): bool
         {
-            if(empty($this->queriedBlacklistRecords))
+            if(empty($this->blacklistRecords))
             {
                 return false;
             }
 
-            foreach ($this->queriedBlacklistRecords as $record)
+            foreach ($this->blacklistRecords as $record)
             {
                 if (!$record->getBlacklistRecord()->isLifted())
                 {
@@ -76,9 +76,9 @@
          *
          * @return QueriedBlacklistRecord[] The array of queried blacklist records.
          */
-        public function getQueriedBlacklistRecords(): array
+        public function getBlacklistRecords(): array
         {
-            return $this->queriedBlacklistRecords;
+            return $this->blacklistRecords;
         }
 
         /**
@@ -109,7 +109,7 @@
             return [
                 'entity_record' => $this->entityRecord->toArray(),
                 'is_blacklisted' => $this->isBlacklisted(),
-                'blacklist_records' => array_map(fn($record) => $record->toArray(), $this->queriedBlacklistRecords),
+                'blacklist_records' => array_map(fn($record) => $record->toArray(), $this->blacklistRecords),
                 'evidence_records' => array_map(fn($record) => $record->toArray(), $this->evidenceRecords),
                 'audit_logs' => array_map(fn($log) => $log->toArray(), $this->auditLogs),
             ];
