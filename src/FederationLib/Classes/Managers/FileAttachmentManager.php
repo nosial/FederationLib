@@ -106,16 +106,16 @@
         /**
          * Retrieves all file attachment records associated with a specific evidence UUID.
          *
-         * @param string $evidence The UUID of the evidence record.
+         * @param string $evidenceUuid The UUID of the evidence record.
          * @return FileAttachmentRecord[] An array of FileAttachmentRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getRecordsByEvidence(string $evidence): array
+        public static function getRecordsByEvidence(string $evidenceUuid): array
         {
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE evidence = :evidence");
-                $stmt->bindParam(':evidence', $evidence);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE evidence=:evidence");
+                $stmt->bindParam(':evidence', $evidenceUuid);
                 $stmt->execute();
 
                 $results = array_map(fn($data) => new FileAttachmentRecord($data), $stmt->fetchAll(PDO::FETCH_ASSOC));

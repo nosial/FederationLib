@@ -10,7 +10,7 @@
         /**
          * @var QueriedBlacklistRecord[]
          */
-        private array $blacklistRecords;
+        private array $queriedBlacklistRecords;
         /**
          * @var EvidenceRecord[]
          */
@@ -31,7 +31,7 @@
         public function __construct(EntityRecord $entityRecord, array $queriedBlacklistRecords, array $evidenceRecords, array $auditLogs)
         {
             $this->entityRecord = $entityRecord;
-            $this->blacklistRecords = $queriedBlacklistRecords;
+            $this->queriedBlacklistRecords = $queriedBlacklistRecords;
             $this->evidenceRecords = $evidenceRecords;
             $this->auditLogs = $auditLogs;
         }
@@ -55,12 +55,12 @@
          */
         public function isBlacklisted(): bool
         {
-            if(empty($this->blacklistRecords))
+            if(empty($this->queriedBlacklistRecords))
             {
                 return false;
             }
 
-            foreach ($this->blacklistRecords as $record)
+            foreach ($this->queriedBlacklistRecords as $record)
             {
                 if (!$record->getBlacklistRecord()->isLifted())
                 {
@@ -76,9 +76,9 @@
          *
          * @return QueriedBlacklistRecord[] The array of queried blacklist records.
          */
-        public function getBlacklistRecords(): array
+        public function getQueriedBlacklistRecords(): array
         {
-            return $this->blacklistRecords;
+            return $this->queriedBlacklistRecords;
         }
 
         /**
@@ -109,7 +109,7 @@
             return [
                 'entity_record' => $this->entityRecord->toArray(),
                 'is_blacklisted' => $this->isBlacklisted(),
-                'blacklist_records' => array_map(fn($record) => $record->toArray(), $this->blacklistRecords),
+                'queried_blacklist_records' => array_map(fn($record) => $record->toArray(), $this->queriedBlacklistRecords),
                 'evidence_records' => array_map(fn($record) => $record->toArray(), $this->evidenceRecords),
                 'audit_logs' => array_map(fn($log) => $log->toArray(), $this->auditLogs),
             ];
@@ -121,8 +121,8 @@
         public static function fromArray(array $array): EntityQueryResult
         {
             $entityRecord = EntityRecord::fromArray($array['entity_record']);
-            $blacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
-                $array['blacklist_records']
+            $queriedBlacklistRecords = array_map(fn($item) => QueriedBlacklistRecord::fromArray($item),
+                $array['queried_blacklist_records']
             );
             $evidenceRecords = array_map(fn($item) => EvidenceRecord::fromArray($item),
                 $array['evidence_records']
@@ -131,6 +131,6 @@
                 $array['audit_logs']
             );
 
-            return new self($entityRecord, $blacklistRecords, $evidenceRecords, $auditLogs);
+            return new self($entityRecord, $queriedBlacklistRecords, $evidenceRecords, $auditLogs);
         }
     }

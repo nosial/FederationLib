@@ -323,7 +323,7 @@
                     $this->assertTrue($queryResult->isBlacklisted());
                     
                     // Verify we have blacklist records
-                    $blacklistRecords = $queryResult->getBlacklistRecords();
+                    $blacklistRecords = $queryResult->getQueriedBlacklistRecords();
                     $this->assertGreaterThan(0, count($blacklistRecords));
                     
                     // Check the first blacklist record

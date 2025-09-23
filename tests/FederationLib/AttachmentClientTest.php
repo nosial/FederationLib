@@ -566,6 +566,43 @@
             }
         }
 
+        // EVIDENCE FILE ATTACHMENT TEST
+
+        public function testGetEvidenceAttachments(): void
+        {
+            // Create entity and evidence
+            $entityUuid = $this->client->pushEntity('evidence-attachments-test.com', 'evidence_attachments_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence with attachments', 'Evidence attachments test', 'evidence_attachments');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $attachmentUuids = [];
+
+            // Upload multiple attachments for the same evidence
+            for ($i = 1; $i <= 2; $i++)
+            {
+                $content = "Content for evidence attachment number $i";
+                $fileName = "evidence_attachment_$i.txt";
+                $testFilePath = $this->createTestFile($fileName, $content);
+
+                $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+                $attachmentUuids[] = $uploadResult->getUuid();
+                $this->createdAttachments[] = $uploadResult->getUuid();
+            }
+
+            // Retrieve all attachments for the evidence
+            $attachments = $this->client->getEvidenceAttachments($evidenceUuid);
+            $this->assertCount(2, $attachments);
+
+            // Verify each attachment is correct
+            foreach ($attachments as $attachment)
+            {
+                $this->assertContains($attachment->getUuid(), $attachmentUuids);
+                $this->assertEquals($evidenceUuid, $attachment->getEvidenceUuid());
+            }
+        }
+
         // HELPER METHODS
 
         private function createTestFile(string $fileName, string $content): string

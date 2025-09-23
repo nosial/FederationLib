@@ -893,6 +893,29 @@
         }
 
         /**
+         * Retrieves attachments associated with a specific evidence record.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record whose attachments are to be retrieved
+         * @return FileAttachmentRecord[] An array of EvidenceAttachment objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function getEvidenceAttachments(string $evidenceUuid): array
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            return array_map(
+                fn($item) => FileAttachmentRecord::fromArray($item),
+                $this->makeRequest('GET', 'evidence/' . $evidenceUuid . '/attachments', null, [HttpResponseCode::OK],
+                    sprintf('Failed to get evidence attachments for evidence with UUID %s', $evidenceUuid)
+                )
+            );
+        }
+
+        /**
          * Lists evidence records with pagination support.
          *
          * @param int $page The page number to retrieve (default is 1)

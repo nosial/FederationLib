@@ -10,7 +10,6 @@
     use FederationLib\Methods\Attachments\UploadAttachment;
     use FederationLib\Methods\Audit\ListAuditLogs;
     use FederationLib\Methods\Audit\ViewAuditEntry;
-    use FederationLib\Methods\Blacklist\BlacklistAttachEvidence;
     use FederationLib\Methods\Blacklist\BlacklistEntity;
     use FederationLib\Methods\Blacklist\DeleteBlacklist;
     use FederationLib\Methods\Blacklist\GetBlacklistRecord;
@@ -25,6 +24,7 @@
     use FederationLib\Methods\Entities\PushEntity;
     use FederationLib\Methods\Entities\QueryEntity;
     use FederationLib\Methods\Evidence\DeleteEvidence;
+    use FederationLib\Methods\Evidence\GetEvidenceAttachments;
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
     use FederationLib\Methods\Evidence\ListEvidence;
     use FederationLib\Methods\Evidence\SubmitEvidence;
@@ -82,6 +82,7 @@
         case LIST_EVIDENCE;
         case SUBMIT_EVIDENCE;
         case GET_EVIDENCE_RECORD;
+        case GET_EVIDENCE_ATTACHMENTS;
         case UPDATE_CONFIDENTIALITY;
         case DELETE_EVIDENCE;
 
@@ -211,6 +212,9 @@
                 case self::GET_EVIDENCE_RECORD:
                     GetEvidenceRecord::handleRequest();
                     break;
+                case self::GET_EVIDENCE_ATTACHMENTS:
+                    GetEvidenceAttachments::handleRequest();
+                    break;
                 case self::UPDATE_CONFIDENTIALITY:
                     UpdateConfidentiality::handleRequest();
                     break;
@@ -284,6 +288,7 @@
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
                 $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/attachments$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_ATTACHMENTS,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update_confidentiality$#', $path) && $requestMethod === 'POST' => Method::UPDATE_CONFIDENTIALITY,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
 
