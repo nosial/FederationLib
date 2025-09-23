@@ -44,8 +44,8 @@ RUN docker-php-ext-install -j$(nproc) \
 WORKDIR /tmp/build
 COPY . .
 
-RUN ncc build --config release --build-source --log-level debug && \
-    ncc package install --package=build/release/net.nosial.federation.ncc --build-source -y --log-level=debug
+RUN ncc build --config release --build-source && \
+    ncc package install --package=build/release/net.nosial.federation.ncc --build-source -y
 
 # Clean up
 RUN rm -rf /tmp/build && rm -rf /var/www/html/*
