@@ -1,5 +1,5 @@
 ### NCC Build
-build/
+target/
 
 ### PHP-CS-Fixer template
 # Covers PHP CS Fixer
