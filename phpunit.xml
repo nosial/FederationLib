@@ -1,4 +1,4 @@
-<phpunit bootstrap="bootstrap.php">
+<phpunit bootstrap="tests/bootstrap.php">
     <testsuites>
         <testsuite name="FederationLib Test Suite">
             <directory>tests</directory>
@@ -6,9 +6,5 @@
     </testsuites>
     <php>
         <ini name="error_reporting" value="-1"/>
-        <ini name="memory_limit" value="1026M" />
-        <env name="LOG_LEVEL" value="debug"/>
-        <env name="SERVER_ENDPOINT" value="http://172.17.0.1:8500"/>
-        <env name="SERVER_API_KEY" value="abcdefghijklmnopqrstuvwxyz123456"/>
     </php>
 </phpunit>

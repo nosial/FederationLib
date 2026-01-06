@@ -1,0 +1,36 @@
+source: src/FederationLib
+default_build: release
+entry_point: main_policy
+update_source: nosial/federationlib@n64
+assembly:
+  name: FederationLib
+  package: net.nosial.federation
+  version: 1.0.0
+repository:
+  name: n64
+  type: github
+  host: git.n64.cc
+  ssl: true
+dependencies:
+  net.nosial.configlib: nosial/configlib@github
+  net.nosial.loglib2: nosial/loglib2@github
+  net.nosial.optslib: nosial/optslib@github
+  com.symfony.uid: symfony/uid@packagist
+execution_units:
+  -
+    name: main_policy
+    type: php
+    mode: auto
+    entry: main
+    working_directory: '${CWD}'
+build_configurations:
+  -
+    name: release
+    output: 'build/release/${ASSEMBLY.PACKAGE}.ncc'
+    type: ncc
+  -
+    name: debug
+    output: 'build/debug/${ASSEMBLY.PACKAGE}.ncc'
+    type: ncc
+    definitions:
+      DEBUG: '1'

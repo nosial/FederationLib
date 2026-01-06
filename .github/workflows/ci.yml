@@ -1,0 +1,275 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt update -yqq
+          apt install git libpq-dev libzip-dev zip make wget gnupg -yqq
+          curl -sSLf -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
+          chmod +x /usr/local/bin/install-php-extensions
+          install-php-extensions msgpack zip
+
+      - name: Install latest version of ncc
+        run: |
+          git clone https://git.n64.cc/nosial/ncc.git
+          cd ncc
+          git submodule update --init --recursive
+          make target/ncc.phar
+          chmod +x target/install.sh
+          ./target/install.sh
+          cd .. && rm -rf ncc
+
+      - name: Build project
+        run: |
+          ncc project install --log-level debug -y
+          ncc build --config release --log-level debug
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: build/release/net.nosial.federation.ncc
+
+  debug:
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt update -yqq
+          apt install git libpq-dev libzip-dev zip make wget gnupg -yqq
+          curl -sSLf -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
+          chmod +x /usr/local/bin/install-php-extensions
+          install-php-extensions msgpack zip
+
+      - name: Install latest version of ncc
+        run: |
+          git clone https://git.n64.cc/nosial/ncc.git
+          cd ncc
+          git submodule update --init --recursive
+          make target/ncc.phar
+          chmod +x target/install.sh
+          ./target/install.sh
+          cd .. && rm -rf ncc
+
+      - name: Build project
+        run: |
+          ncc project install --log-level debug -y
+          ncc build --config debug --log-level debug
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug
+          path: build/debug/net.nosial.federation.ncc
+
+  # Check for phpunit.xml
+  check-phpunit:
+    runs-on: ubuntu-latest
+    outputs:
+      phpunit-exists: ${{ steps.check.outputs.phpunit-exists }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Check for phpunit.xml
+        id: check
+        run: |
+          if [ -f phpunit.xml ]; then
+            echo "phpunit-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "phpunit-exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Check for phpdoc.dist.xml
+  check-phpdoc:
+    runs-on: ubuntu-latest
+    outputs:
+      phpdoc-exists: ${{ steps.check.outputs.phpdoc-exists }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Check for phpdoc.dist.xml
+        id: check
+        run: |
+          if [ -f phpdoc.dist.xml ]; then
+            echo "phpdoc-exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "phpdoc-exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  generate-phpdoc:
+    needs: [release, check-phpdoc]
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+    if: needs.check-phpdoc.outputs.phpdoc-exists == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt update -yqq
+          apt install git libpq-dev libzip-dev zip make wget gnupg -yqq
+
+      - name: Download PHPDocumentor
+        run: |
+          wget https://phpdoc.org/phpDocumentor.phar
+          chmod +x phpDocumentor.phar
+
+      - name: Generate PHPDoc
+        run: |
+          php phpDocumentor.phar -d src -t docs
+
+      - name: Archive PHPDoc
+        run: |
+          zip -r docs.zip docs
+
+      - name: Upload PHPDoc
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs.zip
+
+
+  test:
+    needs: [release, debug, check-phpunit]
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+    if: needs.check-phpunit.outputs.phpunit-exists == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt update -yqq
+          apt install git libpq-dev libzip-dev zip make wget gnupg -yqq
+          curl -sSLf -o /usr/local/bin/install-php-extensions https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions
+          chmod +x /usr/local/bin/install-php-extensions
+          install-php-extensions msgpack zip
+
+      - name: Install latest version of ncc
+        run: |
+          git clone https://git.n64.cc/nosial/ncc.git
+          cd ncc
+          git submodule update --init --recursive
+          make target/ncc.phar
+          chmod +x target/install.sh
+          ./target/install.sh
+          cd .. && rm -rf ncc
+
+      - name: Install ncc packages
+        run: |
+          ncc project install --log-level debug -y
+          ncc build --config=release --log-level debug
+
+      - name: Download PHPUnit
+        run: wget https://phar.phpunit.de/phpunit-11.3.phar
+
+      - name: Run PHPUnit tests
+        run: |
+          mkdir -p "$PWD/reports"
+          chmod 777 "$PWD/reports"
+          php phpunit-11.3.phar --configuration phpunit.xml --log-junit "$PWD/reports/junit.xml" --log-teamcity "$PWD/reports/teamcity" --testdox-html "$PWD/reports/testdox.html" --testdox-text "$PWD/reports/testdox.txt"
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: reports
+
+
+  release-documentation:
+    needs: generate-phpdoc
+    permissions: write-all
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: documentation
+          path: documentation
+
+      - name: Upload documentation artifact
+        uses: softprops/action-gh-release@v1
+        with:
+            files: |
+                documentation/*
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  release-artifacts:
+    needs: [release, debug]
+    permissions: write-all
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - name: Upload release artifact to release
+        uses: softprops/action-gh-release@v1
+        with:
+            files: |
+                release/*
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download debug artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: debug
+          path: debug
+
+      - name: Upload debug artifact to release
+        uses: softprops/action-gh-release@v1
+        with:
+            files: |
+                debug/*
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
