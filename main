@@ -1,7 +1,6 @@
 <?php
 
     use FederationLib\Program;
-    use ncc\Classes\Runtime;
 
     if (PHP_SAPI !== 'cli')
     {
@@ -22,6 +21,4 @@
         }
     }
 
-    require('ncc');
-    Runtime::import('net.nosial.federation', 'latest');
 	exit(Program::main($argv));
