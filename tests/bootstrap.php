@@ -1,7 +1,7 @@
 <?PHP
         require 'ncc';
 
-        $buildOutputPath = __DIR__ . DIRECTORY_SEPARATOR . '../build/release/net.nosial.federation.ncc';
+        $buildOutputPath = __DIR__ . DIRECTORY_SEPARATOR . '../target/release/net.nosial.federation.ncc';
         if(getenv('NCC_BUILD_OUTPUT_PATH'))
         {
             $buildOutputPath = getenv('NCC_BUILD_OUTPUT_PATH');
@@ -12,5 +12,4 @@
             throw new Exception('Build output not found: ' . $buildOutputPath);
         }
 
-        define('FL_TEST', true);
         import($buildOutputPath);

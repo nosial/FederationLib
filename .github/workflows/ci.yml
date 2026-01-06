@@ -45,7 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release
-          path: build/release/net.nosial.federation.ncc
+          path: target/release/net.nosial.federation.ncc
 
   debug:
     runs-on: ubuntu-latest
@@ -83,7 +83,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debug
-          path: build/debug/net.nosial.federation.ncc
+          path: target/debug/net.nosial.federation.ncc
 
   # Check for phpunit.xml
   check-phpunit:
