@@ -12,4 +12,5 @@
             throw new Exception('Build output not found: ' . $buildOutputPath);
         }
 
+        define('FL_TEST', true);
         import($buildOutputPath);
