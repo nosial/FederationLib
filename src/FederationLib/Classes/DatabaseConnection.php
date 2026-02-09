@@ -22,16 +22,29 @@
             // If the connection is not already established, create a new PDO instance.
             if (self::$pdo === null)
             {
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ];
+
+                // Add MySQL-specific init command only if the constant is available
+                if (defined('PDO::MYSQL_ATTR_INIT_COMMAND'))
+                {
+                    $options[PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET NAMES ' . Configuration::getDatabaseConfiguration()->getCharset() . ' COLLATE ' . Configuration::getDatabaseConfiguration()->getCollation();
+                }
+
                 self::$pdo = new PDO(
                     Configuration::getDatabaseConfiguration()->getDsn(),
                     Configuration::getDatabaseConfiguration()->getUsername(),
                     Configuration::getDatabaseConfiguration()->getPassword(),
-                    [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES ' . Configuration::getDatabaseConfiguration()->getCharset() . ' COLLATE ' . Configuration::getDatabaseConfiguration()->getCollation(),
-                    ]
+                    $options
                 );
+
+                // If MySQL constant wasn't available, execute charset command after connection
+                if (!defined('PDO::MYSQL_ATTR_INIT_COMMAND'))
+                {
+                    self::$pdo->exec('SET NAMES ' . Configuration::getDatabaseConfiguration()->getCharset() . ' COLLATE ' . Configuration::getDatabaseConfiguration()->getCollation());
+                }
             }
 
             return self::$pdo;
