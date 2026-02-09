@@ -34,7 +34,7 @@
          */
         public function __construct(array $config)
         {
-            $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:8500';
+            $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:8080';
             $this->name = $config['name'] ?? 'Federation Server';
             $this->apiKey = $config['api_key'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
@@ -46,6 +46,7 @@
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             // TODO: Why not make operators a public record thing to see? could be implemented by default disabled.
+            //       Update, 2026 developer here, don't remember this.
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
