@@ -23,7 +23,7 @@
         {
             self::$configuration = new \ConfigLib\Configuration('federation');
 
-            self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:8500', 'FEDERATION_BASE_URL');
+            self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:8080', 'FEDERATION_BASE_URL');
             self::$configuration->setDefault('server.name', 'Federation Server', 'FEDERATION_NAME');
             self::$configuration->setDefault('server.api_key', Utilities::generateString(), 'FEDERATION_API_KEY');
             self::$configuration->setDefault('server.max_upload_size', 52428800, 'FEDERATION_MAX_UPLOAD_SIZE'); // 50MB default
@@ -40,6 +40,7 @@
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
             self::$configuration->setDefault('server.public_scan_content', true, 'FEDERATION_PUBLIC_SCAN_CONTENT');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
+
             // Maintenance configuration
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
             self::$configuration->setDefault('maintenance.clean_audit_logs', true, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS');
@@ -47,6 +48,7 @@
             self::$configuration->setDefault('maintenance.clean_blacklist', true, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST');
             self::$configuration->setDefault('maintenance.clean_blacklist_days', 730, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST_DAYS'); // 2 years
 
+            // Database configuration
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
             self::$configuration->setDefault('database.port', 3306, 'FEDERATION_DATABASE_PORT');
             self::$configuration->setDefault('database.username', 'root', 'FEDERATION_DATABASE_USERNAME');
@@ -55,6 +57,7 @@
             self::$configuration->setDefault('database.charset', 'utf8mb4', 'FEDERATION_DATABASE_CHARSET');
             self::$configuration->setDefault('database.collation', 'utf8mb4_unicode_ci', 'FEDERATION_DATABASE_COLLATION');
 
+            // Redis caching configuration
             self::$configuration->setDefault('redis.enabled', false, 'FEDERATION_REDIS_ENABLED');
             self::$configuration->setDefault('redis.host', '127.0.0.1', 'FEDERATION_REDIS_HOST');
             self::$configuration->setDefault('redis.port', 6379, 'FEDERATION_REDIS_PORT');
@@ -88,6 +91,7 @@
                 self::$configuration->save();
             }
 
+            // Initialize the configuration classes
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
