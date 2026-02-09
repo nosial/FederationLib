@@ -1,40 +1,50 @@
+version: '3.8'
+
 services:
-  federation:
-    container_name: federation_server
+  app:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: net.nosial.federation
+    image: net.nosial.federation:1.0.0
     ports:
-      - "8500:8500"
+      - "8080:8080"
     depends_on:
       mariadb:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - internal_network
     restart: unless-stopped
     volumes:
       - federation_uploads:/var/www/uploads
     environment:
-      # Logging Level, use "info", "debug", "error", "warning", or "critical"
-      LOG_LEVEL: debug
-      # Configurable Values
-      FEDERATION_NAME: ${FEDERATION_NAME:-federation}
-      FEDERATION_API_KEY: ${FEDERATION_API_KEY:-abcdefghijklmnopqrstuvwxyz123456}
-      FEDERATION_DATABASE_HOST: mariadb
-      FEDERATION_DATABASE_USERNAME: ${MYSQL_USER:-federation}
-      FEDERATION_DATABASE_PASSWORD: ${MYSQL_PASSWORD:-federation}
-      FEDERATION_DATABASE_NAME: ${MYSQL_DATABASE:-federation}
-      FEDERATION_REDIS_ENABLED: 'true'
-      FEDERATION_REDIS_HOST: redis
-
+      # PHP Environment configuration
+      - PHP_MEMORY_LIMIT=256M
+      - PHP_MAX_EXECUTION_TIME=60
+      # LogLib2 Configuration
+      - LOGLIB_UDP_ENABLED=true
+      - LOGLIB_UDP_HOST=172.19.0.1
+      - LOGLIB_UDP_PORT=5000
+      - LOGLIB_UDP_TRACE_FORMAT=full
+      # FederationLib Configuration
+      - FEDERATION_DATABASE_HOST=mariadb
+      - FEDERATION_DATABASE_PORT=3306
+      - FEDERATION_DATABASE_USERNAME=${MYSQL_USER:-federation}
+      - FEDERATION_DATABASE_PASSWORD=${MYSQL_PASSWORD:-federation}
+      - FEDERATION_DATABASE_NAME=${MYSQL_DATABASE:-federation}
+      - FEDERATION_REDIS_ENABLED=true
+      - FEDERATION_REDIS_HOST=redis
+      - FEDERATION_REDIS_PORT=6379
+      - FEDERATION_API_KEY=${FEDERATION_API_KEY:-abcdefghijklmnopqrstuvwxyz123456}
+    # volumes:
     healthcheck:
-      test: ["CMD", "curl", "-f", "-H", "Request-Type: ping", "http://127.0.0.0:8500/"]
+      test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - internal_network
 
   mariadb:
     container_name: federation_mariadb
