@@ -1,6 +1,8 @@
-all: target/release/net.nosial.federation.ncc target/debug/net.nosial.federation.ncc
+all: target/release/net.nosial.federation.ncc target/web/net.nosial.federation.ncc target/debug/net.nosial.federation.ncc
 target/release/net.nosial.federation.ncc:
 	ncc build --configuration release --log-level debug
+target/web/net.nosial.federation.ncc:
+	ncc build --configuration web_release --log-level debug
 target/debug/net.nosial.federation.ncc:
 	ncc build --configuration debug --log-level debug
 
@@ -13,6 +15,7 @@ docs:
 
 clean:
 	rm target/release/net.nosial.federation.ncc
+	rm target/web/net.nosial.federation.ncc
 	rm target/debug/net.nosial.federation.ncc
 	rm target/docs
 	rm target/cache
