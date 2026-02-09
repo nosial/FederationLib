@@ -16,11 +16,12 @@
         /**
          * Returns the full path to the SQL file for the database table.
          *
-         * @return string The full path to the SQL file. (Realpath)
+         * @return string The full path to the SQL file.
          */
         public function getPath(): string
         {
-            return realpath(__DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'Classes' . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . $this->value);
+            // Use dirname(__DIR__) to get the FederationLib directory, avoiding '..' which ncc doesn't resolve
+            return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Classes' . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . $this->value;
         }
 
         /**
