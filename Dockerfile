@@ -1,84 +1,104 @@
-FROM git.n64.cc/nosial/ncc:latest-fpm AS base
+# --- STAGE 1: BUILDER (Compiles the NCC Package) ---
+FROM php:8.3-fpm AS builder
 
-# ----------------------------- Metadata labels ------------------------------
-LABEL maintainer="Netkas <netkas@n64.cc>" \
-      version="1.0" \
-      description="FederationLib Docker image based off ncc-fpm" \
-      application="FederationLib" \
-      base_image="ncc:latest-fpm"
+# Set the working directory for the application source code
+WORKDIR /app
 
-# Environment variable for non-interactive installations
-ENV DEBIAN_FRONTEND=noninteractive
-
-# ----------------------------- System Dependencies --------------------------
-# Update system packages and install required dependencies in one step
-RUN apt-get update -yqq && apt-get install -yqq --no-install-recommends \
+# 1. Install necessary OS Dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
     libpq-dev \
     libzip-dev \
-    cron \
-    supervisor \
-    mariadb-client \
-    libcurl4-openssl-dev \
-    libmemcached-dev \
-    redis \
-    libgd-dev \
+    libicu-dev \
+    zip \
+    make \
+    wget \
+    gnupg \
+    libc-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Required PHP Extensions
+RUN docker-php-ext-install -j$(nproc) zip pdo_mysql
+
+# 3. Install PECL extensions
+RUN pecl install msgpack \
+    && docker-php-ext-enable msgpack
+
+# 4. Download and Install ncc (PHAR package manager)
+RUN echo "Installing ncc package manager..." \
+    && git clone --recurse-submodules https://git.n64.cc/nosial/ncc /tmp/ncc \
+    && cd /tmp/ncc \
+    && git checkout dev \
+    && make target/ncc.phar \
+    && target/install.sh \
+    && mv /tmp/ncc /tmp/ncc-install \
+    && cd /
+
+# 4. Copy the Application Source Code
+COPY . /app
+
+# 5. Install Project Dependencies and Build the NCC Package
+RUN ncc project install -y && ncc build --configuration=web_release
+
+
+# --- STAGE 2: PRODUCTION (Final Runtime Image) ---
+FROM php:8.3-fpm AS production
+
+# Metadata labels
+LABEL org.opencontainers.image.title="FederationLib" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.authors="" \
+      org.opencontainers.image.description="" \
+      org.opencontainers.image.url="" \
+      org.opencontainers.image.licenses="" \
+      ncc.package="net.nosial.federation" \
+      ncc.version="1.0.0" \
+      ncc.entry_point="web_entry"
+
+# Install Nginx, Supervisor and other minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
-    python3-colorama \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    supervisor \
+    libpq5 \
+    libzip-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-# ----------------------------- PHP Extensions -------------------------------
-# Install PHP extensions and enable additional ones
-RUN docker-php-ext-install -j$(nproc) \
-    pdo \
-    pdo_mysql \
-    mysqli \
-    opcache \
-    sockets \
-    pcntl && \
-    pecl install redis memcached && \
-    docker-php-ext-enable redis memcached
+# 1. Install Required PHP Extensions (runtime only)
+RUN docker-php-ext-install -j$(nproc) zip sockets pdo_mysql
 
+# 1.1 Install PECL extensions
+RUN pecl install redis msgpack && docker-php-ext-enable redis msgpack
 
-# ----------------------------- Project Build ---------------------------------
-# Set build directory and copy pre-needed project files
-WORKDIR /tmp/build
-COPY . .
+# 2. Install ncc by running the installation script (sets up PHP environment properly)
+COPY --from=builder /tmp/ncc-install /tmp/ncc-install
+RUN cd /tmp/ncc-install && ./target/install.sh && cd / && rm -rf /tmp/ncc-install
 
-RUN ncc build --config release --build-source && \
-    ncc package install --package=build/release/net.nosial.federation.ncc --build-source -y
+# 3. Install the compiled package and its dependencies
+COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
+RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
 
-# Clean up
-RUN rm -rf /tmp/build && rm -rf /var/www/html/*
+# 4. Copy the web entry point file
+RUN mkdir -p /var/www/html /etc/configlib
+COPY --from=builder /app/web_entry /var/www/html/index.php
 
-# Copy over the required files and set the correct permissions
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker/logger.py /logger.py
-COPY docker/php.ini /usr/local/etc/php/conf.d/php.ini
-COPY public/index.php /var/www/html/index.php
-RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
-RUN mkdir /var/www/uploads && chown -R www-data:www-data /var/www/uploads && chmod -R 777 /var/www/uploads
-RUN mkdir -p /etc/config && chown -R www-data:www-data /etc/config && chmod -R 755 /etc/config
+# Set working directory
+WORKDIR /var/www/html
 
-# ----------------------------- Cleanup ---------------------
-WORKDIR /
+# 5. Configure Files
+RUN rm -f /etc/nginx/sites-enabled/default
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN mkdir /etc/cnfiglib && chmod 0777 /etc/configlib
 
-# ----------------------------- Port Exposing ---------------------------------
-EXPOSE 8500
+# 6. Expose port 8080
+EXPOSE 8080
 
-# ----------------------------- Container Startup ----------------------------
-# Copy over entrypoint script and set it as executable
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-# Environment
-ENV CONFIGLIB_PATH="/etc/config"
-ENV LOGLIB_UDP_ENABLED="true"
-ENV LOGLIB_UDP_HOST="127.0.0.1"
-ENV LOGLIB_UDP_PORT="5131"
-ENV LOGLIB_UDP_TRACE_FORMAT="full"
-ENV LOGLIB_CONSOLE_ENABLED="true"
-ENV LOGLIB_CONSOLE_TRACE_FORMAT="full"
-
-# Set the entrypoint
-ENTRYPOINT ["/usr/bin/bash", "/usr/local/bin/entrypoint.sh"]
+# 7. Define the startup command
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0777 /etc/configlib
+ENTRYPOINT ["docker-entrypoint.sh"]
