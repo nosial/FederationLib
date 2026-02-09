@@ -262,7 +262,7 @@ jobs:
           # Prepare phpunit
           wget https://phar.phpunit.de/phpunit-11.3.phar
           docker-compose -f docker-compose.yml up -d
-          check_service 8500 || exit 1
+          check_service 8080 || exit 1
           
           # Show docker-compose logs for debugging while tests run
           docker-compose -f docker-compose.yml logs -f &

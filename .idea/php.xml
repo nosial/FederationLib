@@ -23,7 +23,7 @@
   <component name="PhpIncludePathManager">
     <include_path>
       <path value="$USER_HOME$/phar" />
-      <path value="/usr/share/ncc" />
+      <path value="/var/ncc/packages/com.symfony.uid=v7.2.0" />
       <path value="/var/ncc/packages/com.symfony.uid=v7.3.1" />
       <path value="/var/ncc/packages/net.nosial.configlib=1.1.11" />
       <path value="/var/ncc/packages/net.nosial.loglib2=1.0.3" />
@@ -41,7 +41,7 @@
   </component>
   <component name="PhpUnit">
     <phpunit_settings>
-      <PhpUnitSettings load_method="PHPUNIT_PHAR" bootstrap_file_path="$PROJECT_DIR$/bootstrap.php" configuration_file_path="$PROJECT_DIR$/phpunit.xml" custom_loader_path="" phpunit_phar_path="$USER_HOME$/phar/phpunit.phar" use_bootstrap_file="true" use_configuration_file="true" />
+      <PhpUnitSettings load_method="PHPUNIT_PHAR" configuration_file_path="$PROJECT_DIR$/phpunit.xml" custom_loader_path="" phpunit_phar_path="$USER_HOME$/phar/phpunit.phar" use_configuration_file="true" />
     </phpunit_settings>
   </component>
   <component name="Psalm">
