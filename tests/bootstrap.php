@@ -12,4 +12,8 @@
             throw new Exception('Build output not found: ' . $buildOutputPath);
         }
 
+        // Import the build output
         import($buildOutputPath);
+
+        // LogLib2's handlers may interfere with tests, so we unregister them here.
+        \LogLib2\Logger::unregisterHandlers();
