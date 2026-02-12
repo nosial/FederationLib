@@ -7,6 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: net.nosial.federation
     image: net.nosial.federation:1.0.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     depends_on:
@@ -22,8 +24,9 @@ services:
       - PHP_MEMORY_LIMIT=256M
       - PHP_MAX_EXECUTION_TIME=60
       # LogLib2 Configuration
+      - LOG_LEVEL=info
       - LOGLIB_UDP_ENABLED=true
-      - LOGLIB_UDP_HOST=172.19.0.1
+      - LOGLIB_UDP_HOST=172.18.0.1
       - LOGLIB_UDP_PORT=5000
       - LOGLIB_UDP_TRACE_FORMAT=full
       # FederationLib Configuration
