@@ -152,13 +152,17 @@
             }
 
             $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
             curl_close($ch);
 
             // Check the response Content-Type and ensure it's application/json
-            $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-            if (strpos($contentType, 'application/json') === false)
+            if (!str_contains($contentType, 'application/json'))
             {
-                throw new RequestException($response, $responseCode);
+                $responseLen = strlen($response);
+                $responsePreview = $responseLen > 200 ? substr($response, 0, 200) . '...' : $response;
+                $errorMsg = $errorMessage . ': Expected JSON response but received Content-Type: ' . ($contentType ?: 'none') 
+                    . sprintf('. Response length: %d bytes. Response preview: [%s]', $responseLen, bin2hex($responsePreview));
+                throw new RequestException($errorMsg, $responseCode);
             }
 
             $decodedResponse = $this->decodeResponse($response);
@@ -1458,6 +1462,12 @@
 
                 Logger::log()->debug(sprintf("Successfully downloaded file (%d bytes), uploading to server", $fileSize));
 
+                // Ensure temp file is readable
+                if (!is_readable($tempFile))
+                {
+                    throw new RequestException('Downloaded temporary file is not readable');
+                }
+
                 // Get filename from URL or use a default
                 $filename = basename(parse_url($fileUrl, PHP_URL_PATH)) ?: 'downloaded_file';
 
@@ -1472,7 +1482,8 @@
                     {
                         $mimeType = $detectedMime;
                     }
-                } elseif (function_exists('mime_content_type'))
+                }
+                elseif (function_exists('mime_content_type'))
                 {
                     $detectedMime = mime_content_type($tempFile);
                     if ($detectedMime)
