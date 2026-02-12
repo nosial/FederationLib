@@ -73,6 +73,12 @@ RUN docker-php-ext-install -j$(nproc) zip sockets pdo_mysql
 # 1.1 Install PECL extensions
 RUN pecl install redis msgpack && docker-php-ext-enable redis msgpack
 
+# 1.2 Configure PHP for file uploads (match nginx client_max_body_size)
+RUN echo "upload_max_filesize = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "max_execution_time = 600" >> /usr/local/etc/php/conf.d/uploads.ini
+
 # 2. Install ncc by running the installation script (sets up PHP environment properly)
 COPY --from=builder /tmp/ncc-install /tmp/ncc-install
 RUN cd /tmp/ncc-install && ./target/install.sh && cd / && rm -rf /tmp/ncc-install
@@ -82,7 +88,7 @@ COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
 RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
 
 # 4. Copy the web entry point file
-RUN mkdir -p /var/www/html /etc/configlib
+RUN mkdir -p /var/www/html /var/www/uploads /etc/configlib
 COPY --from=builder /app/web_entry /var/www/html/index.php
 
 # Set working directory
@@ -92,7 +98,7 @@ WORKDIR /var/www/html
 RUN rm -f /etc/nginx/sites-enabled/default
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-RUN mkdir /etc/cnfiglib && chmod 0777 /etc/configlib
+RUN chmod 0777 /var/www/uploads && chmod 0777 /etc/configlib
 
 # 6. Expose port 8080
 EXPOSE 8080
