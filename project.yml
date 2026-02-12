@@ -37,8 +37,6 @@ build_configurations:
     name: web_release
     output: target/web/net.nosial.federation.ncc
     type: ncc
-    options:
-      static: true
     definitions:
       NCC_DISABLE_LOGGING: true
   -
