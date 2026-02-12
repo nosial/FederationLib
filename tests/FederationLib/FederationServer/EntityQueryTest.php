@@ -1,24 +1,22 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
-    use InvalidArgumentException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class EntityQueryTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdEntities = [];
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('entity-query-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -28,9 +26,9 @@
                 try {
                     $this->client->deleteEntity($entityUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -314,8 +312,8 @@
             $hashQueryTime = microtime(true) - $startTime;
 
             // Log performance metrics
-            $this->logger->info("UUID query time for $batchSize entities: {$uuidQueryTime}s");
-            $this->logger->info("Hash query time for $batchSize entities: {$hashQueryTime}s");
+            Logger::getLogger()->info("UUID query time for $batchSize entities: {$uuidQueryTime}s");
+            Logger::getLogger()->info("Hash query time for $batchSize entities: {$hashQueryTime}s");
 
             // Both should complete in reasonable time (adjust threshold as needed)
             $this->assertLessThan(30.0, $uuidQueryTime, "UUID queries took too long");

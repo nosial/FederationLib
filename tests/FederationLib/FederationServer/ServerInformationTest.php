@@ -1,21 +1,25 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use FederationLib\Exceptions\RequestException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ServerInformationTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('server-information-tests');
             // No authentication required for server information
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'));
+        }
+
+        protected function tearDown(): void
+        {
+            \LogLib2\Logger::unregisterHandlers();
         }
 
         // BASIC SERVER INFORMATION TESTS
@@ -207,7 +211,7 @@
             $this->assertIsBool($publicEntities);
             
             // Log the setting for manual verification if needed
-            $this->logger->info("Server public entities setting: " . ($publicEntities ? 'true' : 'false'));
+            Logger::getLogger()->info("Server public entities setting: " . ($publicEntities ? 'true' : 'false'));
         }
 
         public function testPublicEvidenceFlag(): void
@@ -219,7 +223,7 @@
             $this->assertIsBool($publicEvidence);
             
             // Log the setting for manual verification if needed
-            $this->logger->info("Server public evidence setting: " . ($publicEvidence ? 'true' : 'false'));
+            Logger::getLogger()->info("Server public evidence setting: " . ($publicEvidence ? 'true' : 'false'));
         }
 
         public function testServerConfigurationLogic(): void

@@ -1,21 +1,14 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ClientConfigurationTest extends TestCase
     {
-        private Logger $logger;
-
-        protected function setUp(): void
-        {
-            $this->logger = new Logger('client-configuration-tests');
-        }
-
         // CLIENT INSTANTIATION TESTS
 
         public function testClientWithValidEndpoint(): void

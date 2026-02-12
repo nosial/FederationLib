@@ -1,27 +1,25 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
     use Symfony\Component\Uid\Uuid;
 
     class EntitiesClientTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('tests');
-            // Note, authentication is not required for these tests.
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -35,11 +33,11 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
                 }
                 catch (Exception $e)
                 {
-                    $this->logger->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
                 }
             }
 
@@ -51,11 +49,11 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
                 }
                 catch (Exception $e)
                 {
-                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -439,7 +437,7 @@
                 } catch (RequestException $e) {
                     // Some complex cases might be rejected by validation, which is acceptable
                     // Log but don't fail the test
-                    $this->logger->info("Complex identifier rejected (expected): " . $e->getMessage());
+                    Logger::getLogger()->info("Complex identifier rejected (expected): " . $e->getMessage());
                 }
             }
         }
@@ -471,7 +469,7 @@
                 $this->client->deleteEvidence($evidenceUuid);
             } catch (RequestException $e) {
                 // Evidence operations might not be available for this operator
-                $this->logger->info("Evidence operations not available: " . $e->getMessage());
+                Logger::getLogger()->info("Evidence operations not available: " . $e->getMessage());
             }
 
             // Delete entity
@@ -512,7 +510,7 @@
                 $this->assertNotNull($queryWithBoth);
             } catch (RequestException $e) {
                 // Some query options might require specific permissions
-                $this->logger->info("Advanced query options not available: " . $e->getMessage());
+                Logger::getLogger()->info("Advanced query options not available: " . $e->getMessage());
             }
         }
     }

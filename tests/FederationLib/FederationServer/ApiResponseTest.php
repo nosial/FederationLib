@@ -1,17 +1,23 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Enums\BlacklistType;
     use FederationLib\Exceptions\RequestException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
+    use FederationLib\Objects\AuditLog;
+    use FederationLib\Objects\BlacklistRecord;
+    use FederationLib\Objects\EntityRecord;
+    use FederationLib\Objects\EvidenceRecord;
+    use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\ServerInformation;
     use PHPUnit\Framework\TestCase;
 
     class ApiResponseTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -19,50 +25,73 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('api-response-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
         protected function tearDown(): void
         {
             // Clean up in reverse dependency order
-            foreach ($this->createdBlacklistRecords as $blacklistUuid) {
-                try {
+            foreach ($this->createdBlacklistRecords as $blacklistUuid)
+            {
+                try
+                {
                     $this->client->deleteBlacklistRecord($blacklistUuid);
-                } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+                catch (Exception $e)
+                {
+                    Logger::getLogger()->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
-            foreach ($this->createdEvidenceRecords as $evidenceUuid) {
-                try {
+            foreach ($this->createdEvidenceRecords as $evidenceUuid)
+            {
+                try
+                {
                     $this->client->deleteEvidence($evidenceUuid);
-                } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                }
+                catch (Exception $e)
+                {
+                    Logger::getLogger()->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
-            foreach ($this->createdEntities as $entityUuid) {
-                try {
+            foreach ($this->createdEntities as $entityUuid)
+            {
+                try
+                {
                     $this->client->deleteEntity($entityUuid);
-                } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
-                } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                }
+                catch (Exception $e)
+                {
+                    Logger::getLogger()->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
                 }
             }
 
-            foreach ($this->createdOperators as $operatorUuid) {
-                try {
+            foreach ($this->createdOperators as $operatorUuid)
+            {
+                try
+                {
                     $this->client->deleteOperator($operatorUuid);
-                } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
-                } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                }
+                catch (Exception $e)
+                {
+                    Logger::getLogger()->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -80,7 +109,7 @@
             $serverInfo = $this->client->getServerInformation();
             
             // Test object type
-            $this->assertInstanceOf(\FederationLib\Objects\ServerInformation::class, $serverInfo);
+            $this->assertInstanceOf(ServerInformation::class, $serverInfo);
             
             // Test required properties
             $this->assertIsString($serverInfo->getServerName());
@@ -108,7 +137,7 @@
             
             // Test getEntityRecord response
             $entityRecord = $this->client->getEntityRecord($entityUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\EntityRecord::class, $entityRecord);
+            $this->assertInstanceOf(EntityRecord::class, $entityRecord);
             
             // Test required properties
             $this->assertIsString($entityRecord->getUuid());
@@ -165,7 +194,7 @@
             $this->assertGreaterThanOrEqual(3, count($foundEntities));
             
             foreach ($foundEntities as $entity) {
-                $this->assertInstanceOf(\FederationLib\Objects\EntityRecord::class, $entity);
+                $this->assertInstanceOf(EntityRecord::class, $entity);
                 $this->assertIsString($entity->getUuid());
                 $this->assertIsString($entity->getHost());
                 $this->assertIsInt($entity->getCreated());
@@ -187,7 +216,7 @@
             
             // Test getOperator response
             $operator = $this->client->getOperator($operatorUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $operator);
+            $this->assertInstanceOf(OperatorRecord::class, $operator);
             
             // Test required properties
             $this->assertIsString($operator->getUuid());
@@ -210,7 +239,7 @@
         public function testSelfOperatorResponseStructure(): void
         {
             $selfOperator = $this->client->getSelf();
-            $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $selfOperator);
+            $this->assertInstanceOf(OperatorRecord::class, $selfOperator);
             
             // Self operator should have all standard properties
             $this->assertIsString($selfOperator->getUuid());
@@ -240,7 +269,7 @@
             $this->assertGreaterThanOrEqual(3, count($operators));
             
             foreach ($operators as $operator) {
-                $this->assertInstanceOf(\FederationLib\Objects\OperatorRecord::class, $operator);
+                $this->assertInstanceOf(OperatorRecord::class, $operator);
                 $this->assertIsString($operator->getUuid());
                 $this->assertIsString($operator->getName());
                 $this->assertIsString($operator->getApiKey());
@@ -275,7 +304,7 @@
             
             // Test getEvidenceRecord response
             $evidence = $this->client->getEvidenceRecord($evidenceUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\EvidenceRecord::class, $evidence);
+            $this->assertInstanceOf(EvidenceRecord::class, $evidence);
             
             // Test required properties
             $this->assertIsString($evidence->getUuid());
@@ -319,7 +348,7 @@
             $this->assertGreaterThanOrEqual(3, count($evidenceList));
             
             foreach ($evidenceList as $evidence) {
-                $this->assertInstanceOf(\FederationLib\Objects\EvidenceRecord::class, $evidence);
+                $this->assertInstanceOf(EvidenceRecord::class, $evidence);
                 $this->assertIsString($evidence->getUuid());
                 $this->assertIsString($evidence->getEntityUuid());
                 $this->assertIsString($evidence->getOperatorUuid());
@@ -353,7 +382,7 @@
             
             // Test getBlacklistRecord response
             $blacklistRecord = $this->client->getBlacklistRecord($blacklistUuid);
-            $this->assertInstanceOf(\FederationLib\Objects\BlacklistRecord::class, $blacklistRecord);
+            $this->assertInstanceOf(BlacklistRecord::class, $blacklistRecord);
             
             // Test required properties
             $this->assertIsString($blacklistRecord->getUuid());
@@ -395,7 +424,7 @@
             $this->assertGreaterThanOrEqual(3, count($blacklistRecords));
             
             foreach ($blacklistRecords as $blacklistRecord) {
-                $this->assertInstanceOf(\FederationLib\Objects\BlacklistRecord::class, $blacklistRecord);
+                $this->assertInstanceOf(BlacklistRecord::class, $blacklistRecord);
                 $this->assertIsString($blacklistRecord->getUuid());
                 $this->assertIsString($blacklistRecord->getEntityUuid());
                 $this->assertIsString($blacklistRecord->getEvidenceUuid());
@@ -421,7 +450,7 @@
             $this->assertGreaterThan(0, count($auditLogs));
             
             foreach ($auditLogs as $auditLog) {
-                $this->assertInstanceOf(\FederationLib\Objects\AuditLog::class, $auditLog);
+                $this->assertInstanceOf(AuditLog::class, $auditLog);
                 
                 // Test required properties
                 $this->assertIsString($auditLog->getUuid());

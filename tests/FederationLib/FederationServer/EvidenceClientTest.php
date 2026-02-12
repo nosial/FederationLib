@@ -1,24 +1,23 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class EvidenceClientTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createEvidenceRecords = [];
         private array $createdEntityRecords = [];
         private array $createdOperatorRecords = [];
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -32,11 +31,11 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
                 }
                 catch (Exception $e)
                 {
-                    $this->logger->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -48,11 +47,11 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
                 }
                 catch (Exception $e)
                 {
-                    $this->logger->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage(), $e);
                 }
             }
 
@@ -64,11 +63,11 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
                 }
                 catch (Exception $e)
                 {
-                    $this->logger->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete operator record $operatorId: " . $e->getMessage(), $e);
                 }
             }
 

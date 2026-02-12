@@ -1,21 +1,18 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ClientTest extends TestCase
     {
-        private const string FAKE_OPERATOR_UUID = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
         private FederationClient $client;
-        private Logger $logger;
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('tests');
             // Note, authentication is not required for these tests.
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'));
         }
@@ -49,7 +46,7 @@
                     $serverInfo = $this->client->getServerInformation();
                     $results[] = $serverInfo->getServerName();
                 } catch (RequestException $e) {
-                    $this->logger->warning("Request $i failed: " . $e->getMessage());
+                    Logger::getLogger()->warning("Request $i failed: " . $e->getMessage());
                     $results[] = null;
                 }
             }

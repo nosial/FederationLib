@@ -1,19 +1,19 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Enums\BlacklistType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class DataValidationTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -21,7 +21,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('data-validation-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -32,9 +31,9 @@
                 try {
                     $this->client->deleteBlacklistRecord($blacklistUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
@@ -42,9 +41,9 @@
                 try {
                     $this->client->deleteEvidence($evidenceUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
@@ -52,9 +51,9 @@
                 try {
                     $this->client->deleteEntity($entityUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -62,9 +61,9 @@
                 try {
                     $this->client->deleteOperator($operatorUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -98,7 +97,7 @@
                     if ($entityUuid) {
                         $this->createdEntities[] = $entityUuid;
                         // If creation succeeded, it might be acceptable depending on validation rules
-                        $this->logger->info("Host '$invalidHost' was accepted (may be valid according to server rules)");
+                        Logger::getLogger()->info("Host '$invalidHost' was accepted (may be valid according to server rules)");
                     }
                 } catch (RequestException $e) {
                     // This is expected for invalid hosts
@@ -135,7 +134,7 @@
                         $this->createdEntities[] = $entityUuid;
                         // Some IDs might be accepted with sanitization
                         $entity = $this->client->getEntityRecord($entityUuid);
-                        $this->logger->info("ID '$invalidId' was accepted as '" . $entity->getId() . "'");
+                        Logger::getLogger()->info("ID '$invalidId' was accepted as '" . $entity->getId() . "'");
                     }
                 } catch (RequestException $e) {
                     // Expected for invalid IDs
@@ -198,7 +197,7 @@
                         $this->createdOperators[] = $operatorUuid;
                         // Some names might be accepted with sanitization
                         $operator = $this->client->getOperator($operatorUuid);
-                        $this->logger->info("Operator name '$invalidName' was accepted as '" . $operator->getName() . "'");
+                        Logger::getLogger()->info("Operator name '$invalidName' was accepted as '" . $operator->getName() . "'");
                     }
                 } catch (RequestException $e) {
                     $this->assertContains($e->getCode(), [400, 422], "Expected 400 or 422 for invalid operator name '$invalidName'");
@@ -251,7 +250,7 @@
                     $evidenceUuid = $this->client->submitEvidence($entityUuid, $content, 'Test note', 'test_tag');
                     if ($evidenceUuid) {
                         $this->createdEvidenceRecords[] = $evidenceUuid;
-                        $this->logger->info("Evidence content of length " . strlen($content) . " was accepted");
+                        Logger::getLogger()->info("Evidence content of length " . strlen($content) . " was accepted");
                     }
                 } catch (RequestException $e) {
                     $this->assertContains($e->getCode(), [400, 422], "Expected 400 or 422 for invalid evidence content");
@@ -281,7 +280,7 @@
                     if ($evidenceUuid) {
                         $this->createdEvidenceRecords[] = $evidenceUuid;
                         $evidence = $this->client->getEvidenceRecord($evidenceUuid);
-                        $this->logger->info("Tag '$tag' was accepted as '" . $evidence->getTag() . "'");
+                        Logger::getLogger()->info("Tag '$tag' was accepted as '" . $evidence->getTag() . "'");
                     }
                 } catch (RequestException $e) {
                     $this->assertContains($e->getCode(), [400, 422], "Expected 400 or 422 for invalid tag '$tag'");
@@ -339,7 +338,7 @@
                     if ($blacklistUuid)
                     {
                         $this->createdBlacklistRecords[] = $blacklistUuid;
-                        $this->logger->info("Expiration '$expiration' was accepted");
+                        Logger::getLogger()->info("Expiration '$expiration' was accepted");
                     }
                 }
                 catch(InvalidArgumentException $e)
@@ -421,7 +420,7 @@
                     $this->client->listEntities(1, $limit);
                     if ($limit === 10000) {
                         // Large limit might be accepted but capped
-                        $this->logger->info("Large limit $limit was accepted");
+                        Logger::getLogger()->info("Large limit $limit was accepted");
                     }
                 } catch (InvalidArgumentException $e) {
                     $this->assertNotNull($e);
@@ -455,7 +454,7 @@
                     
                     $evidence = $this->client->getEvidenceRecord($evidenceUuid);
                     $this->assertEquals($length, strlen($evidence->getTextContent()));
-                    $this->logger->info("Content length $length was accepted");
+                    Logger::getLogger()->info("Content length $length was accepted");
                 } catch (RequestException $e) {
                     if ($length > 10000) {
                         // Large content might be rejected

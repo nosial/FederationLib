@@ -1,19 +1,18 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use Exception;
     use FederationLib\Enums\BlacklistType;
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class PaginationTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -21,7 +20,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('pagination-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -32,9 +30,9 @@
                 try {
                     $this->client->deleteBlacklistRecord($blacklistUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
@@ -42,9 +40,9 @@
                 try {
                     $this->client->deleteEvidence($evidenceUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
@@ -52,9 +50,9 @@
                 try {
                     $this->client->deleteEntity($entityUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -62,9 +60,9 @@
                 try {
                     $this->client->deleteOperator($operatorUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 } catch (Exception $e) {
-                    $this->logger->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Unexpected error deleting operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -413,7 +411,7 @@
 
             // Should complete in reasonable time
             $this->assertLessThan(30.0, $totalTime, "Pagination performance test took too long: {$totalTime}s");
-            $this->logger->info("Pagination performance: {$totalTime}s for {$maxPages} pages of {$pageSize} entities each");
+            Logger::getLogger()->info("Pagination performance: {$totalTime}s for {$maxPages} pages of {$pageSize} entities each");
         }
 
         public function testPaginationMemoryUsage(): void
@@ -440,7 +438,7 @@
 
             // Memory usage should not increase significantly
             $this->assertLessThan(1024 * 1024, $memoryIncrease, "Pagination caused excessive memory usage: {$memoryIncrease} bytes");
-            $this->logger->info("Pagination memory usage: {$memoryIncrease} bytes for {$maxPages} pages");
+            Logger::getLogger()->info("Pagination memory usage: {$memoryIncrease} bytes for {$maxPages} pages");
         }
 
         // PAGINATION BOUNDARY TESTS

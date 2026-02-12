@@ -1,20 +1,18 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
-    use Exception;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\BlacklistType;
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class AuditLogClientTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -22,7 +20,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('audit-log-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -37,7 +34,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
@@ -49,7 +46,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
@@ -61,7 +58,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -73,7 +70,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 }
             }
 

@@ -1,18 +1,16 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
-    use Exception;
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class AttachmentClientTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdAttachments = [];
         private array $createdEvidenceRecords = [];
         private array $createdEntityRecords = [];
@@ -21,7 +19,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('attachment-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -36,7 +33,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete attachment $attachmentUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete attachment $attachmentUuid: " . $e->getMessage());
                 }
             }
 
@@ -49,7 +46,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
@@ -62,7 +59,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -75,7 +72,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -417,7 +414,7 @@
                 // If the server has size limits, this is acceptable
                 if ($e->getCode() === 413 || $e->getCode() === 400) // Payload Too Large or Bad Request
                 {
-                    $this->logger->info("Large file upload rejected by server (expected): " . $e->getMessage());
+                    Logger::getLogger()->info("Large file upload rejected by server (expected): " . $e->getMessage());
                     $this->assertTrue(true, "Server correctly rejected large file");
                 }
                 else

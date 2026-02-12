@@ -1,18 +1,18 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use FederationLib\Enums\BlacklistType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Exceptions\RequestException;
-    use LogLib2\Logger;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ScanContentTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -20,7 +20,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('scan-content-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -31,7 +30,7 @@
                 try {
                     $this->client->deleteBlacklistRecord($blacklistUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage(), $e);
                 }
             }
 
@@ -39,7 +38,7 @@
                 try {
                     $this->client->deleteEvidence($evidenceUuid);
                 } catch (RequestException $e) {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage(), $e);
                 }
             }
 
@@ -51,7 +50,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity record $entityUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage(), $e);
                 }
             }
 
@@ -63,7 +62,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
+                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage(), $e);
                 }
             }
 
@@ -471,11 +470,11 @@
                 
                 // If we get here, scan content is public
                 $this->assertIsArray($results);
-                $this->logger->info("Scan content is publicly accessible");
+                Logger::getLogger()->info("Scan content is publicly accessible");
             } catch (RequestException $e) {
                 // If scan content requires authentication, we should get 401
                 $this->assertEquals(HttpResponseCode::UNAUTHORIZED, $e->getCode());
-                $this->logger->info("Scan content requires authentication");
+                Logger::getLogger()->info("Scan content requires authentication");
             }
         }
 
@@ -489,10 +488,10 @@
             try {
                 $results = $this->client->scanContent($longContent);
                 $this->assertIsArray($results);
-                $this->logger->info("Large content was processed successfully");
+                Logger::getLogger()->info("Large content was processed successfully");
             } catch (RequestException $e) {
                 // Server might have limits on content size
-                $this->logger->info("Large content was rejected: " . $e->getMessage());
+                Logger::getLogger()->info("Large content was rejected: " . $e->getMessage());
             }
         }
 
@@ -519,7 +518,7 @@
             $this->assertIsArray($results);
             $this->assertLessThan(10.0, $executionTime, "Scan should complete within 10 seconds");
             
-            $this->logger->info("Scan content performance: {$executionTime} seconds for " . strlen($content) . " characters");
+            Logger::getLogger()->info("Scan content performance: {$executionTime} seconds for " . strlen($content) . " characters");
         }
 
         // EDGE CASES

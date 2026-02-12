@@ -1,19 +1,17 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
-    use Exception;
     use FederationLib\Enums\BlacklistType;
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ErrorHandlingAndEdgeCasesTest extends TestCase
     {
         private FederationClient $client;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
@@ -21,7 +19,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('error-handling-tests');
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
         }
 
@@ -36,7 +33,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
@@ -48,7 +45,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
                 }
             }
 
@@ -60,7 +57,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -72,7 +69,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -117,7 +114,7 @@
                         if ($entityUuid !== null)
                         {
                             $this->createdEntities[] = $entityUuid;
-                            $this->logger->info("Malformed identifier accepted: {$identifier['host']}/{$identifier['id']}");
+                            Logger::getLogger()->info("Malformed identifier accepted: {$identifier['host']}/{$identifier['id']}");
                         }
                     }
                 }
@@ -129,7 +126,7 @@
                 catch (InvalidArgumentException $e)
                 {
                     // Also acceptable for client-side validation
-                    $this->logger->info("Client-side validation caught malformed identifier: " . $e->getMessage());
+                    Logger::getLogger()->info("Client-side validation caught malformed identifier: " . $e->getMessage());
                 }
             }
         }
@@ -165,7 +162,7 @@
                 catch (RequestException $e)
                 {
                     // If the server rejects the content, that's also acceptable
-                    $this->logger->info("Server rejected SQL injection payload: " . $e->getMessage());
+                    Logger::getLogger()->info("Server rejected SQL injection payload: " . $e->getMessage());
                 }
             }
         }
@@ -201,7 +198,7 @@
                 catch (RequestException $e)
                 {
                     // If the server sanitizes/rejects the content, that's acceptable
-                    $this->logger->info("Server handled XSS payload: " . $e->getMessage());
+                    Logger::getLogger()->info("Server handled XSS payload: " . $e->getMessage());
                 }
             }
         }
@@ -280,7 +277,7 @@
                     // If the server has size limits, this is acceptable
                     if ($e->getCode() === 413 || $e->getCode() === 400)
                     {
-                        $this->logger->info("Server rejected content of size {$size}: " . $e->getMessage());
+                        Logger::getLogger()->info("Server rejected content of size {$size}: " . $e->getMessage());
                     }
                     else
                     {
@@ -324,7 +321,7 @@
                     // Some systems might reject empty or whitespace-only content
                     if ($testCase['content'] === '' && ($e->getCode() === 400 || $e->getCode() === 422))
                     {
-                        $this->logger->info("Server rejected empty content (acceptable): " . $e->getMessage());
+                        Logger::getLogger()->info("Server rejected empty content (acceptable): " . $e->getMessage());
                     }
                     else
                     {
@@ -363,7 +360,7 @@
             }
             catch (RequestException $e)
             {
-                $this->logger->info("First delete failed: " . $e->getMessage());
+                Logger::getLogger()->info("First delete failed: " . $e->getMessage());
             }
 
             try
@@ -373,7 +370,7 @@
             }
             catch (RequestException $e)
             {
-                $this->logger->info("Second delete failed: " . $e->getMessage());
+                Logger::getLogger()->info("Second delete failed: " . $e->getMessage());
                 // This is expected if the first delete succeeded
                 if ($firstDeleteSuccess)
                 {
@@ -413,7 +410,7 @@
 
                 // Check final state
                 $finalEvidence = $this->client->getEvidenceRecord($evidenceUuid);
-                $this->logger->info("Final evidence confidentiality state: " . ($finalEvidence->isConfidential() ? 'true' : 'false'));
+                Logger::getLogger()->info("Final evidence confidentiality state: " . ($finalEvidence->isConfidential() ? 'true' : 'false'));
                 
                 // Either state is acceptable, but the evidence should still exist and be valid
                 $this->assertNotNull($finalEvidence);
@@ -422,7 +419,7 @@
             catch (RequestException $e)
             {
                 // If concurrent modifications are handled with locks/conflicts, that's acceptable
-                $this->logger->info("Concurrent modification handled: " . $e->getMessage());
+                Logger::getLogger()->info("Concurrent modification handled: " . $e->getMessage());
             }
         }
 
@@ -448,7 +445,7 @@
                     if ($e->getCode() === 429) // Too Many Requests
                     {
                         $throttleCount++;
-                        $this->logger->info("Request $i was throttled");
+                        Logger::getLogger()->info("Request $i was throttled");
                         // Brief pause to respect rate limiting
                         usleep(100000); // 0.1 second
                     }
@@ -463,12 +460,12 @@
             $totalTime = $endTime - $startTime;
 
             $this->assertGreaterThan(0, $successCount, "At least some requests should succeed");
-            $this->logger->info("Rapid request test: {$successCount} successful, {$throttleCount} throttled in {$totalTime} seconds");
+            Logger::getLogger()->info("Rapid request test: {$successCount} successful, {$throttleCount} throttled in {$totalTime} seconds");
 
             // If rate limiting is in place, we should see some throttled requests
             if ($throttleCount > 0)
             {
-                $this->logger->info("Rate limiting is active (good)");
+                Logger::getLogger()->info("Rate limiting is active (good)");
             }
         }
 
@@ -496,7 +493,7 @@
                 {
                     if ($e->getCode() === 413 || $e->getCode() === 507) // Payload Too Large or Insufficient Storage
                     {
-                        $this->logger->info("Server rejected large content (size ~{$contentSize}): " . $e->getMessage());
+                        Logger::getLogger()->info("Server rejected large content (size ~{$contentSize}): " . $e->getMessage());
                         break; // Stop if we hit server limits
                     }
                     else
@@ -509,7 +506,7 @@
             $finalMemory = memory_get_usage();
             $memoryUsed = $finalMemory - $initialMemory;
 
-            $this->logger->info("Memory used during test: " . number_format($memoryUsed) . " bytes");
+            Logger::getLogger()->info("Memory used during test: " . number_format($memoryUsed) . " bytes");
 
             // Verify we can still retrieve evidence records
             foreach (array_slice($this->createdEvidenceRecords, -3) as $evidenceUuid)
@@ -551,13 +548,13 @@
             catch (RequestException $e)
             {
                 // If server has restrictions on complex identifiers or large content, that's acceptable
-                $this->logger->info("Server handled resilience test: " . $e->getMessage());
+                Logger::getLogger()->info("Server handled resilience test: " . $e->getMessage());
             }
 
             $endTime = microtime(true);
             $totalTime = $endTime - $startTime;
 
-            $this->logger->info("Resilience test completed in {$totalTime} seconds");
+            Logger::getLogger()->info("Resilience test completed in {$totalTime} seconds");
             $this->assertLessThan(30, $totalTime, "Operations should complete within reasonable time even with complex data");
         }
 
@@ -582,7 +579,7 @@
             catch (InvalidArgumentException $e)
             {
                 // Expected - verify no partial state was created
-                $this->logger->info("Negative expiration correctly rejected: " . $e->getMessage());
+                Logger::getLogger()->info("Negative expiration correctly rejected: " . $e->getMessage());
             }
             catch (RequestException $e)
             {

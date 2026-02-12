@@ -1,12 +1,12 @@
 <?php
 
-    namespace FederationLib;
+    namespace FederationLib\FederationServer;
 
     use FederationLib\Enums\BlacklistType;
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
-    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
     use Symfony\Component\Uid\Uuid;
 
@@ -14,7 +14,6 @@
     {
         private FederationClient $authorizedClient;
         private FederationClient $unauthorizedClient;
-        private Logger $logger;
         private array $createdOperators = [];
         private array $createdEntities = [];
         private array $createdBlacklistRecords = [];
@@ -22,7 +21,6 @@
 
         protected function setUp(): void
         {
-            $this->logger = new Logger('security-tests');
             $this->authorizedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
             $this->unauthorizedClient = new FederationClient(getenv('SERVER_ENDPOINT')); // No API key
         }
@@ -38,7 +36,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete blacklist record $blacklistRecordUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistRecordUuid: " . $e->getMessage());
                 }
             }
 
@@ -50,7 +48,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
                 }
             }
 
@@ -62,7 +60,7 @@
                 }
                 catch (RequestException $e)
                 {
-                    $this->logger->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
+                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
                 }
             }
 
@@ -382,7 +380,7 @@
             $this->assertGreaterThan(0, $successCount, "No requests succeeded during rate limit test");
             
             // Log the results for analysis
-            $this->logger->info("Rate limit test: $successCount successful, $rateLimitedCount rate limited out of $rapidRequests requests");
+            Logger::getLogger()->info("Rate limit test: $successCount successful, $rateLimitedCount rate limited out of $rapidRequests requests");
         }
 
         // BUSINESS LOGIC VULNERABILITIES
@@ -641,7 +639,7 @@
                 // Could verify specific security events are logged here
             } catch (RequestException $e) {
                 // Audit logs might not be accessible or implemented
-                $this->logger->info("Audit logs not accessible for verification: " . $e->getMessage());
+                Logger::getLogger()->info("Audit logs not accessible for verification: " . $e->getMessage());
             }
         }
 
