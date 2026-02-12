@@ -19,6 +19,6 @@
         <env name="LOGLIB_UDP_HOST" value="127.0.0.1"/>
         <env name="LOGLIB_UDP_PORT" value="5000"/>
         <env name="LOGLIB_UDP_TRACE_FORMAT" value="full"/>
-
+        <env name="FL_TEST" value="true"/>
     </php>
 </phpunit>
