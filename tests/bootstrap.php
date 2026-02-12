@@ -15,5 +15,8 @@
         // Import the build output
         import($buildOutputPath);
 
+        // Import helper classes
+        require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'Logger.php';
+
         // LogLib2's handlers may interfere with tests, so we unregister them here.
         \LogLib2\Logger::unregisterHandlers();
