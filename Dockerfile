@@ -1,110 +1,60 @@
-# --- STAGE 1: BUILDER (Compiles the NCC Package) ---
-FROM php:8.3-fpm AS builder
+#
+#   FederationLib FederationServer Docker Image
+#
+#   This image provides a PHP-FPM environment with FederationLib FederationServer
+#   pre-installed, along with Nginx and Supervisor for web serving.
+#
 
-# Set the working directory for the application source code
+ARG PHP_VERSION=8.5
+
+FROM ghcr.io/nosial/ncc:latest AS builder
 WORKDIR /app
 
-# 1. Install necessary OS Dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    libpq-dev \
-    libzip-dev \
-    libicu-dev \
-    zip \
-    make \
-    wget \
-    gnupg \
-    libc-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
-
-# 2. Install Required PHP Extensions
-RUN docker-php-ext-install -j$(nproc) zip pdo_mysql
-
-# 3. Install PECL extensions
-RUN pecl install msgpack \
-    && docker-php-ext-enable msgpack
-
-# 4. Download and Install ncc (PHAR package manager)
-RUN echo "Installing ncc package manager..." \
-    && git clone --recurse-submodules https://git.n64.cc/nosial/ncc /tmp/ncc \
-    && cd /tmp/ncc \
-    && git checkout dev \
-    && make target/ncc.phar \
-    && target/install.sh \
-    && mv /tmp/ncc /tmp/ncc-install \
-    && cd /
-
-# 4. Copy the Application Source Code
 COPY . /app
+RUN ncc project install -y && ncc build --configuration web_release
 
-# 5. Install Project Dependencies and Build the NCC Package
-RUN ncc project install -y && ncc build --configuration=web_release
+FROM ghcr.io/nosial/ncc:fpm AS production
 
+LABEL org.opencontainers.image.title="FederationServer" \
+      org.opencontainers.image.description="FederationServer Docker image" \
+      org.opencontainers.image.vendor="Nosial"
 
-# --- STAGE 2: PRODUCTION (Final Runtime Image) ---
-FROM php:8.3-fpm AS production
+ENV LOGLIB_CONSOLE_ENABLED=false
+ENV LOGLIB_UDP_ENABLED=true
+ENV LOGLIB_UDP_HOST=127.0.0.1
+ENV LOGLIB_UDP_PORT=9003
+ENV LOGLIB_UDP_TRACE_FORMAT=full
 
-# Metadata labels
-LABEL org.opencontainers.image.title="FederationLib" \
-      org.opencontainers.image.version="1.0.0" \
-      org.opencontainers.image.vendor="" \
-      org.opencontainers.image.authors="" \
-      org.opencontainers.image.description="" \
-      org.opencontainers.image.url="" \
-      org.opencontainers.image.licenses="" \
-      ncc.package="net.nosial.federation" \
-      ncc.version="1.0.0" \
-      ncc.entry_point="web_entry"
+RUN apt-get update && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 && rm -rf /var/lib/apt/lists/*
 
-# Install Nginx, Supervisor and other minimal runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx \
-    supervisor \
-    libpq5 \
-    libzip-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+RUN install-php-extensions sockets
+RUN docker-php-ext-install -j$(nproc) pdo_mysql
+RUN pecl install redis && docker-php-ext-enable redis
 
-# 1. Install Required PHP Extensions (runtime only)
-RUN docker-php-ext-install -j$(nproc) zip sockets pdo_mysql
+RUN curl -sL "https://github.com/nosial/LogLib2Server/releases/latest/download/LogLib2Server-linux-x86_64" -o /usr/bin/ll2s && \
+    chmod +x /usr/bin/ll2s && apt purge -y --auto-remove curl
 
-# 1.1 Install PECL extensions
-RUN pecl install redis msgpack && docker-php-ext-enable redis msgpack
-
-# 1.2 Configure PHP for file uploads (match nginx client_max_body_size)
 RUN echo "upload_max_filesize = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "max_execution_time = 600" >> /usr/local/etc/php/conf.d/uploads.ini
 
-# 2. Install ncc by running the installation script (sets up PHP environment properly)
-COPY --from=builder /tmp/ncc-install /tmp/ncc-install
-RUN cd /tmp/ncc-install && ./target/install.sh && cd / && rm -rf /tmp/ncc-install
-
-# 3. Install the compiled package and its dependencies
 COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
 RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
 
-# 4. Copy the web entry point file
 RUN mkdir -p /var/www/html /var/www/uploads /etc/configlib
 COPY --from=builder /app/web_entry /var/www/html/index.php
 
-# Set working directory
 WORKDIR /var/www/html
 
-# 5. Configure Files
 RUN rm -f /etc/nginx/sites-enabled/default
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-RUN chmod 0777 /var/www/uploads && chmod 0777 /etc/configlib
 
-# 6. Expose port 8080
-EXPOSE 8080
-
-# 7. Define the startup command
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0777 /etc/configlib
+RUN chmod 0777 /var/www/uploads && chmod 0777 /etc/configlib
+
+EXPOSE 8080
+
 ENTRYPOINT ["docker-entrypoint.sh"]
