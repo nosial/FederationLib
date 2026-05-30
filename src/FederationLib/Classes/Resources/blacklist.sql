@@ -10,8 +10,6 @@ create table blacklist
     lifted_by varchar(36)                                                                                       null comment 'Optional. If the blacklist was manually lifted by an operator, this column represents the operator UUID that made the change.',
     expires   timestamp                                                                                         null comment 'The timestamp for when the blacklist expires, if null the blacklist never expires',
     created   timestamp   default current_timestamp()                                                           not null comment 'The Timestamp for when the record was created',
-    constraint blacklist_uuid_uindex
-        unique (uuid) comment 'The Unique Universal Identifier Primary Unique Index',
     constraint blacklist_entities_uuid_fk
         foreign key (entity) references entities (uuid)
             on update cascade on delete cascade,
@@ -27,23 +25,19 @@ create table blacklist
 )
     comment 'Table for housing one or more blacklist events';
 
+create index blacklist_entity_created_index
+    on blacklist (entity, created desc)
+    comment 'Composite index for entity lookups ordered by created';
+
+create index blacklist_operator_created_index
+    on blacklist (operator, created desc)
+    comment 'Composite index for operator lookups ordered by created';
+
 create index blacklist_created_index
     on blacklist (created)
     comment 'The Timestamp creation index';
 
-create index blacklist_entity_index
-    on blacklist (entity)
-    comment 'The Unique Universal Identifier of the entity index';
-
 create index blacklist_evidence_index
     on blacklist (evidence)
     comment 'The index for the blacklist evidence column';
-
-create index blacklist_operator_index
-    on blacklist (operator)
-    comment 'The Unique Universal Identifier of the operator index';
-
-create index blacklist_type_index
-    on blacklist (type)
-    comment 'The blacklist reason type';
 
