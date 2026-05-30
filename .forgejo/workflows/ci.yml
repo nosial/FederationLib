@@ -154,7 +154,7 @@ jobs:
 
       - name: Deploy Docker Compose environment
         run: |
-          apt-get update -qq && apt-get install -y -qq docker.io docker-compose-v2
+          apt-get update -qq && apt-get install -y -qq docker.io docker-compose
           docker compose up -d
           echo "Waiting for server to be ready..."
           for i in $(seq 1 60); do
