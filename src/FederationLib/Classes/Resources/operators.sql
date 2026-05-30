@@ -11,8 +11,10 @@ create table operators
     created          timestamp   default current_timestamp() not null comment 'The Timestamp for when this operator record was created',
     updated          timestamp   default current_timestamp() not null comment 'The Timestamp for when this operator record was last updated',
     constraint operators_api_key_uindex
-        unique (api_key),
-    constraint operators_uuid_uindex
-        unique (uuid)
+        unique (api_key)
 );
+
+create index operators_created_index
+    on operators (created)
+    comment 'Index for listing operators ordered by creation date';
 
