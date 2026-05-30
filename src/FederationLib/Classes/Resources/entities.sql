@@ -9,15 +9,11 @@ create table entities
     constraint entities_hash_uindex
         unique (hash),
     constraint entities_id_domain_uindex
-        unique (id, host),
-    constraint entities_uuid_uindex
-        unique (uuid)
+        unique (id, host)
 )
     comment 'A table for housing known entities in the database';
 
-create index entities_domain_index
-    on entities (host);
-
-create index entities_id_index
-    on entities (id);
+create index entities_created_index
+    on entities (created desc)
+    comment 'Index for listing entities ordered by creation date';
 
