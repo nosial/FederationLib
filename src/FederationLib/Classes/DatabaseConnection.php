@@ -5,6 +5,7 @@
     use FederationLib\Enums\DatabaseTables;
     use FederationLib\Exceptions\DatabaseOperationException;
     use PDO;
+    use Pdo\Mysql;
     use PDOException;
     use RuntimeException;
 
@@ -30,7 +31,7 @@
                 // Add MySQL-specific init command only if the constant is available
                 if (defined('PDO::MYSQL_ATTR_INIT_COMMAND'))
                 {
-                    $options[PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET NAMES ' . Configuration::getDatabaseConfiguration()->getCharset() . ' COLLATE ' . Configuration::getDatabaseConfiguration()->getCollation();
+                    $options[Mysql::ATTR_INIT_COMMAND] = 'SET NAMES ' . Configuration::getDatabaseConfiguration()->getCharset() . ' COLLATE ' . Configuration::getDatabaseConfiguration()->getCollation();
                 }
 
                 self::$pdo = new PDO(
