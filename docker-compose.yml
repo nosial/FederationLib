@@ -23,12 +23,6 @@ services:
       # PHP Environment configuration
       - PHP_MEMORY_LIMIT=256M
       - PHP_MAX_EXECUTION_TIME=60
-      # LogLib2 Configuration
-      - LOG_LEVEL=info
-      - LOGLIB_UDP_ENABLED=true
-      - LOGLIB_UDP_HOST=172.18.0.1
-      - LOGLIB_UDP_PORT=5000
-      - LOGLIB_UDP_TRACE_FORMAT=full
       # FederationLib Configuration
       - FEDERATION_DATABASE_HOST=mariadb
       - FEDERATION_DATABASE_PORT=3306
