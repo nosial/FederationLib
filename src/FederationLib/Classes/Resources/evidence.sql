@@ -9,8 +9,6 @@ create table evidence
     tag          varchar(32)                             null comment 'Optional. Abstract tag name related to the evidence',
     note         text                                    null comment 'Optional note by the operator that submitted the evidence',
     created      timestamp   default current_timestamp() not null comment 'The timestamp of the evidence',
-    constraint evidence_uuid_uindex
-        unique (uuid),
     constraint evidence_entities_uuid_fk
         foreign key (entity) references entities (uuid)
             on update cascade on delete cascade,
@@ -20,12 +18,19 @@ create table evidence
 )
     comment 'Table for housing evidence';
 
-create index evidence_entity_index
-    on evidence (entity);
+create index evidence_entity_created_index
+    on evidence (entity, created desc)
+    comment 'Composite index for entity evidence lookups ordered by created';
 
-create index evidence_operator_index
-    on evidence (operator);
+create index evidence_operator_created_index
+    on evidence (operator, created desc)
+    comment 'Composite index for operator evidence lookups ordered by created';
 
-create index evidence_tag_index
-    on evidence (tag);
+create index evidence_tag_created_index
+    on evidence (tag, created desc)
+    comment 'Composite index for tag evidence lookups ordered by created';
+
+create index evidence_created_index
+    on evidence (created desc)
+    comment 'Index for listing evidence ordered by creation date';
 
