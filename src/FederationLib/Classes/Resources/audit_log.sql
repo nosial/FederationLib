@@ -7,8 +7,6 @@ create table audit_log
     type      varchar(36)                             not null comment 'The audit action type',
     message   text                                    not null comment 'The log message',
     timestamp timestamp   default current_timestamp() not null comment 'The timestamp for when this log event was created',
-    constraint audit_log_uuid_uindex
-        unique (uuid) comment 'The Unique Universal Identifier primary unique index',
     constraint audit_log_entities_uuid_fk
         foreign key (entity) references entities (uuid)
             on update cascade on delete set null,
@@ -18,18 +16,19 @@ create table audit_log
 )
     comment 'The table for housing audit logs';
 
-create index audit_log_entity_index
-    on audit_log (entity)
-    comment 'The Index of the entity uuid';
+create index audit_log_entity_timestamp_index
+    on audit_log (entity, timestamp desc)
+    comment 'Composite index for entity lookups ordered by timestamp';
 
-create index audit_log_opreator_index
-    on audit_log (operator);
+create index audit_log_operator_timestamp_index
+    on audit_log (operator, timestamp desc)
+    comment 'Composite index for operator lookups ordered by timestamp';
+
+create index audit_log_type_timestamp_index
+    on audit_log (type, timestamp desc)
+    comment 'Composite index for type lookups ordered by timestamp';
 
 create index audit_log_timestamp_index
     on audit_log (timestamp)
-    comment 'The index of the log timestamp';
-
-create index audit_log_type_index
-    on audit_log (type)
-    comment 'The index of the log type';
+    comment 'The index of the log timestamp for cleanup queries';
 
