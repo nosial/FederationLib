@@ -154,6 +154,8 @@ jobs:
         run: wget https://phar.phpunit.de/phpunit-11.3.phar
 
       - name: Run PHPUnit tests
+        env:
+          LOGLIB_UDP_ENABLED: false
         run: |
           mkdir -p "$PWD/reports"
           chmod 777 "$PWD/reports"
