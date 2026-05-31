@@ -594,7 +594,7 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
