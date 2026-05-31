@@ -6,8 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: net.nosial.federation
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     depends_on:
