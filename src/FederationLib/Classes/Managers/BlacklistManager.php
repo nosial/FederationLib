@@ -292,11 +292,11 @@
             {
                 if ($includeLifted)
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
                 else
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
 
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
@@ -350,11 +350,11 @@
             {
                 if ($includeLifted)
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
                 else
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE operator=:operator_uuid AND lifted=0 ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
 
                 $stmt->bindParam(':operator_uuid', $operatorUuid);
@@ -411,11 +411,11 @@
             {
                 if ($includeLifted)
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
                 else
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=0 ORDER BY created DESC LIMIT :limit OFFSET :offset");
+                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE entity=:entity_uuid AND lifted=0 ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
                 }
 
                 $stmt->bindParam(':entity_uuid', $entityUuid);
