@@ -232,7 +232,7 @@
                     $query .= " WHERE confidential=0";
                 }
 
-                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
@@ -304,7 +304,7 @@
                 {
                     $query .= " AND confidential = 0";
                 }
-                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':entity', $entityUuid);
@@ -377,7 +377,7 @@
                 {
                     $query .= " AND confidential = 0";
                 }
-                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':operator', $operatorUuid);
@@ -440,7 +440,7 @@
                 {
                     $query .= " AND confidential = 0";
                 }
-                $query .= " ORDER BY created DESC LIMIT :limit OFFSET :offset";
+                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':tag', $tagName);
