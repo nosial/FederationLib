@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: net.nosial.federation
     ports:
-      - "8080:8080"
+      - "7000:7000"
     depends_on:
       mariadb:
         condition: service_healthy

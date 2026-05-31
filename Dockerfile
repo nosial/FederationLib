@@ -50,5 +50,5 @@ RUN mkdir -p /var/www/uploads /etc/configlib \
     && chmod 0777 /var/www/uploads /etc/configlib
 
 WORKDIR /var/www/html
-EXPOSE 8080
+EXPOSE 7000
 ENTRYPOINT ["docker-entrypoint.sh"]
