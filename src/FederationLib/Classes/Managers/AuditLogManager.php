@@ -333,7 +333,7 @@
                     $sql .= " AND type IN ($placeholders)";
                 }
 
-                $sql .= " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset";
+                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 foreach ($params as $key => $value)
                 {
