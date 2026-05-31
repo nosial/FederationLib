@@ -667,7 +667,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators ORDER BY created LIMIT :limit OFFSET :offset");
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators ORDER BY created, uuid LIMIT :limit OFFSET :offset");
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
