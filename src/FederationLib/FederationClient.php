@@ -68,6 +68,12 @@
             return $this->apiKey;
         }
 
+        /**
+         * Set the authentication token
+         *
+         * @param string|null $apiKey The authentication token to set, or null to unset the token
+         * @throws InvalidArgumentException If the token is an empty string or contains whitespace
+         */
         public function setApiKey(?string $apiKey): void
         {
             if($apiKey !== null)
