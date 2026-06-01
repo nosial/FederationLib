@@ -158,13 +158,11 @@
             {
                 $curlError = curl_error($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-                curl_close($ch);
                 throw new RequestException($errorMessage . ': ' . $curlError, HttpResponseCode::from($httpCode));
             }
 
             $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-            curl_close($ch);
 
             // Check the response Content-Type and ensure it's application/json
             if (!str_contains($contentType, 'application/json'))
@@ -1214,7 +1212,6 @@
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
             $curlError = curl_error($ch);
-            curl_close($ch);
 
             if($response === false)
             {
@@ -1339,12 +1336,10 @@
             {
                 $curlError = curl_error($ch);
                 $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-                curl_close($ch);
                 throw new RequestException('File upload failed: ' . $curlError, HttpResponseCode::from($httpCode));
             }
 
             $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            curl_close($ch);
 
             $decodedResponse = $this->decodeResponse($response);
 
@@ -1446,8 +1441,6 @@
                 $downloadResult = curl_exec($downloadCh);
                 $downloadHttpCode = curl_getinfo($downloadCh, CURLINFO_RESPONSE_CODE);
                 $downloadError = curl_error($downloadCh);
-
-                curl_close($downloadCh);
                 fclose($fileHandle);
 
                 if ($downloadResult === false || !empty($downloadError))
@@ -1554,12 +1547,10 @@
                 {
                     $curlError = curl_error($ch);
                     $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-                    curl_close($ch);
                     throw new RequestException('File upload failed: ' . $curlError, HttpResponseCode::from($httpCode));
                 }
 
                 $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-                curl_close($ch);
 
                 $decodedResponse = $this->decodeResponse($response);
 
