@@ -38,7 +38,8 @@
          */
         public function __construct(string $endpoint, ?string $apiKey=null)
         {
-            if(empty($endpoint) || !filter_var($endpoint, FILTER_VALIDATE_URL))
+            $parsedUrl = parse_url($endpoint);
+            if(empty($endpoint) || !isset($parsedUrl['scheme']) || !isset($parsedUrl['host']))
             {
                 throw new InvalidArgumentException("Endpoint must be a valid URL");
             }
