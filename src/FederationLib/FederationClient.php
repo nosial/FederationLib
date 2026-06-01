@@ -43,24 +43,9 @@
                 throw new InvalidArgumentException("Endpoint must be a valid URL");
             }
 
-            if($apiKey !== null)
-            {
-                if(strlen($apiKey) === 0)
-                {
-                    throw new InvalidArgumentException("Token cannot be an empty string");
-                }
-
-                // Check for empty whitespace in the apikey
-                if (preg_match('/\s/', $apiKey))
-                {
-                    throw new InvalidArgumentException("Token cannot contain whitespace");
-                }
-            }
-
-
             $endpoint = rtrim($endpoint, '/');
             $this->endpoint = $endpoint;
-            $this->apiKey = $apiKey;
+            $this->setApiKey($apiKey);
         }
 
         /**
@@ -81,6 +66,25 @@
         public function getApiKey(): ?string
         {
             return $this->apiKey;
+        }
+
+        public function setApiKey(?string $apiKey): void
+        {
+            if($apiKey !== null)
+            {
+                if(strlen($apiKey) === 0)
+                {
+                    throw new InvalidArgumentException("Token cannot be an empty string");
+                }
+
+                // Check for empty whitespace in the apikey
+                if (preg_match('/\s/', $apiKey))
+                {
+                    throw new InvalidArgumentException("Token cannot contain whitespace");
+                }
+            }
+
+            $this->apiKey = $apiKey;
         }
 
         /**
