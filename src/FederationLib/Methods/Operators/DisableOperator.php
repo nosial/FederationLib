@@ -50,6 +50,11 @@
                     throw new RequestException('Operator Not Found', 404);
                 }
 
+                if(OperatorManager::isRootOperator($operatorUuid))
+                {
+                    throw new RequestException('Cannot disable the root operator', 403);
+                }
+
                 if($existingOperator->isDisabled())
                 {
                     throw new RequestException('Operator is already enabled', 400);

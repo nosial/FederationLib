@@ -24,6 +24,12 @@
             }
 
             $name = $args['name'];
+            if($name === 'root')
+            {
+                print("Error: Operator name 'root' is reserved.\n");
+                return 1;
+            }
+
             $manageOperators = isset($args['manage-operators']) && $args['manage-operators'] === true ?? false;
             $manageBlacklist = isset($args['manage-blacklist']) && $args['manage-blacklist'] === true ?? false;
             $isClient = isset($args['is-client']) && $args['is-client'] === true ?? false;

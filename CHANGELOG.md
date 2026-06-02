@@ -22,7 +22,7 @@ Removed all deprecated usage of curl_close
 This update introduces a bug fix
 
 ### Fixed
-
+ - Prevent operations on reserved 'root' operator
  - Validate URL scheme and host in constructor of FederationClient
 
 

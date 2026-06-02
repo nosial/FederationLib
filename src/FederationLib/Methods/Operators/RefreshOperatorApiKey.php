@@ -47,9 +47,9 @@
                     $existingOperator = $authenticatedOperator;
                 }
 
-                if(OperatorManager::isMasterOperator($operatorUuid))
+                if(OperatorManager::isRootOperator($operatorUuid))
                 {
-                    throw new RequestException('Cannot refresh API key for master operator', 403);
+                    throw new RequestException('Cannot refresh API key for root operator', 403);
                 }
 
                 $newApiKey = OperatorManager::refreshApiKey($operatorUuid);

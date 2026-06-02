@@ -33,6 +33,12 @@
                     return 1;
                 }
 
+                if(OperatorManager::isRootOperator($uuid))
+                {
+                    print("Error: Cannot edit the root operator.\n");
+                    return 1;
+                }
+
                 $changed = false;
 
                 if (isset($args['set-client']))

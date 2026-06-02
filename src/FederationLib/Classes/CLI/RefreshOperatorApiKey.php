@@ -30,6 +30,12 @@
                     return 1;
                 }
 
+                if(OperatorManager::isRootOperator($uuid))
+                {
+                    print("Error: Cannot refresh API key for the root operator.\n");
+                    return 1;
+                }
+
                 $newApiKey = OperatorManager::refreshApiKey($uuid);
                 print("API key refreshed successfully.\n");
                 print("New API Key: $newApiKey\n");

@@ -46,6 +46,11 @@
                     throw new RequestException('Operator Not Found', 404);
                 }
 
+                if(OperatorManager::isRootOperator($operatorUuid))
+                {
+                    throw new RequestException('Cannot delete the root operator', 403);
+                }
+
                 OperatorManager::deleteOperator($operatorUuid);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf('Operator %s (%s) deleted by %s (%s)',
                     $existingOperator->getName(),

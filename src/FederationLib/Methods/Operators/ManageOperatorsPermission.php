@@ -45,6 +45,11 @@
                     throw new RequestException('Operator Not Found', 404);
                 }
 
+                if(OperatorManager::isRootOperator($operatorUuid))
+                {
+                    throw new RequestException('Cannot modify permissions for the root operator', 403);
+                }
+
                 OperatorManager::setManageOperators($operatorUuid, $enabled);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
                     'Operator %s (%s) %s operator management permissions by %s (%s)',

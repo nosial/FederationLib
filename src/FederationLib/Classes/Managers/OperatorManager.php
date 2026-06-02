@@ -40,6 +40,11 @@
                 throw new InvalidArgumentException('Operator name cannot exceed 32 characters.');
             }
 
+            if($name === 'root')
+            {
+                throw new InvalidArgumentException('Operator name "root" is reserved.');
+            }
+
             $uuid = Uuid::v7()->toRfc4122();
             $apiKey = Utilities::generateString();
 
@@ -111,6 +116,26 @@
         public static function isMasterOperator(string $uuid): bool
         {
             return self::getMasterOperator()->getUuid() === $uuid;
+        }
+
+        /**
+         * Check if the given UUID belongs to the root operator.
+         *
+         * @param string $uuid The UUID to check.
+         * @return bool True if the UUID belongs to the root operator, false otherwise.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws CacheOperationException If there is an error during the caching operation.
+         */
+        public static function isRootOperator(string $uuid): bool
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty.');
+            }
+
+            $operator = self::getOperator($uuid);
+            return $operator !== null && $operator->getName() === 'root';
         }
 
         /**

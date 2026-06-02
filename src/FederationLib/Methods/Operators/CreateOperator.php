@@ -31,6 +31,11 @@
                 throw new RequestException('Operator name is required', 400);
             }
 
+            if(FederationServer::getParameter('name') === 'root')
+            {
+                throw new RequestException('Operator name "root" is reserved', 400);
+            }
+
             try
             {
                 $operatorUuid = OperatorManager::createOperator(FederationServer::getParameter('name'));

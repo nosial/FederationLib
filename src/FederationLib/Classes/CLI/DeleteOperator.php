@@ -32,6 +32,12 @@
                     return 1;
                 }
 
+                if(OperatorManager::isRootOperator($uuid))
+                {
+                    print("Error: Cannot delete the root operator.\n");
+                    return 1;
+                }
+
                 OperatorManager::deleteOperator($uuid);
                 print("Operator with UUID $uuid has been deleted.\n");
                 $masterOperator = OperatorManager::getMasterOperator();
