@@ -1168,6 +1168,35 @@
         }
 
         /**
+         * Lists all file attachment records with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of attachment records per page (default is 100)
+         * @return FileAttachmentRecord[] An array of FileAttachmentRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listAttachments(int $page=1, int $limit=100): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => FileAttachmentRecord::fromArray($item),
+                $this->makeRequest('GET', 'attachments', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list attachments, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
          * Deletes an existing attachment record and it's file off the server
          *
          * @param string $attachmentUuid The attachment UUID to delete

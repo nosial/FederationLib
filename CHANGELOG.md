@@ -14,6 +14,7 @@ This update introduces several improvements and bug fixes.
  - Add configuration for maximum items in file attachments listing
  - Add pagination support for retrieving file attachment records
  - Add ListAttachments method for retrieving file attachments
+ - Add listAttachments method for retrieving file attachments with pagination support
 
 
 
