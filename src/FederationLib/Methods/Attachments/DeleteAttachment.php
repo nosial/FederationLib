@@ -58,7 +58,7 @@
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Operator %s deleted attachment %s',
                     $authenticatedOperator->getUuid(),
                     $attachmentUuid
-                ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid());
+                ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid(), null, $existingAttachment->getEvidenceUuid(), $attachmentUuid);
             }
             catch(InvalidArgumentException $e)
             {

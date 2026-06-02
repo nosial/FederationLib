@@ -13,6 +13,7 @@ This update introduces several improvements and bug fixes.
  - Add optional UUID fields for blacklist, evidence, and file attachments in AuditLog
  - Add optional UUID parameters for blacklist, evidence, and file attachments in createEntry method
  - Add optional UUID parameters for blacklist and evidence in BlacklistEntity
+ - Add optional UUID parameters for evidence and attachment in AuditLog entry on deletion
 
 ### Changed
  - Changed audit_log table structure by adding optional fields for blacklist, evidence, and file attachments; update
