@@ -13,6 +13,7 @@ This update introduces several improvements and bug fixes.
  - Add index for listing file attachments by creation date
  - Add configuration for maximum items in file attachments listing
  - Add pagination support for retrieving file attachment records
+ - Add ListAttachments method for retrieving file attachments
 
 
 
