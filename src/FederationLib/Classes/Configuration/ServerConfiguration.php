@@ -16,6 +16,7 @@
         private int $listOperatorsMaxItems;
         private int $listEvidenceMaxItems;
         private int $listBlacklistMaxItems;
+        private int $listAttachmentsMaxItems;
         private bool $publicAuditLogs;
         /**
          * @var AuditLogType[]
@@ -44,9 +45,8 @@
             $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
             $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
+            $this->listAttachmentsMaxItems = $config['list_attachments_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
-            // TODO: Why not make operators a public record thing to see? could be implemented by default disabled.
-            //       Update, 2026 developer here, don't remember this.
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
@@ -153,6 +153,16 @@
         public function getListBlacklistMaxItems(): int
         {
             return $this->listBlacklistMaxItems;
+        }
+
+        /**
+         * Get the maximum number of items to return when listing file attachments.
+         *
+         * @return int The maximum number of file attachment items to return.
+         */
+        public function getListAttachmentsMaxItems(): int
+        {
+            return $this->listAttachmentsMaxItems;
         }
 
         /**
