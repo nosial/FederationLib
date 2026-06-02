@@ -23,6 +23,7 @@
     use FederationLib\Objects\SuccessResponse;
     use FederationLib\Objects\UploadResult;
     use InvalidArgumentException;
+    use RuntimeException;
 
     class FederationClient
     {
@@ -1365,6 +1366,134 @@
         }
 
         /**
+         * Uploads a note as a .txt file attachment in-memory without creating a physical file
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to attach the file to
+         * @param string $fileName The name of the file (without extension, or with .txt)
+         * @param string $content The text content of the note
+         * @return UploadResult The upload result containing UUID and download URL
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID, file name, or content is invalid
+         * @throws RuntimeException If temporary file creation fails
+         */
+        public function uploadNoteAttachment(string $evidenceUuid, string $fileName, string $content): UploadResult
+        {
+            if (empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            if (empty($fileName))
+            {
+                throw new InvalidArgumentException('File name cannot be empty');
+            }
+
+            if (empty($content))
+            {
+                throw new InvalidArgumentException('Content cannot be empty');
+            }
+
+            if (!str_ends_with($fileName, '.txt'))
+            {
+                $fileName .= '.txt';
+            }
+
+            $tempFile = tempnam(sys_get_temp_dir(), 'fed_');
+            if ($tempFile === false)
+            {
+                throw new RuntimeException('Failed to create temporary file');
+            }
+
+            $bytesWritten = file_put_contents($tempFile, $content);
+            if ($bytesWritten === false)
+            {
+                unlink($tempFile);
+                throw new RuntimeException('Failed to write content to temporary file');
+            }
+
+            try
+            {
+                $path = ltrim('attachments', '/');
+                Logger::log()->debug(sprintf("POST Request to %s for note upload", $this->buildUrl($path)));
+
+                $ch = curl_init($this->buildUrl($path));
+
+                $headers = [
+                    'Accept: application/json'
+                ];
+
+                if ($this->apiKey !== null)
+                {
+                    $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                }
+
+                $file = new CURLFile($tempFile, 'text/plain', $fileName);
+
+                $postData = [
+                    'evidence_uuid' => $evidenceUuid,
+                    'file' => $file
+                ];
+
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_HTTPHEADER => $headers,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POSTFIELDS => $postData,
+                    CURLOPT_TIMEOUT => 300,
+                    CURLOPT_UPLOAD_BUFFERSIZE => 65536,
+                    CURLOPT_NOPROGRESS => false,
+                    CURLOPT_PROGRESSFUNCTION => function($resource, $download_size, $downloaded, $upload_size, $uploaded)
+                    {
+                        if ($upload_size > 0)
+                        {
+                            $percent = round(($uploaded / $upload_size) * 100, 2);
+                            Logger::log()->debug("Note upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                        }
+                        return 0;
+                    }
+                ]);
+
+                $response = curl_exec($ch);
+
+                if (curl_errno($ch))
+                {
+                    $curlError = curl_error($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                    throw new RequestException('Note upload failed: ' . $curlError, HttpResponseCode::from($httpCode));
+                }
+
+                $responseCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+                $decodedResponse = $this->decodeResponse($response);
+
+                $expectedStatusCodes = [201, HttpResponseCode::CREATED->value];
+                if (!in_array($responseCode, $expectedStatusCodes))
+                {
+                    $errorMsg = 'Note upload failed, received response code: ' . $responseCode;
+                    if ($decodedResponse instanceof ErrorResponse)
+                    {
+                        $errorMsg = 'Note upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                    }
+                    throw new RequestException($errorMsg, $responseCode);
+                }
+
+                if ($decodedResponse instanceof ErrorResponse)
+                {
+                    throw new RequestException('Note upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
+                }
+
+                /** @var SuccessResponse $decodedResponse */
+                return UploadResult::fromArray($decodedResponse->getData());
+            }
+            finally
+            {
+                if (file_exists($tempFile))
+                {
+                    unlink($tempFile);
+                }
+            }
+        }
+
+        /**
          * Uploads a file attachment from a URL to the federation server
          *
          * @param string $evidenceUuid The UUID of the evidence record to attach the file to
@@ -1481,7 +1610,6 @@
                 {
                     $finfo = finfo_open(FILEINFO_MIME_TYPE);
                     $detectedMime = finfo_file($finfo, $tempFile);
-                    finfo_close($finfo);
                     if ($detectedMime)
                     {
                         $mimeType = $detectedMime;
