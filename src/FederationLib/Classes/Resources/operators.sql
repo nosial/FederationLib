@@ -17,6 +17,6 @@ create table operators
 );
 
 create index operators_created_index
-    on operators (created)
+    on operators (created, uuid)
     comment 'Index for listing operators ordered by creation date';
 

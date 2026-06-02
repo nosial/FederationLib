@@ -14,6 +14,7 @@ This update introduces several improvements and bug fixes.
    timestamp index in audit_log.sql
  - Changed blacklist index to include UUID in blacklist.sql
  - Update evidence index to include UUID in evidence.sql
+ - Update operators index to include UUID in operators.sql
 
 ### Added
  - Add optional filename parameter to uploadFileAttachment and improve original name handling
