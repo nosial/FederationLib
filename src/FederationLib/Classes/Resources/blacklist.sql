@@ -34,7 +34,7 @@ create index blacklist_operator_created_index
     comment 'Composite index for operator lookups ordered by created';
 
 create index blacklist_created_index
-    on blacklist (created)
+    on blacklist (created desc, uuid desc)
     comment 'The Timestamp creation index';
 
 create index blacklist_evidence_index
