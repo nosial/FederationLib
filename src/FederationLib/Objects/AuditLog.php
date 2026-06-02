@@ -11,6 +11,9 @@
         private string $uuid;
         private ?string $operatorUuid;
         private ?string $entityUuid;
+        private ?string $blacklistUuid;
+        private ?string $evidenceUuid;
+        private ?string $fileAttachmentUuid;
         private AuditLogType $type;
         private string $message;
         private int $timestamp;
@@ -25,6 +28,9 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->operatorUuid = $data['operator'] ?? null;
             $this->entityUuid = $data['entity'] ?? null;
+            $this->blacklistUuid = $data['blacklist'] ?? null;
+            $this->evidenceUuid = $data['evidence'] ?? null;
+            $this->fileAttachmentUuid = $data['file_attachment'] ?? null;
             if(isset($data['type']))
             {
                 if($data['type'] instanceof AuditLogType)
@@ -87,6 +93,36 @@
         }
 
         /**
+         * Get the blacklist UUID associated with the audit log record.
+         *
+         * @return string|null
+         */
+        public function getBlacklistUuid(): ?string
+        {
+            return $this->blacklistUuid;
+        }
+
+        /**
+         * Get the evidence UUID associated with the audit log record.
+         *
+         * @return string|null
+         */
+        public function getEvidenceUuid(): ?string
+        {
+            return $this->evidenceUuid;
+        }
+
+        /**
+         * Get the file attachment UUID associated with the audit log record.
+         *
+         * @return string|null
+         */
+        public function getFileAttachmentUuid(): ?string
+        {
+            return $this->fileAttachmentUuid;
+        }
+
+        /**
          * Get the type of the audit log record.
          *
          * @return AuditLogType
@@ -125,6 +161,9 @@
                 'uuid' => $this->uuid,
                 'operator' => $this->operatorUuid,
                 'entity' => $this->entityUuid,
+                'blacklist' => $this->blacklistUuid,
+                'evidence' => $this->evidenceUuid,
+                'file_attachment' => $this->fileAttachmentUuid,
                 'type' => $this->type->value,
                 'message' => $this->message,
                 'timestamp' => $this->timestamp,
