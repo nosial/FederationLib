@@ -37,7 +37,8 @@
 
             try
             {
-                if(!EvidenceManager::evidenceExists($evidenceUuid))
+                $evidence = EvidenceManager::getEvidence($evidenceUuid);
+                if($evidence === null)
                 {
                     throw new RequestException('Evidence Not Found', 404);
                 }
@@ -48,7 +49,7 @@
                     $evidenceUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid());
+                ), $authenticatedOperator->getUuid(), $evidence->getEntityUuid(), null, $evidenceUuid);
             }
             catch(DatabaseOperationException $e)
             {
