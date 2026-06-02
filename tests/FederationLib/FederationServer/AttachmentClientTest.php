@@ -600,6 +600,121 @@
             }
         }
 
+        // LIST ATTACHMENTS TESTS
+
+        public function testListAttachments(): void
+        {
+            // Create entity and evidence
+            $entityUuid = $this->client->pushEntity('list-attachments-test.com', 'list_attachments_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for listing attachments', 'List attachments test', 'list_attachments');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $attachmentUuids = [];
+
+            // Upload multiple attachments
+            for ($i = 1; $i <= 3; $i++)
+            {
+                $content = "Content for list attachment number $i";
+                $fileName = "list_attachment_$i.txt";
+                $testFilePath = $this->createTestFile($fileName, $content);
+
+                $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+                $attachmentUuids[] = $uploadResult->getUuid();
+                $this->createdAttachments[] = $uploadResult->getUuid();
+            }
+
+            // List all attachments
+            $attachments = $this->client->listAttachments(1, 100);
+            $this->assertIsArray($attachments);
+            $this->assertGreaterThanOrEqual(3, count($attachments));
+
+            // Verify each uploaded attachment is present in the list
+            $listedUuids = array_map(fn($a) => $a->getUuid(), $attachments);
+            foreach ($attachmentUuids as $uuid)
+            {
+                $this->assertContains($uuid, $listedUuids);
+            }
+        }
+
+        public function testListAttachmentsPagination(): void
+        {
+            // Create entity and evidence
+            $entityUuid = $this->client->pushEntity('list-attachments-paginate.com', 'paginate_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for paginated listing', 'Pagination test', 'pagination');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            // Upload multiple attachments
+            for ($i = 1; $i <= 5; $i++)
+            {
+                $content = "Pagination content $i";
+                $fileName = "paginate_attachment_$i.txt";
+                $testFilePath = $this->createTestFile($fileName, $content);
+
+                $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+                $this->createdAttachments[] = $uploadResult->getUuid();
+            }
+
+            // Test limit
+            $limitedAttachments = $this->client->listAttachments(1, 2);
+            $this->assertCount(2, $limitedAttachments);
+
+            // Test page
+            $pageTwoAttachments = $this->client->listAttachments(2, 2);
+            $this->assertCount(2, $pageTwoAttachments);
+
+            // Ensure pages are different
+            $pageOneUuids = array_map(fn($a) => $a->getUuid(), $limitedAttachments);
+            $pageTwoUuids = array_map(fn($a) => $a->getUuid(), $pageTwoAttachments);
+            foreach ($pageOneUuids as $uuid)
+            {
+                $this->assertNotContains($uuid, $pageTwoUuids);
+            }
+        }
+
+        public function testListAttachmentsUnauthorized(): void
+        {
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(401);
+            $anonymousClient->listAttachments();
+        }
+
+        public function testListAttachmentsForbidden(): void
+        {
+            // Create an operator without blacklist management permissions
+            $operatorUuid = $this->client->createOperator('no-blacklist-list-operator');
+            $this->createdOperators[] = $operatorUuid;
+
+            $this->client->setManageBlacklistPermission($operatorUuid, false);
+            $this->client->setClientPermission($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(403);
+            $restrictedClient->listAttachments();
+        }
+
+        public function testListAttachmentsInvalidParameters(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Page must be greater than 0');
+            $this->client->listAttachments(0);
+        }
+
+        public function testListAttachmentsInvalidLimit(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Limit must be greater than 0');
+            $this->client->listAttachments(1, 0);
+        }
+
         // HELPER METHODS
 
         private function createTestFile(string $fileName, string $content): string
