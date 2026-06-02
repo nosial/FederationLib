@@ -25,6 +25,10 @@ This update introduces several improvements and bug fixes.
  - Update operators index to include UUID in operators.sql
  - Changed getTotalOperatorsCount method to use countRecords
 
+### Fixed
+ - Fixed deletion processes to ensure audit log entries are created before deleting records in DeleteAttachment,
+   DeleteBlacklist, and DeleteEvidence
+
 ### Added
  - Add optional filename parameter to uploadFileAttachment and improve original name handling
 

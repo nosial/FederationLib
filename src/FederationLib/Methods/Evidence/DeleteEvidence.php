@@ -43,13 +43,13 @@
                     throw new RequestException('Evidence Not Found', 404);
                 }
 
-                EvidenceManager::deleteEvidence($evidenceUuid);
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_DELETED, sprintf(
                     'Evidence %s deleted by %s (%s)',
                     $evidenceUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
                 ), $authenticatedOperator->getUuid(), $evidence->getEntityUuid(), null, $evidenceUuid);
+                EvidenceManager::deleteEvidence($evidenceUuid);
             }
             catch(DatabaseOperationException $e)
             {

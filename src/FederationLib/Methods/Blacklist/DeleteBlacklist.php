@@ -44,13 +44,13 @@
                     throw new RequestException('Blacklist record not found', HttpResponseCode::NOT_FOUND);
                 }
 
-                BlacklistManager::deleteBlacklistRecord($blacklistUuid);
                 AuditLogManager::createEntry(AuditLogType::BLACKLIST_RECORD_DELETED, sprintf(
                     'Blacklist record %s deleted by %s (%s)',
                     $blacklistUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
                 ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid(), $blacklistUuid);
+                BlacklistManager::deleteBlacklistRecord($blacklistUuid);
             }
             catch (DatabaseOperationException $e)
             {

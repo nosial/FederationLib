@@ -6,7 +6,7 @@
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use LogLib2\Logger;
+    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class BlacklistClientTest extends TestCase

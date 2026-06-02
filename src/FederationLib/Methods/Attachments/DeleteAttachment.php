@@ -54,11 +54,11 @@
                     throw new RequestException('Associated evidence not found', 404);
                 }
 
-                FileAttachmentManager::deleteRecord($attachmentUuid); // This will delete the file automatically
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Operator %s deleted attachment %s',
                     $authenticatedOperator->getUuid(),
                     $attachmentUuid
                 ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid(), null, $existingAttachment->getEvidenceUuid(), $attachmentUuid);
+                FileAttachmentManager::deleteRecord($attachmentUuid); // This will delete the file automatically
             }
             catch(InvalidArgumentException $e)
             {
