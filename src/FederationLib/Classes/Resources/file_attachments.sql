@@ -17,3 +17,7 @@ create index file_attachments_evidence_index
     on file_attachments (evidence)
     comment 'The file attachment index';
 
+create index file_attachments_created_index
+    on file_attachments (created desc, uuid desc)
+    comment 'Index for listing attachments ordered by creation date';
+

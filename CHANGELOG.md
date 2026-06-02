@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.6] - Ongoing
 
+This update introduces several improvements and bug fixes.
+
+### Added
+ - Add index for listing file attachments by creation date
+
 
 
 ## [0.0.5] - 2026-06-02
