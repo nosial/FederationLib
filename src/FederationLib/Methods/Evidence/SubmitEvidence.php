@@ -52,7 +52,7 @@
                     $entityUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $entityUuid);
+                ), $authenticatedOperator->getUuid(), $entityUuid, null, $evidenceUuid);
             }
             catch(InvalidArgumentException $e)
             {

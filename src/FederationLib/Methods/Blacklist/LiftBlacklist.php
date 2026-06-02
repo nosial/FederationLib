@@ -55,7 +55,7 @@
                     $blacklistUuid,
                     $authenticatedOperator->getName(),
                     $authenticatedOperator->getUuid()
-                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid());
+                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid(), $blacklistUuid);
             }
             catch (DatabaseOperationException $e)
             {

@@ -156,7 +156,7 @@
                 // Log upload success
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_UPLOADED, sprintf('Operator %s uploaded file %s (%s %s) Type %s | For Evidence %s',
                     $operator->getName(), $uuid, $originalName, $file['size'], $detectedMimeType, $evidenceUuid
-                ), $operator->getUuid(), $entityUuid);
+                ), $operator->getUuid(), $entityUuid, null, $evidenceUuid, $uuid);
 
                 self::successResponse(new UploadResult($uuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachments/' . $uuid), 201);
             }
