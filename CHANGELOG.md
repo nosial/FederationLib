@@ -13,6 +13,7 @@ This update introduces several improvements and bug fixes.
  - Changed audit_log table structure by adding optional fields for blacklist, evidence, and file attachments; update
    timestamp index
  - Changed blacklist index to include UUID
+ - Update entities index to include UUID for improved querying
 
 ### Added
  - Add optional filename parameter to uploadFileAttachment and improve original name handling

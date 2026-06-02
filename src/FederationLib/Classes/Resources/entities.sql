@@ -14,6 +14,6 @@ create table entities
     comment 'A table for housing known entities in the database';
 
 create index entities_created_index
-    on entities (created desc)
+    on entities (created desc, uuid desc)
     comment 'Index for listing entities ordered by creation date';
 
