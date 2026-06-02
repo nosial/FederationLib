@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.5] - Ongoing
 
+This update introduces several improvements and bug fixes.
+
+### Added
+ - Add optional filename parameter to uploadFileAttachment and improve original name handling
+
+
 
 ## [0.0.4] - 2026-06-02
 

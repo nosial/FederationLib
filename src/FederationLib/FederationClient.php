@@ -1263,7 +1263,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the file doesn't exist or evidence UUID is invalid
          */
-        public function uploadFileAttachment(string $evidenceUuid, string $localFilePath): UploadResult
+        public function uploadFileAttachment(string $evidenceUuid, string $localFilePath, ?string $fileName = null): UploadResult
         {
             if (empty($evidenceUuid))
             {
@@ -1302,8 +1302,9 @@
                 $headers[] = 'Authorization: Bearer ' . $this->apiKey;
             }
 
-            // Create CURLFile for the upload
-            $file = new CURLFile($localFilePath, mime_content_type($localFilePath) ?: 'application/octet-stream', basename($localFilePath));
+            // Create CURLFile for the upload; server-side FederationLib handles sanitization and fallback
+            $uploadName = $fileName ?? basename($localFilePath);
+            $file = new CURLFile($localFilePath, mime_content_type($localFilePath) ?: 'application/octet-stream', $uploadName);
 
             // Prepare multipart form data
             $postData = [

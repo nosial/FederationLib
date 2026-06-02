@@ -88,7 +88,11 @@
             }
 
             $detectedMimeType = self::detectMimeType($file['tmp_name']);
-            $originalName = self::getSafeFileName($file['name'] ?? 'unnamed');
+            $originalName = self::getSafeFileName($file['name'] ?? '');
+            if (empty($originalName) || $originalName === 'unnamed')
+            {
+                $originalName = Uuid::v4()->toRfc4122();
+            }
 
             // Check for symlinks/hardlinks in tmp_name
             if (is_link($file['tmp_name']))
