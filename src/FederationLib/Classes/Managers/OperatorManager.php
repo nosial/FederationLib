@@ -742,15 +742,7 @@
          */
         public static function getTotalOperatorsCount(): int
         {
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM operators");
-                return (int)$stmt->fetchColumn();
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException('Failed to retrieve total operators count', 0, $e);
-            }
+            return self::countRecords();
         }
 
         /**
