@@ -25,9 +25,12 @@
          * @param string $message The message to log.
          * @param string|null $operatorUuid The UUID of the operator performing the action, or null if not applicable.
          * @param string|null $entityUuid The UUID of the entity being acted upon, or null if not applicable.
+         * @param string|null $blacklistUuid The UUID of the blacklist record related to this action, or null if not applicable.
+         * @param string|null $evidenceUuid The UUID of the evidence record related to this action, or null if not applicable.
+         * @param string|null $fileAttachmentUuid The UUID of the file attachment related to this action, or null if not applicable.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function createEntry(AuditLogType $type, string $message, ?string $operatorUuid=null, ?string $entityUuid=null): void
+        public static function createEntry(AuditLogType $type, string $message, ?string $operatorUuid=null, ?string $entityUuid=null, ?string $blacklistUuid=null, ?string $evidenceUuid=null, ?string $fileAttachmentUuid=null): void
         {
             if(strlen($message) === 0)
             {
@@ -42,6 +45,21 @@
             if($entityUuid !== null && strlen($entityUuid) === 0)
             {
                 throw new InvalidArgumentException("Entity UUID cannot be empty.");
+            }
+
+            if($blacklistUuid !== null && strlen($blacklistUuid) === 0)
+            {
+                throw new InvalidArgumentException("Blacklist UUID cannot be empty.");
+            }
+
+            if($evidenceUuid !== null && strlen($evidenceUuid) === 0)
+            {
+                throw new InvalidArgumentException("Evidence UUID cannot be empty.");
+            }
+
+            if($fileAttachmentUuid !== null && strlen($fileAttachmentUuid) === 0)
+            {
+                throw new InvalidArgumentException("File attachment UUID cannot be empty.");
             }
 
             if($operatorUuid !== null && $entityUuid !== null)
@@ -65,11 +83,14 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (type, message, operator, entity) VALUES (:type, :message, :operator, :entity)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (type, message, operator, entity, blacklist, evidence, file_attachment) VALUES (:type, :message, :operator, :entity, :blacklist, :evidence, :file_attachment)");
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':message', $message);
                 $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':entity', $entityUuid);
+                $stmt->bindParam(':blacklist', $blacklistUuid);
+                $stmt->bindParam(':evidence', $evidenceUuid);
+                $stmt->bindParam(':file_attachment', $fileAttachmentUuid);
 
                 $stmt->execute();
             }
@@ -382,7 +403,6 @@
             }
 
             $timestamp = time() - ($olderThanDays * 86400); // Convert days to seconds
-            $timestamp = DateTime::createFromFormat('U', $timestamp)->getTimestamp();
 
             try
             {
@@ -420,10 +440,6 @@
 
                 if ($type !== null)
                 {
-                    if (!$type instanceof AuditLogType)
-                    {
-                        throw new InvalidArgumentException("Type must be of type AuditLogType.");
-                    }
                     $params[':type'] = $type->value;
                     $sql .= " WHERE type = :type";
                 }
