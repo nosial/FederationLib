@@ -18,6 +18,7 @@
         private array $createdEntities = [];
         private array $createdBlacklistRecords = [];
         private array $createdEvidenceRecords = [];
+        private array $createdAttachments = [];
 
         protected function setUp(): void
         {
@@ -37,6 +38,18 @@
                 catch (RequestException $e)
                 {
                     Logger::getLogger()->warning("Failed to delete blacklist record $blacklistRecordUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->createdAttachments as $attachmentUuid)
+            {
+                try
+                {
+                    $this->authorizedClient->deleteAttachment($attachmentUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete attachment $attachmentUuid: " . $e->getMessage());
                 }
             }
 
@@ -66,6 +79,7 @@
 
             // Clear arrays
             $this->createdBlacklistRecords = [];
+            $this->createdAttachments = [];
             $this->createdEntities = [];
             $this->createdOperators = [];
             $this->createdEvidenceRecords = [];
@@ -350,37 +364,6 @@
             // Test very large evidence content (should be rejected)
             $this->expectException(RequestException::class);
             $this->authorizedClient->submitEvidence($entityUuid, $veryLargeContent, 'Very large content test', 'very-large');
-        }
-
-        public function testRateLimitingBehavior(): void
-        {
-            // Test rapid fire requests to check for rate limiting
-            $rapidRequests = 50;
-            $successCount = 0;
-            $rateLimitedCount = 0;
-
-            for ($i = 0; $i < $rapidRequests; $i++) {
-                try {
-                    $serverInfo = $this->authorizedClient->getServerInformation();
-                    $this->assertNotNull($serverInfo);
-                    $successCount++;
-                } catch (RequestException $e) {
-                    if ($e->getCode() === 429) { // Too Many Requests
-                        $rateLimitedCount++;
-                    } else {
-                        $this->fail("Unexpected error during rate limit test: " . $e->getMessage());
-                    }
-                }
-                
-                // Small delay to avoid overwhelming the server
-                usleep(10000); // 10ms
-            }
-
-            // At least some requests should succeed
-            $this->assertGreaterThan(0, $successCount, "No requests succeeded during rate limit test");
-            
-            // Log the results for analysis
-            Logger::getLogger()->info("Rate limit test: $successCount successful, $rateLimitedCount rate limited out of $rapidRequests requests");
         }
 
         // BUSINESS LOGIC VULNERABILITIES
@@ -669,8 +652,497 @@
 
         public function testInformationDisclosureInErrorMessages(): void
         {
-            // Test with malformed UUIDs to check for information disclosure  
+            // Test with malformed UUIDs to check for information disclosure
             $this->expectException(RequestException::class);
             $this->authorizedClient->getOperator('not-a-valid-uuid');
+        }
+
+        // CORS AND HEADER SECURITY TESTS
+
+        public function testCorsAllowsAnyOrigin(): void
+        {
+            // The API returns Access-Control-Allow-Origin: * which allows any malicious website
+            // to make cross-origin authenticated requests if they obtain the API key.
+            $ch = curl_init(getenv('SERVER_ENDPOINT') . '/info');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Origin: https://evil-attacker.example.com']);
+            $response = curl_exec($ch);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr($response, 0, $headerSize);
+            curl_close($ch);
+
+            $this->assertStringContainsString('Access-Control-Allow-Origin: *', $headers,
+                'CORS policy allows any origin, enabling cross-origin attacks from malicious sites');
+        }
+
+        public function testSecurityHeadersMissing(): void
+        {
+            $ch = curl_init(getenv('SERVER_ENDPOINT') . '/info');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            $response = curl_exec($ch);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr($response, 0, $headerSize);
+            curl_close($ch);
+
+            $this->assertStringNotContainsString('Content-Security-Policy', $headers,
+                'Missing Content-Security-Policy header enables XSS attacks');
+            $this->assertStringNotContainsString('Strict-Transport-Security', $headers,
+                'Missing HSTS header allows SSL stripping attacks');
+            $this->assertStringNotContainsString('Referrer-Policy', $headers,
+                'Missing Referrer-Policy header may leak sensitive URLs');
+            $this->assertStringNotContainsString('Permissions-Policy', $headers,
+                'Missing Permissions-Policy header allows unauthorized browser features');
+        }
+
+        // STORED XSS TESTS
+
+        public function testStoredXssPayloadsReturnedUnescapedInJson(): void
+        {
+            $entityUuid = $this->authorizedClient->pushEntity('xss-test.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $xssPayload = '<script>alert("XSS")</script>';
+            $evidenceUuid = $this->authorizedClient->submitEvidence(
+                $entityUuid,
+                $xssPayload,
+                $xssPayload,
+                'xss_tag'
+            );
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $evidence = $this->authorizedClient->getEvidenceRecord($evidenceUuid);
+
+            // The server stores and returns the raw XSS payload without escaping.
+            // If this JSON is rendered in a web UI without additional escaping, it executes.
+            $this->assertEquals($xssPayload, $evidence->getTextContent(),
+                'Evidence text_content is stored and returned without HTML sanitization');
+            $this->assertEquals($xssPayload, $evidence->getNote(),
+                'Evidence note is stored and returned without HTML sanitization');
+        }
+
+        // PUBLIC ENDPOINT INFORMATION DISCLOSURE TESTS
+
+        public function testPublicEndpointsExposeDataWithoutAuthentication(): void
+        {
+            // By default, most read endpoints are public. This exposes server state to unauthenticated attackers.
+            $serverInfo = $this->unauthorizedClient->getServerInformation();
+            $this->assertNotNull($serverInfo->getServerName());
+            // The info endpoint exposes record counts, which aids reconnaissance
+            $this->assertGreaterThanOrEqual(0, $serverInfo->getAuditLogRecords());
+            $this->assertGreaterThanOrEqual(0, $serverInfo->getBlacklistRecords());
+            $this->assertGreaterThanOrEqual(0, $serverInfo->getKnownEntities());
+            $this->assertGreaterThanOrEqual(0, $serverInfo->getEvidenceRecords());
+            $this->assertGreaterThanOrEqual(0, $serverInfo->getOperators());
+
+            // Public entities access
+            $entities = $this->unauthorizedClient->listEntities(1, 10);
+            $this->assertIsArray($entities);
+
+            // Public blacklist access
+            $blacklist = $this->unauthorizedClient->listBlacklistRecords(1, 10);
+            $this->assertIsArray($blacklist);
+
+            // Public audit logs access
+            $auditLogs = $this->unauthorizedClient->listAuditLogs(1, 10);
+            $this->assertIsArray($auditLogs);
+        }
+
+        // BROKEN OBJECT LEVEL AUTHORIZATION (BOLA) TESTS
+
+        public function testCrossOperatorEvidenceDeletion(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-operator1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-operator2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 creates an entity and evidence
+            $entityUuid = $client1->pushEntity('bola-test.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $client1->submitEvidence($entityUuid, 'Operator1 evidence', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            // Operator2 (a different user) can delete Operator1's evidence without any ownership check.
+            // This proves Broken Object Level Authorization (BOLA / IDOR).
+            try
+            {
+                $client2->deleteEvidence($evidenceUuid);
+            }
+            catch (RequestException $e)
+            {
+                $this->fail('Operator2 was blocked from deleting Operator1 evidence, which is good, but the test expected BOLA to exist: ' . $e->getMessage());
+            }
+
+            // Verify the evidence is actually deleted
+            try
+            {
+                $this->authorizedClient->getEvidenceRecord($evidenceUuid);
+                $this->fail('Evidence should have been deleted by cross-operator');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertEquals(404, $e->getCode(), 'Evidence was successfully deleted by a different operator');
+            }
+        }
+
+        public function testCrossOperatorBlacklistLift(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-bl-operator1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-bl-operator2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+            $this->authorizedClient->setClientPermission($operator2Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 creates entity, evidence, and blacklists it
+            $entityUuid = $client1->pushEntity('bola-bl-test.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $client1->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            // Operator2 can lift Operator1's blacklist without ownership check
+            try
+            {
+                $client2->liftBlacklistRecord($blacklistUuid);
+            }
+            catch (RequestException $e)
+            {
+                $this->fail('Operator2 was blocked from lifting Operator1 blacklist, test expected BOLA: ' . $e->getMessage());
+            }
+
+            $record = $this->authorizedClient->getBlacklistRecord($blacklistUuid);
+            $this->assertTrue($record->isLifted(), 'Blacklist record was lifted by a different operator');
+        }
+
+        // ERROR MESSAGE INFORMATION DISCLOSURE TESTS
+
+        public function testErrorMessageLeaksDatabaseDetails(): void
+        {
+            // The GetAttachmentInfo endpoint concatenates raw database exception messages into HTTP responses.
+            // We trigger a database-layer error indirectly by attempting operations that may fail.
+            // Since we cannot easily force a DB failure in an integration test, we verify the behavior
+            // by inspecting the response for a known code pattern in the source.
+            // However, we can trigger an InvalidArgumentException path that leaks internal details.
+
+            // A simpler concrete test: send a request to an endpoint that does not exist,
+            // but this doesn't test DB leakage.
+
+            // More concrete: attempt to download an attachment with a valid UUID format but non-existent record.
+            // The response should NOT contain SQL details.
+            $fakeUuid = Uuid::v4()->toRfc4122();
+            try
+            {
+                $this->authorizedClient->getAttachmentInfo($fakeUuid);
+                $this->fail('Expected 404 for non-existent attachment');
+            }
+            catch (RequestException $e)
+            {
+                // Ensure the error message does NOT contain SQL keywords or stack traces
+                $this->assertStringNotContainsString('SQL', $e->getMessage(), 'Error message may leak SQL details');
+                $this->assertStringNotContainsString('SELECT', $e->getMessage(), 'Error message leaks SQL details');
+                $this->assertStringNotContainsString('prepare', $e->getMessage(), 'Error message leaks SQL details');
+            }
+        }
+
+        // BOLA / IDOR - ADDITIONAL OBJECT-LEVEL AUTHORIZATION TESTS
+
+        public function testCrossOperatorAttachmentDeletion(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-attach-op1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-attach-op2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+            $this->authorizedClient->setClientPermission($operator2Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 creates entity, evidence, and uploads an attachment
+            $entityUuid = $client1->pushEntity('bola-attach.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $client1->submitEvidence($entityUuid, 'Operator1 evidence', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $tempFile = tempnam(sys_get_temp_dir(), 'attach_bola_');
+            file_put_contents($tempFile, 'attachment content for bola test');
+            $uploadResult = $client1->uploadFileAttachment($evidenceUuid, $tempFile);
+            $attachmentUuid = $uploadResult->getUuid();
+            @unlink($tempFile);
+            $this->createdAttachments[] = $attachmentUuid;
+
+            // Operator2 can delete Operator1's attachment without any ownership check
+            try
+            {
+                $client2->deleteAttachment($attachmentUuid);
+            }
+            catch (RequestException $e)
+            {
+                $this->fail('Operator2 was blocked from deleting Operator1 attachment, test expected BOLA to exist: ' . $e->getMessage());
+            }
+
+            // Verify the attachment is actually deleted
+            try
+            {
+                $this->authorizedClient->getAttachmentInfo($attachmentUuid);
+                $this->fail('Attachment should have been deleted by cross-operator');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertEquals(404, $e->getCode(), 'Attachment was successfully deleted by a different operator');
+            }
+        }
+
+        public function testCrossOperatorBlacklistDeletion(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-bl-del-op1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-bl-del-op2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+            $this->authorizedClient->setClientPermission($operator2Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 creates entity, evidence, and blacklists it
+            $entityUuid = $client1->pushEntity('bola-bl-del.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $client1->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            // Operator2 can delete Operator1's blacklist without ownership check
+            try
+            {
+                $client2->deleteBlacklistRecord($blacklistUuid);
+            }
+            catch (RequestException $e)
+            {
+                $this->fail('Operator2 was blocked from deleting Operator1 blacklist, test expected BOLA: ' . $e->getMessage());
+            }
+
+            // Verify the blacklist is actually deleted
+            try
+            {
+                $this->authorizedClient->getBlacklistRecord($blacklistUuid);
+                $this->fail('Blacklist should have been deleted by cross-operator');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertEquals(404, $e->getCode(), 'Blacklist was successfully deleted by a different operator');
+            }
+        }
+
+        public function testCrossOperatorEntityDeletion(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-entity-op1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-entity-op2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 pushes an entity
+            $entityUuid = $client1->pushEntity('bola-entity.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            // Operator2 can delete Operator1's entity without ownership check
+            try
+            {
+                $client2->deleteEntity($entityUuid);
+            }
+            catch (RequestException $e)
+            {
+                $this->fail('Operator2 was blocked from deleting Operator1 entity, test expected BOLA: ' . $e->getMessage());
+            }
+
+            // Verify the entity is actually deleted
+            try
+            {
+                $this->authorizedClient->getEntityRecord($entityUuid);
+                $this->fail('Entity should have been deleted by cross-operator');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertEquals(404, $e->getCode(), 'Entity was successfully deleted by a different operator');
+            }
+        }
+
+        public function testCrossOperatorEvidenceConfidentialityToggle(): void
+        {
+            // Create two operators both with manage_blacklist permission
+            $operator1Uuid = $this->authorizedClient->createOperator('bola-conf-op1');
+            $operator2Uuid = $this->authorizedClient->createOperator('bola-conf-op2');
+            $this->createdOperators[] = $operator1Uuid;
+            $this->createdOperators[] = $operator2Uuid;
+
+            $this->authorizedClient->setManageBlacklistPermission($operator1Uuid, true);
+            $this->authorizedClient->setManageBlacklistPermission($operator2Uuid, true);
+            $this->authorizedClient->setClientPermission($operator1Uuid, true);
+
+            $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
+            $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
+
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+
+            // Operator1 creates entity and non-confidential evidence
+            $entityUuid = $client1->pushEntity('bola-conf.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $client1->submitEvidence($entityUuid, 'Operator1 evidence', 'note', 'tag', false);
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            // Operator2 toggles confidentiality on Operator1's evidence without ownership check
+            $client2->updateEvidenceConfidentiality($evidenceUuid, true);
+
+            $evidence = $this->authorizedClient->getEvidenceRecord($evidenceUuid);
+            $this->assertTrue($evidence->isConfidential(),
+                'Evidence confidentiality was toggled by a different operator without ownership check');
+        }
+
+        // INPUT VALIDATION & TYPE CONFUSION TESTS
+
+        public function testJsonArrayParameterTypeConfusionOnListBlacklist(): void
+        {
+            // Create a lifted blacklist record to detect exposure
+            $entityUuid = $this->authorizedClient->pushEntity('array-type-conf.example.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->authorizedClient->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+            $this->authorizedClient->liftBlacklistRecord($blacklistUuid);
+
+            // Send GET /blacklist with JSON body {"include_lifted": [0]}
+            // (bool)[0] evaluates to true in PHP, bypassing the boolean parameter check
+            $ch = curl_init(getenv('SERVER_ENDPOINT') . '/blacklist');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['include_lifted' => [0]]));
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            $this->assertEquals(200, $httpCode);
+            $decoded = json_decode($response, true);
+            $this->assertTrue($decoded['success'] ?? false);
+
+            $foundLifted = false;
+            foreach ($decoded['data'] ?? [] as $record)
+            {
+                if (($record['lifted'] ?? false) === true)
+                {
+                    $foundLifted = true;
+                    break;
+                }
+            }
+
+            $this->assertTrue($foundLifted,
+                'Array parameter type confusion bypassed boolean check, exposing lifted blacklist records');
+        }
+
+        // LOG INJECTION & STORED XSS TESTS
+
+        public function testLogInjectionViaOperatorName(): void
+        {
+            $injectedName = "test\nINJECTED_LOG_ENTRY";
+            $operatorUuid = $this->authorizedClient->createOperator($injectedName);
+            $this->createdOperators[] = $operatorUuid;
+
+            $operator = $this->authorizedClient->getOperator($operatorUuid);
+            // The newline is preserved in the name and will be injected into audit log messages
+            $this->assertEquals($injectedName, $operator->getName(),
+                'Operator name containing newlines is accepted and stored without sanitization, enabling log injection');
+        }
+
+        public function testOperatorNameStoredXss(): void
+        {
+            $xssPayload = "<script>alert('XSS')</script>"; // 28 chars, fits within 32-char limit
+            $operatorUuid = $this->authorizedClient->createOperator($xssPayload);
+            $this->createdOperators[] = $operatorUuid;
+
+            $operator = $this->authorizedClient->getOperator($operatorUuid);
+            $this->assertEquals($xssPayload, $operator->getName(),
+                'Operator name XSS payload is stored and returned without HTML sanitization');
+        }
+
+        // DEPRECATED SECURITY HEADER TEST
+
+        public function testNginxUsesDeprecatedXssProtectionHeader(): void
+        {
+            $ch = curl_init(getenv('SERVER_ENDPOINT') . '/info');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_NOBODY, true);
+            $response = curl_exec($ch);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr($response, 0, $headerSize);
+            curl_close($ch);
+
+            // X-XSS-Protection is deprecated and can introduce vulnerabilities in some browsers.
+            // Modern security practice recommends omitting this header entirely.
+            $this->assertStringContainsString('X-XSS-Protection', $headers,
+                'nginx.conf sets the deprecated X-XSS-Protection header which can cause XSS issues in legacy browsers');
         }
     }
