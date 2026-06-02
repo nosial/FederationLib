@@ -52,10 +52,10 @@
             return [
                 self::OPERATORS,
                 self::ENTITIES,
-                self::AUDIT_LOG,
                 self::EVIDENCE,
                 self::FILE_ATTACHMENTS,
-                self::BLACKLIST
+                self::BLACKLIST,
+                self::AUDIT_LOG
             ];
         }
     }
