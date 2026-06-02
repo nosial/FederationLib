@@ -98,7 +98,7 @@
                     $authenticatedOperator->getUuid(),
                     $type->name,
                     $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ' as a permanent'
-                ), $authenticatedOperator->getUuid(), $entityIdentifier);
+                ), $authenticatedOperator->getUuid(), $entityIdentifier, $blacklistUuid, $evidence, null);
             }
             catch(DatabaseOperationException $e)
             {
