@@ -195,6 +195,53 @@
             }
         }
 
+        /**
+         * Retrieves all file attachment records from the database with pagination support.
+         *
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @return FileAttachmentRecord[] An array of FileAttachmentRecord objects.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws InvalidArgumentException If the limit or page parameters are invalid.
+         */
+        public static function getAttachmentRecords(int $limit=100, int $page=1): array
+        {
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = array_map(fn($data) => new FileAttachmentRecord($data), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                );
+            }
+
+            return $results;
+        }
 
         /**
          * Counts the total number of file attachment records in the database.
