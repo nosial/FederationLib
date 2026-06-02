@@ -31,6 +31,6 @@ create index evidence_tag_created_index
     comment 'Composite index for tag evidence lookups ordered by created';
 
 create index evidence_created_index
-    on evidence (created desc)
+    on evidence (created desc, uuid desc)
     comment 'Index for listing evidence ordered by creation date';
 
