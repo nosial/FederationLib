@@ -37,7 +37,8 @@
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
             {
-                $data['created'] = strtotime($data['created']);
+                // Numeric strings come from the Redis cache (hGetAll returns all hash values as strings)
+                $data['created'] = is_numeric($data['created']) ? (int)$data['created'] : strtotime($data['created']);
             }
             elseif (isset($data['created']) && $data['created'] instanceof DateTime)
             {
@@ -145,7 +146,7 @@
             {
                 if(is_string($array['created']))
                 {
-                    $array['created'] = strtotime($array['created']);
+                    $array['created'] = is_numeric($array['created']) ? (int)$array['created'] : strtotime($array['created']);
                 }
                 elseif($array['created'] instanceof DateTime)
                 {

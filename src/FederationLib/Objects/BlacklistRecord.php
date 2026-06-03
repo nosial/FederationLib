@@ -54,7 +54,8 @@
             {
                 if (is_string($data['expires']))
                 {
-                    $this->expires = strtotime($data['expires']);
+                    // Numeric strings come from the Redis cache (hGetAll returns all hash values as strings)
+                    $this->expires = is_numeric($data['expires']) ? (int)$data['expires'] : strtotime($data['expires']);
                 }
                 elseif ($data['expires'] instanceof DateTime)
                 {
@@ -73,7 +74,8 @@
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
             {
-                $this->created = strtotime($data['created']);
+                // Numeric strings come from the Redis cache (hGetAll returns all hash values as strings)
+                $this->created = is_numeric($data['created']) ? (int)$data['created'] : strtotime($data['created']);
             }
             elseif (isset($data['created']) && $data['created'] instanceof DateTime)
             {
@@ -212,7 +214,7 @@
             {
                 if(is_string($array['expires']))
                 {
-                    $array['expires'] = strtotime($array['expires']);
+                    $array['expires'] = is_numeric($array['expires']) ? (int)$array['expires'] : strtotime($array['expires']);
                 }
                 elseif($array['expires'] instanceof DateTime)
                 {
@@ -224,7 +226,7 @@
             {
                 if(is_string($array['created']))
                 {
-                    $array['created'] = strtotime($array['created']);
+                    $array['created'] = is_numeric($array['created']) ? (int)$array['created'] : strtotime($array['created']);
                 }
                 elseif($array['created'] instanceof DateTime)
                 {
