@@ -92,10 +92,9 @@
                 );
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_BLACKLISTED, sprintf(
-                    'Entity %s blacklisted by operator %s (%s) with type %s%s',
+                    'Entity %s blacklisted by operator %s with type %s%s',
                     $entityRecord->getAddress(),
                     $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid(),
                     $type->name,
                     $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ' as a permanent'
                 ), $authenticatedOperator->getUuid(), $entityIdentifier, $blacklistUuid, $evidence, null);

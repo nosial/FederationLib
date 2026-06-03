@@ -39,11 +39,10 @@
             try
             {
                 $operatorUuid = OperatorManager::createOperator(FederationServer::getParameter('name'));
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf('Operator %s (%s) created by %s (%s)',
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf('Operator %s (%s) created by %s',
                     FederationServer::getParameter('name'),
                     $operatorUuid,
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(InvalidArgumentException $e)

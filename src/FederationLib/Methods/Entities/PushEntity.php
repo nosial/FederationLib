@@ -32,10 +32,9 @@
                 {
                     $entityUuid = EntitiesManager::registerEntity($host, $id);
                     AuditLogManager::createEntry(AuditLogType::ENTITY_PUSHED, sprintf(
-                        'Entity %s registered by %s (%s)',
+                        'Entity %s registered by operator %s',
                         $id,
-                        $authenticatedOperator->getName(),
-                        $authenticatedOperator->getUuid()
+                        $authenticatedOperator->getName()
                     ), $authenticatedOperator->getUuid(), $entityUuid);
                 }
                 else

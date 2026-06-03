@@ -154,8 +154,8 @@
                 FileAttachmentManager::createRecord($uuid, $evidenceUuid, $detectedMimeType, $originalName, $file['size']);
 
                 // Log upload success
-                AuditLogManager::createEntry(AuditLogType::ATTACHMENT_UPLOADED, sprintf('Operator %s uploaded file %s (%s %s) Type %s | For Evidence %s',
-                    $operator->getName(), $uuid, $originalName, $file['size'], $detectedMimeType, $evidenceUuid
+                AuditLogManager::createEntry(AuditLogType::ATTACHMENT_UPLOADED, sprintf('File %s uploaded by operator %s (size: %s bytes) Type %s',
+                    $originalName, $operator->getName(), $file['size'], $detectedMimeType
                 ), $operator->getUuid(), $entityUuid, null, $evidenceUuid, $uuid);
 
                 self::successResponse(new UploadResult($uuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachments/' . $uuid), 201);

@@ -54,11 +54,10 @@
 
                 $newApiKey = OperatorManager::refreshApiKey($operatorUuid);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
-                    'Operator %s (%s) refreshed API key by %s (%s)',
+                    'Operator %s (%s) refreshed API key by %s',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

@@ -61,9 +61,9 @@
                 $masterOperator = OperatorManager::getMasterOperator();
 
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf(
-                    "Operator %s created with name '%s'. Manage Operators: %s, Manage Blacklist: %s, Is Client: %s",
-                    $operatorUuid,
+                    "Operator '%s' (%s) created. Manage Operators: %s, Manage Blacklist: %s, Is Client: %s",
                     $name,
+                    $operatorUuid,
                     $manageOperators ? 'true' : 'false',
                     $manageBlacklist ? 'true' : 'false',
                     $isClient ? 'true' : 'false'

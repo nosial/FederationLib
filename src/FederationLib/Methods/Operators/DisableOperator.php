@@ -61,11 +61,9 @@
                 }
 
                 OperatorManager::disableOperator($operatorUuid);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_DISABLED, sprintf('Operator %s (%s) disabled by %s (%s)',
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_DISABLED, sprintf('Operator %s disabled by %s',
                     $existingOperator->getName(),
-                    $existingOperator->getUuid(),
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

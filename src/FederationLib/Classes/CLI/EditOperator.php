@@ -39,6 +39,7 @@
                     return 1;
                 }
 
+                $targetOperator = OperatorManager::getOperator($uuid);
                 $changed = false;
 
                 if (isset($args['set-client']))
@@ -96,8 +97,8 @@
                 {
                     $masterOperator = OperatorManager::getMasterOperator();
                     AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
-                        "Operator with UUID %s has been edited. Changes: %s",
-                        $uuid,
+                        "Operator %s has been edited. Changes: %s",
+                        $targetOperator->getName(),
                         json_encode($args)
                     ), $masterOperator->getUuid());
                 }

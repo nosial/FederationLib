@@ -45,10 +45,8 @@
                 }
 
                 AuditLogManager::createEntry(AuditLogType::BLACKLIST_RECORD_DELETED, sprintf(
-                    'Blacklist record %s deleted by %s (%s)',
-                    $blacklistUuid,
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    'Blacklist record deleted by operator %s',
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid(), $blacklistUuid);
                 BlacklistManager::deleteBlacklistRecord($blacklistUuid);
             }

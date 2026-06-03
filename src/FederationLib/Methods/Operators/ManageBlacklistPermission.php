@@ -52,12 +52,10 @@
 
                 OperatorManager::setManageBlacklist($operatorUuid, $enabled);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
-                    'Operator %s (%s) %s blacklist management permissions by %s (%s)',
+                    'Operator %s %s blacklist management permissions by %s',
                     $targetOperator->getName(),
-                    $targetOperator->getUuid(),
                     $enabled ? 'enabled' : 'disabled',
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

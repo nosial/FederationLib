@@ -52,11 +52,10 @@
                 }
 
                 OperatorManager::deleteOperator($operatorUuid);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf('Operator %s (%s) deleted by %s (%s)',
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf('Operator %s (%s) deleted by %s',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

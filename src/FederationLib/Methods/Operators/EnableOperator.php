@@ -61,11 +61,9 @@
                 }
 
                 OperatorManager::enableOperator($operatorUuid);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_ENABLED, sprintf('Operator %s (%s) enabled by %s (%s)',
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_ENABLED, sprintf('Operator %s enabled by %s',
                     $existingOperator->getName(),
-                    $existingOperator->getUuid(),
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

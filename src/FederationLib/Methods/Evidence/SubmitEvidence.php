@@ -47,11 +47,8 @@
 
                 $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $tag, $confidential);
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_SUBMITTED, sprintf(
-                    'Evidence %s created for entity %s by %s (%s)',
-                    $evidenceUuid,
-                    $entityUuid,
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    'Evidence created by operator %s',
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $entityUuid, null, $evidenceUuid);
             }
             catch(InvalidArgumentException $e)

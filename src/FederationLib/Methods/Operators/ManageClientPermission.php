@@ -51,12 +51,10 @@
 
                 OperatorManager::setClient($operatorUuid, $enabled);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
-                    'Operator %s (%s) %s client permissions by %s (%s)',
+                    'Operator %s %s client permissions by %s',
                     $targetOperator->getName(),
-                    $targetOperator->getUuid(),
                     $enabled ? 'enabled' : 'disabled',
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
             catch(DatabaseOperationException $e)

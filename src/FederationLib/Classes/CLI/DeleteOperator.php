@@ -38,13 +38,14 @@
                     return 1;
                 }
 
+                $targetOperator = OperatorManager::getOperator($uuid);
                 OperatorManager::deleteOperator($uuid);
                 print("Operator with UUID $uuid has been deleted.\n");
                 $masterOperator = OperatorManager::getMasterOperator();
 
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf(
-                    "Operator with UUID %s has been deleted.",
-                    $uuid
+                    "Operator %s has been deleted.",
+                    $targetOperator->getName()
                 ), $masterOperator->getUuid());
             }
             catch (DatabaseOperationException $e)

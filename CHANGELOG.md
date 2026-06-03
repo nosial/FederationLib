@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.7] - Ongoing
 
+This update introduces several improvements and bug fixes.
+
+### Changed
+ - Updated audit log messages to remove UUID references for operators and entities
+
 
 
 ## [0.0.6] - 2026-06-02

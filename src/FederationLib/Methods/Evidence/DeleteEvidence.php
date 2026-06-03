@@ -44,10 +44,8 @@
                 }
 
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_DELETED, sprintf(
-                    'Evidence %s deleted by %s (%s)',
-                    $evidenceUuid,
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    'Evidence deleted by operator %s',
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $evidence->getEntityUuid(), null, $evidenceUuid);
                 EvidenceManager::deleteEvidence($evidenceUuid);
             }

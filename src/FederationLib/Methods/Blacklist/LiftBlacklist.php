@@ -51,10 +51,8 @@
 
                 BlacklistManager::liftBlacklistRecord($blacklistUuid, $authenticatedOperator->getUuid());
                 AuditLogManager::createEntry(AuditLogType::BLACKLIST_LIFTED, sprintf(
-                    'Blacklist record %s lifted by %s (%s)',
-                    $blacklistUuid,
-                    $authenticatedOperator->getName(),
-                    $authenticatedOperator->getUuid()
+                    'Blacklist record lifted by operator %s',
+                    $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid(), $blacklistUuid);
             }
             catch (DatabaseOperationException $e)
