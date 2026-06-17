@@ -10,7 +10,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
 
-    class RefreshOperatorApiKey extends RequestHandler
+    class RefreshOperatorAccessToken extends RequestHandler
     {
         /**
          * @inheritDoc
@@ -21,10 +21,10 @@
             if(preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', FederationServer::getPath(), $matches))
             {
                 $operatorUuid = $matches[1];
-                // Ensure the authenticated operator has permission to refresh other operators' API keys.
+                // Ensure the authenticated operator has permission to refresh other operators' Access Tokens.
                 if($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->canManageOperators())
                 {
-                    throw new RequestException('Insufficient permissions to refresh other operators API keys', 403);
+                    throw new RequestException('Insufficient permissions to refresh other operators Access Tokens', 403);
                 }
             }
             else
@@ -49,12 +49,12 @@
 
                 if(OperatorManager::isRootOperator($operatorUuid))
                 {
-                    throw new RequestException('Cannot refresh API key for root operator', 403);
+                    throw new RequestException('Cannot refresh Access Token for root operator', 403);
                 }
 
-                $newApiKey = OperatorManager::refreshApiKey($operatorUuid);
+                $newAccessToken = OperatorManager::newAccessToken($operatorUuid);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
-                    'Operator %s (%s) refreshed API key by %s',
+                    'Operator %s (%s) refreshed Access Token by %s',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),
                     $authenticatedOperator->getName()
@@ -62,9 +62,9 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Unable to refresh operator\'s API Key', 500, $e);
+                throw new RequestException('Unable to refresh operator\'s Access token', 500, $e);
             }
 
-            self::successResponse($newApiKey);
+            self::successResponse($newAccessToken);
         }
     }
