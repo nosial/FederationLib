@@ -6,7 +6,7 @@
     use CurlHandle;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Utilities;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\ResponseInterface;
@@ -28,16 +28,16 @@
     class FederationClient
     {
         private string $endpoint;
-        private ?string $apiKey;
+        private ?string $accessToken;
 
         /**
          * Constructor for FederationClient
          *
          * @param string $endpoint The endpoint URL for the federation server
-         * @param string|null $apiKey Optional token for authentication
+         * @param string|null $accessToken Optional token for authentication
          * @throws InvalidArgumentException If the endpoint is not a valid URL or if the token is an empty string
          */
-        public function __construct(string $endpoint, ?string $apiKey=null)
+        public function __construct(string $endpoint, ?string $accessToken=null)
         {
             $parsedUrl = parse_url($endpoint);
             if(empty($endpoint) || !isset($parsedUrl['scheme']) || !isset($parsedUrl['host']))
@@ -47,7 +47,7 @@
 
             $endpoint = rtrim($endpoint, '/');
             $this->endpoint = $endpoint;
-            $this->setApiKey($apiKey);
+            $this->setAccessToken($accessToken);
         }
 
         /**
@@ -65,34 +65,34 @@
          *
          * @return string|null The authentication token or null if not set
          */
-        public function getApiKey(): ?string
+        public function getAccessToken(): ?string
         {
-            return $this->apiKey;
+            return $this->accessToken;
         }
 
         /**
          * Set the authentication token
          *
-         * @param string|null $apiKey The authentication token to set, or null to unset the token
+         * @param string|null $accessToken The authentication token to set, or null to unset the token
          * @throws InvalidArgumentException If the token is an empty string or contains whitespace
          */
-        public function setApiKey(?string $apiKey): void
+        public function setAccessToken(?string $accessToken): void
         {
-            if($apiKey !== null)
+            if($accessToken !== null)
             {
-                if(strlen($apiKey) === 0)
+                if(strlen($accessToken) === 0)
                 {
                     throw new InvalidArgumentException("Token cannot be an empty string");
                 }
 
-                // Check for empty whitespace in the apikey
-                if (preg_match('/\s/', $apiKey))
+                // Check for empty whitespace in the access-token
+                if (preg_match('/\s/', $accessToken))
                 {
                     throw new InvalidArgumentException("Token cannot contain whitespace");
                 }
             }
 
-            $this->apiKey = $apiKey;
+            $this->accessToken = $accessToken;
         }
 
         /**
@@ -423,7 +423,8 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
-            return array_map(
+            return
+                array_map(
                 fn($item) => OperatorRecord::fromArray($item),
                 $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
@@ -475,7 +476,6 @@
          * @param bool $includeConfidential if True, confidential results are included if you have permission to view them
          * @return EvidenceRecord[] An array of EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
          */
         public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100, bool $includeConfidential=false): array
         {
@@ -605,29 +605,29 @@
          * @return string The new authentication token
          * @throws RequestException If the request fails or the response is invalid
          */
-        public function refreshApiKey(bool $update=True): string
+        public function refreshAccessToken(bool $update=True): string
         {
             $newToken = $this->makeRequest('POST', 'operators/refresh', null, [HttpResponseCode::OK],
-                'Failed to refresh API Key'
+                'Failed to refresh Access token'
             );
 
             if($update)
             {
-                $this->apiKey = $newToken;
+                $this->accessToken = $newToken;
             }
 
-            return $this->apiKey;
+            return $this->accessToken;
         }
 
         /**
-         * Refreshes the API key for a specific operator.
+         * Refreshes the Access Token for a specific operator.
          *
-         * @param string $operatorUuid The UUID of the operator whose API key is to be refreshed
-         * @return string The new API key for the operator
+         * @param string $operatorUuid The UUID of the operator whose Access Token is to be refreshed
+         * @return string The new Access Token for the operator
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function refreshOperatorApiKey(string $operatorUuid): string
+        public function refreshOperatorAccessToken(string $operatorUuid): string
         {
             if(empty($operatorUuid))
             {
@@ -635,7 +635,7 @@
             }
 
             return $this->makeRequest('POST', 'operators/' . $operatorUuid . '/refresh', null,  [HttpResponseCode::OK],
-                sprintf('Failed to refresh API Key for operator with UUID %s', $operatorUuid)
+                sprintf('Failed to refresh Access token for operator with UUID %s', $operatorUuid)
             );
         }
 
@@ -822,10 +822,11 @@
          *
          * @param string $host The host/domain of the entity to push
          * @param string|null $id Optional. ID of the entity to push if it belongs to the specified domain
+         * @param array|null $metadata Optional. Metadata to associate with the entity
          * @return string The UUID of the pushed entity
          * @throws RequestException If the request fails or the response is invalid
          */
-        public function pushEntity(string $host, ?string $id=null): string
+        public function pushEntity(string $host, ?string $id=null, ?array $metadata=null): string
         {
             if($id !== null && empty($id))
             {
@@ -837,7 +838,13 @@
                 throw new InvalidArgumentException('Host cannot be an empty string');
             }
 
-            return $this->makeRequest('POST', 'entities', ['host' => $host, 'id' => $id], [HttpResponseCode::CREATED, HttpResponseCode::OK],
+            $params = ['host' => $host, 'id' => $id];
+            if($metadata !== null)
+            {
+                $params['metadata'] = $metadata;
+            }
+
+            return $this->makeRequest('POST', 'entities', $params, [HttpResponseCode::CREATED, HttpResponseCode::OK],
                 sprintf('Failed to push entity with domain %s', $host)
             );
         }
@@ -1026,13 +1033,13 @@
          *
          * @param string $entityIdentifier The UUID or hash of the entity to blacklist
          * @param string $evidenceUuid The UUID of the evidence record supporting the blacklist action
-         * @param BlacklistType $type The type of blacklist action (e.g., SPAM, MALWARE)
+         * @param IncidentType $type The type of blacklist action (e.g., SPAM, MALWARE)
          * @param int|null $expires Optional. Expiration time in seconds for the blacklist entry (null for permanent)
          * @return string The UUID of the created blacklist record
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If any of the parameters are invalid
          */
-        public function blacklistEntity(string $entityIdentifier, string $evidenceUuid, BlacklistType $type, ?int $expires=null): string
+        public function blacklistEntity(string $entityIdentifier, string $evidenceUuid, IncidentType $type, ?int $expires=null): string
         {
             if(empty($entityIdentifier))
             {
@@ -1326,9 +1333,9 @@
                 'Accept: application/json'
             ];
 
-            if ($this->apiKey !== null)
+            if ($this->accessToken !== null)
             {
-                $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                $headers[] = 'Authorization: Bearer ' . $this->accessToken;
             }
 
             // Create CURLFile for the upload; server-side FederationLib handles sanitization and fallback
@@ -1452,9 +1459,9 @@
                     'Accept: application/json'
                 ];
 
-                if ($this->apiKey !== null)
+                if ($this->accessToken !== null)
                 {
-                    $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                    $headers[] = 'Authorization: Bearer ' . $this->accessToken;
                 }
 
                 $file = new CURLFile($tempFile, 'text/plain', $fileName);
@@ -1664,9 +1671,9 @@
                     'Accept: application/json'
                 ];
 
-                if ($this->apiKey !== null)
+                if ($this->accessToken !== null)
                 {
-                    $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                    $headers[] = 'Authorization: Bearer ' . $this->accessToken;
                 }
 
                 // Create CURLFile for the upload
@@ -1870,9 +1877,9 @@
                 'Accept: application/json'
             ];
 
-            if($this->apiKey !== null)
+            if($this->accessToken !== null)
             {
-                $headers[] = 'Authorization: Bearer ' . $this->apiKey;
+                $headers[] = 'Authorization: Bearer ' . $this->accessToken;
             }
 
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
