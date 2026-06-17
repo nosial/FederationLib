@@ -67,9 +67,9 @@
             {
                 return CliCommands::MAINTENANCE->handle($args);
             }
-            elseif(isset($args[CliCommands::REFRESH_OPERATOR_API_KEY->value]))
+            elseif(isset($args[CliCommands::REFRESH_OPERATOR_ACCESS_TOKEN->value]))
             {
-                return CliCommands::REFRESH_OPERATOR_API_KEY->handle($args);
+                return CliCommands::REFRESH_OPERATOR_ACCESS_TOKEN->handle($args);
             }
 
             return self::displayHelp();
