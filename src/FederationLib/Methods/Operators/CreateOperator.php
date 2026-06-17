@@ -31,9 +31,9 @@
                 throw new RequestException('Operator name is required', 400);
             }
 
-            if(FederationServer::getParameter('name') === 'root')
+            if(strtolower(FederationServer::getParameter('name')) === 'root' || strtolower(FederationServer::getParameter('name')) === 'system')
             {
-                throw new RequestException('Operator name "root" is reserved', 400);
+                throw new RequestException('Operator name is reserved', 400);
             }
 
             try
