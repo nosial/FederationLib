@@ -4,6 +4,7 @@
 
     use DateTime;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Interfaces\SerializableInterface;
 
     class EntityRecord implements SerializableInterface
@@ -12,6 +13,8 @@
         private string $host;
         private ?string $id;
         private ?array $metadata;
+        private ?string $relationshipEntity;
+        private ?EntityRelationshipType $relationshipType;
         private int $created;
         private ?int $updated;
 
@@ -19,10 +22,6 @@
          * EntityRecord constructor.
          *
          * @param array $data Associative array of entity data.
-         *                    - 'uuid': string, Unique identifier for the entity record.
-         *                    - 'id': string, Identifier for the entity (e.g., IP address, domain).
-         *                    - 'domain': string, Domain associated with the entity.
-         *                    - 'created': int, Timestamp when the record was created.
          */
         public function __construct(array $data)
         {
@@ -30,6 +29,19 @@
             $this->host = $data['host'] ?? '';
             $this->id = (isset($data['id']) && $data['id'] !== '') ? $data['id'] : null;
             $this->metadata = null;
+            $this->relationshipEntity = $data['relationship_entity'] ?? null;
+
+            if(isset($data['relationship_type']))
+            {
+                if(is_string($data['relationship_type']))
+                {
+                    $this->relationshipType = EntityRelationshipType::tryFrom($data['relationship_type']);
+                }
+                elseif($data['relationship_type'] instanceof EntityRelationshipType)
+                {
+                    $this->relationshipType = $data['relationship_type'];
+                }
+            }
 
             // Parse the JSON metadata
             if(isset($data['metadata']))
@@ -132,7 +144,6 @@
             return $this->host;
         }
 
-
         /**
          * Get the unique identifier of the entity.
          *
@@ -151,6 +162,26 @@
         public function getMetadata(): ?array
         {
             return $this->metadata;
+        }
+
+        /**
+         * Returns the entity UUID of the target entity for the relationship
+         *
+         * @return string|null
+         */
+        public function getRelationshipEntity(): ?string
+        {
+            return $this->relationshipEntity;
+        }
+
+        /**
+         * Returns the relationship type of the target entity
+         *
+         * @return EntityRelationshipType|null
+         */
+        public function getRelationshipType(): ?EntityRelationshipType
+        {
+            return $this->relationshipType;
         }
 
         /**
@@ -199,6 +230,8 @@
                 'host' => $this->host,
                 'id' => $this->id,
                 'metadata' => $this->metadata,
+                'relationship_entity' => $this->relationshipEntity,
+                'relationship_type' => $this->relationshipType?->value ?? null,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];

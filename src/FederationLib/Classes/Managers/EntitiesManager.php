@@ -7,6 +7,7 @@
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\EntityRecord;
@@ -136,6 +137,98 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to update entity metadata: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+            }
+
+            return true;
+        }
+
+        /**
+         * Updates the entity's relationship
+         *
+         * @param string $entityUuid The entity to update
+         * @param string $targetEntityUuid The target entity of the relationship (the parent)
+         * @param EntityRelationshipType $type The relationship type
+         * @return bool True if the relationship was updated successfully, False otherwise
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function assignEntityRelationship(string $entityUuid, string $targetEntityUuid, EntityRelationshipType $type): bool
+        {
+            $entity = self::getEntityByUuid($entityUuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            $targetEntity = self::getEntityByUuid($targetEntityUuid);
+            if($targetEntity === null)
+            {
+                throw new InvalidArgumentException('Target Entity not found');
+            }
+
+            $typeString = $type->value;
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET relationship_entity=:relationship_entity, relationship_type=:relationship_type, updated=:updated WHERE uuid=:uuid"
+                );
+                $stmt->bindParam(':relationship_entity', $targetEntityUuid);
+                $stmt->bindParam(':relationship_type', $typeString);
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update entity relationship: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+            }
+
+            return true;
+        }
+
+        /**
+         * Clears the entity's relationship information
+         *
+         * @param string $entityUuid The entity UUID to clear relationship data from
+         * @return bool True if the operation was successful, False otherwise.
+         * @throws DatabaseOperationException Thrown if there was an databsae operation error.
+         */
+        public static function clearEntityRelationship(string $entityUuid): bool
+        {
+            $entity = self::getEntityByUuid($entityUuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET relationship_entity=null, relationship_type=null, updated=:updated WHERE uuid=:uuid"
+                );
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update entity relationship: " . $e->getMessage(), $e->getCode(), $e);
             }
 
             if(self::isCachingEnabled())
