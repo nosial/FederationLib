@@ -201,10 +201,10 @@
                 'operator' => $this->operatorUuid,
                 'confidential' => $this->confidential,
                 'text_content' => $this->textContent,
-                'note' => $this->note,
                 'tag' => $this->tag,
                 'report' => $this->report,
                 'classification_flag' => $this->classificationFlag?->value ?? null,
+                'note' => $this->note,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];

@@ -11,6 +11,7 @@ create table evidence
     classification_flag enum ('MALICIOUS', 'SUSPICIOUS', 'NORMAL') null comment 'Optional. The classification flag assigned to the evidence''s text content. This is used for content filtering',
     note                text                                       null comment 'Optional note by the operator that submitted the evidence',
     created             timestamp   default current_timestamp()    not null comment 'The timestamp of the evidence',
+    updated             timestamp                                  null comment 'Optional. The Timestamp for when the record was last updated',
     constraint evidence_entities_uuid_fk
         foreign key (entity) references entities (uuid)
             on update cascade on delete cascade,
