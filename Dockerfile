@@ -28,7 +28,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker-entrypoint.sh /usr/local/bin/
 
-RUN apt-get update && apt-get upgrade && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/* \
     && install-php-extensions sockets \
     && docker-php-ext-install -j$(nproc) pdo_mysql \
