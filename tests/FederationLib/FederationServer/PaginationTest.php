@@ -3,7 +3,7 @@
     namespace FederationLib\FederationServer;
 
     use Exception;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
@@ -20,7 +20,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -318,7 +318,7 @@
                 $blacklistUuid = $this->client->blacklistEntity(
                     $entityUuid,
                     $evidenceUuid,
-                    BlacklistType::SPAM,
+                    IncidentType::SPAM,
                     time() + 3600
                 );
                 $this->createdBlacklistRecords[] = $blacklistUuid;

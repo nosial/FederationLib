@@ -2,7 +2,7 @@
 
     namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Exceptions\RequestException;
@@ -20,7 +20,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -297,7 +297,7 @@
             
             // Blacklist the entity
             $expires = time() + 3600;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expires);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expires);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             
             // Scan content containing the blacklisted entity
@@ -328,7 +328,7 @@
                     // Check the first blacklist record
                     $firstRecord = $blacklistRecords[0];
                     $blacklistRecord = $firstRecord->getBlacklistRecord();
-                    $this->assertEquals(BlacklistType::SPAM, $blacklistRecord->getType());
+                    $this->assertEquals(IncidentType::SPAM, $blacklistRecord->getType());
                     $this->assertFalse($blacklistRecord->isLifted());
                     break;
                 }
@@ -357,7 +357,7 @@
             $blacklistUuid = $this->client->blacklistEntity(
                 $domain2Uuid, 
                 $evidenceUuid, 
-                BlacklistType::MALWARE, 
+                IncidentType::MALWARE,
                 time() + 3600
             );
             $this->createdBlacklistRecords[] = $blacklistUuid;

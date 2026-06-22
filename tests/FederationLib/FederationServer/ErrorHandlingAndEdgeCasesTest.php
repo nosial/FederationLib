@@ -2,7 +2,7 @@
 
     namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
@@ -19,7 +19,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -343,11 +343,11 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             // Create blacklist
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Create second client with same credentials
-            $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
 
             // Try to delete the blacklist record from both clients simultaneously
             $firstDeleteSuccess = false;
@@ -400,7 +400,7 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             // Create second client
-            $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
 
             // Try to modify evidence confidentiality from both clients
             try
@@ -573,7 +573,7 @@
             try
             {
                 // Use negative expiration time (should be invalid)
-                $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, -1);
+                $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, -1);
                 $this->fail("Expected InvalidArgumentException for negative expiration");
             }
             catch (InvalidArgumentException $e)
@@ -618,7 +618,7 @@
 
             try
             {
-                $this->client->blacklistEntity('invalid-entity-uuid', $evidenceUuid, BlacklistType::SPAM);
+                $this->client->blacklistEntity('invalid-entity-uuid', $evidenceUuid, IncidentType::SPAM);
             }
             catch (RequestException $e)
             {

@@ -17,7 +17,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -57,8 +57,8 @@
             $this->assertFalse($operatorRecord->canManageBlacklist());
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
-            $this->assertNotNull($operatorRecord->getApiKey());
-            $this->assertNotEmpty($operatorRecord->getApiKey());
+            $this->assertNotNull($operatorRecord->getAccessToken());
+            $this->assertNotEmpty($operatorRecord->getAccessToken());
         }
 
         /**
@@ -81,8 +81,8 @@
             $this->assertTrue($operatorRecord->canManageBlacklist());
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
-            $this->assertNotNull($operatorRecord->getApiKey());
-            $this->assertNotEmpty($operatorRecord->getApiKey());
+            $this->assertNotNull($operatorRecord->getAccessToken());
+            $this->assertNotEmpty($operatorRecord->getAccessToken());
         }
 
         /**
@@ -105,8 +105,8 @@
             $this->assertFalse($operatorRecord->canManageBlacklist());
             $this->assertTrue($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
-            $this->assertNotNull($operatorRecord->getApiKey());
-            $this->assertNotEmpty($operatorRecord->getApiKey());
+            $this->assertNotNull($operatorRecord->getAccessToken());
+            $this->assertNotEmpty($operatorRecord->getAccessToken());
         }
 
         /**
@@ -129,8 +129,8 @@
             $this->assertFalse($operatorRecord->canManageBlacklist());
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertTrue($operatorRecord->isClient());
-            $this->assertNotNull($operatorRecord->getApiKey());
-            $this->assertNotEmpty($operatorRecord->getApiKey());
+            $this->assertNotNull($operatorRecord->getAccessToken());
+            $this->assertNotEmpty($operatorRecord->getAccessToken());
         }
 
         /**
@@ -155,8 +155,8 @@
             $this->assertTrue($operatorRecord->canManageBlacklist());
             $this->assertTrue($operatorRecord->canManageOperators());
             $this->assertTrue($operatorRecord->isClient());
-            $this->assertNotNull($operatorRecord->getApiKey());
-            $this->assertNotEmpty($operatorRecord->getApiKey());
+            $this->assertNotNull($operatorRecord->getAccessToken());
+            $this->assertNotEmpty($operatorRecord->getAccessToken());
         }
 
         /**
@@ -184,8 +184,8 @@
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
@@ -229,8 +229,8 @@
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
@@ -260,12 +260,12 @@
             $this->assertTrue($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
-            // Now try to create another operator using that operator's API key
+            // Now try to create another operator using that operator's Access Token
             $managedOperatorName = uniqid('managed operator');
             $managedOperatorUuid = $operatorClient->createOperator($managedOperatorName);
             $this->createdOperators[] = $managedOperatorUuid;
@@ -297,12 +297,12 @@
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
-            // Now try to create another operator using that operator's API key, which should fail
+            // Now try to create another operator using that operator's Access Token, which should fail
             $managedOperatorName = uniqid('managed operator');
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
@@ -329,12 +329,12 @@
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertTrue($operatorRecord->isClient());
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
-            // Now try to push an entity using that operator's API key
+            // Now try to push an entity using that operator's Access Token
             $entityUuid = $operatorClient->pushEntity('example.com', uniqid('john_doe_'));
             $this->assertNotNull($entityUuid);
             $this->assertNotEmpty($entityUuid);
@@ -359,12 +359,12 @@
             $this->assertFalse($operatorRecord->canManageOperators());
             $this->assertFalse($operatorRecord->isClient());
 
-            // Now create a client using that operator's API key
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            // Now create a client using that operator's Access Token
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
             $this->assertNotNull($operatorClient);
             $this->assertNotEmpty($operatorClient);
 
-            // Now try to push an entity using that operator's API key, which should fail
+            // Now try to push an entity using that operator's Access Token, which should fail
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
             $operatorClient->pushEntity('example.com', uniqid('john_doe_'));
@@ -443,7 +443,7 @@
             $this->assertTrue($operatorRecord->isDisabled());
 
             // Create an operator client
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
 
             // Attempt to preform a normal method that usually requires authentication
             $this->expectException(RequestException::class);
@@ -472,7 +472,7 @@
             $this->assertTrue($operatorRecord->isDisabled());
 
             // Create an operator client
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
 
             // Attempt to preform a normal method that usually requires authentication
             try
@@ -575,7 +575,7 @@
             $this->assertFalse($operator->canManageOperators());
             $this->assertFalse($operator->isClient());
             $this->assertFalse($operator->isDisabled());
-            $this->assertNotNull($operator->getApiKey());
+            $this->assertNotNull($operator->getAccessToken());
 
             // Set all permissions
             $this->client->setManageBlacklistPermission($operatorUuid, true);
@@ -603,13 +603,13 @@
             $this->assertTrue($enabledOperator->canManageOperators());
             $this->assertTrue($enabledOperator->isClient());
 
-            // Refresh API key
-            $originalApiKey = $enabledOperator->getApiKey();
-            $newApiKey = $this->client->refreshOperatorApiKey($operatorUuid);
-            $this->assertNotEquals($originalApiKey, $newApiKey);
+            // Refresh Access Token
+            $originalAccessToken = $enabledOperator->getAccessToken();
+            $newAccessToken = $this->client->refreshOperatorAccessToken($operatorUuid);
+            $this->assertNotEquals($originalAccessToken, $newAccessToken);
 
             $refreshedOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($newApiKey, $refreshedOperator->getApiKey());
+            $this->assertEquals($newAccessToken, $refreshedOperator->getAccessToken());
 
             // Delete operator
             $this->client->deleteOperator($operatorUuid);
@@ -744,33 +744,33 @@
         /**
          * @throws RequestException
          */
-        public function testOperatorApiKeyIntegrity(): void
+        public function testOperatorAccessTokenIntegrity(): void
         {
-            // Test API key generation and refresh functionality
-            $operatorUuid = $this->client->createOperator('api_key_test_operator');
+            // Test Access Token generation and refresh functionality
+            $operatorUuid = $this->client->createOperator('access_token_test_operator');
             $this->createdOperators[] = $operatorUuid;
 
-            // Get initial API key
+            // Get initial Access Token
             $operator = $this->client->getOperator($operatorUuid);
-            $originalApiKey = $operator->getApiKey();
-            $this->assertNotNull($originalApiKey);
-            $this->assertNotEmpty($originalApiKey);
+            $originalAccessToken = $operator->getAccessToken();
+            $this->assertNotNull($originalAccessToken);
+            $this->assertNotEmpty($originalAccessToken);
 
-            // Test that the API key works
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalApiKey);
+            // Test that the Access Token works
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalAccessToken);
             $selfOperator = $operatorClient->getSelf();
             $this->assertEquals($operatorUuid, $selfOperator->getUuid());
 
-            // Refresh API key multiple times
-            $previousKey = $originalApiKey;
+            // Refresh Access Token multiple times
+            $previousKey = $originalAccessToken;
             for ($i = 0; $i < 3; $i++) {
-                $newApiKey = $this->client->refreshOperatorApiKey($operatorUuid);
-                $this->assertNotEquals($previousKey, $newApiKey);
-                $this->assertNotNull($newApiKey);
-                $this->assertNotEmpty($newApiKey);
+                $newAccessToken = $this->client->refreshOperatorAccessToken($operatorUuid);
+                $this->assertNotEquals($previousKey, $newAccessToken);
+                $this->assertNotNull($newAccessToken);
+                $this->assertNotEmpty($newAccessToken);
 
                 // Verify new key works
-                $newOperatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $newApiKey);
+                $newOperatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $newAccessToken);
                 $newSelfOperator = $newOperatorClient->getSelf();
                 $this->assertEquals($operatorUuid, $newSelfOperator->getUuid());
 
@@ -778,17 +778,17 @@
                 try {
                     $oldOperatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $previousKey);
                     $oldOperatorClient->getSelf();
-                    $this->fail("Expected RequestException for old API key");
+                    $this->fail("Expected RequestException for old Access Token");
                 } catch (RequestException $e) {
                     $this->assertEquals(401, $e->getCode());
                 }
 
-                $previousKey = $newApiKey;
+                $previousKey = $newAccessToken;
             }
 
             // Verify operator record has the latest key
             $finalOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($previousKey, $finalOperator->getApiKey());
+            $this->assertEquals($previousKey, $finalOperator->getAccessToken());
         }
 
         /**
@@ -848,7 +848,7 @@
             $parentOperator = $this->client->getOperator($parentOperatorUuid);
             
             // Create client using parent operator
-            $parentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $parentOperator->getApiKey());
+            $parentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $parentOperator->getAccessToken());
             
             // Parent creates child operator
             $childOperatorUuid = $parentClient->createOperator('child_operator');

@@ -2,7 +2,7 @@
 
     namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
@@ -22,7 +22,7 @@
          */
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         /**
@@ -86,60 +86,60 @@
             $this->createdBlacklistRecords = [];
         }
 
-        // API KEY MANAGEMENT TESTS
+        // ACCESS TOKEN MANAGEMENT TESTS
 
-        public function testOperatorApiKeyRefresh(): void
+        public function testOperatorAccessTokenRefresh(): void
         {
             // Create an operator
-            $operatorUuid = $this->client->createOperator('api-key-refresh-test');
+            $operatorUuid = $this->client->createOperator('access-token-refresh-test');
             $this->createdOperators[] = $operatorUuid;
 
-            // Get initial API key
+            // Get initial Access Token
             $operator = $this->client->getOperator($operatorUuid);
-            $originalApiKey = $operator->getApiKey();
-            $this->assertNotNull($originalApiKey);
-            $this->assertNotEmpty($originalApiKey);
+            $originalAccessToken = $operator->getAccessToken();
+            $this->assertNotNull($originalAccessToken);
+            $this->assertNotEmpty($originalAccessToken);
 
-            // Test the original API key works
-            $testClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalApiKey);
+            // Test the original Access Token works
+            $testClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalAccessToken);
             $selfOperator = $testClient->getSelf();
             $this->assertEquals($operatorUuid, $selfOperator->getUuid());
 
-            // Refresh the API key
-            $newApiKey = $this->client->refreshOperatorApiKey($operatorUuid);
-            $this->assertNotNull($newApiKey);
-            $this->assertNotEmpty($newApiKey);
-            $this->assertNotEquals($originalApiKey, $newApiKey);
+            // Refresh the Access Token
+            $newAccessToken = $this->client->refreshOperatorAccessToken($operatorUuid);
+            $this->assertNotNull($newAccessToken);
+            $this->assertNotEmpty($newAccessToken);
+            $this->assertNotEquals($originalAccessToken, $newAccessToken);
 
-            // Verify new API key works
-            $newTestClient = new FederationClient(getenv('SERVER_ENDPOINT'), $newApiKey);
+            // Verify new Access Token works
+            $newTestClient = new FederationClient(getenv('SERVER_ENDPOINT'), $newAccessToken);
             $newSelfOperator = $newTestClient->getSelf();
             $this->assertEquals($operatorUuid, $newSelfOperator->getUuid());
 
-            // Verify old API key no longer works
+            // Verify old Access Token no longer works
             try
             {
                 $testClient->getSelf();
-                $this->fail("Expected RequestException for revoked API key");
+                $this->fail("Expected RequestException for revoked Access Token");
             }
             catch (RequestException $e)
             {
-                $this->assertContains($e->getCode(), [401, 403], "Expected 401/403 for revoked API key");
+                $this->assertContains($e->getCode(), [401, 403], "Expected 401/403 for revoked Access Token");
             }
 
-            // Verify operator record shows new API key
+            // Verify operator record shows new Access Token
             $updatedOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($newApiKey, $updatedOperator->getApiKey());
+            $this->assertEquals($newAccessToken, $updatedOperator->getAccessToken());
         }
 
-        public function testSelfApiKeyRefresh(): void
+        public function testSelfAccessTokenRefresh(): void
         {
             // Since we're authenticated as the root operator (Master operator) we shouldn't be allowed to change the
-            // API key. This test ensures that attempting to do so results in an error. The API key should remain
+            // Access Token. This test ensures that attempting to do so results in an error. The Access Token should remain
             // configurable in the server configuration for the master operator.
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
-            $this->client->refreshApiKey(false);
+            $this->client->refreshAccessToken(false);
         }
 
         // EVIDENCE CONFIDENTIALITY TESTS
@@ -215,7 +215,7 @@
 
             // Create blacklist with short expiration (5 seconds in the future)
             $expires = time() + 5;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expires);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expires);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Verify blacklist exists and is active
@@ -247,7 +247,7 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             // Create permanent blacklist (null expiration)
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::MALWARE, null);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Verify permanent blacklist
@@ -273,13 +273,13 @@
             $this->createdEvidenceRecords[] = $abuseEvidenceUuid;
 
             // Create blacklists for different types
-            $spamBlacklistUuid = $this->client->blacklistEntity($entityUuid, $spamEvidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $spamBlacklistUuid = $this->client->blacklistEntity($entityUuid, $spamEvidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $spamBlacklistUuid;
 
-            $malwareBlacklistUuid = $this->client->blacklistEntity($entityUuid, $malwareEvidenceUuid, BlacklistType::MALWARE, null);
+            $malwareBlacklistUuid = $this->client->blacklistEntity($entityUuid, $malwareEvidenceUuid, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $malwareBlacklistUuid;
 
-            $abuseBlacklistUuid = $this->client->blacklistEntity($entityUuid, $abuseEvidenceUuid, BlacklistType::SERVICE_ABUSE, time() + 7200);
+            $abuseBlacklistUuid = $this->client->blacklistEntity($entityUuid, $abuseEvidenceUuid, IncidentType::SERVICE_ABUSE, time() + 7200);
             $this->createdBlacklistRecords[] = $abuseBlacklistUuid;
 
             // Verify all blacklists exist and are distinct
@@ -291,9 +291,9 @@
             $this->assertEquals($entityUuid, $malwareRecord->getEntityUuid());
             $this->assertEquals($entityUuid, $abuseRecord->getEntityUuid());
 
-            $this->assertEquals(BlacklistType::SPAM, $spamRecord->getType());
-            $this->assertEquals(BlacklistType::MALWARE, $malwareRecord->getType());
-            $this->assertEquals(BlacklistType::SERVICE_ABUSE, $abuseRecord->getType());
+            $this->assertEquals(IncidentType::SPAM, $spamRecord->getType());
+            $this->assertEquals(IncidentType::MALWARE, $malwareRecord->getType());
+            $this->assertEquals(IncidentType::SERVICE_ABUSE, $abuseRecord->getType());
 
             $this->assertNotNull($spamRecord->getExpires());
             $this->assertNull($malwareRecord->getExpires());
@@ -350,7 +350,7 @@
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Blacklist evidence $i", "Blacklist note $i", "blacklist_tag_$i");
                 $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                $blacklistType = ($i === 1) ? BlacklistType::SPAM : BlacklistType::MALWARE;
+                $blacklistType = ($i === 1) ? IncidentType::SPAM : IncidentType::MALWARE;
                 $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, $blacklistType, time() + 3600);
                 $blacklistUuids[] = $blacklistUuid;
                 $this->createdBlacklistRecords[] = $blacklistUuid;
@@ -498,7 +498,7 @@
             $this->client->setManageBlacklistPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $concurrentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $concurrentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Create entity with main client
             $entityUuid = $this->client->pushEntity('concurrent-test.com', 'concurrent_user');

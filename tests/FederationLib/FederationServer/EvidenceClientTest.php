@@ -18,7 +18,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -125,7 +125,7 @@
             $this->assertFalse($basicOperator->isClient());
 
             // Create a client for the basic operator
-            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getApiKey());
+            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getAccessToken());
             $this->assertNotNull($basicClient);
 
             // First, create an entity to associate the evidence with

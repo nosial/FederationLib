@@ -2,7 +2,7 @@
 
     namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
@@ -22,8 +22,8 @@
 
         protected function setUp(): void
         {
-            $this->authorizedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
-            $this->unauthorizedClient = new FederationClient(getenv('SERVER_ENDPOINT')); // No API key
+            $this->authorizedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $this->unauthorizedClient = new FederationClient(getenv('SERVER_ENDPOINT')); // No Access Token
         }
 
         protected function tearDown(): void
@@ -96,7 +96,7 @@
                 'pushEntity' => fn() => $this->unauthorizedClient->pushEntity('test.com', 'user'),
                 'deleteEntity' => fn() => $this->unauthorizedClient->deleteEntity(Uuid::v4()->toRfc4122()),
                 'submitEvidence' => fn() => $this->unauthorizedClient->submitEvidence(Uuid::v4()->toRfc4122(), 'test', 'note', 'tag'),
-                'blacklistEntity' => fn() => $this->unauthorizedClient->blacklistEntity(Uuid::v4()->toRfc4122(), Uuid::v4()->toRfc4122(), BlacklistType::SPAM),
+                'blacklistEntity' => fn() => $this->unauthorizedClient->blacklistEntity(Uuid::v4()->toRfc4122(), Uuid::v4()->toRfc4122(), IncidentType::SPAM),
             ];
 
             foreach ($protectedOperations as $operationName => $operation)
@@ -118,17 +118,17 @@
             }
         }
 
-        public function testInvalidApiKeyAuthentication(): void
+        public function testInvalidAccessTokenAuthentication(): void
         {
             // Test empty string should be caught by constructor
             $this->expectException(InvalidArgumentException::class);
             new FederationClient(getenv('SERVER_ENDPOINT'), '');
         }
 
-        public function testInvalidApiKeyFormats(): void
+        public function testInvalidAccessTokenFormats(): void
         {
-            // Test various invalid API key formats
-            $invalidApiKeys = [
+            // Test various invalid Access Token formats
+            $invalidAccessTokens = [
                 'invalid-key',               // Invalid format
                 'bearer-token-format',       // Wrong format
                 str_repeat('a', 1000),      // Extremely long key
@@ -137,7 +137,7 @@
                 'special!@#$%^&*()chars',   // Special characters
             ];
 
-            foreach ($invalidApiKeys as $invalidKey) {
+            foreach ($invalidAccessTokens as $invalidKey) {
                 $this->expectException(RequestException::class);
                 $this->expectExceptionCode(400);
                 
@@ -158,7 +158,7 @@
             $this->authorizedClient->setClientPermission($operatorUuid, false);
 
             $operator = $this->authorizedClient->getOperator($operatorUuid);
-            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Attempt permission escalation attacks
             $escalationAttempts = [
@@ -173,12 +173,12 @@
                 // Try to modify other operators
                 'modifyOtherOperator' => fn() => $limitedClient->setManageBlacklistPermission(Uuid::v4()->toRfc4122(), true),
                 
-                // Try to refresh own API key without permission
-                'refreshOwnApiKey' => fn() => $limitedClient->refreshApiKey(),
+                // Try to refresh own Access Token without permission
+                'refreshOwnAccessToken' => fn() => $limitedClient->refreshAccessToken(),
             ];
 
             foreach ($escalationAttempts as $attemptName => $attempt) {
-                if ($attemptName === 'refreshOwnApiKey') {
+                if ($attemptName === 'refreshOwnAccessToken') {
                     // This specific operation might succeed but not escalate permissions
                     try {
                         $attempt();
@@ -197,38 +197,38 @@
             }
         }
 
-        public function testApiKeyLeakagePrevention(): void
+        public function testAccessTokenLeakagePrevention(): void
         {
-            // Test that API keys are not exposed in responses or error messages
-            $operatorUuid = $this->authorizedClient->createOperator('api-key-test-operator');
+            // Test that Access Tokens are not exposed in responses or error messages
+            $operatorUuid = $this->authorizedClient->createOperator('access-token-test-operator');
             $this->createdOperators[] = $operatorUuid;
 
             $operator = $this->authorizedClient->getOperator($operatorUuid);
-            $apiKey = $operator->getApiKey();
+            $accessToken = $operator->getAccessToken();
 
-            // Verify API key is present in operator object (this is expected)
-            $this->assertNotNull($apiKey);
-            $this->assertNotEmpty($apiKey);
+            // Verify Access Token is present in operator object (this is expected)
+            $this->assertNotNull($accessToken);
+            $this->assertNotEmpty($accessToken);
 
-            // Create client with this API key and test various operations
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $apiKey);
+            // Create client with this Access Token and test various operations
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $accessToken);
             
-            // Test that API key works
+            // Test that Access Token works
             $self = $operatorClient->getSelf();
             $this->assertEquals($operatorUuid, $self->getUuid());
 
-            // Refresh the API key
-            $newApiKey = $this->authorizedClient->refreshOperatorApiKey($operatorUuid);
-            $this->assertNotEquals($apiKey, $newApiKey);
+            // Refresh the Access Token
+            $newAccessToken = $this->authorizedClient->refreshOperatorAccessToken($operatorUuid);
+            $this->assertNotEquals($accessToken, $newAccessToken);
 
-            // Verify old API key no longer works
+            // Verify old Access Token no longer works
             try {
                 $operatorClient->getSelf();
-                $this->fail("Expected RequestException for revoked API key");
+                $this->fail("Expected RequestException for revoked Access Token");
             } catch (RequestException $e) {
                 $this->assertEquals(401, $e->getCode());
-                // Ensure the error message doesn't contain the API key
-                $this->assertStringNotContainsString($apiKey, $e->getMessage());
+                // Ensure the error message doesn't contain the Access Token
+                $this->assertStringNotContainsString($accessToken, $e->getMessage());
             }
         }
 
@@ -376,7 +376,7 @@
             $this->authorizedClient->setManageOperatorsPermission($operatorUuid, true);
 
             $operator = $this->authorizedClient->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Verify operator can manage other operators
             $testOperatorUuid = $operatorClient->createOperator('managed-operator');
@@ -397,7 +397,7 @@
             $this->authorizedClient->setManageOperatorsPermission($operatorUuid, true);
 
             $operator = $this->authorizedClient->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $this->expectException(RequestException::class);
             // Operator should not be able to disable themselves
@@ -416,7 +416,7 @@
             $this->authorizedClient->setClientPermission($superOperatorUuid, true);
 
             $superOperator = $this->authorizedClient->getOperator($superOperatorUuid);
-            $superClient = new FederationClient(getenv('SERVER_ENDPOINT'), $superOperator->getApiKey());
+            $superClient = new FederationClient(getenv('SERVER_ENDPOINT'), $superOperator->getAccessToken());
 
             // Create sub-operator with limited permissions
             $subOperatorUuid = $superClient->createOperator('sub-operator');
@@ -424,7 +424,7 @@
             $superClient->setClientPermission($subOperatorUuid, true);
 
             $subOperator = $this->authorizedClient->getOperator($subOperatorUuid);
-            $subClient = new FederationClient(getenv('SERVER_ENDPOINT'), $subOperator->getApiKey());
+            $subClient = new FederationClient(getenv('SERVER_ENDPOINT'), $subOperator->getAccessToken());
 
             // Sub-operator should be able to push entities (has client permission)
             $entityUuid = $subClient->pushEntity('cascade-test.com', 'test-user');
@@ -463,7 +463,7 @@
             $farFutureExpiration = time() + (365 * 24 * 60 * 60 * 10); // 10 years in future
             
             try {
-                $blacklistUuid = $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $farFutureExpiration);
+                $blacklistUuid = $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $farFutureExpiration);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
                 
                 // Verify the system either accepted it or capped it to a reasonable limit
@@ -482,7 +482,7 @@
             $pastExpiration = time() - 3600; // 1 hour ago
             
             try {
-                $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $pastExpiration);
+                $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $pastExpiration);
                 $this->fail("Expected RequestException for past expiration time");
             } catch (RequestException $e) {
                 $this->assertContains($e->getCode(), [400, 422], "Expected validation error for past expiration");
@@ -526,7 +526,7 @@
 
             // Limited operator should not access confidential evidence
             $limitedOperator = $this->authorizedClient->getOperator($limitedOperatorUuid);
-            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $limitedOperator->getApiKey());
+            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $limitedOperator->getAccessToken());
             $this->expectException(RequestException::class);
             $limitedClient->getEvidenceRecord($confidentialEvidenceUuid);
         }
@@ -548,8 +548,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
             
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates entities and evidence
             $entityUuid = $client1->pushEntity('isolation-test.com', 'test-user');
@@ -566,7 +566,7 @@
             $this->assertEquals($operator1Uuid, $evidence2->getOperatorUuid());
 
             // Create blacklist with operator1
-            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Both operators should be able to see the blacklist record
@@ -596,7 +596,7 @@
             
             // Test failed authentication attempts (if audit logs are accessible)
             try {
-                $invalidClient = new FederationClient(getenv('SERVER_ENDPOINT'), 'invalid-api-key');
+                $invalidClient = new FederationClient(getenv('SERVER_ENDPOINT'), 'invalid-access-token');
                 $invalidClient->getSelf();
             } catch (RequestException $e) {
                 $this->assertEquals(400, $e->getCode());
@@ -607,7 +607,7 @@
             $this->createdOperators[] = $operatorUuid;
             
             $operator = $this->authorizedClient->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             try {
                 $operatorClient->createOperator('unauthorized-operator');
@@ -662,7 +662,7 @@
         public function testCorsAllowsAnyOrigin(): void
         {
             // The API returns Access-Control-Allow-Origin: * which allows any malicious website
-            // to make cross-origin authenticated requests if they obtain the API key.
+            // to make cross-origin authenticated requests if they obtain the Access Token.
             $ch = curl_init(getenv('SERVER_ENDPOINT') . '/info');
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_HEADER, true);
@@ -767,8 +767,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates an entity and evidence
             $entityUuid = $client1->pushEntity('bola-test.example.com', 'user');
@@ -816,8 +816,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates entity, evidence, and blacklists it
             $entityUuid = $client1->pushEntity('bola-bl-test.example.com', 'user');
@@ -826,7 +826,7 @@
             $evidenceUuid = $client1->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Operator2 can lift Operator1's blacklist without ownership check
@@ -891,8 +891,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates entity, evidence, and uploads an attachment
             $entityUuid = $client1->pushEntity('bola-attach.example.com', 'user');
@@ -946,8 +946,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates entity, evidence, and blacklists it
             $entityUuid = $client1->pushEntity('bola-bl-del.example.com', 'user');
@@ -956,7 +956,7 @@
             $evidenceUuid = $client1->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $blacklistUuid = $client1->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Operator2 can delete Operator1's blacklist without ownership check
@@ -996,8 +996,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 pushes an entity
             $entityUuid = $client1->pushEntity('bola-entity.example.com', 'user');
@@ -1040,8 +1040,8 @@
             $operator1 = $this->authorizedClient->getOperator($operator1Uuid);
             $operator2 = $this->authorizedClient->getOperator($operator2Uuid);
 
-            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getApiKey());
-            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getApiKey());
+            $client1 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator1->getAccessToken());
+            $client2 = new FederationClient(getenv('SERVER_ENDPOINT'), $operator2->getAccessToken());
 
             // Operator1 creates entity and non-confidential evidence
             $entityUuid = $client1->pushEntity('bola-conf.example.com', 'user');
@@ -1069,7 +1069,7 @@
             $evidenceUuid = $this->authorizedClient->submitEvidence($entityUuid, 'evidence', 'note', 'tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $blacklistUuid = $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $blacklistUuid = $this->authorizedClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             $this->authorizedClient->liftBlacklistRecord($blacklistUuid);
 

@@ -3,7 +3,7 @@
     namespace FederationLib\FederationServer;
 
     use Exception;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
@@ -25,7 +25,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -221,7 +221,7 @@
             // Test required properties
             $this->assertIsString($operator->getUuid());
             $this->assertIsString($operator->getName());
-            $this->assertIsString($operator->getApiKey());
+            $this->assertIsString($operator->getAccessToken());
             $this->assertIsInt($operator->getCreated());
             $this->assertIsBool($operator->canManageBlacklist());
             $this->assertIsBool($operator->canManageOperators());
@@ -231,7 +231,7 @@
             // Test property values
             $this->assertEquals($operatorUuid, $operator->getUuid());
             $this->assertEquals('Response Test Operator', $operator->getName());
-            $this->assertNotEmpty($operator->getApiKey());
+            $this->assertNotEmpty($operator->getAccessToken());
             $this->assertGreaterThan(0, $operator->getCreated());
             $this->assertFalse($operator->isDisabled()); // Should be enabled by default
         }
@@ -244,7 +244,7 @@
             // Self operator should have all standard properties
             $this->assertIsString($selfOperator->getUuid());
             $this->assertIsString($selfOperator->getName());
-            $this->assertIsString($selfOperator->getApiKey());
+            $this->assertIsString($selfOperator->getAccessToken());
             $this->assertIsInt($selfOperator->getCreated());
             $this->assertIsBool($selfOperator->canManageBlacklist());
             $this->assertIsBool($selfOperator->canManageOperators());
@@ -272,7 +272,7 @@
                 $this->assertInstanceOf(OperatorRecord::class, $operator);
                 $this->assertIsString($operator->getUuid());
                 $this->assertIsString($operator->getName());
-                $this->assertIsString($operator->getApiKey());
+                $this->assertIsString($operator->getAccessToken());
                 $this->assertIsInt($operator->getCreated());
                 $this->assertIsBool($operator->canManageBlacklist());
                 $this->assertIsBool($operator->canManageOperators());
@@ -372,7 +372,7 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
             
             $expiration = time() + 3600;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expiration);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expiration);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             
             // Test blacklistEntity response
@@ -389,7 +389,7 @@
             $this->assertIsString($blacklistRecord->getEntityUuid());
             $this->assertIsString($blacklistRecord->getEvidenceUuid());
             $this->assertIsString($blacklistRecord->getOperatorUuid());
-            $this->assertInstanceOf(BlacklistType::class, $blacklistRecord->getType());
+            $this->assertInstanceOf(IncidentType::class, $blacklistRecord->getType());
             $this->assertIsInt($blacklistRecord->getCreated());
             $this->assertIsInt($blacklistRecord->getExpires());
             $this->assertIsBool($blacklistRecord->isLifted());
@@ -398,7 +398,7 @@
             $this->assertEquals($blacklistUuid, $blacklistRecord->getUuid());
             $this->assertEquals($entityUuid, $blacklistRecord->getEntityUuid());
             $this->assertEquals($evidenceUuid, $blacklistRecord->getEvidenceUuid());
-            $this->assertEquals(BlacklistType::SPAM, $blacklistRecord->getType());
+            $this->assertEquals(IncidentType::SPAM, $blacklistRecord->getType());
             $this->assertEquals($expiration, $blacklistRecord->getExpires());
             $this->assertFalse($blacklistRecord->isLifted()); // Should not be lifted initially
             $this->assertGreaterThan(0, $blacklistRecord->getCreated());
@@ -414,7 +414,7 @@
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Evidence $i", "Note $i", "list_test");
                 $this->createdEvidenceRecords[] = $evidenceUuid;
                 
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
             }
             
@@ -429,7 +429,7 @@
                 $this->assertIsString($blacklistRecord->getEntityUuid());
                 $this->assertIsString($blacklistRecord->getEvidenceUuid());
                 $this->assertIsString($blacklistRecord->getOperatorUuid());
-                $this->assertInstanceOf(BlacklistType::class, $blacklistRecord->getType());
+                $this->assertInstanceOf(IncidentType::class, $blacklistRecord->getType());
                 $this->assertIsInt($blacklistRecord->getCreated());
                 $this->assertIsInt($blacklistRecord->getExpires());
                 $this->assertIsBool($blacklistRecord->isLifted());

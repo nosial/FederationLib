@@ -3,7 +3,7 @@
     namespace FederationLib\FederationServer;
 
     use Exception;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
@@ -21,7 +21,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -334,7 +334,7 @@
             foreach ($invalidExpirations as $expiration) {
                 try
                 {
-                    $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expiration);
+                    $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expiration);
                     if ($blacklistUuid)
                     {
                         $this->createdBlacklistRecords[] = $blacklistUuid;
@@ -362,7 +362,7 @@
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->blacklistEntity($entityUuid, $fakeEvidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $this->client->blacklistEntity($entityUuid, $fakeEvidenceUuid, IncidentType::SPAM, time() + 3600);
         }
 
         public function testBlacklistWithNonExistentEntity(): void
@@ -371,7 +371,7 @@
             $fakeEvidenceUuid = '01234567-89ab-cdef-0123-456789abcdef';
 
             $this->expectException(RequestException::class);
-            $this->client->blacklistEntity($fakeEntityUuid, $fakeEvidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $this->client->blacklistEntity($fakeEntityUuid, $fakeEvidenceUuid, IncidentType::SPAM, time() + 3600);
         }
 
         // DATA TYPE VALIDATION TESTS

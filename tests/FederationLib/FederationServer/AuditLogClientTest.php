@@ -3,7 +3,7 @@
     namespace FederationLib\FederationServer;
 
     use FederationLib\Enums\AuditLogType;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
@@ -20,7 +20,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -138,7 +138,7 @@
             $operator = $this->client->getOperator($operatorUuid);
             $this->client->setClientPermission($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Perform some operations that should generate audit logs
             $entityUuid = $operatorClient->pushEntity('operator-audit-test.com', 'audit_user');
@@ -165,7 +165,7 @@
             $this->client->setClientPermission($operatorUuid, true);
             $this->client->setManageBlacklistPermission($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Generate multiple audit log entries
             for ($i = 1; $i <= 3; $i++)
@@ -264,7 +264,7 @@
             $this->client->setClientPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             try
             {
@@ -287,7 +287,7 @@
             $this->client->setClientPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
@@ -325,7 +325,7 @@
             $this->client->setManageBlacklistPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Create entity and evidence
             $entityUuid = $operatorClient->pushEntity('blacklist-audit-test.com', 'blacklist_audit_user');
@@ -337,7 +337,7 @@
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
             // Perform blacklist operations
-            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $operatorClient->liftBlacklistRecord($blacklistUuid);
@@ -431,7 +431,7 @@
             $this->client->setClientPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('sample-audit.com', 'sample_user');
             $this->createdEntities[] = $entityUuid;

@@ -24,14 +24,14 @@
             $this->assertNotNull($serverInfo);
         }
 
-        public function testClientWithValidEndpointAndApiKey(): void
+        public function testClientWithValidEndpointAndAccessToken(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $apiKey = getenv('SERVER_API_KEY');
+            $accessToken = getenv('SERVER_ACCESS_TOKEN');
             $this->assertNotNull($endpoint, "SERVER_ENDPOINT must be set for tests");
-            $this->assertNotNull($apiKey, "SERVER_API_KEY must be set for tests");
+            $this->assertNotNull($accessToken, "SERVER_ACCESS_TOKEN must be set for tests");
 
-            $client = new FederationClient($endpoint, $apiKey);
+            $client = new FederationClient($endpoint, $accessToken);
             $this->assertInstanceOf(FederationClient::class, $client);
 
             // Test that client can make authenticated requests
@@ -118,7 +118,7 @@
             }
         }
 
-        public function testClientWithEmptyApiKey(): void
+        public function testClientWithEmptyAccessToken(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
             
@@ -126,7 +126,7 @@
             new FederationClient($endpoint, '');
         }
 
-        public function testClientWithWhitespaceOnlyApiKey(): void
+        public function testClientWithWhitespaceOnlyAccessToken(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
             
@@ -134,24 +134,24 @@
             new FederationClient($endpoint, '   ');
         }
 
-        public function testClientWithInvalidApiKey(): void
+        public function testClientWithInvalidAccessToken(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $invalidApiKeys = [
+            $invalidAccessTokens = [
                 'too-short',
                 '123',
                 'invalid-format-key',
                 str_repeat('a', 10), // Too short
             ];
 
-            foreach ($invalidApiKeys as $apiKey) {
+            foreach ($invalidAccessTokens as $accessToken) {
                 try {
-                    $client = new FederationClient($endpoint, $apiKey);
+                    $client = new FederationClient($endpoint, $accessToken);
                     // If client creation succeeds, test that authentication fails
                     $this->expectException(RequestException::class);
                     $client->getSelf();
                 } catch (InvalidArgumentException $e) {
-                    // This is also acceptable - client should validate API key format
+                    // This is also acceptable - client should validate Access Token format
                     $this->assertNotNull($e);
                 }
             }
@@ -179,30 +179,30 @@
             $client->getServerInformation();
         }
 
-        // API KEY VALIDATION TESTS
+        // ACCESS TOKEN VALIDATION TESTS
 
-        public function testApiKeyFormat(): void
+        public function testAccessTokenFormat(): void
         {
-            $apiKey = getenv('SERVER_API_KEY');
-            $this->assertNotNull($apiKey, "SERVER_API_KEY must be set for tests");
+            $accessToken = getenv('SERVER_ACCESS_TOKEN');
+            $this->assertNotNull($accessToken, "SERVER_ACCESS_TOKEN must be set for tests");
 
-            // API key should be reasonable length and format
-            $this->assertGreaterThan(10, strlen($apiKey), "API key seems too short");
-            $this->assertLessThan(200, strlen($apiKey), "API key seems too long");
+            // Access Token should be reasonable length and format
+            $this->assertGreaterThan(10, strlen($accessToken), "Access Token seems too short");
+            $this->assertLessThan(200, strlen($accessToken), "Access Token seems too long");
             
             // Should not contain spaces
-            $this->assertStringNotContainsString(' ', $apiKey, "API key should not contain spaces");
+            $this->assertStringNotContainsString(' ', $accessToken, "Access Token should not contain spaces");
             
             // Should be printable ASCII
-            $this->assertTrue(ctype_print($apiKey), "API key should be printable ASCII");
+            $this->assertTrue(ctype_print($accessToken), "Access Token should be printable ASCII");
         }
 
-        public function testValidApiKeyAuthentication(): void
+        public function testValidAccessTokenAuthentication(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $apiKey = getenv('SERVER_API_KEY');
+            $accessToken = getenv('SERVER_ACCESS_TOKEN');
             
-            $client = new FederationClient($endpoint, $apiKey);
+            $client = new FederationClient($endpoint, $accessToken);
             
             // Should be able to authenticate
             $selfOperator = $client->getSelf();
@@ -211,12 +211,12 @@
             $this->assertNotNull($selfOperator->getName());
         }
 
-        public function testInvalidApiKeyAuthentication(): void
+        public function testInvalidAccessTokenAuthentication(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $invalidApiKey = 'definitely-not-a-valid-api-key-12345';
+            $invalidAccessToken = 'definitely-not-a-valid-access-token-12345';
             
-            $client = new FederationClient($endpoint, $invalidApiKey);
+            $client = new FederationClient($endpoint, $invalidAccessToken);
             
             $this->expectException(RequestException::class);
             $client->getSelf();
@@ -227,11 +227,11 @@
         public function testClientStatelessness(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $apiKey = getenv('SERVER_API_KEY');
+            $accessToken = getenv('SERVER_ACCESS_TOKEN');
             
             // Create multiple clients with same credentials
-            $client1 = new FederationClient($endpoint, $apiKey);
-            $client2 = new FederationClient($endpoint, $apiKey);
+            $client1 = new FederationClient($endpoint, $accessToken);
+            $client2 = new FederationClient($endpoint, $accessToken);
             
             // Both should work identically
             $self1 = $client1->getSelf();
@@ -270,11 +270,11 @@
 
         // CONFIGURATION EDGE CASES
 
-        public function testClientWithNullApiKey(): void
+        public function testClientWithNullAccessToken(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
             
-            // Null API key should create unauthenticated client
+            // Null Access Token should create unauthenticated client
             $client = new FederationClient($endpoint, null);
             $this->assertInstanceOf(FederationClient::class, $client);
             
@@ -291,13 +291,13 @@
         {
             $endpoint = getenv('SERVER_ENDPOINT');
             
-            // Create client without API key
+            // Create client without Access Token
             $client1 = new FederationClient($endpoint);
             $serverInfo1 = $client1->getServerInformation();
             
-            // Create new client with API key
-            $apiKey = getenv('SERVER_API_KEY');
-            $client2 = new FederationClient($endpoint, $apiKey);
+            // Create new client with Access Token
+            $accessToken = getenv('SERVER_ACCESS_TOKEN');
+            $client2 = new FederationClient($endpoint, $accessToken);
             $serverInfo2 = $client2->getServerInformation();
             $self2 = $client2->getSelf();
             

@@ -2,7 +2,7 @@
 
     namespace FederationLib\FederationServer;
 
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
@@ -18,7 +18,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -98,7 +98,7 @@
 
             // Blacklist the entity for 3600 seconds.
             $expires = (time() + 3600);
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expires);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expires);
             $this->assertNotNull($blacklistUuid);
             $this->assertNotEmpty($blacklistUuid);
             $this->createdBlacklistRecords[] = $blacklistUuid;
@@ -129,7 +129,7 @@
             $this->assertNotNull($evidenceUuid);
 
             // Blacklist the entity permanently (no expiration)
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::MALWARE, null);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
             $this->assertNotNull($blacklistUuid);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
@@ -147,7 +147,7 @@
             // Test empty entity identifier
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('The entity identifier must not be empty');
-            $this->client->blacklistEntity('', 'some-uuid', BlacklistType::SPAM);
+            $this->client->blacklistEntity('', 'some-uuid', IncidentType::SPAM);
         }
 
         public function testBlacklistEntityInvalidEvidenceUuid(): void
@@ -155,7 +155,7 @@
             // Test empty evidence UUID
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('The evidence UUID must not be empty');
-            $this->client->blacklistEntity('some-entity-uuid', '', BlacklistType::SPAM);
+            $this->client->blacklistEntity('some-entity-uuid', '', IncidentType::SPAM);
         }
 
         public function testBlacklistEntityNegativeExpires(): void
@@ -163,7 +163,7 @@
             // Test negative expires value
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('The expires parameter must be a positive integer or null');
-            $this->client->blacklistEntity('some-entity-uuid', 'some-evidence-uuid', BlacklistType::SPAM, -1);
+            $this->client->blacklistEntity('some-entity-uuid', 'some-evidence-uuid', IncidentType::SPAM, -1);
         }
 
         public function testDeleteBlacklistRecord(): void
@@ -175,7 +175,7 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, "Test content for deletion", "Test note", "test");
             
             // Blacklist the entity
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->assertNotNull($blacklistUuid);
 
             // Verify the blacklist record exists
@@ -230,7 +230,7 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, "Test content for lifting", "Test note", "test");
             
             // Blacklist the entity
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->assertNotNull($blacklistUuid);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
@@ -272,7 +272,7 @@
                 
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Test content $i", "Test note $i", "test");
                 
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
                 $createdBlacklistUuids[] = $blacklistUuid;
                 $this->createdBlacklistRecords[] = $blacklistUuid;
             }
@@ -305,7 +305,7 @@
             
             $evidenceUuid = $this->client->submitEvidence($entityUuid, "Test content for lifted", "Test note", "test");
             
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             
             // Lift the record
@@ -340,11 +340,11 @@
         public function testBlacklistEntityWithDifferentTypes(): void
         {
             $blacklistTypes = [
-                BlacklistType::SCAM,
-                BlacklistType::SERVICE_ABUSE,
-                BlacklistType::ILLEGAL_CONTENT,
-                BlacklistType::PHISHING,
-                BlacklistType::OTHER
+                IncidentType::SCAM,
+                IncidentType::SERVICE_ABUSE,
+                IncidentType::ILLEGAL_CONTENT,
+                IncidentType::PHISHING,
+                IncidentType::OTHER
             ];
 
             foreach ($blacklistTypes as $type) {
@@ -377,7 +377,7 @@
             $this->client->setClientPermission($basicOperatorUuid, false);
 
             $basicOperator = $this->client->getOperator($basicOperatorUuid);
-            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getApiKey());
+            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getAccessToken());
 
             // Create entity and evidence as root operator
             $entityUuid = $this->client->pushEntity('unauthorized-test.com', 'unauthorized_user');
@@ -388,7 +388,7 @@
             // Try to blacklist as unauthorized user
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(403); // FORBIDDEN
-            $basicClient->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM);
+            $basicClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
         }
 
         // DURABILITY TESTS
@@ -407,7 +407,7 @@
                 
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Durability test evidence $i", "Test note $i", "durability");
                 
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 7200);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
                 $blacklistUuids[] = $blacklistUuid;
             }
@@ -460,7 +460,7 @@
             }
 
             // Create multiple blacklist records with different types
-            $types = [BlacklistType::SPAM, BlacklistType::SCAM, BlacklistType::SERVICE_ABUSE];
+            $types = [IncidentType::SPAM, IncidentType::SCAM, IncidentType::SERVICE_ABUSE];
             for ($i = 0; $i < 3; $i++) {
                 $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuids[$i], $types[$i], time() + 3600);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
@@ -490,7 +490,7 @@
 
             // Create blacklist record that expires in 2 seconds
             $shortExpiry = time() + 2;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $shortExpiry);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $shortExpiry);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Verify record exists and has correct expiration
@@ -519,7 +519,7 @@
             // Test with invalid expires (past time)
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::BAD_REQUEST->value);
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() - 3600);
+            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() - 3600);
         }
 
         public function testMultipleBlacklistTypesForSameEntity(): void
@@ -529,13 +529,13 @@
             $this->createdEntities[] = $entityUuid;
 
             $allTypes = [
-                BlacklistType::SPAM,
-                BlacklistType::SCAM,
-                BlacklistType::SERVICE_ABUSE,
-                BlacklistType::ILLEGAL_CONTENT,
-                BlacklistType::MALWARE,
-                BlacklistType::PHISHING,
-                BlacklistType::OTHER
+                IncidentType::SPAM,
+                IncidentType::SCAM,
+                IncidentType::SERVICE_ABUSE,
+                IncidentType::ILLEGAL_CONTENT,
+                IncidentType::MALWARE,
+                IncidentType::PHISHING,
+                IncidentType::OTHER
             ];
 
             $blacklistUuids = [];
@@ -564,7 +564,7 @@
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, "Original evidence", "Original note", "integrity");
             $expires = time() + 7200;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, $expires);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expires);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Get original record data
@@ -599,7 +599,7 @@
                 $entityUuids[] = $entityUuid;
 
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Batch evidence $i", "Batch note $i", "batch");
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SPAM, time() + 3600);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
                 $blacklistUuids[] = $blacklistUuid;
             }
@@ -629,7 +629,7 @@
             $this->createdEntities[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, "Operator consistency test", "Test note", "operator");
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, BlacklistType::SERVICE_ABUSE, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SERVICE_ABUSE, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             // Verify operator UUID is consistent

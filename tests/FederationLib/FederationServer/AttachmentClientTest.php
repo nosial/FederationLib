@@ -19,7 +19,7 @@
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
         }
 
         protected function tearDown(): void
@@ -299,7 +299,7 @@
             $this->client->setClientPermission($operatorUuid, true); // Can access basic functions
 
             $operator = $this->client->getOperator($operatorUuid);
-            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             // Create entity and evidence with root client
             $entityUuid = $this->client->pushEntity('unauthorized-upload-test.com', 'unauthorized_user');
@@ -694,7 +694,7 @@
             $this->client->setClientPermission($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getApiKey());
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(403);

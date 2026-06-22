@@ -58,7 +58,7 @@
             // Test that authentication doesn't change server information
             $unauthenticatedInfo = $this->client->getServerInformation();
             
-            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_API_KEY'));
+            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
             $authenticatedInfo = $authenticatedClient->getServerInformation();
             
             $this->assertEquals($unauthenticatedInfo->getServerName(), $authenticatedInfo->getServerName());
