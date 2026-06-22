@@ -61,10 +61,10 @@
                         OperatorManager::setClient($operator->getUuid(), true);
                     }
 
-                    if($operator->getName() === 'system' && $operator->getAccessToken() !== '0')
+                    if($operator->getName() === 'system' && $operator->getAccessToken() !== 'none')
                     {
                         Logger::log()->warning('The system operator\'s access token has changed, resetting value');
-                        OperatorManager::newAccessToken($operator->getUuid(), '0');
+                        OperatorManager::newAccessToken($operator->getUuid(), 'none');
                     }
                 }
             }
