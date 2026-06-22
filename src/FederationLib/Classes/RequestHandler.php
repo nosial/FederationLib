@@ -263,7 +263,7 @@
                 }
 
                 // Even though we checked before, we're still checking here for sanity’s sake
-                if($operator->getAccessToken() === '0' || $operator->getName() === 'system')
+                if($operator->getAccessToken() === 'none' || $operator->getName() === 'system')
                 {
                     throw new RequestException('Operator access not allowed');
                 }

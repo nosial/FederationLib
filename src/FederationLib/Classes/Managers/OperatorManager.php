@@ -77,7 +77,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, '0', 'system', 1, 1, 1)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, 'none', 'system', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
@@ -211,7 +211,7 @@
          */
         public static function getSystemOperator(): OperatorRecord
         {
-            $operator = self::getOperatorByAccessToken('0');
+            $operator = self::getOperatorByAccessToken('none');
             if($operator === null)
             {
                 $uuid = self::createSystemOperator();
