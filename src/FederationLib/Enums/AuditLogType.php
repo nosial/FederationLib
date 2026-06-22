@@ -43,6 +43,7 @@
                 self::EVIDENCE_SUBMITTED,
                 self::EVIDENCE_DELETED,
                 self::ENTITY_BLACKLISTED,
+                self::ENTITY_UPDATED
             ];
         }
     }
