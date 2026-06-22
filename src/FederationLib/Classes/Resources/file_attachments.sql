@@ -13,11 +13,9 @@ create table file_attachments
 )
     comment 'A table for housing file attachments related to evidence records';
 
-create index file_attachments_evidence_index
-    on file_attachments (evidence)
-    comment 'The file attachment index';
-
 create index file_attachments_created_index
-    on file_attachments (created desc, uuid desc)
-    comment 'Index for listing attachments ordered by creation date';
+    on file_attachments (created desc, uuid desc);
+
+create index file_attachments_evidence_index
+    on file_attachments (evidence);
 
