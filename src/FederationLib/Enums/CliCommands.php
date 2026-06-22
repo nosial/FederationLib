@@ -10,7 +10,7 @@
     use FederationLib\Classes\CLI\ListAuditLogs;
     use FederationLib\Classes\CLI\ListOperators;
     use FederationLib\Classes\CLI\MaintenanceCommand;
-    use FederationLib\Classes\CLI\RefreshOperatorApiKey;
+    use FederationLib\Classes\CLI\RefreshOperatorAccessToken;
 
     enum CliCommands : string
     {
@@ -22,7 +22,7 @@
         case EDIT_OPERATOR = 'edit-operator';
         case LIST_OPERATORS = 'list-operators';
         case MAINTENANCE = 'maintenance';
-        case REFRESH_OPERATOR_API_KEY = 'refresh-operator-api-key';
+        case REFRESH_OPERATOR_ACCESS_TOKEN = 'refresh-operator-access-token';
 
         /**
          * Returns the class interface of the cli command
@@ -42,7 +42,7 @@
                 self::LIST_AUDIT_LOGS => ListAuditLogs::class,
                 self::LIST_OPERATORS => ListOperators::class,
                 self::MAINTENANCE => MaintenanceCommand::class,
-                self::REFRESH_OPERATOR_API_KEY => RefreshOperatorApiKey::class
+                self::REFRESH_OPERATOR_ACCESS_TOKEN => RefreshOperatorAccessToken::class
             };
         }
 
