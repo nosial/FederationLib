@@ -11,7 +11,9 @@
         private string $uuid;
         private string $host;
         private ?string $id;
+        private ?array $metadata;
         private int $created;
+        private ?int $updated;
 
         /**
          * EntityRecord constructor.
@@ -27,6 +29,24 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->host = $data['host'] ?? '';
             $this->id = (isset($data['id']) && $data['id'] !== '') ? $data['id'] : null;
+            $this->metadata = null;
+
+            // Parse the JSON metadata
+            if(isset($data['metadata']))
+            {
+                if(is_array($data['metadata']))
+                {
+                    $this->metadata = $data['metadata'];
+                }
+                elseif(is_string($data['metadata']))
+                {
+                    $metadata = @json_decode($data['metadata'], true);
+                    if(is_array($metadata))
+                    {
+                        $this->metadata = $metadata;
+                    }
+                }
+            }
 
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
@@ -53,6 +73,32 @@
             else
             {
                 $this->created = time();
+            }
+
+            if (isset($data['updated']) && is_string($data['updated']))
+            {
+                // Check if it's a numeric string (from Redis cache)
+                if (is_numeric($data['updated']))
+                {
+                    $this->updated = (int)$data['updated'];
+                }
+                else
+                {
+                    // SQL datetime string - convert using strtotime
+                    $this->updated = strtotime($data['updated']);
+                }
+            }
+            elseif (isset($data['updated']) && $data['updated'] instanceof DateTime)
+            {
+                $this->updated = $data['updated']->getTimestamp();
+            }
+            elseif (isset($data['updated']) && is_int($data['updated']))
+            {
+                $this->updated = $data['updated'];
+            }
+            else
+            {
+                $this->updated = null;
             }
         }
 
@@ -98,6 +144,16 @@
         }
 
         /**
+         * Gets the optional metadata of the entity
+         *
+         * @return array|null
+         */
+        public function getMetadata(): ?array
+        {
+            return $this->metadata;
+        }
+
+        /**
          * Get the creation timestamp of the entity record.
          *
          * @return int The timestamp when the record was created.
@@ -105,6 +161,16 @@
         public function getCreated(): int
         {
             return $this->created;
+        }
+
+        /**
+         * Gets the updated timestmap of the entity, null if the record hasn't been updated
+         *
+         * @return int|null The timestamp when the record was updated, null otherwise.
+         */
+        public function getUpdated(): ?int
+        {
+            return $this->updated;
         }
 
         /**
@@ -132,7 +198,9 @@
                 'hash' => $this->getHash(),
                 'host' => $this->host,
                 'id' => $this->id,
+                'metadata' => $this->metadata,
                 'created' => $this->created,
+                'updated' => $this->updated
             ];
         }
 
