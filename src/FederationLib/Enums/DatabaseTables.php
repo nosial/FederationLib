@@ -2,8 +2,6 @@
 
     namespace FederationLib\Enums;
 
-    use FederationLib\Classes\Logger;
-
     enum DatabaseTables : string
     {
         case AUDIT_LOG = 'audit_log.sql';
@@ -12,6 +10,7 @@
         case EVIDENCE  = 'evidence.sql';
         case FILE_ATTACHMENTS = 'file_attachments.sql';
         case OPERATORS = 'operators.sql';
+        case REPORTS = 'reports.sql';
 
         /**
          * Returns the full path to the SQL file for the database table.
@@ -39,6 +38,7 @@
                 self::EVIDENCE => 'evidence',
                 self::FILE_ATTACHMENTS => 'file_attachments',
                 self::OPERATORS => 'operators',
+                self::REPORTS => 'reports'
             };
         }
 
@@ -55,6 +55,7 @@
                 self::EVIDENCE,
                 self::FILE_ATTACHMENTS,
                 self::BLACKLIST,
+                self::REPORTS,
                 self::AUDIT_LOG
             ];
         }
