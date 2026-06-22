@@ -22,14 +22,6 @@
          * BlacklistRecord constructor.
          *
          * @param array $data Associative array of blacklist data.
-         *                    - 'uuid': string, Unique identifier for the blacklist record.
-         *                    - 'operator': string, UUID of the operator who created the record.
-         *                    - 'entity': string, Entity being blacklisted (e.g., IP address, domain).
-         *                    - 'entity': string, Entity being blacklisted (e.g., IP address, domain).
-         *                    - 'type': BlacklistType, Type of blacklist (e.g., IP, domain).
-         *                    - 'expires': int|null, Timestamp when the blacklist expires, null if permanent.
-         *                    - 'created': int, Timestamp when the record was created.
-         * @noinspection PhpUnnecessaryBoolCastInspection
          */
         public function __construct(array $data)
         {
