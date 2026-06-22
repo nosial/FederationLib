@@ -25,10 +25,12 @@
          *
          * @param string $host The host of the entity
          * @param string|null $id Optional. The ID of the entity if it belongs to the specific domain
+         * @param array|null $metadata Optional. Metadata to associate with the entity
+         * @return string The UUID of the registered entity
          * @throws InvalidArgumentException If the ID exceeds 255 characters or if the domain is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function registerEntity(string $host, ?string $id=null): string
+        public static function registerEntity(string $host, ?string $id=null, ?array $metadata=null): string
         {
             if($id !== null && strlen($id) > 255)
             {
@@ -45,12 +47,33 @@
                 throw new InvalidArgumentException("Host cannot exceed 255 characters.");
             }
 
+            if($metadata !== null && !Validate::entityMetadata($metadata))
+            {
+                throw new InvalidArgumentException('Invalid entity metadata provided');
+            }
+
             $uuid = Uuid::v4()->toRfc4122();
             $hash = Utilities::hashEntity($host, $id);
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO entities (uuid, hash, id, host) VALUES (:uuid, :hash, :id, :host)");
+                if($metadata !== null)
+                {
+                    $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $now = date('Y-m-d H:i:s');
+                    $stmt = DatabaseConnection::getConnection()->prepare(
+                        "INSERT INTO entities (uuid, hash, id, host, metadata, updated) VALUES (:uuid, :hash, :id, :host, :metadata, :updated)"
+                    );
+                    $stmt->bindParam(':metadata', $metadataJson);
+                    $stmt->bindParam(':updated', $now);
+                }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare(
+                        "INSERT INTO entities (uuid, hash, id, host) VALUES (:uuid, :hash, :id, :host)"
+                    );
+                }
+
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);
@@ -63,6 +86,66 @@
             }
 
             return $uuid;
+        }
+
+        /**
+         * Updates the metadata of an existing entity, merging new values with existing ones.
+         * Only updates the database when changes are detected. New keys are added, existing
+         * keys are overwritten, but no existing keys are removed.
+         *
+         * @param string $entityUuid The UUID of the entity to update
+         * @param array $metadata The new metadata to merge into the existing metadata
+         * @return bool True if changes were applied, False if no changes were needed
+         * @throws InvalidArgumentException If the metadata is invalid or entity is not found
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function updateEntityMetadata(string $entityUuid, array $metadata): bool
+        {
+            if(!Validate::entityMetadata($metadata))
+            {
+                throw new InvalidArgumentException('Invalid entity metadata provided');
+            }
+
+            $entity = self::getEntityByUuid($entityUuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            $existingMetadata = $entity->getMetadata() ?? [];
+            $mergedMetadata = array_merge($existingMetadata, $metadata);
+            $existingJson = json_encode($existingMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $mergedJson = json_encode($mergedMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if($mergedJson === $existingJson)
+            {
+                return false;
+            }
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET metadata = :metadata, updated = :updated WHERE uuid = :uuid"
+                );
+                $stmt->bindParam(':metadata', $mergedJson);
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update entity metadata: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+            }
+
+            return true;
         }
 
         /**
