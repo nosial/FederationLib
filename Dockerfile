@@ -28,7 +28,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker-entrypoint.sh /usr/local/bin/
 
-RUN apt-get update && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
+RUN apt-get update && apt-get upgrade && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/* \
     && install-php-extensions sockets \
     && docker-php-ext-install -j$(nproc) pdo_mysql \
@@ -36,7 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx superviso
     && curl -sL "https://github.com/nosial/LogLib2Server/releases/latest/download/LogLib2Server-linux-x86_64" -o /usr/bin/ll2s \
     && curl -sL "https://github.com/nosial/BayesianServer/releases/latest/download/bayesian-server.jar" -o /usr/bin/bayesian.jar \
     && chmod +x /usr/bin/ll2s /usr/bin/bayesian.jar /usr/local/bin/docker-entrypoint.sh \
-    && apt purge -y --auto-remove curl \
     && echo "upload_max_filesize = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini \
@@ -54,5 +53,7 @@ WORKDIR /var/www/html
 EXPOSE 7000
 ENTRYPOINT ["docker-entrypoint.sh"]
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:7000/ || exit 1
+HEALTHCHECK --interval=15s --timeout=10s --start-period=5s --retries=2 \
+    CMD curl -f http://localhost:7000/ && \
+    curl -f http://localhost:6380/ && \
+    bash -c 'exec 3<>/dev/tcp/localhost/9003' 2>/dev/null

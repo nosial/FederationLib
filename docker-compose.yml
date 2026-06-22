@@ -14,6 +14,7 @@ services:
     restart: unless-stopped
     volumes:
       - federation_uploads:/var/www/uploads
+      - bayesian_model:/var/www/bayesian_model
     environment:
       # FederationLib Configuration
       - FEDERATION_DATABASE_HOST=mariadb
@@ -70,6 +71,8 @@ services:
 
 volumes:
   federation_uploads:
+    driver: local
+  bayesian_model:
     driver: local
   mariadb_data:
     driver: local
