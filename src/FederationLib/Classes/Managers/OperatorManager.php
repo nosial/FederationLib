@@ -582,7 +582,7 @@
                     // Remove old access token pointer if we have the old operator data
                     if($oldOperator !== null)
                     {
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $oldOperator->getAccessToken()));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $oldOperator->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -778,7 +778,7 @@
 
                         // Create access token pointer for quick lookups
                         RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
+                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operator->getAccessToken())),
                             expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                             value: $operator->getUuid()
                         );
