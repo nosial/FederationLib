@@ -8,7 +8,7 @@
     {
         private string $baseUrl;
         private string $name;
-        private ?string $apiKey;
+        private ?string $accessToken;
         private int $maxUploadSize;
         private string $storagePath;
         private int $listAuditLogsMaxItems;
@@ -37,7 +37,7 @@
         {
             $this->baseUrl = $config['base_url'] ?? 'http://127.0.0.1:7000';
             $this->name = $config['name'] ?? 'Federation Server';
-            $this->apiKey = $config['api_key'] ?? null;
+            $this->accessToken = $config['access_token'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
             $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
             $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
@@ -76,13 +76,13 @@
         }
 
         /**
-         * Get the master API key for the server.
+         * Get the master Access Token for the server.
          *
-         * @return string|null The API key, or null if not set.
+         * @return string|null The Access Token, or null if not set.
          */
-        public function getApiKey(): ?string
+        public function getAccessToken(): ?string
         {
-            return $this->apiKey;
+            return $this->accessToken;
         }
 
         /**
