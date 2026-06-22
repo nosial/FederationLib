@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Classes\Configuration\BayesianConfiguration;
     use FederationLib\Classes\Configuration\DatabaseConfiguration;
     use FederationLib\Classes\Configuration\MaintenanceConfiguration;
     use FederationLib\Classes\Configuration\RedisConfiguration;
@@ -10,8 +11,9 @@
 
     class Configuration
     {
-        private static ?ServerConfiguration $serverConfiguration = null;
         private static ?\ConfigLib\Configuration $configuration = null;
+        private static ?ServerConfiguration $serverConfiguration = null;
+        private static ?BayesianConfiguration $bayesianConfiguration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?MaintenanceConfiguration $maintenanceConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
@@ -25,7 +27,7 @@
 
             self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:7000', 'FEDERATION_BASE_URL');
             self::$configuration->setDefault('server.name', 'Federation Server', 'FEDERATION_NAME');
-            self::$configuration->setDefault('server.api_key', Utilities::generateString(), 'FEDERATION_API_KEY');
+            self::$configuration->setDefault('server.access_token', Utilities::generateString(), 'FEDERATION_ACCESS_TOKEN');
             self::$configuration->setDefault('server.max_upload_size', 52428800, 'FEDERATION_MAX_UPLOAD_SIZE'); // 50MB default
             self::$configuration->setDefault('server.storage_path', '/var/www/uploads', 'FEDERATION_STORAGE_PATH');
             self::$configuration->setDefault('server.list_audit_logs_max_items', 100, 'FEDERATION_LIST_AUDIT_LOGS_MAX_ITEMS');
@@ -40,6 +42,12 @@
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
             self::$configuration->setDefault('server.public_scan_content', true, 'FEDERATION_PUBLIC_SCAN_CONTENT');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
+
+            // Bayesian filter configuration
+            self::$configuration->setDefault('bayesian.enabled', true, 'FEDERATION_BS_ENABLED');
+            self::$configuration->setDefault('bayesian.ssl', false, 'FEDERATION_BS_SSL');
+            self::$configuration->setDefault('bayesian.host', '127.0.0.1', 'FEDERATION_BS_HOST');
+            self::$configuration->setDefault('bayesian.port', 6380, 'FEDERATION_BS_PORT');
 
             // Maintenance configuration
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
@@ -93,6 +101,7 @@
 
             // Initialize the configuration classes
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
+            self::$bayesianConfiguration = new BayesianConfiguration(self::$configuration->get('bayesian'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
             self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
@@ -141,6 +150,21 @@
             }
 
             return self::$serverConfiguration;
+        }
+
+        /**
+         * Get the BayesianServer configuration
+         *
+         * @return BayesianConfiguration
+         */
+        public static function getBayesianConfiguration(): BayesianConfiguration
+        {
+            if(self::$bayesianConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$bayesianConfiguration;
         }
 
         /**
