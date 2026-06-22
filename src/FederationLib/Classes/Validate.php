@@ -103,4 +103,63 @@
         {
             return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
         }
+
+        /**
+         * Validates the Entity metadata input, returns False if the following conditions are met
+         *
+         *  - The key value length is greater than 64 characters
+         *  - The value type is not one of: string, integer, boolean or null
+         *  - The value type exceeds 1000 chracters if it's a string
+         *  - The value type is empty if it's a string instead of null
+         *  - The serialized JSON encoding results in a size larger than 8kb
+         *
+         * @param array $input
+         * @return bool
+         */
+        public static function entityMetadata(array $input): bool
+        {
+
+            foreach($input as $key => $value)
+            {
+                // key cannot be greater than 64 characters
+                if(strlen($key) > 64)
+                {
+                    return false;
+                }
+
+                // null is allowed
+                if($value === null)
+                {
+                    continue;
+                }
+
+                switch(gettype($value))
+                {
+                    case 'string':
+                        // string value cannot be empty or greater than 64 characters
+                        if(strlen($value) > 1000 || $value === '')
+                        {
+                            return false;
+                        }
+                        break;
+
+                        // integer and boolean is allowed
+                    case 'integer':
+                    case 'boolean':
+                        break;
+
+                        // disallow anything else
+                    default:
+                        return false;
+                }
+            }
+
+            // disallow json encoding larger than 8kb
+            if(strlen(json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) > 8000)
+            {
+                return false;
+            }
+
+            return true;
+        }
     }
