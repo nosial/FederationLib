@@ -17,10 +17,10 @@
     class OperatorManager
     {
         public const string CACHE_PREFIX = 'operator:';
-        public const string API_KEY_POINTER_PREFIX = 'operator_api_key:';
+        public const string ACCESS_TOKEN_POINTER_PREFIX = 'operator_access_token:';
 
         /**
-         * Create a new operator with a unique API key.
+         * Create a new operator with a unique access token.
          *
          * @param string $name The name of the operator.
          * @return string The generated UUID for the operator.
@@ -46,13 +46,13 @@
             }
 
             $uuid = Uuid::v7()->toRfc4122();
-            $apiKey = Utilities::generateString();
+            $accessToken = Utilities::generateString();
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, api_key, name) VALUES (:uuid, :api_key, :name)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name) VALUES (:uuid, :access_token, :name)");
                 $stmt->bindParam(':uuid', $uuid);
-                $stmt->bindParam(':api_key', $apiKey);
+                $stmt->bindParam(':access_token', $accessToken);
                 $stmt->bindParam(':name', $name);
 
                 $stmt->execute();
@@ -66,56 +66,66 @@
         }
 
         /**
-         * Creates the master operator with a predefined API key.
+         * Creates the system operator with a non-usable access token
          *
-         * @param string $apiKey The API key for the master operator.
-         * @return string The UUID of the created master operator.
-         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @return string
+         * @throws DatabaseOperationException
          */
-        private static function createMasterOperator(string $apiKey): string
+        private static function createSystemOperator(): string
         {
-            if(empty($apiKey))
-            {
-                throw new InvalidArgumentException('API key cannot be empty.');
-            }
-
-            if(strlen($apiKey) !== 32)
-            {
-                throw new InvalidArgumentException('API key must be exactly 32 characters long.');
-            }
-
-            // This method is used to create the master operator with a predefined API key.
-            // It should only be called once during the initial setup of the server.
             $uuid = Uuid::v7()->toRfc4122();
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, api_key, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, :api_key, 'root', 1, 1, 1)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, '0', 'system', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
-                $stmt->bindParam(':api_key', $apiKey);
-
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException('Failed to create master operator', 0, $e);
+                throw new DatabaseOperationException('Failed to create system operator', 0, $e);
             }
 
             return $uuid;
         }
 
         /**
-         * Check if the given UUID belongs to the master operator.
+         * Creates the root operator with a predefined Access Token.
          *
-         * @param string $uuid The UUID to check.
-         * @return bool True if the UUID belongs to the master operator, false otherwise.
+         * @param string $accessToken The Access Token for the root operator.
+         * @return string The UUID of the created root operator.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws InvalidArgumentException If the UUID is empty.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function isMasterOperator(string $uuid): bool
+        private static function createRootOperator(string $accessToken): string
         {
-            return self::getMasterOperator()->getUuid() === $uuid;
+            if(empty($accessToken))
+            {
+                throw new InvalidArgumentException('Access Token cannot be empty.');
+            }
+
+            if(strlen($accessToken) !== 32)
+            {
+                throw new InvalidArgumentException('Access Token must be exactly 32 characters long.');
+            }
+
+            // This method is used to create the master operator with a predefined Access Token.
+            // It should only be called once during the initial setup of the server.
+            $uuid = Uuid::v7()->toRfc4122();
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, :access_token, 'root', 1, 1, 1)");
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':access_token', $accessToken);
+
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to create root operator', 0, $e);
+            }
+
+            return $uuid;
         }
 
         /**
@@ -139,31 +149,72 @@
         }
 
         /**
-         * Retrieve the master operator.
+         * Checks if the given UUID belongs to the system operator
          *
-         * This method checks if the master operator exists in the database.
-         * If it does not exist, it creates one with a predefined API key.
-         *
-         * @return OperatorRecord The master operator record.
-         * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws InvalidArgumentException If the API key for the master operator is not set in the configuration.
-         * @throws CacheOperationException If there is an error during the caching operation.
+         * @param string $uuid The UUID to check
+         * @return bool True if the UUID belongs to the root operator, false otherwise
+         * @throws CacheOperationException If there is an error during the caching operation
+         * @throws DatabaseOperationException If there is an error during the database operation
          */
-        public static function getMasterOperator(): OperatorRecord
+        public static function isSystemOperator(string $uuid): bool
         {
-            // This method retrieves the master operator from the database.
-            // If the master operator does not exist, it creates one with a predefined API key.
-            $apiKey = Configuration::getServerConfiguration()->getApiKey();
-
-            if(empty($apiKey))
+            if(empty($uuid))
             {
-                throw new InvalidArgumentException('API key for master operator is not set in configuration.');
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $operator = self::getOperatorByApiKey($apiKey);
+            $operator = self::getOperator($uuid);
+            return $operator !== null && $operator->getName() === 'system';
+        }
+
+        /**
+         * Retrieve the root operator.
+         *
+         * This method checks if the root operator exists in the database.
+         * If it does not exist, it creates one with a predefined Access Token.
+         *
+         * @return OperatorRecord The root operator record.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws InvalidArgumentException If the Access Token for the root operator is not set in the configuration.
+         * @throws CacheOperationException If there is an error during the caching operation.
+         */
+        public static function getRootOperator(): OperatorRecord
+        {
+            // This method retrieves the root operator from the database.
+            // If the root operator does not exist, it creates one with a predefined Access Token.
+            $accessToken = Configuration::getServerConfiguration()->getAccessToken();
+
+            if(empty($accessToken))
+            {
+                throw new InvalidArgumentException('Access Token for root operator is not set in configuration.');
+            }
+
+            $operator = self::getOperatorByAccessToken($accessToken);
             if($operator === null)
             {
-                $uuid = self::createMasterOperator($apiKey);
+                $uuid = self::createRootOperator($accessToken);
+                $operator = self::getOperator($uuid);
+            }
+
+            return $operator;
+        }
+
+        /**
+         * Retrieve the system operator
+         *
+         * This method checks if the system operator exists in the database.
+         * If it does not exist, it creates one with an unusable Access Token.
+         *
+         * @return OperatorRecord
+         * @throws CacheOperationException
+         * @throws DatabaseOperationException
+         */
+        public static function getSystemOperator(): OperatorRecord
+        {
+            $operator = self::getOperatorByAccessToken('0');
+            if($operator === null)
+            {
+                $uuid = self::createSystemOperator();
                 $operator = self::getOperator($uuid);
             }
 
@@ -224,9 +275,9 @@
                     ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
                 );
 
-                // Create API key pointer for quick lookups
+                // Create Access Token pointer for quick lookups
                 RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()),
+                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())),
                     expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                     value: $uuid
                 );
@@ -277,23 +328,23 @@
         }
 
         /**
-         * Retrieve an operator by their API key.
+         * Retrieve an operator by their Access Token.
          *
-         * @param string $apiKey The API key of the operator.
+         * @param string $accessToken The Access Token of the operator.
          * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function getOperatorByApiKey(string $apiKey): ?OperatorRecord
+        public static function getOperatorByAccessToken(string $accessToken): ?OperatorRecord
         {
-            if(empty($apiKey))
+            if(empty($accessToken))
             {
-                throw new InvalidArgumentException('API key cannot be empty.');
+                throw new InvalidArgumentException('Access Token cannot be empty.');
             }
 
-            // Try cache with API key pointer first
+            // Try cache with Access Token pointer first
             if(self::isCachingEnabled())
             {
-                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey));
+                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)));
                 if($cachedUuid !== false && strlen($cachedUuid) > 0)
                 {
                     $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
@@ -303,34 +354,34 @@
                     }
                     else
                     {
-                        // API key pointer exists but operator record is missing from cache
-                        // Remove the stale API key pointer to prevent future inconsistencies
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey));
+                        // Access Token pointer exists but operator record is missing from cache
+                        // Remove the stale Access Token pointer to prevent future inconsistencies
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)));
                     }
                 }
             }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators WHERE api_key=:api_key");
-                $stmt->bindParam(':api_key', $apiKey);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators WHERE access_token=:access_token");
+                $stmt->bindParam(':access_token', $accessToken);
                 $stmt->execute();
 
                 $data = $stmt->fetch();
 
                 if($data === false)
                 {
-                    return null; // No operator found with the given API key
+                    return null; // No operator found with the given Access Token
                 }
 
                 $operatorRecord = new OperatorRecord($data);
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to retrieve operator with API key '%s'", $apiKey), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to retrieve operator with Access Token '%s'", $accessToken), 0, $e);
             }
 
-            // Cache the operator record and create API key pointer if caching is enabled and limit not reached
+            // Cache the operator record and create Access Token pointer if caching is enabled and limit not reached
             if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
             {
                 RedisConnection::setRecord(
@@ -339,10 +390,10 @@
                     ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
                 );
 
-                // Create a pointer from API key to UUID for quick lookups
-                // Only set the API key pointer if the operator record was successfully cached
+                // Create a pointer from Access Token to UUID for quick lookups
+                // Only set the Access Token pointer if the operator record was successfully cached
                 RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $apiKey),
+                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)),
                     expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                     value: $operatorRecord->getUuid()
                 );
@@ -385,8 +436,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove Access Token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -428,8 +479,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove Access Token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -471,8 +522,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove Access Token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -481,22 +532,22 @@
         }
 
         /**
-         * Refresh the API key for an operator.
+         * Refresh the access token for an operator.
          *
          * @param string $uuid The UUID of the operator.
-         * @return string The new API key for the operator.
-         * @throws InvalidArgumentException If the UUID is empty.
+         * @param string|null $accessToken Optional. The access token to set to the operator
+         * @return string The new access token for the operator.
+         * @throws CacheOperationException Thrown if there was an error with the caching operation
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException
          */
-        public static function refreshApiKey(string $uuid): string
+        public static function newAccessToken(string $uuid, ?string $accessToken=null): string
         {
             if(empty($uuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
 
-            // Get the current operator to access the old API key for cache invalidation
+            // Get the current operator to access the old Access Token for cache invalidation
             $oldOperator = null;
             if(self::isCachingEnabled())
             {
@@ -507,35 +558,38 @@
                 }
             }
 
-            $newApiKey = Utilities::generateString();
+            if($accessToken === null)
+            {
+                $accessToken = Utilities::generateString();
+            }
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET api_key=:api_key WHERE uuid=:uuid");
-                $stmt->bindParam(':api_key', $newApiKey);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET access_token=:access_token WHERE uuid=:uuid");
+                $stmt->bindParam(':access_token', $accessToken);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to refresh API key for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to refresh access token for operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    // Remove old API key pointer if we have the old operator data
+                    // Remove old access token pointer if we have the old operator data
                     if($oldOperator !== null)
                     {
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $oldOperator->getApiKey()));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $oldOperator->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 }
             }
 
-            return $newApiKey;
+            return $accessToken;
         }
 
         /**
@@ -574,8 +628,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove access token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -619,8 +673,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove access token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -664,8 +718,8 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove API key pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operatorRecord->getApiKey()));
+                        // Remove access token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -711,6 +765,7 @@
             // Pre-cache operators if caching is enabled and pre-caching is enabled
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
+                /** @var OperatorRecord $operator */
                 foreach($operators as $operator)
                 {
                     if(!RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
@@ -721,9 +776,9 @@
                             ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
                         );
 
-                        // Create API key pointer for quick lookups
+                        // Create access token pointer for quick lookups
                         RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::API_KEY_POINTER_PREFIX, $operator->getApiKey()),
+                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
                             expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                             value: $operator->getUuid()
                         );
