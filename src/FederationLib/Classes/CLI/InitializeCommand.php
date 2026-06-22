@@ -8,6 +8,7 @@
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Interfaces\CommandLineInterface;
+    use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
 
     class InitializeCommand implements CommandLineInterface
@@ -33,46 +34,43 @@
 
             try
             {
-                $masterOperator = OperatorManager::getMasterOperator();
-                $uuid = $masterOperator->getUuid();
-                $fixed = false;
-
-                if($masterOperator->isDisabled())
+                /** @var OperatorRecord $operator */
+                foreach([OperatorManager::getRootOperator(), OperatorManager::getSystemOperator()] as $operator)
                 {
-                    Logger::log()->warning('Root operator was disabled, re-enabling');
-                    OperatorManager::enableOperator($uuid);
-                    $fixed = true;
-                }
+                    if($operator->isDisabled())
+                    {
+                        Logger::log()->warning(sprintf('%s operator was disabled, re-enabling', $operator->getName()));
+                        OperatorManager::enableOperator($operator->getUuid());
+                    }
 
-                if(!$masterOperator->canManageOperators())
-                {
-                    Logger::log()->warning('Root operator missing manage_operators permission, fixing');
-                    OperatorManager::setManageOperators($uuid, true);
-                    $fixed = true;
-                }
+                    if(!$operator->canManageOperators())
+                    {
+                        Logger::log()->warning(sprintf('%s operator missing manage_operators permission, re-enabling', $operator->getName()));
+                        OperatorManager::setManageOperators($operator->getUuid(), true);
+                    }
 
-                if(!$masterOperator->canManageBlacklist())
-                {
-                    Logger::log()->warning('Root operator missing manage_blacklist permission, fixing');
-                    OperatorManager::setManageBlacklist($uuid, true);
-                    $fixed = true;
-                }
+                    if(!$operator->canManageBlacklist())
+                    {
+                        Logger::log()->warning(sprintf('%s operator missing manage_blacklist permission, re-enabling', $operator->getName()));
+                        OperatorManager::setManageBlacklist($operator->getUuid(), true);
+                    }
 
-                if(!$masterOperator->isClient())
-                {
-                    Logger::log()->warning('Root operator missing is_client permission, fixing');
-                    OperatorManager::setClient($uuid, true);
-                    $fixed = true;
-                }
+                    if(!$operator->isClient())
+                    {
+                        Logger::log()->warning(sprintf('%s operator missing is_client permission, re-enabling', $operator->getName()));
+                        OperatorManager::setClient($operator->getUuid(), true);
+                    }
 
-                if($fixed)
-                {
-                    Logger::log()->info('Root operator properties corrected successfully');
+                    if($operator->getName() === 'system' && $operator->getAccessToken() !== '0')
+                    {
+                        Logger::log()->warning('The system operator\'s access token has changed, resetting value');
+                        OperatorManager::newAccessToken($operator->getUuid(), '0');
+                    }
                 }
             }
             catch (DatabaseOperationException|InvalidArgumentException $e)
             {
-                Logger::log()->critical('Failed to validate/fix root operator: ' . $e->getMessage(), $e);
+                Logger::log()->critical('Failed to initialize/fix a required operator: ' . $e->getMessage(), $e);
                 return 1;
             }
 

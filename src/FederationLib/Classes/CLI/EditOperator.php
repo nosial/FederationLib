@@ -95,7 +95,7 @@
                 }
                 else
                 {
-                    $masterOperator = OperatorManager::getMasterOperator();
+                    $masterOperator = OperatorManager::getRootOperator();
                     AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
                         "Operator %s has been edited. Changes: %s",
                         $targetOperator->getName(),

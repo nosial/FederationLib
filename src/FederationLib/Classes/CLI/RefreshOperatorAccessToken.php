@@ -7,7 +7,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Interfaces\CommandLineInterface;
 
-    class RefreshOperatorApiKey implements CommandLineInterface
+    class RefreshOperatorAccessToken implements CommandLineInterface
     {
         /**
          * @inheritDoc
@@ -32,18 +32,18 @@
 
                 if(OperatorManager::isRootOperator($uuid))
                 {
-                    print("Error: Cannot refresh API key for the root operator.\n");
+                    print("Error: Cannot refresh access token for the root operator.\n");
                     return 1;
                 }
 
-                $newApiKey = OperatorManager::refreshApiKey($uuid);
-                print("API key refreshed successfully.\n");
-                print("New API Key: $newApiKey\n");
+                $accessToken = OperatorManager::newAccessToken($uuid);
+                print("Access Token refreshed successfully.\n");
+                print("New Access Token: $accessToken\n");
             }
             catch (DatabaseOperationException $e)
             {
-                Logger::log()->error('Failed to refresh API key: ' . $e->getMessage(), $e);
-                print("Error: Failed to refresh API key. See logs for details.\n");
+                Logger::log()->error('Failed to refresh Access Token: ' . $e->getMessage(), $e);
+                print("Error: Failed to refresh Access Token. See logs for details.\n");
                 return 1;
             }
 
@@ -56,11 +56,11 @@
         public static function getHelp(): string
         {
             return "Usage:\n" .
-                "  federationserver refresh-apikey --uuid <uuid>\n" .
+                "  federationserver refresh-access-token --uuid <uuid>\n" .
                 "\nDescription:\n" .
-                "  Refreshes the API key for the specified operator.\n" .
+                "  Refreshes the Access Token for the specified operator.\n" .
                 "\nOptions:\n" .
-                "  --uuid <uuid>   The UUID of the operator to refresh the API key for. (required)\n";
+                "  --uuid <uuid>   The UUID of the operator to refresh the Access Token for. (required)\n";
         }
 
         /**
@@ -68,7 +68,7 @@
          */
         public static function getShortHelp(): string
         {
-            return "Refreshes the API key for an operator.";
+            return "Refreshes the Access Token for an operator.";
         }
 
         /**
@@ -77,7 +77,7 @@
         public static function getExamples(): ?string
         {
             return "Examples:\n" .
-                "  federationserver refresh-apikey --uuid <uuid>\n" .
-                "    Refreshes the API key for the specified operator.\n";
+                "  federationserver refresh-access-token --uuid <uuid>\n" .
+                "    Refreshes the Access Token for the specified operator.\n";
         }
     }

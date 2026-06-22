@@ -46,7 +46,7 @@
                     print(
                         self::ANSI_BOLD . self::ANSI_CYAN . "UUID:" . self::ANSI_RESET . " {$operator->getUuid()}\n" .
                         self::ANSI_BOLD . self::ANSI_YELLOW . "Name:" . self::ANSI_RESET . " {$operator->getName()}\n" .
-                        self::ANSI_BOLD . "API Key:" . self::ANSI_RESET . " {$operator->getApiKey()}\n" .
+                        self::ANSI_BOLD . "Access token:" . self::ANSI_RESET . " {$operator->getAccessToken()}\n" .
                         str_repeat('-', 50) . "\n"
                     );
                 }

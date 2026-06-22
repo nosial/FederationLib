@@ -24,11 +24,12 @@
             }
 
             $name = $args['name'];
-            if($name === 'root')
+            if(strtolower($name) === 'root' || strtolower($name) === 'system')
             {
-                print("Error: Operator name 'root' is reserved.\n");
+                print("Error: Operator name '" . $name . "' is reserved.\n");
                 return 1;
             }
+
 
             $manageOperators = isset($args['manage-operators']) && $args['manage-operators'] === true ?? false;
             $manageBlacklist = isset($args['manage-blacklist']) && $args['manage-blacklist'] === true ?? false;
@@ -58,7 +59,7 @@
                     OperatorManager::setClient($operatorUuid, true);
                 }
 
-                $masterOperator = OperatorManager::getMasterOperator();
+                $masterOperator = OperatorManager::getRootOperator();
 
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf(
                     "Operator '%s' (%s) created. Manage Operators: %s, Manage Blacklist: %s, Is Client: %s",

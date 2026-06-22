@@ -41,7 +41,7 @@
                 $targetOperator = OperatorManager::getOperator($uuid);
                 OperatorManager::deleteOperator($uuid);
                 print("Operator with UUID $uuid has been deleted.\n");
-                $masterOperator = OperatorManager::getMasterOperator();
+                $masterOperator = OperatorManager::getRootOperator();
 
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_DELETED, sprintf(
                     "Operator %s has been deleted.",
