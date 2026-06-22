@@ -24,7 +24,7 @@ services:
       - FEDERATION_REDIS_ENABLED=true
       - FEDERATION_REDIS_HOST=redis
       - FEDERATION_REDIS_PORT=6379
-      - FEDERATION_API_KEY=${FEDERATION_API_KEY:-abcdefghijklmnopqrstuvwxyz123456}
+      - FEDERATION_ACCESS_TOKEN=${FEDERATION_ACCESS_TOKEN:-abcdefghijklmnopqrstuvwxyz123456}
     networks:
       - internal_network
 

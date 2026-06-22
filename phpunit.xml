@@ -11,7 +11,7 @@
 
         <!-- Tests configuration -->
         <env name="SERVER_ENDPOINT" value="http://172.17.0.1:7000"/>
-        <env name="SERVER_API_KEY" value="abcdefghijklmnopqrstuvwxyz123456"/>
+        <env name="SERVER_ACCESS_TOKEN" value="abcdefghijklmnopqrstuvwxyz123456"/>
 
         <!-- LogLib2 configuration -->
         <env name="LOG_LEVEL" value="debug"/>
