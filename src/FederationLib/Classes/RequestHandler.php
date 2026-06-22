@@ -3,11 +3,12 @@
     namespace FederationLib\Classes;
 
     use FederationLib\Classes\Managers\OperatorManager;
-     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Interfaces\StandardObjectInterface;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\SuccessResponse;
@@ -139,7 +140,11 @@
                 $responseCode = $responseCode->value;
             }
 
-            if($data instanceof SerializableInterface)
+            if($data instanceof StandardObjectInterface)
+            {
+                $data = $data->toStandardArray();
+            }
+            elseif($data instanceof SerializableInterface)
             {
                 $data = $data->toArray();
             }
@@ -196,39 +201,39 @@
         }
 
         /**
-         * Get the authenticated operator based on the API key provided in the request.
+         * Get the authenticated operator based on the Access Token provided in the request.
          *
-         * This method retrieves the API key from the request headers or query parameters,
+         * This method retrieves the Access Token from the request headers or query parameters,
          * validates it, and returns the corresponding OperatorRecord object if found and enabled.
          *
          * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if not found or disabled.
-         * @throws RequestException If the API key is missing, invalid, or the operator is disabled.
+         * @throws RequestException If the Access Token is missing, invalid, or the operator is disabled.
          */
         protected static function getAuthenticatedOperator(): ?OperatorRecord
         {
-            $apiKey = null;
+            $accessToken = null;
             if (isset($_SERVER['HTTP_AUTHORIZATION']))
             {
                 $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
                 if (preg_match('/^Bearer\s+(\S+)$/', $authHeader, $matches))
                 {
-                    $apiKey = $matches[1];
+                    $accessToken = $matches[1];
 
                 }
             }
 
-            if (empty($apiKey))
+            if (empty($accessToken))
             {
                 return null;
             }
 
-            if (strlen($apiKey) !== 32)
+            if (strlen($accessToken) !== 32)
             {
-                throw new RequestException('Invalid API key', 400);
+                throw new RequestException('Invalid Access Token', 400);
             }
 
-            // If the given API key matches the master operator's API key, we can retrieve the master operator.
-            if(Configuration::getServerConfiguration()->getApiKey() !== null && $apiKey === Configuration::getServerConfiguration()->getApiKey())
+            // If the given Access Token matches the master operator's Access Token, we can retrieve the master operator.
+            if(Configuration::getServerConfiguration()->getAccessToken() !== null && $accessToken === Configuration::getServerConfiguration()->getAccessToken())
             {
                 // A master operator is automatically created if it does not exist.
                 // This is useful for initial setup or if the master operator was deleted.
@@ -236,7 +241,7 @@
 
                 try
                 {
-                    return OperatorManager::getMasterOperator();
+                    return OperatorManager::getRootOperator();
                 }
                 catch (DatabaseOperationException $e)
                 {
@@ -244,16 +249,23 @@
                 }
                 catch(InvalidArgumentException $e)
                 {
-                    throw new RequestException('Invalid API Key Configuration', 500, $e);
+                    throw new RequestException('Invalid Access token Configuration', 500, $e);
                 }
             }
 
             try
             {
-                $operator = OperatorManager::getOperatorByApiKey($apiKey);
+                $operator = OperatorManager::getOperatorByAccessToken($accessToken);
+
                 if ($operator === null)
                 {
-                    throw new RequestException('Invalid API key', 401);
+                    throw new RequestException('Invalid Access Token', 401);
+                }
+
+                // Even though we checked before, we're still checking here for sanity’s sake
+                if($operator->getAccessToken() === '0' || $operator->getName() === 'system')
+                {
+                    throw new RequestException('Operator access not allowed');
                 }
             }
             catch (DatabaseOperationException $e)
