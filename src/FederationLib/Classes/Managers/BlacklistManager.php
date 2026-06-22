@@ -6,7 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\BlacklistRecord;
     use InvalidArgumentException;
@@ -23,14 +23,14 @@
          *
          * @param string $entityUuid The UUID of the entity to blacklist.
          * @param string $operatorUuid The UUID of the operator performing the blacklisting.
-         * @param BlacklistType $type The type of blacklist action.
+         * @param IncidentType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
          * @param string|null $evidenceUuid Optional evidence UUID, must be a valid UUID if provided.
          * @return string The UUID of the created blacklist entry.
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistEntity(string $entityUuid, string $operatorUuid, BlacklistType $type, ?int $expires=null, ?string $evidenceUuid=null): string
+        public static function blacklistEntity(string $entityUuid, string $operatorUuid, IncidentType $type, ?int $expires=null, ?string $evidenceUuid=null): string
         {
             if(empty($entityUuid) || empty($operatorUuid))
             {

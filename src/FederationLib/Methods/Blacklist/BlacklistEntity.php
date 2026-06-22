@@ -10,7 +10,7 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
@@ -32,7 +32,7 @@
 
             $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
             $evidence = FederationServer::getParameter('evidence_uuid') ?? null;
-            $type = BlacklistType::tryFrom(FederationServer::getParameter('type') ?? '');
+            $type = IncidentType::tryFrom(FederationServer::getParameter('type') ?? '');
             $expires = FederationServer::getParameter('expires');
 
             if($entityIdentifier === null)

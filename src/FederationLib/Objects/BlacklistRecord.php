@@ -3,7 +3,7 @@
     namespace FederationLib\Objects;
 
     use DateTime;
-    use FederationLib\Enums\BlacklistType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Interfaces\SerializableInterface;
 
     class BlacklistRecord implements SerializableInterface
@@ -12,7 +12,7 @@
         private string $operatorUuid;
         private string $entityUuid;
         private ?string $evidenceUuid;
-        private BlacklistType $type;
+        private IncidentType $type;
         private bool $lifted;
         private ?string $liftedBy;
         private ?int $expires;
@@ -37,13 +37,13 @@
             $this->operatorUuid = $data['operator'] ?? '';
             $this->entityUuid = $data['entity'] ?? '';
             $this->evidenceUuid = $data['evidence'] ?? null;
-            if(isset($data['type']) && $data['type'] instanceof BlacklistType)
+            if(isset($data['type']) && $data['type'] instanceof IncidentType)
             {
                 $this->type = $data['type'];
             }
             else
             {
-                $this->type = isset($data['type']) ? BlacklistType::from($data['type']) : BlacklistType::OTHER;
+                $this->type = isset($data['type']) ? IncidentType::from($data['type']) : IncidentType::OTHER;
             }
             /** @noinspection PhpTernaryExpressionCanBeReplacedWithConditionInspection */
             $this->lifted = isset($data['lifted']) ? (bool)$data['lifted'] : false;
@@ -133,9 +133,9 @@
         /**
          * Get the type of the blacklist record.
          *
-         * @return BlacklistType The type of the blacklist record.
+         * @return IncidentType The type of the blacklist record.
          */
-        public function getType(): BlacklistType
+        public function getType(): IncidentType
         {
             return $this->type;
         }
@@ -236,7 +236,7 @@
 
             if(isset($array['type']) && is_string($array['type']))
             {
-                $array['type'] = BlacklistType::from($array['type']);
+                $array['type'] = IncidentType::from($array['type']);
             }
 
             return new self($array);

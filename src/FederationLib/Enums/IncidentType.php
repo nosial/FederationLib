@@ -2,7 +2,7 @@
 
     namespace FederationLib\Enums;
 
-    enum BlacklistType : string
+    enum IncidentType : string
     {
         /**
          * Spam or automated spam content.
