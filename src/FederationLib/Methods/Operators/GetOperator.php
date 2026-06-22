@@ -43,8 +43,8 @@
 
             if(!$authenticatedOperator?->canManageOperators())
             {
-                // Clear API key if the authenticated operator does not have permission to manage operators
-                $existingOperator->clearApiKey();
+                // Clear Access Token if the authenticated operator does not have permission to manage operators
+                $existingOperator->clearAccessToken();
             }
 
             self::successResponse($existingOperator->toArray());
