@@ -44,7 +44,7 @@
     use FederationLib\Methods\Operators\ManageBlacklistPermission;
     use FederationLib\Methods\Operators\ManageClientPermission;
     use FederationLib\Methods\Operators\ManageOperatorsPermission;
-    use FederationLib\Methods\Operators\RefreshOperatorApiKey;
+    use FederationLib\Methods\Operators\RefreshOperatorAccessToken;
     use FederationLib\Methods\ScanContent;
 
     enum Method
@@ -63,7 +63,7 @@
         case ENABLE_OPERATOR;
         case DISABLE_OPERATOR;
         case GET_OPERATOR;
-        case REFRESH_OPERATOR_API_KEY;
+        case REFRESH_OPERATOR_ACCESS_TOKEN;
         case MANAGE_OPERATORS_PERMISSION;
         case MANAGE_BLACKLIST_PERMISSION;
         case MANAGE_CLIENT_PERMISSION;
@@ -186,8 +186,8 @@
                 case self::DISABLE_OPERATOR:
                     DisableOperator::handleRequest();
                     break;
-                case self::REFRESH_OPERATOR_API_KEY:
-                    RefreshOperatorApiKey::handleRequest();
+                case self::REFRESH_OPERATOR_ACCESS_TOKEN:
+                    RefreshOperatorAccessToken::handleRequest();
                     break;
                 case self::MANAGE_OPERATORS_PERMISSION:
                     ManageOperatorsPermission::handleRequest();
@@ -301,12 +301,12 @@
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
                 $path === '/operators/self' && $requestMethod === 'GET' => Method::GET_SELF_OPERATOR,
-                $path === '/operators/refresh' && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
+                $path === '/operators/refresh' && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_ACCESS_TOKEN,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/enable$#', $path) && $requestMethod === 'POST' => Method::ENABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/disable$#', $path) && $requestMethod === 'POST' => Method::DISABLE_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_API_KEY,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', $path) && $requestMethod === 'POST' => Method::REFRESH_OPERATOR_ACCESS_TOKEN,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/manage_operators$#', $path) && $requestMethod === 'POST' => Method::MANAGE_OPERATORS_PERMISSION,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/manage_blacklist$#', $path) && $requestMethod === 'POST' => Method::MANAGE_BLACKLIST_PERMISSION,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/manage_client$#', $path) && $requestMethod === 'POST' => Method::MANAGE_CLIENT_PERMISSION,
