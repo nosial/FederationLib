@@ -3,6 +3,7 @@
     namespace FederationLib\Objects;
 
     use DateTime;
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Interfaces\SerializableInterface;
 
     class EvidenceRecord implements SerializableInterface
@@ -14,7 +15,10 @@
         private ?string $textContent;
         private ?string $note;
         private ?string $tag;
+        private ?string $report;
+        private ?ClassificationFlag $classificationFlag;
         private int $created;
+        private int $updated;
 
         /**
          * EvidenceRecord constructor.
@@ -30,6 +34,18 @@
             $this->textContent = $data['text_content'] ?? null;
             $this->note = $data['note'] ?? null;
             $this->tag = $data['tag'] ?? null;
+            $this->report = $data['report'] ?? null;
+            if(isset($data['classification_flag']))
+            {
+                if(is_string($data['classification_flag']))
+                {
+                    $this->classificationFlag = ClassificationFlag::tryFrom($data['classification_flag']);
+                }
+                elseif($data['classification_flag'] instanceof ClassificationFlag)
+                {
+                    $this->classificationFlag = $data['classification_flag'];
+                }
+            }
 
             // Parse SQL datetime string to timestamp if necessary
             if (isset($data['created']) && is_string($data['created']))
@@ -46,7 +62,21 @@
                 $data['created'] = $data['created'] ?? time();
             }
 
+            if(isset($data['updated']) && is_string($data['updated']))
+            {
+                $data['updated'] = is_numeric($data['updated']) ? (int)$data['updated'] : strtotime($data['updated']);
+            }
+            elseif(isset($data['updated']) && $data['updated'] instanceof DateTime)
+            {
+                $data['updated'] = $data['updated']->getTimestamp();
+            }
+            else
+            {
+                $data['updated'] = $data['updated'] ?? null;
+            }
+
             $this->created = (int)($data['created'] ?? time());
+            $this->updated = (int)$data['updated'] ?? null;
         }
 
         /**
@@ -120,13 +150,44 @@
         }
 
         /**
+         * Optional. Returns the Unique Universal Identifier of the report record that this evidence record is
+         * associated with
+         *
+         * @return string|null The report UUID, null = No report assigned with this evidence record.
+         */
+        public function getReport(): ?string
+        {
+            return $this->report;
+        }
+
+        /**
+         * Optional. Returns the classification flag of the record
+         *
+         * @return ClassificationFlag|null The classification flag of the record
+         */
+        public function getClassificationFlag(): ?ClassificationFlag
+        {
+            return $this->classificationFlag;
+        }
+
+        /**
          * Get the created timestamp.
          *
-         * @return int
+         * @return int Returns the creation timestamp of the record
          */
         public function getCreated(): int
         {
             return $this->created;
+        }
+
+        /**
+         * Get the updated timestamp
+         *
+         * @return int|null Returns the updated timestamp of the record, null=Never updated
+         */
+        public function getUpdated(): ?int
+        {
+            return $this->updated;
         }
 
         /**
@@ -142,7 +203,10 @@
                 'text_content' => $this->textContent,
                 'note' => $this->note,
                 'tag' => $this->tag,
+                'report' => $this->report,
+                'classification_flag' => $this->classificationFlag?->value ?? null,
                 'created' => $this->created,
+                'updated' => $this->updated
             ];
         }
 
@@ -160,6 +224,18 @@
                 elseif($array['created'] instanceof DateTime)
                 {
                     $array['created'] = $array['created']->getTimestamp();
+                }
+            }
+
+            if(isset($array['updated']))
+            {
+                if(is_string($array['updated']))
+                {
+                    $array['updated'] = is_numeric($array['updated']) ? (int)$array['updated'] : strtotime($array['updated']);
+                }
+                elseif($array['updated'] instanceof DateTime)
+                {
+                    $array['updated'] = $array['updated']->getTimestamp();
                 }
             }
 
