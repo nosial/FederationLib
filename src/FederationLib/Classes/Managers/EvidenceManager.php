@@ -549,6 +549,50 @@
         }
 
         /**
+         * Updates the tag of an existing evidence record
+         *
+         * @param string $evidenceUuid The evidence UUID record to update
+         * @param string $tagName The new tag to set
+         * @throws DatabaseOperationException Thrown if the record could not be updated
+         */
+        public static function updateTag(string $evidenceUuid, string $tagName): void
+        {
+            if(strlen($tagName) < 1)
+            {
+                throw new InvalidArgumentException('Tag name must be provided.');
+            }
+
+            if(!Validate::evidenceTag($tagName))
+            {
+                throw new InvalidArgumentException('Tag name must be alphanumeric and spaces must be underscores');
+            }
+
+            if(strlen($evidenceUuid) < 1)
+            {
+                throw new InvalidArgumentException('UUID must be provided.');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET tag = :tag WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $evidenceUuid);
+                $stmt->bindParam(':tag', $tagName, PDO::PARAM_BOOL);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update tag: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                }
+            }
+        }
+
+        /**
          * Counts the total number of evidence records in the database.
          *
          * @return int The total number of evidence records.
