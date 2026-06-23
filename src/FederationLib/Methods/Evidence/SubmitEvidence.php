@@ -6,7 +6,7 @@
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
-    use FederationLib\Classes\Validate;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -27,10 +27,10 @@
                 throw new RequestException('You do not have permission to create evidence', 403);
             }
 
-            $entityUuid = FederationServer::getParameter('entity_uuid');
-            if(!$entityUuid || !Validate::uuid($entityUuid))
+            $entityIdentifier = FederationServer::getParameter('entity_identifier');
+            if($entityIdentifier === null)
             {
-                throw new RequestException('Entity UUID is required and must be valid', 400);
+                throw new RequestException('Entity identifier is required', 400);
             }
 
             $textContent = FederationServer::getParameter('text_content') ?? null;
@@ -40,10 +40,30 @@
 
             try
             {
-                if(!EntitiesManager::getEntityByUuid($entityUuid))
+                if(Utilities::isUuid($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
+                }
+                elseif(Utilities::isSha256($entityIdentifier))
+                {
+                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
+                }
+                elseif(Utilities::isEntityAddress($entityIdentifier))
+                {
+                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
+                }
+                else
+                {
+                    throw new RequestException('Given identifier is not a valid UUID, SHA-256, or entity address input', 400);
+                }
+
+                if($entityRecord === null)
                 {
                     throw new RequestException('Entity does not exist', 404);
                 }
+
+                $entityUuid = $entityRecord->getUuid();
 
                 $evidenceUuid = EvidenceManager::addEvidence($entityUuid, $authenticatedOperator->getUuid(), $textContent, $note, $tag, $confidential);
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_SUBMITTED, sprintf(
