@@ -2,9 +2,10 @@
 
     namespace FederationLib\Objects;
 
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class UploadResult implements SerializableInterface
+    class UploadResult implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $url;
@@ -63,5 +64,40 @@
             }
 
             return new self($array['uuid'], $array['url']);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the uploaded file'],
+                'url' => ['type' => 'string', 'format' => 'uri', 'description' => 'URL to download the uploaded file'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'url'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/UploadResult';
         }
     }
