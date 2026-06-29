@@ -5,7 +5,7 @@ create table blacklist
     operator  varchar(36)                                                                                       not null comment 'The operator that created this blacklist record',
     entity    varchar(36)                                                                                       not null comment 'The target entity that is blacklisted',
     evidence  varchar(36)                                                                                       null comment 'Optional. The evidence for the blacklist',
-    type      enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER') not null comment 'The blacklist incident type',
+    type      enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER') not null comment 'The incident type',
     lifted    tinyint(1)  default 0                                                                             not null comment 'Default: 0, 1=The blacklist was lifted and is no longer in effect, 0=The blacklist is not lifted, it is in effect until it expires',
     lifted_by varchar(36)                                                                                       null comment 'Optional. If the blacklist was manually lifted by an operator, this column represents the operator UUID that made the change.',
     expires   timestamp                                                                                         null comment 'The timestamp for when the blacklist expires, if null the blacklist never expires',
@@ -26,7 +26,7 @@ create table blacklist
     comment 'Table for housing one or more blacklist events';
 
 create index blacklist_created_index
-    on blacklist (created desc, uuid desc);
+    on blacklist (created, uuid);
 
 create index blacklist_entity_created_index
     on blacklist (entity asc, created desc);

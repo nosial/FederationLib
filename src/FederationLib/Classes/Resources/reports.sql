@@ -12,7 +12,7 @@ create table reports
     updated             timestamp                                                                                                                   null comment 'The Timestamp for when the record was last updated',
     constraint reports_entities_uuid_fk
         foreign key (reporting_entity) references entities (uuid)
-            on update cascade on delete set null,
+            on update cascade on delete cascade,
     constraint reports_operators_uuid_fk
         foreign key (submitting_operator) references operators (uuid)
             on update cascade on delete cascade,

@@ -6,6 +6,7 @@ create table evidence
     operator            varchar(36)                                not null comment 'The operator that submitted the evidence',
     confidential        tinyint(1)  default 0                      not null comment 'Default: 0, 1=The evidence and all of it''s attachments is confidential and only operators can view this, 0=The evidence is available for public view',
     text_content        mediumtext                                 null comment 'Optional. the text content with the evidence',
+    metadata            TEXT                                       null comment 'Optional. Metadata attached with the evidence record including abritrary JSON-encoded data',
     tag                 varchar(32)                                null comment 'Optional. Abstract tag name related to the evidence',
     report              varchar(36)                                null comment 'Optional. The UUID of the report that this evidence is associated with',
     classification_flag enum ('MALICIOUS', 'SUSPICIOUS', 'NORMAL') null comment 'Optional. The classification flag assigned to the evidence''s text content. This is used for content filtering',
@@ -25,7 +26,7 @@ create table evidence
     comment 'Table for housing evidence';
 
 create index evidence_created_index
-    on evidence (created desc, uuid desc);
+    on evidence (created, uuid);
 
 create index evidence_entity_created_index
     on evidence (entity asc, created desc);
