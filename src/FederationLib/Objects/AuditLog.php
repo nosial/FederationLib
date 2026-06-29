@@ -4,9 +4,10 @@
 
     use DateTime;
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class AuditLog implements SerializableInterface
+    class AuditLog implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private ?string $operatorUuid;
@@ -194,5 +195,47 @@
             }
 
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the audit log entry'],
+                'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who performed the action', 'nullable' => true],
+                'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related entity', 'nullable' => true],
+                'blacklist' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related blacklist record', 'nullable' => true],
+                'evidence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related evidence', 'nullable' => true],
+                'file_attachment' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related file attachment', 'nullable' => true],
+                'type' => ['type' => 'string', 'description' => 'Type of audit log entry'],
+                'message' => ['type' => 'string', 'description' => 'Human-readable description of the action'],
+                'timestamp' => ['type' => 'integer', 'description' => 'Unix timestamp when the entry was created'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'type', 'message', 'timestamp'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/AuditLog';
         }
     }
