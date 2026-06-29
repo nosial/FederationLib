@@ -3,10 +3,10 @@
     namespace FederationLib\Objects;
 
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Interfaces\ResponseInterface;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use InvalidArgumentException;
 
-    class ErrorResponse implements ResponseInterface
+    class ErrorResponse implements ObjectSpecificationInterface
     {
         private HttpResponseCode $code;
         private string $message;
@@ -59,14 +59,6 @@
         /**
          * @inheritDoc
          */
-        public function isSuccess(): bool
-        {
-            return false;
-        }
-
-        /**
-         * @inheritDoc
-         */
         public function toArray(): array
         {
             return [
@@ -97,5 +89,41 @@
             }
 
             return new self(HttpResponseCode::from($array['code']), $array['message']);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'success' => ['type' => 'boolean', 'description' => 'Indicates the request was unsuccessful', 'enum' => [false]],
+                'code' => ['type' => 'integer', 'description' => 'HTTP status code'],
+                'message' => ['type' => 'string', 'description' => 'Error message describing the issue'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['success', 'code', 'message'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/ErrorResponse';
         }
     }
