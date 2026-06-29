@@ -3,17 +3,18 @@
     namespace FederationLib\Objects;
     
     use DateTime;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
-    
-    class OperatorRecord implements SerializableInterface
+
+    class OperatorRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private ?string $accessToken;
         private string $name;
         private bool $disabled;
-        private bool $manageOperators;
-        private bool $manageBlacklist;
-        private bool $isClient;
+        private bool $clientPermissions;
+        private bool $managementPermissions;
+        private bool $operatorPermissions;
         private int $created;
         private int $updated;
 
@@ -27,10 +28,10 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->accessToken = $data['access_token'] ?? '';
             $this->name = $data['name'] ?? '';
-            $this->disabled = (bool)$data['disabled'] ?? false;
-            $this->manageOperators = (bool)$data['manage_operators'] ?? false;
-            $this->manageBlacklist = (bool)$data['manage_blacklist'] ?? false;
-            $this->isClient = (bool)$data['is_client'] ?? false;
+            $this->disabled = (bool)($data['disabled'] ?? false);
+            $this->clientPermissions = (bool)($data['client_permissions'] ?? false);
+            $this->managementPermissions = (bool)($data['management_permissions'] ?? false);
+            $this->operatorPermissions = (bool)($data['operator_permissions'] ?? false);
 
             // Parse SQL datetime string to timestamp if necessary for created
             if (isset($data['created']) && is_string($data['created']))
@@ -117,33 +118,33 @@
         }
 
         /**
-         * Check if the operator can manage other operators.
+         * Check if the operator has client permissions (inherits management_permissions).
          *
          * @return bool
          */
-        public function canManageOperators(): bool
+        public function hasClientPermissions(): bool
         {
-            return $this->manageOperators;
+            return $this->clientPermissions || $this->managementPermissions;
         }
 
         /**
-         * Check if the operator can manage the blacklist.
+         * Check if the operator has management permissions.
          *
          * @return bool
          */
-        public function canManageBlacklist(): bool
+        public function hasManagementPermissions(): bool
         {
-            return $this->manageBlacklist;
+            return $this->managementPermissions;
         }
 
         /**
-         * Check if the operator is a client.
+         * Check if the operator has operator permissions.
          *
          * @return bool
          */
-        public function isClient(): bool
+        public function hasOperatorPermissions(): bool
         {
-            return $this->isClient;
+            return $this->operatorPermissions;
         }
 
         /**
@@ -176,9 +177,9 @@
                 'access_token' => $this->accessToken,
                 'name' => $this->name,
                 'disabled' => $this->disabled,
-                'manage_operators' => $this->manageOperators,
-                'manage_blacklist' => $this->manageBlacklist,
-                'is_client' => $this->isClient,
+                'client_permissions' => $this->clientPermissions,
+                'management_permissions' => $this->managementPermissions,
+                'operator_permissions' => $this->operatorPermissions,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];
@@ -215,5 +216,47 @@
             }
 
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the operator'],
+                'access_token' => ['type' => 'string', 'description' => 'Access token for authentication', 'nullable' => true],
+                'name' => ['type' => 'string', 'description' => 'Display name of the operator'],
+                'disabled' => ['type' => 'boolean', 'description' => 'Whether the operator account is disabled'],
+                'client_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has client-level permissions'],
+                'management_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has management-level permissions'],
+                'operator_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has operator-level permissions'],
+                'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was created'],
+                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was last updated'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'name', 'disabled', 'client_permissions', 'management_permissions', 'operator_permissions', 'created', 'updated'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/OperatorRecord';
         }
     }
