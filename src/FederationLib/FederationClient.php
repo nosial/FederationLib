@@ -5,22 +5,20 @@
     use CURLFile;
     use CurlHandle;
     use FederationLib\Classes\Logger;
-    use FederationLib\Classes\Utilities;
-    use FederationLib\Enums\IncidentType;
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
-    use FederationLib\Interfaces\ResponseInterface;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
     use FederationLib\Objects\EntityRecord;
-    use FederationLib\Objects\EntityQueryResult;
-    use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
-    use FederationLib\Objects\NamedEntity;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\ReportRecord;
+    use FederationLib\Objects\ReportSubmission;
+    use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ServerInformation;
-    use FederationLib\Objects\SuccessResponse;
     use FederationLib\Objects\UploadResult;
     use InvalidArgumentException;
     use RuntimeException;
@@ -134,6 +132,14 @@
                     }
                     break;
 
+                case 'PATCH':
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+                    if ($data)
+                    {
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                    }
+                    break;
+
                 case 'PUT':
                     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
                     if ($data)
@@ -181,50 +187,42 @@
             if (!in_array($responseCode, $expectedStatusCodes))
             {
                 $errorMsg = $errorMessage . ' received response code: ' . $responseCode;
-                if ($decodedResponse instanceof ErrorResponse) {
-                    $errorMsg = $errorMessage . ', ' . $decodedResponse->getMessage() . ' received response code: ' . $responseCode;
+                if (is_array($decodedResponse) && isset($decodedResponse['message']))
+                {
+                    $errorMsg = $errorMessage . ', ' . $decodedResponse['message'] . ' received response code: ' . $responseCode;
                 }
                 throw new RequestException($errorMsg, $responseCode);
             }
 
-            if ($decodedResponse instanceof ErrorResponse)
-            {
-                throw new RequestException(
-                    $decodedResponse->getMessage(),
-                    $decodedResponse->getCode()
-                );
-            }
-
-            /** @var SuccessResponse $decodedResponse */
-            return $decodedResponse->getData();
+            return $decodedResponse;
         }
-
-        // CORE METHODS
 
         /**
          * Scans the given text content and attempts to identify entities within the text content such as URLs
          * email addresses, ip addresses, etc.
          *
          * @param string $content The text content to scan
-         * @return NamedEntity[] The named entity results of the scna
+         * @param string|null $author Optional author identifier (UUID, SHA-256, or entity address)
+         * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(string $content): array
+        public function scanContent(string $content, ?string $author = null): ScannedContent
         {
             if(empty($content))
             {
-                return [];
+                throw new InvalidArgumentException('Content cannot be empty');
             }
 
-            return array_map(
-                fn($item) => NamedEntity::fromArray($item),
-                $this->makeRequest('POST', 'scan', ['content' => $content], [HttpResponseCode::OK],
-                    'Failed to scan content'
-                )
-            );
-        }
+            $params = ['content' => $content];
+            if($author !== null)
+            {
+                $params['author'] = $author;
+            }
 
-        // AUDIT METHODS
+            return ScannedContent::fromArray($this->makeRequest('POST', 'scan', $params, [HttpResponseCode::OK],
+                'Failed to scan content'
+            ));
+        }
 
         /**
          * Lists audit logs with pagination support.
@@ -274,8 +272,6 @@
                 sprintf('Failed to get audit log record for UUID %s', $auditLogUuid)
             ));
         }
-
-        // OPERATOR METHODS
 
         /**
          * Retrieves server information.
@@ -344,7 +340,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/disable', null, [HttpResponseCode::OK],
                 sprintf('Failed to disable operator with UUID %s', $operatorUuid)
             );
         }
@@ -363,7 +359,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/enable', null, [HttpResponseCode::OK],
                 sprintf('Failed to enable operator with UUID %s', $operatorUuid)
             );
         }
@@ -539,62 +535,62 @@
         }
 
         /**
-         * Sets the permission for an operator to manage other operators.
+         * Sets the operator permissions for an operator.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
-         * @param bool $manageOperators True to enable the permission, false to disable it
+         * @param bool $hasOperatorPermissions True to enable the permission, false to disable it
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function setManageOperatorsPermission(string $operatorUuid, bool $manageOperators): void
+        public function setOperatorPermissions(string $operatorUuid, bool $hasOperatorPermissions): void
         {
             if(empty($operatorUuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_operators', ['enabled' => $manageOperators], [HttpResponseCode::OK],
-                sprintf('Failed to %s the operator\'s permission to manage other operators', ($manageOperators ? 'enable' : 'disable'))
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/operator_permissions', ['enabled' => $hasOperatorPermissions], [HttpResponseCode::OK],
+                sprintf('Failed to %s the operator\'s operator permissions', ($hasOperatorPermissions ? 'enable' : 'disable'))
             );
         }
 
         /**
-         * Sets the permission for an operator to manage clients.
+         * Sets the client permissions for an operator.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
-         * @param bool $isClient True to enable the permission, false to disable it
+         * @param bool $hasClientPermissions True to enable the permission, false to disable it
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function setClientPermission(string $operatorUuid, bool $isClient): void
+        public function setClientPermissions(string $operatorUuid, bool $hasClientPermissions): void
         {
             if(empty($operatorUuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_client', ['enabled' => $isClient], [HttpResponseCode::OK],
-                sprintf('Failed to %s the operator\'s client permissions', ($isClient ? 'enable' : 'disable'))
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/client_permissions', ['enabled' => $hasClientPermissions], [HttpResponseCode::OK],
+                sprintf('Failed to %s the operator\'s client permissions', ($hasClientPermissions ? 'enable' : 'disable'))
             );
         }
 
         /**
-         * Sets the permission for an operator to manage the blacklist.
+         * Sets the management permissions for an operator.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
-         * @param bool $manageBlacklist True to enable the permission, false to disable it
+         * @param bool $hasManagementPermissions True to enable the permission, false to disable it
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function setManageBlacklistPermission(string $operatorUuid, bool $manageBlacklist): void
+        public function setManagementPermissions(string $operatorUuid, bool $hasManagementPermissions): void
         {
             if(empty($operatorUuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'operators/' . $operatorUuid . '/manage_blacklist', ['enabled' => $manageBlacklist], [HttpResponseCode::OK],
-                sprintf('Failed to %s operator\'s blacklist management permission', ($manageBlacklist ? 'enable' : 'disable'))
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/management_permissions', ['enabled' => $hasManagementPermissions], [HttpResponseCode::OK],
+                sprintf('Failed to %s operator\'s management permission', ($hasManagementPermissions ? 'enable' : 'disable'))
             );
         }
 
@@ -644,7 +640,7 @@
         /**
          * Deletes an entity with the given identifier.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash to delete
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) to delete
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
@@ -663,7 +659,7 @@
         /**
          * Retrieves an entity record with the given identifier.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash to retrieve
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) to retrieve
          * @return EntityRecord The retrieved entity object
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
@@ -712,7 +708,7 @@
         /**
          * Lists evidence records for a specific entity with pagination support.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
          * @return EvidenceRecord[] An array of EvidenceRecord objects
@@ -747,7 +743,7 @@
         /**
          * Lists evidence records for a specific entity with pagination support.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
          * @param bool $includeLifted Optional. If True, lifted records will be included in the results
@@ -783,7 +779,7 @@
         /**
          * Lists evidence records for a specific entity with pagination support.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash whose evidence records are to be retrieved
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
          * @param bool $includeConfidential Optional. If True, confidential records will be included in the results
@@ -850,26 +846,68 @@
         }
 
         /**
-         * Queries information about an entity from the federation network.
+         * Clears the reputation of the given entity.
          *
-         * @param string $entityIdentifier The entity UUID or entity hash to query
-         * @param bool $includeConfidential if True, confidential results are shown if you have permission to access the records
-         * @param bool $includeLifted if True, lifted blacklist results are show  if you have permission to access the records
-         * @return EntityQueryResult The result of the entity query
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose reputation to clear
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function queryEntity(string $entityIdentifier, bool $includeConfidential=false, bool $includeLifted=false): EntityQueryResult
+        public function clearEntityReputation(string $entityIdentifier): void
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            return EntityQueryResult::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query',
-                ['include_confidential' => $includeConfidential, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
-                sprintf('Failed to query entity %s', $entityIdentifier)
-            ));
+            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/clearReputation', null, [HttpResponseCode::OK],
+                sprintf('Failed to clear reputation for entity %s', $entityIdentifier)
+            );
+        }
+
+        /**
+         * Sets a relationship between an entity and a target entity.
+         *
+         * @param string $entityIdentifier The entity UUID, hash, or address to set the relationship for
+         * @param string $targetEntityUuid The UUID of the target entity (the parent entity in the relationship)
+         * @param EntityRelationshipType $relationshipType The type of relationship to set
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
+        public function setEntityRelationship(string $entityIdentifier, string $targetEntityUuid, EntityRelationshipType $relationshipType): void
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if(empty($targetEntityUuid))
+            {
+                throw new InvalidArgumentException('Target entity UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/relationship',
+                ['target_entity_uuid' => $targetEntityUuid, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
+                sprintf('Failed to set relationship for entity %s', $entityIdentifier)
+            );
+        }
+
+        /**
+         * Clears the relationship for an entity.
+         *
+         * @param string $entityIdentifier The entity UUID, hash, or address to clear the relationship for
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
+        public function clearEntityRelationship(string $entityIdentifier): void
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            $this->makeRequest('DELETE', 'entities/' . $entityIdentifier . '/relationship', null, [HttpResponseCode::OK],
+                sprintf('Failed to clear relationship for entity %s', $entityIdentifier)
+            );
         }
 
         // EVIDENCE METHODS
@@ -969,22 +1007,22 @@
         /**
          * Submits new evidence for a specific entity.
          *
-         * @param string $entityUuid The UUID of the entity the evidence is associated with
+         * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) to submit evidence for
          * @param string|null $textContent Optional. The textual content of the evidence
          * @param string|null $note Optional. An optional note about the evidence
          * @param bool $confidential Optional. If true, the evidence is marked as confidential (default is false)
          * @return string The UUID of the created evidence record
          * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the entity UUID is empty
+         * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function submitEvidence(string $entityUuid, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false): string
+        public function submitEvidence(string $entityIdentifier, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?array $metadata=null): string
         {
-            if(empty($entityUuid))
+            if(empty($entityIdentifier))
             {
-                throw new InvalidArgumentException('Entity UUID cannot be empty');
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $parameters = ['entity_uuid' => $entityUuid, 'confidential' => $confidential];
+            $parameters = ['entity_identifier' => $entityIdentifier, 'confidential' => $confidential];
 
             if($textContent !== null)
             {
@@ -1001,8 +1039,13 @@
                 $parameters['tag'] = $tag;
             }
 
+            if($metadata !== null)
+            {
+                $parameters['metadata'] = $metadata;
+            }
+
             return $this->makeRequest('POST', 'evidence', $parameters, [HttpResponseCode::CREATED],
-                sprintf('Failed to submit evidence for entity with UUID %s', $entityUuid)
+                sprintf('Failed to submit evidence for entity %s', $entityIdentifier)
             );
         }
 
@@ -1021,8 +1064,333 @@
                 throw new InvalidArgumentException('Evidence UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'evidence/' . $evidenceUuid . '/update_confidentiality', ['confidential' => $confidential], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update_confidentiality', ['confidential' => $confidential], [HttpResponseCode::OK],
                 sprintf('Failed to %s confidentiality for evidence with UUID %s', ($confidential ? 'set' : 'unset'), $evidenceUuid)
+            );
+        }
+
+        /**
+         * Updates the tag of an existing evidence record.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to update
+         * @param string $tag The new tag to set
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function updateEvidenceTag(string $evidenceUuid, string $tag): void
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            if(empty($tag))
+            {
+                throw new InvalidArgumentException('Tag cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update_tag', ['tag' => $tag], [HttpResponseCode::OK],
+                sprintf('Failed to update tag for evidence with UUID %s', $evidenceUuid)
+            );
+        }
+
+        /**
+         * Links an existing evidence record to a report.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to link
+         * @param string $reportUuid The UUID of the report to link the evidence to
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the evidence or report UUID is empty
+         */
+        public function addEvidenceToReport(string $evidenceUuid, string $reportUuid): void
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/link_report', ['report_uuid' => $reportUuid], [HttpResponseCode::OK],
+                sprintf('Failed to link evidence %s to report %s', $evidenceUuid, $reportUuid)
+            );
+        }
+
+        /**
+         * Deletes a report record by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report record to delete
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the report UUID is empty
+         */
+        public function deleteReport(string $reportUuid): void
+        {
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            $this->makeRequest('DELETE', 'reports/' . $reportUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to delete report %s', $reportUuid)
+            );
+        }
+
+        /**
+         * Submits a new report.
+         *
+         * @param string $reportingEntity The UUID, SHA-256 hash, or entity address of the entity being reported
+         * @param string $content The content/message of the report
+         * @param IncidentType $incidentType The type of incident being reported
+         * @param string|null $reportMessage Optional message for the report
+         * @param string|null $evidenceTag Optional tag for the evidence
+         * @return ReportSubmission The created report submission
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If required parameters are invalid
+         */
+        public function submitReport(string $reportingEntity, string $content, IncidentType $incidentType, ?string $reportMessage = null, ?string $evidenceTag = null): ReportSubmission
+        {
+            if(empty($reportingEntity))
+            {
+                throw new InvalidArgumentException('Reporting entity identifier cannot be empty');
+            }
+
+            if(empty($content))
+            {
+                throw new InvalidArgumentException('Content cannot be empty');
+            }
+
+            $params = [
+                'reporting_entity' => $reportingEntity,
+                'content' => $content,
+                'incident_type' => $incidentType->value,
+            ];
+
+            if($reportMessage !== null)
+            {
+                $params['report_message'] = $reportMessage;
+            }
+
+            if($evidenceTag !== null)
+            {
+                $params['evidence_tag'] = $evidenceTag;
+            }
+
+            return ReportSubmission::fromArray($this->makeRequest('POST', 'reports', $params, [HttpResponseCode::OK],
+                'Failed to submit report'
+            ));
+        }
+
+        /**
+         * Lists reports with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of reports per page (default is 100)
+         * @return ReportRecord[] An array of ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the page or limit parameters are invalid
+         */
+        public function listReports(int $page = 1, int $limit = 100): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list reports, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Retrieves a report by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report to retrieve
+         * @return ReportRecord The retrieved report record
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the report UUID is empty
+         */
+        public function getReport(string $reportUuid): ReportRecord
+        {
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            return ReportRecord::fromArray($this->makeRequest('GET', 'reports/' . $reportUuid, null, [HttpResponseCode::OK],
+                sprintf('Failed to get report %s', $reportUuid)
+            ));
+        }
+
+        /**
+         * Closes a report by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report to close
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the report UUID is empty
+         */
+        public function closeReport(string $reportUuid): void
+        {
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/close', null, [HttpResponseCode::OK],
+                sprintf('Failed to close report %s', $reportUuid)
+            );
+        }
+
+        /**
+         * Assigns an operator to a report.
+         *
+         * @param string $reportUuid The UUID of the report to assign
+         * @param string $operatorUuid The UUID of the operator to assign
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the report or operator UUID is empty
+         */
+        public function assignOperatorToReport(string $reportUuid, string $operatorUuid): void
+        {
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/assign', ['operator_uuid' => $operatorUuid], [HttpResponseCode::OK],
+                sprintf('Failed to assign operator %s to report %s', $operatorUuid, $reportUuid)
+            );
+        }
+
+        /**
+         * Lists reports for a specific operator with pagination support.
+         *
+         * @param string $operatorUuid The UUID of the operator whose reports are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of reports per page (default is 100)
+         * @return ReportRecord[] An array of ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
+         */
+        public function listOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100): array
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list reports for operator %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Lists reports for a specific entity with pagination support.
+         *
+         * @param string $entityIdentifier The entity UUID, hash, or address whose reports are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of reports per page (default is 100)
+         * @return ReportRecord[] An array of ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty or page/limit are invalid
+         */
+        public function listEntityReports(string $entityIdentifier, int $page = 1, int $limit = 100): array
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list reports for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Lists assigned reports for a specific operator with pagination support.
+         *
+         * @param string $operatorUuid The UUID of the operator whose assigned reports are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of reports per page (default is 100)
+         * @return ReportRecord[] An array of ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
+         */
+        public function listAssignedOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100): array
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports/assigned', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to list assigned reports for operator %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Retrieves the OpenAPI specification from the server.
+         *
+         * @return array The OpenAPI specification as an associative array
+         * @throws RequestException If the request fails or the response is invalid
+         */
+        public function getSpecification(): array
+        {
+            return $this->makeRequest('GET', 'specification', null, [HttpResponseCode::OK],
+                'Failed to get specification'
             );
         }
 
@@ -1031,7 +1399,7 @@
         /**
          * Blacklists an entity with the given identifier using specified evidence and type.
          *
-         * @param string $entityIdentifier The UUID or hash of the entity to blacklist
+         * @param string $entityIdentifier The UUID, hash, or entity address (email) of the entity to blacklist
          * @param string $evidenceUuid The UUID of the evidence record supporting the blacklist action
          * @param IncidentType $type The type of blacklist action (e.g., SPAM, MALWARE)
          * @param int|null $expires Optional. Expiration time in seconds for the blacklist entry (null for permanent)
@@ -1117,7 +1485,7 @@
                 throw new InvalidArgumentException('Blacklist record UUID cannot be empty');
             }
 
-            $this->makeRequest('POST', 'blacklist/' . $blacklistRecordUuid . '/lift', null, [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'blacklist/' . $blacklistRecordUuid . '/lift', null, [HttpResponseCode::OK],
                 sprintf('Failed to lift blacklist record with UUID %s', $blacklistRecordUuid)
             );
         }
@@ -1222,28 +1590,49 @@
             );
         }
 
-        // TODO: Instead of choosing a filePath, make it choose a Directory, the method should return the full path of
-        //       the downloaded file with it's filename, for example if the $directoryPath is /downloads then the method
-        //       would return /downloads/testAttachment.txt after downloading the file, if it cannot obtain the filename
-        //       from the server then it should use the UUID of the attachment instead as the filename with no extension.
-        public function downloadAttachment(string $attachmentUuid, string $filePath): void
+        /**
+         * Downloads an attachment file to the specified directory.
+         *
+         * The filename is determined by the server's Content-Disposition header.
+         * If no filename is provided by the server, the attachment UUID is used as the filename.
+         *
+         * @param string $attachmentUuid The UUID of the attachment to download
+         * @param string $directoryPath The directory to save the downloaded file in
+         * @return string The full path to the downloaded file
+         * @throws InvalidArgumentException If the attachment UUID is empty, directory path is empty,
+         *                                  or the directory does not exist or is not writable
+         * @throws RequestException If the download fails
+         */
+        public function downloadAttachment(string $attachmentUuid, string $directoryPath): string
         {
             if(empty($attachmentUuid))
             {
                 throw new InvalidArgumentException('Attachment UUID cannot be empty');
             }
 
-            if(empty($filePath))
+            if(empty($directoryPath))
             {
-                throw new InvalidArgumentException('File path cannot be empty');
+                throw new InvalidArgumentException('Directory path cannot be empty');
+            }
+
+            $directoryPath = rtrim($directoryPath, DIRECTORY_SEPARATOR);
+
+            if(!is_dir($directoryPath))
+            {
+                throw new InvalidArgumentException('Directory does not exist: ' . $directoryPath);
+            }
+
+            if(!is_writable($directoryPath))
+            {
+                throw new InvalidArgumentException('Directory is not writable: ' . $directoryPath);
             }
 
             $ch = $this->buildCurl('attachments/' . $attachmentUuid);
             curl_setopt($ch, CURLOPT_HTTPGET, true);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
             curl_setopt($ch, CURLOPT_FAILONERROR, true);
-            curl_setopt($ch, CURLOPT_HEADER, true); // Include headers in output to extract filename
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); // Return the transfer as a string
+            curl_setopt($ch, CURLOPT_HEADER, true);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1260,20 +1649,13 @@
                 throw new RequestException('Failed to download attachment, HTTP code: ' . $httpCode, HttpResponseCode::from($httpCode));
             }
 
-            // Extract headers and body
             $headers = substr($response, 0, $headerSize);
             $body = substr($response, $headerSize);
 
-            // Extract filename from Content-Disposition header
             $suggestedFilename = $this->extractFilenameFromHeaders($headers);
+            $filename = $suggestedFilename ?? $attachmentUuid;
+            $finalFilePath = $directoryPath . DIRECTORY_SEPARATOR . $filename;
 
-            // Extract MIME type from Content-Type header
-            $mimeType = $this->extractMimeTypeFromHeaders($headers);
-
-            // Determine the final file path
-            $finalFilePath = $this->determineFinalFilePath($filePath, $suggestedFilename, $mimeType, $attachmentUuid);
-
-            // Write the file
             $fileHandle = fopen($finalFilePath, 'wb');
             if($fileHandle === false)
             {
@@ -1283,11 +1665,12 @@
             if(fwrite($fileHandle, $body) === false)
             {
                 fclose($fileHandle);
-                unlink($finalFilePath); // Remove incomplete file
+                unlink($finalFilePath);
                 throw new RequestException('Failed to write attachment data to file: ' . $finalFilePath);
             }
 
             fclose($fileHandle);
+            return $finalFilePath;
         }
 
         /**
@@ -1386,20 +1769,14 @@
             if (!in_array($responseCode, $expectedStatusCodes))
             {
                 $errorMsg = 'File upload failed, received response code: ' . $responseCode;
-                if ($decodedResponse instanceof ErrorResponse)
+                if (is_array($decodedResponse) && isset($decodedResponse['message']))
                 {
-                    $errorMsg = 'File upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                    $errorMsg = 'File upload failed: ' . $decodedResponse['message'] . ' (response code: ' . $responseCode . ')';
                 }
                 throw new RequestException($errorMsg, $responseCode);
             }
 
-            if ($decodedResponse instanceof ErrorResponse)
-            {
-                throw new RequestException('File upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
-            }
-
-            /** @var SuccessResponse $decodedResponse */
-            return UploadResult::fromArray($decodedResponse->getData());
+            return UploadResult::fromArray($decodedResponse);
         }
 
         /**
@@ -1506,20 +1883,14 @@
                 if (!in_array($responseCode, $expectedStatusCodes))
                 {
                     $errorMsg = 'Note upload failed, received response code: ' . $responseCode;
-                    if ($decodedResponse instanceof ErrorResponse)
+                    if (is_array($decodedResponse) && isset($decodedResponse['message']))
                     {
-                        $errorMsg = 'Note upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                        $errorMsg = 'Note upload failed: ' . $decodedResponse['message'] . ' (response code: ' . $responseCode . ')';
                     }
                     throw new RequestException($errorMsg, $responseCode);
                 }
 
-                if ($decodedResponse instanceof ErrorResponse)
-                {
-                    throw new RequestException('Note upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
-                }
-
-                /** @var SuccessResponse $decodedResponse */
-                return UploadResult::fromArray($decodedResponse->getData());
+                return UploadResult::fromArray($decodedResponse);
             }
             finally
             {
@@ -1724,21 +2095,15 @@
                 if (!in_array($responseCode, $expectedStatusCodes))
                 {
                     $errorMsg = 'File upload failed, received response code: ' . $responseCode;
-                    if ($decodedResponse instanceof ErrorResponse)
+                    if (is_array($decodedResponse) && isset($decodedResponse['message']))
                     {
-                        $errorMsg = 'File upload failed: ' . $decodedResponse->getMessage() . ' (response code: ' . $responseCode . ')';
+                        $errorMsg = 'File upload failed: ' . $decodedResponse['message'] . ' (response code: ' . $responseCode . ')';
                     }
 
                     throw new RequestException($errorMsg, $responseCode);
                 }
 
-                if ($decodedResponse instanceof ErrorResponse)
-                {
-                    throw new RequestException('File upload failed: ' . $decodedResponse->getMessage(), $decodedResponse->getCode());
-                }
-
-                /** @var SuccessResponse $decodedResponse */
-                return UploadResult::fromArray($decodedResponse->getData());
+                return UploadResult::fromArray($decodedResponse);
 
             }
             finally
@@ -1776,69 +2141,13 @@
         }
 
         /**
-         * Extract MIME type from Content-Type header
-         *
-         * @param string $headers The HTTP headers
-         * @return string|null The extracted MIME type or null if not found
-         */
-        private function extractMimeTypeFromHeaders(string $headers): ?string
-        {
-            if(preg_match('/Content-Type:\s*([^\s;]+)/i', $headers, $matches))
-            {
-                return trim($matches[1]);
-            }
-
-            return null;
-        }
-
-        /**
-         * Determine the final file path based on user input and server suggestions
-         *
-         * @param string $userFilePath The path provided by the user
-         * @param string|null $suggestedFilename The filename suggested by the server
-         * @param string|null $mimeType The MIME type from server
-         * @param string $attachmentUuid The attachment UUID as fallback
-         * @return string The final file path to use
-         */
-        private function determineFinalFilePath(string $userFilePath, ?string $suggestedFilename, ?string $mimeType, string $attachmentUuid): string
-        {
-            // If user provided a full file path (has extension or doesn't end with separator), use it as-is
-            if(pathinfo($userFilePath, PATHINFO_EXTENSION) !== '' || !str_ends_with($userFilePath, DIRECTORY_SEPARATOR))
-            {
-                return $userFilePath;
-            }
-
-            // User provided a directory path, so we need to determine the filename
-            if($suggestedFilename !== null)
-            {
-                // Use the server's suggested filename
-                $filename = $suggestedFilename;
-            }
-            elseif($mimeType !== null)
-            {
-                // Generate filename based on MIME type
-                $extension = Utilities::extensionFromMime($mimeType);
-                $filename = $attachmentUuid . $extension;
-            }
-            else
-            {
-                // Last resort: use attachment UUID as filename
-                $filename = $attachmentUuid;
-            }
-
-            return rtrim($userFilePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
-        }
-
-
-        /**
-         * Decodes the given raw JSON input and decodes it into a SuccessResponse or a ErrorResponse depending on the
-         * `success` variable of the response, in both objects they can be referenced as ResponseInterface.
+         * Decodes the given raw JSON response from the server.
          *
          * @param string $response The raw JSON response from the server
-         * @return ResponseInterface The decoded response object, either SuccessResponse or ErrorResponse
-         * @throws RequestException If the response cannot be decoded or if the response indicates an error
+         * @return mixed The decoded response data
+         * @throws RequestException If the response cannot be decoded
          */
-        private function decodeResponse(string $response): ResponseInterface
+        private function decodeResponse(string $response): mixed
         {
             $decoded = json_decode($response, true);
 
@@ -1847,19 +2156,7 @@
                 throw new RequestException('Failed to decode response: ' . json_last_error_msg() . "\n\n" . $response);
             }
 
-            if(!isset($decoded['success']))
-            {
-                throw new RequestException('Request failed: got unknown response from server; ' . $response, HttpResponseCode::from($decoded['code'] ?? HttpResponseCode::INTERNAL_SERVER_ERROR));
-            }
-
-            if($decoded['success'] === true)
-            {
-                return SuccessResponse::fromArray($decoded);
-            }
-            else
-            {
-                return ErrorResponse::fromArray($decoded);
-            }
+            return $decoded;
         }
 
         /**
