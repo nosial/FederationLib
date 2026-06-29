@@ -4,9 +4,10 @@
 
     use DateTime;
     use FederationLib\Classes\Configuration;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class FileAttachmentRecord implements SerializableInterface
+    class FileAttachmentRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $evidenceUuid;
@@ -19,12 +20,6 @@
          * FileAttachmentRecord constructor.
          *
          * @param array $data Associative array of file attachment data.
-         *                    - 'uuid': string, Unique identifier for the file attachment.
-         *                    - 'evidence': string, UUID of the associated evidence record.
-         *                    - 'file_name': string, Name of the file.
-         *                    - 'file_size': int, Size of the file in bytes.
-         *                    - 'file_mime': string, The MIME of the file
-         *                    - 'created': int, Timestamp of when the record was created.
          */
         public function __construct(array $data)
         {
@@ -155,5 +150,47 @@
             }
 
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the file attachment'],
+                'evidence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the evidence this file is attached to', 'nullable' => true],
+                'file_name' => ['type' => 'string', 'description' => 'Original filename of the attachment'],
+                'file_size' => ['type' => 'integer', 'description' => 'Size of the file in bytes'],
+                'file_mime' => ['type' => 'string', 'description' => 'MIME type of the file'],
+                'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the attachment was uploaded'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'file_name', 'file_size', 'file_mime', 'created'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/FileAttachmentRecord';
         }
     }
