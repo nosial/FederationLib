@@ -3,9 +3,10 @@
     namespace FederationLib\Objects;
 
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class ServerInformation implements SerializableInterface
+    class ServerInformation implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $serverName;
         private string $apiVersion;
@@ -211,5 +212,55 @@
         public static function fromArray(array $array): ServerInformation
         {
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'name' => ['type' => 'string', 'description' => 'Name of the federation server'],
+                'api_version' => ['type' => 'string', 'description' => 'Version of the API'],
+                'public_audit_logs' => ['type' => 'boolean', 'description' => 'Whether audit logs are publicly accessible'],
+                'public_evidence' => ['type' => 'boolean', 'description' => 'Whether evidence is publicly accessible'],
+                'public_blacklist' => ['type' => 'boolean', 'description' => 'Whether the blacklist is publicly accessible'],
+                'public_entities' => ['type' => 'boolean', 'description' => 'Whether entities are publicly accessible'],
+                'public_audit_logs_visibility' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'Types of audit log entries that are publicly visible',
+                ],
+                'audit_log_records' => ['type' => 'integer', 'description' => 'Total number of audit log records'],
+                'blacklist_records' => ['type' => 'integer', 'description' => 'Total number of blacklist records'],
+                'known_entities' => ['type' => 'integer', 'description' => 'Total number of known entities'],
+                'evidence_records' => ['type' => 'integer', 'description' => 'Total number of evidence records'],
+                'file_attachment_records' => ['type' => 'integer', 'description' => 'Total number of file attachments'],
+                'operators' => ['type' => 'integer', 'description' => 'Total number of operators'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['name', 'api_version', 'public_audit_logs', 'public_evidence', 'public_blacklist', 'public_entities'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/ServerInformation';
         }
     }
