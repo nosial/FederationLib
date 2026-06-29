@@ -4,9 +4,10 @@
 
     use DateTime;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class EvidenceRecord implements SerializableInterface
+    class EvidenceRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $entityUuid;
@@ -16,6 +17,7 @@
         private ?string $note;
         private ?string $tag;
         private ?string $report;
+        private ?array $metadata;
         private ?ClassificationFlag $classificationFlag;
         private int $created;
         private int $updated;
@@ -35,6 +37,22 @@
             $this->note = $data['note'] ?? null;
             $this->tag = $data['tag'] ?? null;
             $this->report = $data['report'] ?? null;
+            $this->metadata = null;
+            if(isset($data['metadata']))
+            {
+                if(is_array($data['metadata']))
+                {
+                    $this->metadata = $data['metadata'];
+                }
+                elseif(is_string($data['metadata']))
+                {
+                    $parsed = @json_decode($data['metadata'], true);
+                    if(is_array($parsed))
+                    {
+                        $this->metadata = $parsed;
+                    }
+                }
+            }
             if(isset($data['classification_flag']))
             {
                 if(is_string($data['classification_flag']))
@@ -161,6 +179,16 @@
         }
 
         /**
+         * Returns the metadata associated with the evidence record.
+         *
+         * @return array|null The metadata array, or null if not set
+         */
+        public function getMetadata(): ?array
+        {
+            return $this->metadata;
+        }
+
+        /**
          * Optional. Returns the classification flag of the record
          *
          * @return ClassificationFlag|null The classification flag of the record
@@ -203,6 +231,7 @@
                 'text_content' => $this->textContent,
                 'tag' => $this->tag,
                 'report' => $this->report,
+                'metadata' => $this->metadata,
                 'classification_flag' => $this->classificationFlag?->value ?? null,
                 'note' => $this->note,
                 'created' => $this->created,
@@ -240,5 +269,50 @@
             }
 
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the evidence'],
+                'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the entity the evidence relates to'],
+                'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who submitted the evidence'],
+                'confidential' => ['type' => 'boolean', 'description' => 'Whether the evidence is marked as confidential'],
+                'text_content' => ['type' => 'string', 'description' => 'Text content of the evidence', 'nullable' => true],
+                'note' => ['type' => 'string', 'description' => 'Optional note attached to the evidence', 'nullable' => true],
+                'tag' => ['type' => 'string', 'description' => 'Tag categorizing the evidence', 'nullable' => true],
+                'report' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the report this evidence is linked to', 'nullable' => true],
+                'metadata' => ['type' => 'object', 'description' => 'Additional metadata attached to the evidence', 'nullable' => true],
+                'classification_flag' => ['type' => 'string', 'description' => 'Classification flag assigned to the evidence', 'nullable' => true],
+                'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the evidence was created'],
+                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the evidence was last updated'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'entity', 'operator', 'confidential', 'created', 'updated'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/EvidenceRecord';
         }
     }
