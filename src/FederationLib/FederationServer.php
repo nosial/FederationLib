@@ -3,6 +3,7 @@
     namespace FederationLib;
 
     use Exception;
+    use FederationLib\Classes\BayesianClient;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
@@ -22,6 +23,8 @@
 
     class FederationServer extends RequestHandler
     {
+        private static ?BayesianClient $bayesianClient = null;
+
         /**
          * Handle incoming requests to the Federation Server.
          *
@@ -46,6 +49,12 @@
                 {
                     self::errorResponse('Invalid request method or path.', 400);
                     return;
+                }
+
+                // Create the BayesianClient if it's enabled
+                if(Configuration::getBayesianConfiguration()->isEnabled())
+                {
+                    self::$bayesianClient = new BayesianClient(Configuration::getBayesianConfiguration());
                 }
 
                 // Handle the request based on the matched method.
@@ -214,6 +223,16 @@
             }
 
             return $serverInformation;
+        }
+
+        /**
+         * Returns the BayesianClient if BayesianServer is enabled
+         *
+         * @return BayesianClient|null The BayesianClient, null if BayesianServer is not configured
+         */
+        public static function getBayesianClient(): ?BayesianClient
+        {
+            return self::$bayesianClient;
         }
 
         /**
