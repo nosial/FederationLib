@@ -5,14 +5,18 @@
     use DateTime;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\EntityRelationshipType;
-    use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
+    use FederationLib\Interfaces\StandardObjectInterface;
 
-    class EntityRecord implements SerializableInterface
+    class EntityRecord implements StandardObjectInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $host;
         private ?string $id;
         private ?array $metadata;
+        private bool $whitelisted;
+        private int $reputation;
+        private ?int $reputationLastUpdated;
         private ?string $relationshipEntity;
         private ?EntityRelationshipType $relationshipType;
         private int $created;
@@ -29,6 +33,8 @@
             $this->host = $data['host'] ?? '';
             $this->id = (isset($data['id']) && $data['id'] !== '') ? $data['id'] : null;
             $this->metadata = null;
+            $this->reputation = (int)$data['reputation'] ?? 0;
+            $this->whitelisted = (bool)$data['whitelisted'] ?? false;
             $this->relationshipEntity = $data['relationship_entity'] ?? null;
 
             if(isset($data['relationship_type']))
@@ -112,6 +118,32 @@
             {
                 $this->updated = null;
             }
+
+            if (isset($data['reputation_last_updated']) && is_string($data['reputation_last_updated']))
+            {
+                // Check if it's a numeric string (from Redis cache)
+                if (is_numeric($data['reputation_last_updated']))
+                {
+                    $this->reputationLastUpdated = (int)$data['reputation_last_updated'];
+                }
+                else
+                {
+                    // SQL datetime string - convert using strtotime
+                    $this->reputationLastUpdated = strtotime($data['reputation_last_updated']);
+                }
+            }
+            elseif (isset($data['reputation_last_updated']) && $data['reputation_last_updated'] instanceof DateTime)
+            {
+                $this->reputationLastUpdated = $data['reputation_last_updated']->getTimestamp();
+            }
+            elseif (isset($data['reputation_last_updated']) && is_int($data['reputation_last_updated']))
+            {
+                $this->reputationLastUpdated = $data['reputation_last_updated'];
+            }
+            else
+            {
+                $this->reputationLastUpdated = null;
+            }
         }
 
         /**
@@ -165,6 +197,38 @@
         }
 
         /**
+         * Returns True if the entity is whitelisted by the server
+         *
+         * @return bool True if the entiy is whitelisted
+         */
+        public function isWhitelisted(): bool
+        {
+            return $this->whitelisted;
+        }
+
+        /**
+         * Returns the reputation score of the entity, with a max value of -1000 and 1000.
+         * Negative values = Bad reputation score
+         * Positive values = Good reputation score
+         *
+         * @return int The reputation score of the entity
+         */
+        public function getReputation(): int
+        {
+            return $this->reputation;
+        }
+
+        /**
+         * Returns the Unix timestamp of when the reputation score of the entity was last updated
+         *
+         * @return int|null The Unix timestamp of the last time the reputation score was updated
+         */
+        public function getReputationLastUpdated(): ?int
+        {
+            return $this->reputationLastUpdated;
+        }
+
+        /**
          * Returns the entity UUID of the target entity for the relationship
          *
          * @return string|null
@@ -195,7 +259,7 @@
         }
 
         /**
-         * Gets the updated timestmap of the entity, null if the record hasn't been updated
+         * Gets the updated timestamp of the entity, null if the record hasn't been updated
          *
          * @return int|null The timestamp when the record was updated, null otherwise.
          */
@@ -230,6 +294,28 @@
                 'host' => $this->host,
                 'id' => $this->id,
                 'metadata' => $this->metadata,
+                'whitelisted' => $this->whitelisted,
+                'reputation' => $this->reputation,
+                'reputation_last_updated' => $this->reputationLastUpdated,
+                'relationship_entity' => $this->relationshipEntity,
+                'relationship_type' => $this->relationshipType?->value ?? null,
+                'created' => $this->created,
+                'updated' => $this->updated
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public function toStandardArray(): array
+        {
+            return [
+                'uuid' => $this->uuid,
+                'hash' => $this->getHash(),
+                'host' => $this->host,
+                'id' => $this->id,
+                'metadata' => $this->metadata,
+                'reputation' => $this->reputation,
                 'relationship_entity' => $this->relationshipEntity,
                 'relationship_type' => $this->relationshipType?->value ?? null,
                 'created' => $this->created,
@@ -243,5 +329,50 @@
         public static function fromArray(array $array): EntityRecord
         {
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the entity'],
+                'hash' => ['type' => 'string', 'description' => 'SHA-256 hash of the entity'],
+                'host' => ['type' => 'string', 'description' => 'Hostname or domain of the entity'],
+                'id' => ['type' => 'string', 'description' => 'Local-part identifier (email username)', 'nullable' => true],
+                'metadata' => ['type' => 'object', 'description' => 'Additional entity metadata', 'nullable' => true],
+                'whitelisted' => ['type' => 'boolean', 'description' => 'Whether the entity is whitelisted'],
+                'reputation' => ['type' => 'integer', 'description' => 'Reputation score between -1000 and 1000'],
+                'reputation_last_updated' => ['type' => 'integer', 'description' => 'Unix timestamp of last reputation update', 'nullable' => true],
+                'relationship_entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related entity', 'nullable' => true],
+                'relationship_type' => ['type' => 'string', 'description' => 'Type of relationship with the related entity', 'nullable' => true],
+                'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the entity was created'],
+                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the entity was last updated'],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'hash', 'host', 'whitelisted', 'reputation', 'created', 'updated'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/EntityRecord';
         }
     }
