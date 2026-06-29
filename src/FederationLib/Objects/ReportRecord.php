@@ -4,9 +4,10 @@
 
     use DateTime;
     use FederationLib\Enums\IncidentType;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
-    class ReportRecord implements SerializableInterface
+    class ReportRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $submittingOperator;
@@ -218,5 +219,48 @@
             }
 
             return new self($array);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the report'],
+                'submitting_operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who submitted the report'],
+                'reporting_entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the entity being reported', 'nullable' => true],
+                'assigned_operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator assigned to the report', 'nullable' => true],
+                'automated' => ['type' => 'boolean', 'description' => 'Whether the report was created automatically'],
+                'incident_type' => ['type' => 'string', 'description' => 'Type of incident being reported'],
+                'opened' => ['type' => 'boolean', 'description' => 'Whether the report is still open'],
+                'message' => ['type' => 'string', 'description' => 'Message or description for the report', 'nullable' => true],
+                'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the report was created'],
+                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the report was last updated', 'nullable' => true],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return ['uuid', 'submitting_operator', 'automated', 'incident_type', 'opened', 'created'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/ReportRecord';
         }
     }
