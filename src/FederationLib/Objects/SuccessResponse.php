@@ -2,68 +2,63 @@
 
     namespace FederationLib\Objects;
 
-    use FederationLib\Interfaces\ResponseInterface;
-    use InvalidArgumentException;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
+    use FederationLib\Interfaces\SerializableInterface;
 
-    class SuccessResponse implements ResponseInterface
+    class SuccessResponse implements SerializableInterface, ObjectSpecificationInterface
     {
-        private mixed $data;
-
         /**
          * Constructor for SuccessResponse
-         *
-         * @param mixed $data The data to include in the success response
-         * @throws InvalidArgumentException If the data is not provided
          */
-        public function __construct(mixed $data)
-        {
-            $this->data = $data;
-        }
-
-        /**
-         * @inheritDoc
-         */
-        public function isSuccess(): bool
-        {
-            return true;
-        }
-
-        /**
-         * Returns the data response
-         *
-         * @return mixed
-         */
-        public function getData(): mixed
-        {
-            return $this->data;
-        }
+        public function __construct(){}
 
         /**
          * @inheritDoc
          */
         public function toArray(): array
         {
+            return ['success' => true];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function fromArray(array $array=[]): SuccessResponse
+        {
+            return new self();
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
             return [
-                'success' => true,
-                'data' => $this->data,
+                'success' => ['type' => 'boolean', 'description' => 'Indicates the request was successful', 'enum' => [true]]
             ];
         }
 
         /**
          * @inheritDoc
          */
-        public static function fromArray(array $array): SuccessResponse
+        public static function getObjectRequired(): array
         {
-            if (!isset($array['success']) || !$array['success'])
-            {
-                throw new InvalidArgumentException("Array must contain 'success' key set to true");
-            }
+            return ['success'];
+        }
 
-            if (!isset($array['data']))
-            {
-                $array['data'] = null;
-            }
-
-            return new self($array['data']);
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/SuccessResponse';
         }
     }
