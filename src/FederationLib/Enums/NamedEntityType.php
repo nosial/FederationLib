@@ -3,6 +3,7 @@
     namespace FederationLib\Enums;
 
     use FederationLib\Classes\Validate;
+    use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
 
     enum NamedEntityType: string
     {
@@ -18,7 +19,8 @@
          */
         public function getPattern(): string
         {
-            return match($this) {
+            return match($this)
+            {
                 self::DOMAIN => '/(?<![\w\-\.])(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}(?![\w\-])/i',
                 self::URL => '/https?:\/\/(?:[-\w.])+(?:\:[0-9]+)?(?:\/(?:[\w\/_.])*)?(?:\?(?:[\w&=%.])*)?(?:#(?:\w)*)?(?![\w])/i',
                 self::EMAIL => '/(?<![\w\-\.])(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-._]{0,61}[a-zA-Z0-9])?@(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63})(?![\w\-])/i',
@@ -34,7 +36,8 @@
          */
         public function isValid(string $value): bool
         {
-            return match($this) {
+            return match($this)
+            {
                 self::DOMAIN => Validate::domain($value),
                 self::URL => Validate::url($value),
                 self::EMAIL => Validate::email($value),
@@ -51,11 +54,73 @@
         {
             return match($this)
             {
-                self::URL => 5,        // Highest priority to avoid conflicts with domains in URLs
-                self::EMAIL => 4,      // High priority to avoid conflicts with domains
-                self::IPv4 => 3,       // Medium-high priority
-                self::IPv6 => 3,       // Medium-high priority
-                self::DOMAIN => 2,     // Lower priority to avoid false positives
+                self::URL => 5, // Highest priority to avoid conflicts with domains in URLs
+                self::EMAIL => 4, // High priority to avoid conflicts with domains
+                self::IPv4 => 3, // Medium-high priority
+                self::IPv6 => 3, // Medium-high priority
+                self::DOMAIN => 2 ,// Lower priority to avoid false positives
             };
+        }
+
+        /**
+         * Extract all named entities from the given content
+         *
+         * @param string $content The text to scan
+         * @return ResolvedEntityPosition[]
+         */
+        public static function extract(string $content): array
+        {
+            $cases = self::cases();
+
+            usort($cases, fn(self $a, self $b) => $b->getPriority() <=> $a->getPriority());
+
+            $results = [];
+            $reservedRanges = [];
+
+            foreach ($cases as $type)
+            {
+                $pattern = $type->getPattern();
+
+                if (preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE) === false)
+                {
+                    continue;
+                }
+
+                foreach ($matches[0] as [$match, $offset])
+                {
+                    if (!$type->isValid($match))
+                    {
+                        continue;
+                    }
+
+                    $length = strlen($match);
+
+                    $overlaps = false;
+                    foreach ($reservedRanges as [$rOffset, $rLength])
+                    {
+                        if ($offset < $rOffset + $rLength && $offset + $length > $rOffset)
+                        {
+                            $overlaps = true;
+                            break;
+                        }
+                    }
+
+                    if ($overlaps)
+                    {
+                        continue;
+                    }
+
+                    if (isset($results[$match]))
+                    {
+                        $reservedRanges[] = [$offset, $length];
+                        continue;
+                    }
+
+                    $results[$match] = new ResolvedEntityPosition($offset, $length, $type);
+                    $reservedRanges[] = [$offset, $length];
+                }
+            }
+
+            return $results;
         }
     }
