@@ -31,9 +31,9 @@
             }
 
 
-            $manageOperators = isset($args['manage-operators']) && $args['manage-operators'] === true ?? false;
-            $manageBlacklist = isset($args['manage-blacklist']) && $args['manage-blacklist'] === true ?? false;
-            $isClient = isset($args['is-client']) && $args['is-client'] === true ?? false;
+            $operatorPermissions = isset($args['operator-permissions']) && $args['operator-permissions'] === true ?? false;
+            $managementPermissions = isset($args['management-permissions']) && $args['management-permissions'] === true ?? false;
+            $clientPermissions = isset($args['client-permissions']) && $args['client-permissions'] === true ?? false;
 
             try
             {
@@ -41,33 +41,33 @@
                 $operatorUuid = OperatorManager::createOperator($name);
                 print(sprintf("Operator %s created successfully\n", $operatorUuid));
 
-                if($manageOperators)
+                if($operatorPermissions)
                 {
-                    print("Setting manage operators permissions\n");
-                    OperatorManager::setManageOperators($operatorUuid, true);
+                    print("Setting operator permissions\n");
+                    OperatorManager::setOperatorPermissions($operatorUuid, true);
                 }
 
-                if($manageBlacklist)
+                if($managementPermissions)
                 {
-                    print("Setting manage blacklist permissions\n");
-                    OperatorManager::setManageBlacklist($operatorUuid, true);
+                    print("Setting management permissions\n");
+                    OperatorManager::setManagementPermissions($operatorUuid, true);
                 }
 
-                if($isClient)
+                if($clientPermissions)
                 {
                     print("Setting client permissions\n");
-                    OperatorManager::setClient($operatorUuid, true);
+                    OperatorManager::setClientPermissions($operatorUuid, true);
                 }
 
                 $masterOperator = OperatorManager::getRootOperator();
 
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf(
-                    "Operator '%s' (%s) created. Manage Operators: %s, Manage Blacklist: %s, Is Client: %s",
+                    "Operator '%s' (%s) created. Operator Permissions: %s, Management Permissions: %s, Client Permissions: %s",
                     $name,
                     $operatorUuid,
-                    $manageOperators ? 'true' : 'false',
-                    $manageBlacklist ? 'true' : 'false',
-                    $isClient ? 'true' : 'false'
+                    $operatorPermissions ? 'true' : 'false',
+                    $managementPermissions ? 'true' : 'false',
+                    $clientPermissions ? 'true' : 'false'
                 ), $masterOperator->getUuid());
             }
             catch(DatabaseOperationException $e)
@@ -86,14 +86,14 @@
         public static function getHelp(): string
         {
             return "Usage:\n" .
-                   "  federationserver create-operator --name <name> [--manage-operators] [--manage-blacklist] [--is-client]\n" .
+                   "  federationserver create-operator --name <name> [--operator-permissions] [--management-permissions] [--client-permissions]\n" .
                    "\nDescription:\n" .
                    "  Creates a new operator with the specified permissions.\n" .
                    "\nOptions:\n" .
-                   "  --name <name>            The name of the operator to create. (required)\n" .
-                   "  --manage-operators       If set, the operator can manage other operators.\n" .
-                   "  --manage-blacklist       If set, the operator can manage the blacklist.\n" .
-                   "  --is-client              If set, the operator is a client operator.\n";
+                   "  --name <name>                The name of the operator to create. (required)\n" .
+                   "  --operator-permissions       If set, the operator can manage other operators.\n" .
+                   "  --management-permissions     If set, the operator has management permissions.\n" .
+                   "  --client-permissions         If set, the operator has client permissions.\n";
         }
 
         /**
@@ -110,8 +110,8 @@
         public static function getExamples(): ?string
         {
             return "Examples:\n" .
-                   "  federationserver create-operator --name 'John Doe' --manage-operators --is-client\n" .
-                   "    Creates a new operator named 'John Doe' who can manage other operators and is a client operator.\n";
+                   "  federationserver create-operator --name 'John Doe' --operator-permissions --client-permissions\n" .
+                   "    Creates a new operator named 'John Doe' who can manage other operators and has client permissions.\n";
         }
     }
 
