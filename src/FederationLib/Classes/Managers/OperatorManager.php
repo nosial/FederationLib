@@ -6,7 +6,6 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
-    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
@@ -26,7 +25,6 @@
          * @return string The generated UUID for the operator.
          * @throws InvalidArgumentException If the name is empty or exceeds 255 characters.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function createOperator(string $name): string
         {
@@ -77,7 +75,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, 'none', 'system', 1, 1, 1)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, operator_permissions, management_permissions, client_permissions) VALUES (:uuid, 'none', 'system', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
@@ -114,7 +112,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, manage_operators, manage_blacklist, is_client) VALUES (:uuid, :access_token, 'root', 1, 1, 1)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, operator_permissions, management_permissions, client_permissions) VALUES (:uuid, :access_token, 'root', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':access_token', $accessToken);
 
@@ -135,7 +133,6 @@
          * @return bool True if the UUID belongs to the root operator, false otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws InvalidArgumentException If the UUID is empty.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function isRootOperator(string $uuid): bool
         {
@@ -153,7 +150,6 @@
          *
          * @param string $uuid The UUID to check
          * @return bool True if the UUID belongs to the root operator, false otherwise
-         * @throws CacheOperationException If there is an error during the caching operation
          * @throws DatabaseOperationException If there is an error during the database operation
          */
         public static function isSystemOperator(string $uuid): bool
@@ -176,7 +172,6 @@
          * @return OperatorRecord The root operator record.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws InvalidArgumentException If the Access Token for the root operator is not set in the configuration.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getRootOperator(): OperatorRecord
         {
@@ -206,7 +201,6 @@
          * If it does not exist, it creates one with an unusable Access Token.
          *
          * @return OperatorRecord
-         * @throws CacheOperationException
          * @throws DatabaseOperationException
          */
         public static function getSystemOperator(): OperatorRecord
@@ -228,7 +222,6 @@
          * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function getOperator(string $uuid): ?OperatorRecord
         {
@@ -293,7 +286,6 @@
          * @return bool True if the operator exists, false otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function operatorExists(string $uuid): bool
         {
@@ -408,7 +400,6 @@
          * @param string $uuid The UUID of the operator.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function disableOperator(string $uuid): void
         {
@@ -451,7 +442,6 @@
          * @param string $uuid The UUID of the operator.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
         public static function enableOperator(string $uuid): void
         {
@@ -494,7 +484,6 @@
          * @param string $uuid The UUID of the operator.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there was an error during the cache operation.
          */
         public static function deleteOperator(string $uuid): void
         {
@@ -537,7 +526,6 @@
          * @param string $uuid The UUID of the operator.
          * @param string|null $accessToken Optional. The access token to set to the operator
          * @return string The new access token for the operator.
-         * @throws CacheOperationException Thrown if there was an error with the caching operation
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
         public static function newAccessToken(string $uuid, ?string $accessToken=null): string
@@ -572,7 +560,7 @@
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to refresh access token for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to generate access token for operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
@@ -593,15 +581,14 @@
         }
 
         /**
-         * Set the management permissions for an operator.
+         * Set the operator permissions for an operator.
          *
          * @param string $uuid The UUID of the operator.
          * @param bool $canManageOperators True if the operator can manage other operators, false otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function setManageOperators(string $uuid, bool $canManageOperators): void
+        public static function setOperatorPermissions(string $uuid, bool $canManageOperators): void
         {
             if(empty($uuid))
             {
@@ -610,14 +597,14 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET manage_operators=:manage_operators WHERE uuid=:uuid");
-                $stmt->bindParam(':manage_operators', $canManageOperators, PDO::PARAM_BOOL);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET operator_permissions=:operator_permissions WHERE uuid=:uuid");
+                $stmt->bindParam(':operator_permissions', $canManageOperators, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to set operator management permissions for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to set operator permissions for operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
@@ -638,15 +625,14 @@
         }
 
         /**
-         * Set the blacklist management permissions for an operator.
+         * Set the management permissions for an operator.
          *
          * @param string $uuid The UUID of the operator.
-         * @param bool $canManageBlacklist True if the operator can manage the blacklist, false otherwise.
+         * @param bool $canManage True if the operator can manage records (inherits client), false otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function setManageBlacklist(string $uuid, bool $canManageBlacklist): void
+        public static function setManagementPermissions(string $uuid, bool $canManage): void
         {
             if(empty($uuid))
             {
@@ -655,14 +641,14 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET manage_blacklist=:manage_blacklist WHERE uuid=:uuid");
-                $stmt->bindParam(':manage_blacklist', $canManageBlacklist, PDO::PARAM_BOOL);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET management_permissions=:management_permissions WHERE uuid=:uuid");
+                $stmt->bindParam(':management_permissions', $canManage, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to set blacklist management permissions for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to set management permissions for operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
@@ -683,15 +669,14 @@
         }
 
         /**
-         * Set the client status for an operator.
+         * Set the client permissions for an operator.
          *
          * @param string $uuid The UUID of the operator.
-         * @param bool $isClient True if the operator is a client, false otherwise.
+         * @param bool $isClient True if the operator has client permissions, false otherwise.
          * @throws InvalidArgumentException If the UUID is empty.
          * @throws DatabaseOperationException If there is an error during the database operation.
-         * @throws CacheOperationException If there is an error during the caching operation.
          */
-        public static function setClient(string $uuid, bool $isClient): void
+        public static function setClientPermissions(string $uuid, bool $isClient): void
         {
             if(empty($uuid))
             {
@@ -700,14 +685,14 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET is_client=:is_client WHERE uuid=:uuid");
-                $stmt->bindParam(':is_client', $isClient, PDO::PARAM_BOOL);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET client_permissions=:client_permissions WHERE uuid=:uuid");
+                $stmt->bindParam(':client_permissions', $isClient, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to set client status for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to set client permissions for operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
