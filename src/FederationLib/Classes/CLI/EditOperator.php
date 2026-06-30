@@ -42,35 +42,35 @@
                 $targetOperator = OperatorManager::getOperator($uuid);
                 $changed = false;
 
-                if (isset($args['set-client']))
+                if (isset($args['set-client-permissions']))
                 {
-                    $val = filter_var($args['set-client'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                    $val = filter_var($args['set-client-permissions'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                     if ($val !== null)
                     {
-                        OperatorManager::setClient($uuid, $val);
-                        print("Set client to " . ($val ? 'true' : 'false') . "\n");
+                        OperatorManager::setClientPermissions($uuid, $val);
+                        print("Set client permissions to " . ($val ? 'true' : 'false') . "\n");
                         $changed = true;
                     }
                 }
 
-                if (isset($args['set-manage-operators']))
+                if (isset($args['set-operator-permissions']))
                 {
-                    $val = filter_var($args['set-manage-operators'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                    $val = filter_var($args['set-operator-permissions'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                     if ($val !== null)
                     {
-                        OperatorManager::setManageOperators($uuid, $val);
-                        print("Set manage operators to " . ($val ? 'true' : 'false') . "\n");
+                        OperatorManager::setOperatorPermissions($uuid, $val);
+                        print("Set operator permissions to " . ($val ? 'true' : 'false') . "\n");
                         $changed = true;
                     }
                 }
 
-                if (isset($args['set-manage-blacklist']))
+                if (isset($args['set-management-permissions']))
                 {
-                    $val = filter_var($args['set-manage-blacklist'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                    $val = filter_var($args['set-management-permissions'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                     if ($val !== null)
                     {
-                        OperatorManager::setManageBlacklist($uuid, $val);
-                        print("Set manage blacklist to " . ($val ? 'true' : 'false') . "\n");
+                        OperatorManager::setManagementPermissions($uuid, $val);
+                        print("Set management permissions to " . ($val ? 'true' : 'false') . "\n");
                         $changed = true;
                     }
                 }
@@ -118,16 +118,16 @@
         public static function getHelp(): string
         {
             return "Usage:\n" .
-                "  federationserver edit-operator --uuid <uuid> [--set-client true|false] [--set-manage-operators true|false] [--set-manage-blacklist true|false] [--disable] [--enable]\n" .
+                "  federationserver edit-operator --uuid <uuid> [--set-client-permissions true|false] [--set-operator-permissions true|false] [--set-management-permissions true|false] [--disable] [--enable]\n" .
                 "\nDescription:\n" .
                 "  Edits an operator's permissions and status.\n" .
                 "\nOptions:\n" .
-                "  --uuid <uuid>                   The UUID of the operator to edit. (required)\n" .
-                "  --set-client true|false         Set client status.\n" .
-                "  --set-manage-operators true|false  Set manage operators permission.\n" .
-                "  --set-manage-blacklist true|false Set manage blacklist permission.\n" .
-                "  --disable                       Disable the operator.\n" .
-                "  --enable                        Enable the operator.\n";
+                "  --uuid <uuid>                           The UUID of the operator to edit. (required)\n" .
+                "  --set-client-permissions true|false     Set client permissions.\n" .
+                "  --set-operator-permissions true|false   Set operator permissions.\n" .
+                "  --set-management-permissions true|false Set management permissions.\n" .
+                "  --disable                               Disable the operator.\n" .
+                "  --enable                                Enable the operator.\n";
         }
 
         /**
@@ -144,8 +144,8 @@
         public static function getExamples(): ?string
         {
             return "Examples:\n" .
-                "  federationserver edit-operator --uuid <uuid> --set-client true\n" .
-                "  federationserver edit-operator --uuid <uuid> --set-manage-operators false\n" .
+                "  federationserver edit-operator --uuid <uuid> --set-client-permissions true\n" .
+                "  federationserver edit-operator --uuid <uuid> --set-operator-permissions false\n" .
                 "  federationserver edit-operator --uuid <uuid> --disable\n" .
                 "  federationserver edit-operator --uuid <uuid> --enable\n";
         }
