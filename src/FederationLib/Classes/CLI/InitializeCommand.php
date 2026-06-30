@@ -2,11 +2,14 @@
 
     namespace FederationLib\Classes\CLI;
 
+    use FederationLib\Classes\BayesianClient;
+    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\CommandLineInterface;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
@@ -30,7 +33,7 @@
                 return 1;
             }
 
-            Logger::log()->info('Database initialized successfully');
+            Logger::log()->info('Database OK');
 
             try
             {
@@ -43,22 +46,22 @@
                         OperatorManager::enableOperator($operator->getUuid());
                     }
 
-                    if(!$operator->canManageOperators())
+                    if(!$operator->hasOperatorPermissions())
                     {
-                        Logger::log()->warning(sprintf('%s operator missing manage_operators permission, re-enabling', $operator->getName()));
-                        OperatorManager::setManageOperators($operator->getUuid(), true);
+                        Logger::log()->warning(sprintf('%s operator missing operator_permissions permission, re-enabling', $operator->getName()));
+                        OperatorManager::setOperatorPermissions($operator->getUuid(), true);
                     }
 
-                    if(!$operator->canManageBlacklist())
+                    if(!$operator->hasManagementPermissions())
                     {
-                        Logger::log()->warning(sprintf('%s operator missing manage_blacklist permission, re-enabling', $operator->getName()));
-                        OperatorManager::setManageBlacklist($operator->getUuid(), true);
+                        Logger::log()->warning(sprintf('%s operator missing management_permissions permission, re-enabling', $operator->getName()));
+                        OperatorManager::setManagementPermissions($operator->getUuid(), true);
                     }
 
-                    if(!$operator->isClient())
+                    if(!$operator->hasClientPermissions())
                     {
-                        Logger::log()->warning(sprintf('%s operator missing is_client permission, re-enabling', $operator->getName()));
-                        OperatorManager::setClient($operator->getUuid(), true);
+                        Logger::log()->warning(sprintf('%s operator missing client_permissions permission, re-enabling', $operator->getName()));
+                        OperatorManager::setClientPermissions($operator->getUuid(), true);
                     }
 
                     if($operator->getName() === 'system' && $operator->getAccessToken() !== 'none')
