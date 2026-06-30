@@ -5,6 +5,7 @@
     use CURLFile;
     use CurlHandle;
     use FederationLib\Classes\Logger;
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
@@ -203,10 +204,13 @@
          *
          * @param string $content The text content to scan
          * @param string|null $author Optional author identifier (UUID, SHA-256, or entity address)
+         * @param int|null $topK Optional. Number of top classifications to return
+         * @param float|null $threshold Optional. Confidence threshold for classification
+         * @param array|null $metadata Optional. Metadata to associate with the evidence record
          * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(string $content, ?string $author = null): ScannedContent
+        public function scanContent(string $content, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $metadata = null): ScannedContent
         {
             if(empty($content))
             {
@@ -217,6 +221,21 @@
             if($author !== null)
             {
                 $params['author'] = $author;
+            }
+
+            if($topK !== null)
+            {
+                $params['top_k'] = $topK;
+            }
+
+            if($threshold !== null)
+            {
+                $params['threshold'] = $threshold;
+            }
+
+            if($metadata !== null)
+            {
+                $params['metadata'] = $metadata;
             }
 
             return ScannedContent::fromArray($this->makeRequest('POST', 'scan', $params, [HttpResponseCode::OK],
@@ -374,7 +393,7 @@
          */
         public function getOperator(string $operatorUuid): OperatorRecord
         {
-            IF(empty($operatorUuid))
+            if(empty($operatorUuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
@@ -595,16 +614,16 @@
         }
 
         /**
-         * Refreshes the authentication token.
+         * Generates a new authentication token for the current operator.
          *
          * @param bool $update If true, updates the client's token with the new token (default is true)
          * @return string The new authentication token
          * @throws RequestException If the request fails or the response is invalid
          */
-        public function refreshAccessToken(bool $update=True): string
+        public function generateAccessToken(bool $update=True): string
         {
             $newToken = $this->makeRequest('POST', 'operators/refresh', null, [HttpResponseCode::OK],
-                'Failed to refresh Access token'
+                'Failed to generate Access token'
             );
 
             if($update)
@@ -612,18 +631,18 @@
                 $this->accessToken = $newToken;
             }
 
-            return $this->accessToken;
+            return $newToken;
         }
 
         /**
-         * Refreshes the Access Token for a specific operator.
+         * Generates a new Access Token for a specific operator.
          *
-         * @param string $operatorUuid The UUID of the operator whose Access Token is to be refreshed
+         * @param string $operatorUuid The UUID of the operator whose Access Token is to be generated
          * @return string The new Access Token for the operator
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
-        public function refreshOperatorAccessToken(string $operatorUuid): string
+        public function generateOperatorAccessToken(string $operatorUuid): string
         {
             if(empty($operatorUuid))
             {
@@ -631,7 +650,7 @@
             }
 
             return $this->makeRequest('POST', 'operators/' . $operatorUuid . '/refresh', null,  [HttpResponseCode::OK],
-                sprintf('Failed to refresh Access token for operator with UUID %s', $operatorUuid)
+                sprintf('Failed to generate Access token for operator with UUID %s', $operatorUuid)
             );
         }
 
@@ -919,7 +938,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the evidence UUID is empty
          */
-        public function deleteEvidence(String $evidenceUuid): void
+        public function deleteEvidence(string $evidenceUuid): void
         {
             if(empty($evidenceUuid))
             {
@@ -1236,17 +1255,22 @@
          * Closes a report by its UUID.
          *
          * @param string $reportUuid The UUID of the report to close
+         * @param ClassificationFlag|null $classification Optional. The classification flag to identify the content as
          * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the report UUID is empty
          */
-        public function closeReport(string $reportUuid): void
+        public function closeReport(string $reportUuid, ?ClassificationFlag $classification=null): void
         {
             if(empty($reportUuid))
             {
                 throw new InvalidArgumentException('Report UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/close', null, [HttpResponseCode::OK],
+            $params = [];
+            if($classification !== null)
+            {
+                $params['classification'] = $classification->value;
+            }
+            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/close', $params, [HttpResponseCode::OK],
                 sprintf('Failed to close report %s', $reportUuid)
             );
         }
@@ -1419,7 +1443,7 @@
                 throw new InvalidArgumentException('The evidence UUID must not be empty');
             }
 
-            if($expires < 0)
+            if($expires !== null && $expires < 0)
             {
                 throw new InvalidArgumentException('The expires parameter must be a positive integer or null');
             }
