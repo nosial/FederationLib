@@ -68,6 +68,12 @@
             return false;
         }
 
+        /**
+         * Validates if the given string is a valid domain name.
+         *
+         * @param string $domain The domain name to validate
+         * @return bool True if valid, False otherwise
+         */
         public static function domain(string $domain): bool
         {
             // Basic validation - check length and structure
@@ -84,21 +90,45 @@
             return true;
         }
 
+        /**
+         * Validates if the given string is a valid URL.
+         *
+         * @param string $url The URL to validate
+         * @return bool True if valid, False otherwise
+         */
         public static function url(string $url): bool
         {
             return filter_var($url, FILTER_VALIDATE_URL) !== false;
         }
 
+        /**
+         * Validates if the given string is a valid email address.
+         *
+         * @param string $email The email address to validate
+         * @return bool True if valid, False otherwise
+         */
         public static function email(string $email): bool
         {
             return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
         }
 
+        /**
+         * Validates if the given string is a valid IPv4 address.
+         *
+         * @param string $ip The IPv4 address to validate
+         * @return bool True if valid, False otherwise
+         */
         public static function ipv4(string $ip): bool
         {
             return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
         }
 
+        /**
+         * Validates if the given string is a valid IPv6 address.
+         *
+         * @param string $ip The IPv6 address to validate
+         * @return bool True if valid, False otherwise
+         */
         public static function ipv6(string $ip): bool
         {
             return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
