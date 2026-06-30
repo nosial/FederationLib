@@ -30,6 +30,9 @@
         private bool $blacklistCacheEnabled;
         private int $blacklistCacheLimit;
         private int $blacklistCacheTtl;
+        private bool $reportCacheEnabled;
+        private int $reportCacheLimit;
+        private int $reportCacheTtl;
 
         /**
          * RedisConfiguration constructor.
@@ -64,6 +67,9 @@
             $this->blacklistCacheEnabled = $configuration['blacklist_cache_enabled'] ?? true;
             $this->blacklistCacheLimit = $configuration['blacklist_cache_limit'] ?? 3000;
             $this->blacklistCacheTtl = $configuration['blacklist_cache_ttl'] ?? 600;
+            $this->reportCacheEnabled = $configuration['report_cache_enabled'] ?? true;
+            $this->reportCacheLimit = $configuration['report_cache_limit'] ?? 1000;
+            $this->reportCacheTtl = $configuration['report_cache_ttl'] ?? 600;
         }
 
         /**
@@ -328,5 +334,35 @@
         public function getBlacklistCacheTtl(): int
         {
             return $this->blacklistCacheTtl;
+        }
+
+        /**
+         * Returns True if report caching is enabled
+         *
+         * @return bool True if report caching is Enabled, False otherwise
+         */
+        public function isReportCacheEnabled(): bool
+        {
+            return $this->reportCacheEnabled;
+        }
+
+        /**
+         * Returns the report cache limit for the cache
+         *
+         * @return int The maximum number of reports, anything 0 or less=no limit
+         */
+        public function getReportCacheLimit(): int
+        {
+            return $this->reportCacheLimit;
+        }
+
+        /**
+         * Returns the report cache TTL in seconds
+         *
+         * @return int The time to live in seconds for the report cache
+         */
+        public function getReportCacheTtl(): int
+        {
+            return $this->reportCacheTtl;
         }
     }
