@@ -17,6 +17,7 @@
         private int $listEvidenceMaxItems;
         private int $listBlacklistMaxItems;
         private int $listAttachmentsMaxItems;
+        private int $listReportsMaxItems;
         private bool $publicAuditLogs;
         /**
          * @var AuditLogType[]
@@ -25,6 +26,7 @@
         private bool $publicEvidence;
         private bool $publicBlacklist;
         private bool $publicEntities;
+        private bool $publicReports;
         private bool $publicScanContent;
         private int $minBlacklistTime;
 
@@ -46,11 +48,13 @@
             $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
             $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
             $this->listAttachmentsMaxItems = $config['list_attachments_max_items'] ?? 100;
+            $this->listReportsMaxItems = $config['list_reports_max_items'] ?? 100;
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicReports = $config['public_reports'] ?? true;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
         }
@@ -166,6 +170,16 @@
         }
 
         /**
+         * Get the maximum number of items to return when listing reports
+         *
+         * @return int The maximum number of reports to return
+         */
+        public function getListReportsMaxItems(): int
+        {
+            return $this->listReportsMaxItems;
+        }
+
+        /**
          * Check if audit logs are publicly accessible.
          *
          * @return bool True if public audit logs are enabled, false otherwise.
@@ -213,6 +227,16 @@
         public function isEntitiesPublic(): bool
         {
             return $this->publicEntities;
+        }
+
+        /**
+         * Checks if reports are public accessible
+         *
+         * @return bool True if public reports rae enabled, false otherwise
+         */
+        public function isReportsPublic(): bool
+        {
+            return $this->publicReports;
         }
 
         /**
