@@ -35,11 +35,6 @@
         case PHISHING = 'PHISHING';
 
         /**
-         * Child Sexual Abuse Material (CSAM).
-         */
-        case CSAM = 'CSAM';
-
-        /**
          * Other types of content that do not fit into the above categories.
          * Should rarely be used.
          */
