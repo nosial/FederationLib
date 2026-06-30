@@ -1,0 +1,594 @@
+<?php
+
+    namespace FederationLib\Classes\Managers;
+
+    use FederationLib\Classes\Configuration;
+    use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Validate;
+    use FederationLib\Enums\IncidentType;
+    use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Objects\ReportRecord;
+    use InvalidArgumentException;
+    use PDO;
+    use PDOException;
+    use Symfony\Component\Uid\UuidV4;
+
+    class ReportManager
+    {
+        public const string CACHE_PREFIX = 'report:';
+
+        /**
+         * Creates a new report record in the database.
+         *
+         * @param string $submittingOperator The UUID of the operator submitting the report.
+         * @param string|null $reportingEntity Optional UUID of the entity submitting the report.
+         * @param IncidentType $type The incident type for the report.
+         * @param string|null $message Optional message attached to the report.
+         * @param bool $automated Whether the report was automatically generated.
+         * @return string The UUID of the newly created report.
+         * @throws InvalidArgumentException If the submitting operator is not provided.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function createReport(string $submittingOperator, ?string $reportingEntity, IncidentType $type, ?string $message=null, bool $automated=false): string
+        {
+            if(strlen($submittingOperator) < 1)
+            {
+                throw new InvalidArgumentException('Submitting operator must be provided.');
+            }
+
+            if(!Validate::uuid($submittingOperator))
+            {
+                throw new InvalidArgumentException('Invalid submitting operator UUID');
+            }
+
+            if($reportingEntity !== null && !Validate::uuid($reportingEntity))
+            {
+                throw new InvalidArgumentException('Invalid reporting entity UUID');
+            }
+
+            if($message !== null && strlen($message) === 0)
+            {
+                throw new InvalidArgumentException('Message cannot be empty if provided');
+            }
+
+            $uuid = UuidV4::v4()->toRfc4122();
+            $incidentType = $type->value;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "INSERT INTO reports (uuid, submitting_operator, reporting_entity, automated, incident_type, message) 
+                     VALUES (:uuid, :submitting_operator, :reporting_entity, :automated, :incident_type, :message)"
+                );
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':submitting_operator', $submittingOperator);
+                $stmt->bindParam(':reporting_entity', $reportingEntity);
+                $stmt->bindParam(':automated', $automated, PDO::PARAM_BOOL);
+                $stmt->bindParam(':incident_type', $incidentType);
+                $stmt->bindParam(':message', $message);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to create report: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            return $uuid;
+        }
+
+        /**
+         * Retrieves a specific report record by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report record.
+         * @return ReportRecord|null The ReportRecord object if found, null otherwise.
+         * @throws InvalidArgumentException If the UUID is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getReport(string $reportUuid): ?ReportRecord
+        {
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid Report UUID');
+            }
+
+            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid)))
+            {
+                return new ReportRecord(RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid)));
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM reports WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $reportUuid);
+                $stmt->execute();
+
+                $data = $stmt->fetch(PDO::FETCH_ASSOC);
+                if($data === false)
+                {
+                    return null;
+                }
+
+                $data = new ReportRecord($data);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve report: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getReportCacheLimit()))
+            {
+                RedisConnection::setRecord(
+                    record: $data, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $data->getUuid()),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $data;
+        }
+
+        /**
+         * Checks if a report record exists by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report record to check.
+         * @return bool True if the report exists, false otherwise.
+         * @throws InvalidArgumentException If the UUID is not provided.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function reportExists(string $reportUuid): bool
+        {
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid Report UUID');
+            }
+
+            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid)))
+            {
+                return true;
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM reports WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $reportUuid);
+                $stmt->execute();
+
+                return $stmt->fetchColumn() > 0;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check report existence: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Assigns an operator to handle a report.
+         *
+         * @param string $reportUuid The UUID of the report.
+         * @param string $operatorUuid The UUID of the operator to assign.
+         * @throws InvalidArgumentException If the UUIDs are not provided or are invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function assignOperator(string $reportUuid, string $operatorUuid): void
+        {
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid Report UUID');
+            }
+
+            if(strlen($operatorUuid) < 1)
+            {
+                throw new InvalidArgumentException('Operator UUID must be provided.');
+            }
+
+            if(!Validate::uuid($operatorUuid))
+            {
+                throw new InvalidArgumentException('Invalid Operator UUID');
+            }
+
+            $now = date('Y-m-d H:i:s');
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE reports SET assigned_operator = :assigned_operator, updated = :updated WHERE uuid = :uuid"
+                );
+                $stmt->bindParam(':uuid', $reportUuid);
+                $stmt->bindParam(':assigned_operator', $operatorUuid);
+                $stmt->bindParam(':updated', $now);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to assign operator to report: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                }
+            }
+        }
+
+        /**
+         * Closes a report, optionally setting a classification flag.
+         *
+         * @param string $reportUuid The UUID of the report to close.
+         * @throws InvalidArgumentException If the UUID is not provided.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function closeReport(string $reportUuid): void
+        {
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid Report UUID');
+            }
+
+            $now = date('Y-m-d H:i:s');
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE reports SET opened = 0, updated = :updated WHERE uuid = :uuid"
+                );
+                $stmt->bindParam(':uuid', $reportUuid);
+                $stmt->bindParam(':updated', $now);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to close report: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                }
+            }
+        }
+
+        /**
+         * Deletes a report record by its UUID.
+         *
+         * @param string $reportUuid The UUID of the report record to delete.
+         * @throws InvalidArgumentException If the UUID is not provided or is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function deleteReport(string $reportUuid): void
+        {
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid Report UUID');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM reports WHERE uuid = :uuid");
+                $stmt->bindParam(':uuid', $reportUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to delete report: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                }
+            }
+        }
+
+        /**
+         * Retrieves report records with pagination.
+         *
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @return ReportRecord[] An array of ReportRecord objects.
+         * @throws InvalidArgumentException If limit or page parameters are invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getReports(int $limit=100, int $page=1): array
+        {
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM reports ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $reportRecords = [];
+                foreach ($results as $data)
+                {
+                    $reportRecords[] = new ReportRecord($data);
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve reports: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $reportRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getReportCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $reportRecords;
+        }
+
+        /**
+         * Retrieves reports submitted by a specific operator.
+         *
+         * @param string $operatorUuid The UUID of the submitting operator.
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @return ReportRecord[] An array of ReportRecord objects.
+         * @throws InvalidArgumentException If the operator UUID is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getReportsBySubmittingOperator(string $operatorUuid, int $limit=100, int $page=1): array
+        {
+            if(strlen($operatorUuid) < 1)
+            {
+                throw new InvalidArgumentException('Operator UUID must be provided.');
+            }
+
+            if(!Validate::uuid($operatorUuid))
+            {
+                throw new InvalidArgumentException('Invalid Operator UUID');
+            }
+
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM reports WHERE submitting_operator = :operator ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':operator', $operatorUuid);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $reportRecords = [];
+                foreach ($results as $data)
+                {
+                    $reportRecords[] = new ReportRecord($data);
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve reports by submitting operator: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $reportRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getReportCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $reportRecords;
+        }
+
+        /**
+         * Retrieves reports associated with a specific reporting entity.
+         *
+         * @param string $entityUuid The UUID of the reporting entity.
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @return ReportRecord[] An array of ReportRecord objects.
+         * @throws InvalidArgumentException If the entity UUID is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getReportsByReportingEntity(string $entityUuid, int $limit=100, int $page=1): array
+        {
+            if(strlen($entityUuid) < 1)
+            {
+                throw new InvalidArgumentException('Entity UUID must be provided.');
+            }
+
+            if(!Validate::uuid($entityUuid))
+            {
+                throw new InvalidArgumentException('Invalid Entity UUID');
+            }
+
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM reports WHERE reporting_entity = :entity ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':entity', $entityUuid);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $reportRecords = [];
+                foreach ($results as $data)
+                {
+                    $reportRecords[] = new ReportRecord($data);
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve reports by reporting entity: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $reportRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getReportCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $reportRecords;
+        }
+
+        /**
+         * Retrieves reports assigned to a specific operator.
+         *
+         * @param string $operatorUuid The UUID of the assigned operator.
+         * @param int $limit The maximum number of records to return (default is 100).
+         * @param int $page The page number for pagination (default is 1).
+         * @return ReportRecord[] An array of ReportRecord objects.
+         * @throws InvalidArgumentException If the operator UUID is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getReportsByAssignedOperator(string $operatorUuid, int $limit=100, int $page=1): array
+        {
+            if(strlen($operatorUuid) < 1)
+            {
+                throw new InvalidArgumentException('Operator UUID must be provided.');
+            }
+
+            if(!Validate::uuid($operatorUuid))
+            {
+                throw new InvalidArgumentException('Invalid Operator UUID');
+            }
+
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM reports WHERE assigned_operator = :operator ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':operator', $operatorUuid);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $reportRecords = [];
+                foreach ($results as $data)
+                {
+                    $reportRecords[] = new ReportRecord($data);
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve reports by assigned operator: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $reportRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getReportCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $reportRecords;
+        }
+
+        /**
+         * Counts the total number of report records in the database.
+         *
+         * @return int The total number of report records.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countRecords(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM reports");
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count reports: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Checks if caching is enabled based on the configuration.
+         *
+         * @return bool True if caching is enabled, false otherwise.
+         */
+        private static function isCachingEnabled(): bool
+        {
+            return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isReportCacheEnabled();
+        }
+    }
