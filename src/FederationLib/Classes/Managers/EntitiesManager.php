@@ -4,22 +4,27 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\EntityRelationshipType;
+    use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\DatabaseOperationException;
-    use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\EntityRecord;
-    use FederationLib\Objects\QueriedBlacklistRecord;
+    use FederationLib\Objects\ScannedContent;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Redis;
+    use RedisException;
     use Symfony\Component\Uid\Uuid;
 
     class EntitiesManager
     {
         private const string CACHE_PREFIX = 'entity:';
+        private const string REPUTATION_WINDOW_PREFIX = 'reputation_window:';
+        private const string REPUTATION_ACTIVE_SET = 'reputation_window:active';
 
         /**
          * Registers a new entity with the given ID and domain.
@@ -61,12 +66,10 @@
                 if($metadata !== null)
                 {
                     $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                    $now = date('Y-m-d H:i:s');
                     $stmt = DatabaseConnection::getConnection()->prepare(
-                        "INSERT INTO entities (uuid, hash, id, host, metadata, updated) VALUES (:uuid, :hash, :id, :host, :metadata, :updated)"
+                        "INSERT INTO entities (uuid, hash, id, host, metadata) VALUES (:uuid, :hash, :id, :host, :metadata)"
                     );
                     $stmt->bindParam(':metadata', $metadataJson);
-                    $stmt->bindParam(':updated', $now);
                 }
                 else
                 {
@@ -127,7 +130,7 @@
             {
                 $now = date('Y-m-d H:i:s');
                 $stmt = DatabaseConnection::getConnection()->prepare(
-                    "UPDATE entities SET metadata = :metadata, updated = :updated WHERE uuid = :uuid"
+                    "UPDATE entities SET metadata=:metadata, updated=:updated WHERE uuid=:uuid"
                 );
                 $stmt->bindParam(':metadata', $mergedJson);
                 $stmt->bindParam(':updated', $now);
@@ -798,46 +801,6 @@
         }
 
         /**
-         * Queries an entity by its hash and retrieves all associated blacklist records, evidence, and audit logs.
-         *
-         * @param EntityRecord $entityRecord The entity record to query
-         * @param bool|null $includeConfidential Whether to include confidential evidence records. Defaults to true. (Note this does not exclude blacklist records, evidence records will be shown as null if they are confidential)
-         * @param bool|null $includeLifted Whether to include lifted blacklist records. Defaults to true.
-         * @return EntityQueryResult An EntityQueryResult object containing the entity record, queried blacklist records, evidence records, and audit logs.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function queryEntity(EntityRecord $entityRecord, ?bool $includeConfidential=true, ?bool $includeLifted=true): EntityQueryResult
-        {
-            // Build all the queried blacklist records
-            $queriedBlacklistRecords = [];
-            foreach(BlacklistManager::getEntriesByEntity($entityRecord->getUuid(), includeLifted: $includeLifted) as $blacklistRecord)
-            {
-                $evidenceRecord = EvidenceManager::getEvidence($blacklistRecord->getUuid());
-                if(!$includeConfidential && ($evidenceRecord === null || $evidenceRecord->isConfidential()))
-                {
-                    $evidenceRecord = null; // Set to null if evidence is confidential or not available
-                }
-
-                $fileAttachments = [];
-                if($evidenceRecord !== null)
-                {
-                    // We automatically include the file attachments if the evidence record exists, because the
-                    // above check already checks for existence and confidentiality
-                    $fileAttachments = FileAttachmentManager::getRecordsByEvidence($evidenceRecord->getUuid());
-                }
-
-                $queriedBlacklistRecords[] = new QueriedBlacklistRecord($blacklistRecord, $evidenceRecord, $fileAttachments);
-            }
-
-            // Finally return the full EntityQueryResult object
-            return new EntityQueryResult(
-                $entityRecord, $queriedBlacklistRecords,
-                EvidenceManager::getEvidenceByEntity($entityRecord->getUuid()),
-                AuditLogManager::getEntriesByEntity($entityRecord->getUuid())
-            );
-        }
-
-        /**
          * Returns the total number of entities in the database.
          *
          * @return int The total number of entities.
@@ -855,6 +818,272 @@
             {
                 throw new DatabaseOperationException("Failed to count entities: " . $e->getMessage(), $e->getCode(), $e);
             }
+        }
+
+        /**
+         * Updates the reputation score for an entity atomically. The delta is added to the existing
+         * reputation and clamped to the configured bounds. The reputation cache is invalidated
+         * after the update so subsequent reads fetch the fresh value.
+         *
+         * @param string $entityUuid The UUID of the entity to update
+         * @param int $delta The amount to add to the current reputation (positive or negative)
+         * @return void
+         * @throws DatabaseOperationException If there is an error executing the SQL statement
+         */
+        public static function updateEntityReputation(string $entityUuid, int $delta): void
+        {
+            try
+            {
+                $minBound = Configuration::getScanningConfiguration()->getReputationMinBound();
+                $maxBound = Configuration::getScanningConfiguration()->getReputationMaxBound();
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET reputation = GREATEST(:minBound, LEAST(:maxBound, reputation + :delta)), reputation_last_updated = :updated WHERE uuid = :uuid"
+                );
+                $stmt->bindParam(':minBound', $minBound, PDO::PARAM_INT);
+                $stmt->bindParam(':maxBound', $maxBound, PDO::PARAM_INT);
+                $stmt->bindParam(':delta', $delta, PDO::PARAM_INT);
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update entity reputation: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+            }
+        }
+
+        /**
+         * Records a completed scan result into the open reputation window for the author entity.
+         *
+         * Author-specific and classification signals are attributed to the author entity.
+         * If the author entity has a parent entity, the same points are also attributed to the parent entity.
+         *
+         * @param ScannedContent $scannedContent The fully constructed scan result
+         */
+        public static function recordScan(ScannedContent $scannedContent): void
+        {
+            $redis = self::getReputationRedis();
+            if($redis === null)
+            {
+                return;
+            }
+
+            $now = time();
+            $scanResults = $scannedContent->getScanResults();
+
+            if($scannedContent->getAuthorEntity() !== null)
+            {
+                $authorUuid = $scannedContent->getAuthorEntity()->getEntity()->getUuid();
+                $authorPoints = 0.0;
+
+                foreach(ScanningRules::cases() as $rule)
+                {
+                    if($rule->isAuthorRule() || $rule->isClassificationRule())
+                    {
+                        $authorPoints += $scanResults[$rule->name] ?? 0.0;
+                    }
+                }
+
+                self::accumulateReputation($authorUuid, $authorPoints, $now, $redis);
+                self::closeReputationWindow($authorUuid, $redis);
+
+                $authorParent = $scannedContent->getAuthorEntity()->getParentEntity();
+                if($authorParent !== null)
+                {
+                    $parentUuid = $authorParent->getEntity()->getUuid();
+                    self::accumulateReputation($parentUuid, $authorPoints, $now, $redis);
+                    self::closeReputationWindow($parentUuid, $redis);
+                }
+            }
+        }
+
+        /**
+         * Clears the reputation score of an entity back to 0, clearing the reputation window
+         *
+         * @param string $uuid The target entity UUID
+         * @param bool $affectParent True to affect parent entities recursively, False otherwise
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function clearReputation(string $uuid, bool $affectParent=false): void
+        {
+            $entity = self::getEntityByUuid($uuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET reputation=0, reputation_last_updated=:updated WHERE uuid=:uuid"
+                );
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clear entity reputation: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+            }
+
+            $redis = self::getReputationRedis();
+            if($redis !== null)
+            {
+                $windowKey = self::REPUTATION_WINDOW_PREFIX . $uuid;
+                $redis->del($windowKey);
+                $redis->sRem(self::REPUTATION_ACTIVE_SET, $uuid);
+            }
+
+            if($affectParent)
+            {
+                $parentUuid = $entity->getRelationshipEntity();
+                if($parentUuid !== null)
+                {
+                    self::clearReputation($parentUuid);
+                }
+            }
+        }
+
+        /**
+         * Checks whether a single entity's reputation window has elapsed and, if so, computes the
+         * reputation delta, persists it to SQL, and cleans up the Redis window data.
+         *
+         * @param string $entityUuid The entity UUID
+         * @param Redis $redis The Redis connection
+         * @return bool True if the window was closed, False otherwise
+         */
+        private static function closeReputationWindow(string $entityUuid, Redis $redis): bool
+        {
+            $key = self::REPUTATION_WINDOW_PREFIX . $entityUuid;
+
+            try
+            {
+                $data = $redis->hGetAll($key);
+            }
+            catch (RedisException $e)
+            {
+                Logger::log()->error(sprintf('Failed to read reputation window for %s: %s', $entityUuid, $e->getMessage()), $e);
+                return false;
+            }
+
+            if(empty($data))
+            {
+                try
+                {
+                    $redis->sRem(self::REPUTATION_ACTIVE_SET, $entityUuid);
+                }
+                catch (RedisException $e)
+                {
+                    Logger::log()->error(sprintf('Failed to clean up stale reputation window set entry for %s: %s', $entityUuid, $e->getMessage()), $e);
+                }
+
+                return false;
+            }
+
+            $windowDuration = Configuration::getScanningConfiguration()->getReputationWindowDuration();
+            $windowStart = (int)($data['window_start'] ?? 0);
+            $now = time();
+
+            if($now - $windowStart < $windowDuration)
+            {
+                return false;
+            }
+
+            $accumulatedPoints = (float)($data['accumulated_points'] ?? 0.0);
+            $scanCount = (int)($data['scan_count'] ?? 0);
+            $maxDelta = Configuration::getScanningConfiguration()->getReputationMaxDelta();
+            $minDelta = Configuration::getScanningConfiguration()->getReputationMinDelta();
+            $scalingFactor = Configuration::getScanningConfiguration()->getReputationScalingFactor();
+
+            $delta = (int)round($accumulatedPoints * $scalingFactor);
+            $delta = max($minDelta, min($maxDelta, $delta));
+
+            try
+            {
+                if($delta !== 0)
+                {
+                    self::updateEntityReputation($entityUuid, $delta);
+
+                    Logger::log()->debug(sprintf('Reputation window closed for %s: %+d delta (%d scans, %.2f accumulated points)',
+                        $entityUuid, $delta, $scanCount, $accumulatedPoints
+                    ));
+                }
+
+                $redis->del($key);
+                $redis->sRem(self::REPUTATION_ACTIVE_SET, $entityUuid);
+                return true;
+            }
+            catch (DatabaseOperationException $e)
+            {
+                Logger::log()->error(sprintf('Failed to persist reputation for %s: %s', $entityUuid, $e->getMessage()), $e);
+                return false;
+            }
+            catch (RedisException $e)
+            {
+                Logger::log()->error(sprintf('Failed to clean up reputation window for %s: %s', $entityUuid, $e->getMessage()), $e);
+                return false;
+            }
+        }
+
+        /**
+         * Atomically accumulates scan points into an entity's open window.
+         * Creates the window if it does not yet exist.
+         *
+         * @param string $entityUuid The entity UUID
+         * @param float $points The points to add
+         * @param int $now Current Unix timestamp
+         * @param Redis $redis The Redis connection
+         */
+        private static function accumulateReputation(string $entityUuid, float $points, int $now, Redis $redis): void
+        {
+            $key = self::REPUTATION_WINDOW_PREFIX . $entityUuid;
+
+            try
+            {
+                $exists = $redis->exists($key);
+                if(!$exists)
+                {
+                    $redis->hMSet($key, [
+                        'window_start' => $now,
+                        'scan_count' => 0,
+                        'accumulated_points' => 0.0,
+                        'last_scan_at' => 0,
+                    ]);
+                }
+
+                $redis->hIncrByFloat($key, 'accumulated_points', $points);
+                $redis->hIncrBy($key, 'scan_count', 1);
+                $redis->hMSet($key, ['last_scan_at' => $now]);
+                $redis->sAdd(self::REPUTATION_ACTIVE_SET, $entityUuid);
+            }
+            catch (RedisException $e)
+            {
+                Logger::log()->error(sprintf('Failed to accumulate reputation for %s: %s', $entityUuid, $e->getMessage()), $e);
+            }
+        }
+
+        /**
+         * Returns the Redis connection for reputation window operations or null if unavailable.
+         *
+         * @return Redis|null
+         */
+        private static function getReputationRedis(): ?Redis
+        {
+            return RedisConnection::getConnection();
         }
 
         /**
