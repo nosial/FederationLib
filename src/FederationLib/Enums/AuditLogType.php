@@ -16,10 +16,15 @@
         case EVIDENCE_SUBMITTED = 'EVIDENCE_SUBMITTED';
         case EVIDENCE_DELETED = 'EVIDENCE_DELETED';
 
+        case REPORT_GENERATED = 'REPORT_GENERATED';
+        case REPORT_SUBMITTED = 'REPORT_SUBMITTED';
+        case REPORT_OPERATOR_ASSIGNED = 'REPORT_OPERATOR_ASSIGNED';
+
         case ENTITY_DELETED = 'ENTITY_DELETED';
         case ENTITY_BLACKLISTED = 'ENTITY_BLACKLISTED';
         case ENTITY_PUSHED = 'ENTITY_PUSHED';
         case ENTITY_UPDATED = 'ENTITY_UPDATED';
+        case ENTITY_REPUTATION_CLEARED = 'ENTITY_REPUTATION_CLEARED';
 
         case BLACKLIST_RECORD_DELETED = 'BLACKLIST_DELETED';
         case BLACKLIST_LIFTED = 'BLACKLIST_LIFTED';
@@ -43,7 +48,8 @@
                 self::EVIDENCE_SUBMITTED,
                 self::EVIDENCE_DELETED,
                 self::ENTITY_BLACKLISTED,
-                self::ENTITY_UPDATED
+                self::ENTITY_UPDATED,
+                self::REPORT_GENERATED
             ];
         }
     }
