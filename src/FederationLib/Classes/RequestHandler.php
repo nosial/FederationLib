@@ -8,7 +8,6 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
-    use FederationLib\Interfaces\StandardObjectInterface;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\SuccessResponse;
@@ -130,28 +129,31 @@
          * Respond with a success message and data.
          *
          * @param mixed $data Data to include in the response.
-         * @param int|HttpResponseCode $responseCode HTTP status code (default is 200).
          * @return void
          */
-        protected static function successResponse(mixed $data=null, int|HttpResponseCode $responseCode=200): void
+        protected static function successResponse(mixed $data = null, int|HttpResponseCode $responseCode = 200): void
         {
             if($responseCode instanceof HttpResponseCode)
             {
                 $responseCode = $responseCode->value;
             }
 
-            if($data instanceof StandardObjectInterface)
-            {
-                $data = $data->toStandardArray();
-            }
-            elseif($data instanceof SerializableInterface)
+            if($data instanceof SerializableInterface)
             {
                 $data = $data->toArray();
             }
 
             http_response_code($responseCode);
             self::returnHeaders();
-            print(json_encode((new SuccessResponse($data))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+            if($data === null)
+            {
+                print(json_encode((new SuccessResponse())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+            else
+            {
+                print(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
         }
 
         /**
@@ -196,7 +198,7 @@
         {
             header('Content-Type: application/json; charset=utf-8');
             header('Access-Control-Allow-Origin: *');
-            header('Access-Control-Allow-Methods: POST, PUT, GET, DELETE');
+            header('Access-Control-Allow-Methods: POST, PUT, GET, DELETE, PATCH');
             header('Access-Control-Allow-Headers: Content-Type, Authorization');
         }
 
