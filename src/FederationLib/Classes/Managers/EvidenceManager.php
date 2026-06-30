@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EvidenceRecord;
     use InvalidArgumentException;
@@ -26,11 +27,13 @@
          * @param string|null $note Optional note, can be null.
          * @param string|null $tag Optional tag, must be underscored and alphanumeric
          * @param bool $confidential Whether the evidence is confidential (default is false).
+         * @param string|null $report Optional. The UUID of the report record that this evidence record is associated with
+         * @param array|null $metadata Optional. Metadata to associate with the evidence record
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @return string The UUID of the newly created evidence record.
          */
-        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false): string
+        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?string $report=null, ?array $metadata=null): string
         {
             if(strlen($entity) < 1 || strlen($operator) < 1)
             {
@@ -81,11 +84,43 @@
                 }
             }
 
+            if($report !== null)
+            {
+                if(!Validate::uuid($report))
+                {
+                    throw new InvalidArgumentException('Invalid report UUID');
+                }
+
+                if(!ReportManager::reportExists($report))
+                {
+                    throw new InvalidArgumentException('The referenced report UUID does not exist');
+                }
+            }
+
+            if($metadata !== null)
+            {
+                if(!Validate::entityMetadata($metadata))
+                {
+                    throw new InvalidArgumentException('Invalid evidence metadata provided');
+                }
+            }
+
             $uuid = UuidV4::v4()->toRfc4122();
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence (uuid, entity, operator, confidential, text_content, note, tag) VALUES (:uuid, :entity, :operator, :confidential, :text_content, :note, :tag)");
+                $columns = 'uuid, entity, operator, confidential, text_content, note, tag, report';
+                $values = ':uuid, :entity, :operator, :confidential, :text_content, :note, :tag, :report';
+
+                if($metadata !== null)
+                {
+                    $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $columns .= ', metadata';
+                    $values .= ', :metadata';
+                }
+
+                $sql = "INSERT INTO evidence ({$columns}) VALUES ({$values})";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
@@ -93,6 +128,20 @@
                 $stmt->bindParam(':text_content', $textContent);
                 $stmt->bindParam(':note', $note);
                 $stmt->bindParam(':tag', $tag);
+                $stmt->bindParam(':report', $report);
+
+                if($metadata !== null)
+                {
+                    $stmt->bindParam(':metadata', $metadataJson);
+                }
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindParam(':entity', $entity);
+                $stmt->bindParam(':operator', $operator);
+                $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
+                $stmt->bindParam(':text_content', $textContent);
+                $stmt->bindParam(':note', $note);
+                $stmt->bindParam(':tag', $tag);
+                $stmt->bindParam(':report', $report);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -150,7 +199,7 @@
          * @param string $evidenceUuid The UUID of the evidence record.
          * @return EvidenceRecord|null The EvidenceRecord object if found, null otherwise.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws Denum('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER')atabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
         public static function getEvidence(string $evidenceUuid): ?EvidenceRecord
@@ -457,7 +506,74 @@
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to retrieve evidence by entity: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to retrieve evidence by tag: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
+        }
+
+        /**
+         * Returns an array of evidence records assigned to a report record
+         *
+         * @param string $report The report UUID to search by
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page to view
+         * @param bool $includeConfidential True to include confidential evidence records, False otherwise
+         * @return EvidenceRecord[] An array of EvidenceRecord objcts
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function getEvidenceByReport(string $report, int $limit=100, int $page=1, bool $includeConfidential=false): array
+        {
+            if(strlen($report) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($report))
+            {
+                throw new InvalidArgumentException('Invalid report UUID');
+            }
+
+            if(!ReportManager::reportExists($report))
+            {
+                throw new InvalidArgumentException('Report record not found');
+            }
+
+            try
+            {
+                $offset = ($page - 1) * $limit;
+                $query = "SELECT * FROM evidence WHERE report=:report";
+                if(!$includeConfidential)
+                {
+                    $query .= " AND confidential = 0";
+                }
+                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($query);
+                $stmt->bindParam(':report', $report);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $evidenceRecords = [];
+                foreach ($results as $data)
+                {
+                    $evidenceRecords[] = new EvidenceRecord($data);
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve evidence by report: " . $e->getMessage(), $e->getCode(), $e);
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -572,16 +688,110 @@
                 throw new InvalidArgumentException('UUID must be provided.');
             }
 
+            $now = date('Y-m-d H:i:s');
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET tag = :tag WHERE uuid = :uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET tag=:tag, updated=:updated WHERE uuid=:uuid");
                 $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->bindParam(':tag', $tagName, PDO::PARAM_BOOL);
+                $stmt->bindParam(':updated', $now);
                 $stmt->execute();
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to update tag: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                }
+            }
+        }
+
+        /**
+         * Updates/sets the classification flag for an evidence record
+         *
+         * @param string $evidence The UUID of the evidence record to update
+         * @param ClassificationFlag $classification The classification flag to set
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function updateClassificationFlag(string $evidence, ClassificationFlag $classification): void
+        {
+            $now = date('Y-m-d H:i:s');
+
+            try
+            {
+                $classification = $classification->value;
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET evidence.classification_flag=:classification_flag, updated=:updated WHERE uuid=:uuid");
+                $stmt->bindParam(':uuid', $evidenceUuid);
+                $stmt->bindParam(':classification_flag', $classification, PDO::PARAM_BOOL);
+                $stmt->bindParam(':updated', $now);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update classification flag: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                }
+            }
+        }
+
+        /**
+         * Updates the report association of an existing evidence record.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to update
+         * @param string $reportUuid The UUID of the report to associate with the evidence record
+         * @throws InvalidArgumentException If the evidence or report UUID is invalid
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement
+         */
+        public static function updateEvidenceReport(string $evidenceUuid, string $reportUuid): void
+        {
+            if(strlen($evidenceUuid) < 1)
+            {
+                throw new InvalidArgumentException('Evidence UUID must be provided.');
+            }
+
+            if(!Validate::uuid($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Invalid evidence UUID');
+            }
+
+            if(strlen($reportUuid) < 1)
+            {
+                throw new InvalidArgumentException('Report UUID must be provided.');
+            }
+
+            if(!Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException('Invalid report UUID');
+            }
+
+            if(!ReportManager::reportExists($reportUuid))
+            {
+                throw new InvalidArgumentException('The referenced report UUID does not exist');
+            }
+
+            $now = date('Y-m-d H:i:s');
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET report=:report, updated=:updated WHERE uuid=:uuid");
+                $stmt->bindParam(':uuid', $evidenceUuid);
+                $stmt->bindParam(':report', $reportUuid);
+                $stmt->bindParam(':updated', $now);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update evidence report: " . $e->getMessage(), $e->getCode(), $e);
             }
             finally
             {
