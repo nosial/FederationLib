@@ -14,6 +14,11 @@
         private int $offset;
         private int $limit;
 
+        /**
+         * Constructs a BayesianAnalytics instance from an array
+         *
+         * @param array $array Data array with keys: entries, total, returned, offset, limit
+         */
         public function __construct(array $array)
         {
             $this->entries = [];
@@ -51,26 +56,51 @@
             }
         }
 
+        /**
+         * Returns the analytics entries
+         *
+         * @return AnalyticalEntry[] The list of analytical entries
+         */
         public function getEntries(): array
         {
             return $this->entries;
         }
 
+        /**
+         * Returns the total number of records
+         *
+         * @return int Total records count
+         */
         public function getTotal(): int
         {
             return $this->total;
         }
 
+        /**
+         * Returns the number of returned records
+         *
+         * @return int Returned records count
+         */
         public function getReturned(): int
         {
             return $this->returned;
         }
 
+        /**
+         * Returns the offset used for pagination
+         *
+         * @return int The offset value
+         */
         public function getOffset(): int
         {
             return $this->offset;
         }
 
+        /**
+         * Returns the limit used for pagination
+         *
+         * @return int The limit value
+         */
         public function getLimit(): int
         {
             return $this->limit;
