@@ -25,6 +25,11 @@
         private float $confidence;
         private float $processingTimeMs;
 
+        /**
+         * Constructs a BayesianClassification from an array
+         *
+         * @param array $array Data array with classification fields
+         */
         public function __construct(array $array)
         {
             $this->labels = [];
@@ -70,66 +75,131 @@
             }
         }
 
+        /**
+         * Returns the list of label classifications
+         *
+         * @return LabelClassification[] Array of label classifications
+         */
         public function getLabels(): array
         {
             return $this->labels;
         }
 
+        /**
+         * Returns the top predicted label
+         *
+         * @return string The top label name
+         */
         public function getTopLabel(): string
         {
             return $this->topLabel;
         }
 
+        /**
+         * Returns the probability of the top label
+         *
+         * @return float Top label probability
+         */
         public function getTopProbability(): float
         {
             return $this->topProbability;
         }
 
+        /**
+         * Returns the list of predicted labels
+         *
+         * @return array List of predicted label names
+         */
         public function getPredictedLabels(): array
         {
             return $this->predictedLabels;
         }
 
+        /**
+         * Returns the classification threshold
+         *
+         * @return float The threshold value
+         */
         public function getThreshold(): float
         {
             return $this->threshold;
         }
 
+        /**
+         * Returns the total number of tokens
+         *
+         * @return int Total token count
+         */
         public function getTotalTokens(): int
         {
             return $this->totalTokens;
         }
 
+        /**
+         * Returns the number of known tokens
+         *
+         * @return int Known token count
+         */
         public function getKnownTokens(): int
         {
             return $this->knownTokens;
         }
 
+        /**
+         * Returns the number of unknown tokens
+         *
+         * @return int Unknown token count
+         */
         public function getUnknownTokenCount(): int
         {
             return $this->unknownTokenCount;
         }
 
+        /**
+         * Returns the model version
+         *
+         * @return float The model version number
+         */
         public function getModelVersion(): float
         {
             return $this->modelVersion;
         }
 
+        /**
+         * Returns the scoring method used
+         *
+         * @return string The scoring method name
+         */
         public function getScoringMethod(): string
         {
             return $this->scoringMethod;
         }
 
+        /**
+         * Returns the language code
+         *
+         * @return string The language code (e.g., 'en', 'de')
+         */
         public function getLanguageCode(): string
         {
             return $this->languageCode;
         }
 
+        /**
+         * Returns the confidence score
+         *
+         * @return float The confidence value
+         */
         public function getConfidence(): float
         {
             return $this->confidence;
         }
 
+        /**
+         * Returns the processing time in milliseconds
+         *
+         * @return float Processing time in ms
+         */
         public function getProcessingTimeMs(): float
         {
             return $this->processingTimeMs;
