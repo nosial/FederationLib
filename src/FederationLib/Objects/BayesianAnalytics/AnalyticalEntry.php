@@ -19,6 +19,11 @@
         private ?string $rejectedReason;
         private int $textLength;
 
+        /**
+         * Constructs an AnalyticalEntry from an array
+         *
+         * @param array $array Data array with analytical entry fields
+         */
         public function __construct(array $array)
         {
             $this->timestamp = (int)$array['timestamp'];
@@ -34,56 +39,111 @@
             $this->textLength = $array['text_length'];
         }
 
+        /**
+         * Returns the timestamp of the analytical entry
+         *
+         * @return int Unix timestamp
+         */
         public function getTimestamp(): int
         {
             return $this->timestamp;
         }
 
+        /**
+         * Returns the event type
+         *
+         * @return BayesianEventType The event type
+         */
         public function getType(): BayesianEventType
         {
             return $this->type;
         }
 
+        /**
+         * Returns the language code
+         *
+         * @return string The language code (e.g., 'en', 'de')
+         */
         public function getLanguageCode(): string
         {
             return $this->languageCode;
         }
 
+        /**
+         * Returns the classification labels
+         *
+         * @return array List of classification labels
+         */
         public function getLabels(): array
         {
             return $this->labels;
         }
 
+        /**
+         * Returns the token count
+         *
+         * @return int Number of tokens
+         */
         public function getTokenCount(): int
         {
             return $this->tokenCount;
         }
 
+        /**
+         * Returns the confidence score
+         *
+         * @return float The confidence value
+         */
         public function getConfidence(): float
         {
             return $this->confidence;
         }
 
+        /**
+         * Returns the processing time in milliseconds
+         *
+         * @return int Processing time in ms
+         */
         public function getProcessingTimeMs(): int
         {
             return $this->processingTimeMs;
         }
 
+        /**
+         * Returns the model version
+         *
+         * @return int The model version number
+         */
         public function getModelVersion(): int
         {
             return $this->modelVersion;
         }
 
+        /**
+         * Returns whether the operation was successful
+         *
+         * @return bool True if successful, False otherwise
+         */
         public function isSuccess(): bool
         {
             return $this->success;
         }
 
+        /**
+         * Returns the rejection reason if the entry was rejected
+         *
+         * @return string|null The rejection reason or null
+         */
         public function getRejectedReason(): ?string
         {
             return $this->rejectedReason;
         }
 
+        /**
+         * Returns the text length
+         *
+         * @return int The text length in characters
+         */
         public function getTextLength(): int
         {
             return $this->textLength;
