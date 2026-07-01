@@ -15,19 +15,30 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Interfaces\RequestSpecificationInterface;
+    use FederationLib\Objects\ErrorResponse;
 
-    class BlacklistEntity extends RequestHandler
+    class BlacklistEntity extends RequestHandler implements RequestSpecificationInterface
     {
+        private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to manage the blacklist';
+        private const string ERROR_ENTITY_IDENTIFIER_REQUIRED = 'Entity UUID is required';
+        private const string ERROR_INVALID_TYPE = 'A valid blacklist type is required';
+        private const string ERROR_EXPIRES_IN_PAST = 'The expiration time must be in the future';
+        private const string ERROR_INVALID_EVIDENCE = 'Evidence must be a valid UUID';
+        private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
+        private const string ERROR_ENTITY_NOT_FOUND = 'Entity not found';
+        private const string ERROR_EVIDENCE_NOT_FOUND = 'Evidence not found';
+        private const string ERROR_FAILED_TO_BLACKLIST = 'Failed to blacklist entity';
+
         /**
          * @inheritDoc
          */
         public static function handleRequest(): void
         {
-            // Get the authenticated operator
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(!$authenticatedOperator->canManageBlacklist())
+            if(!$authenticatedOperator->hasManagementPermissions())
             {
-                throw new RequestException('Insufficient permissions to manage the blacklist', HttpResponseCode::FORBIDDEN);
+                throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
             $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
@@ -37,25 +48,25 @@
 
             if($entityIdentifier === null)
             {
-                throw new RequestException('Entity UUID is required', HttpResponseCode::BAD_REQUEST);
+                throw new RequestException(self::ERROR_ENTITY_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }
 
             if($type === null)
             {
-                throw new RequestException('A valid blacklist type is required', HttpResponseCode::BAD_REQUEST);
+                throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
             }
 
             if($expires !== null)
             {
                 if((int)$expires < time())
                 {
-                    throw new RequestException('The expiration time must be in the future', HttpResponseCode::BAD_REQUEST);
+                    throw new RequestException(self::ERROR_EXPIRES_IN_PAST, HttpResponseCode::BAD_REQUEST);
                 }
             }
 
             if($evidence !== null && !Validate::uuid($evidence))
             {
-                throw new RequestException('Evidence must be a valid UUID', HttpResponseCode::BAD_REQUEST);
+                throw new RequestException(self::ERROR_INVALID_EVIDENCE, HttpResponseCode::BAD_REQUEST);
             }
 
             try
@@ -68,19 +79,24 @@
                 {
                     $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
                 }
+                elseif(Utilities::isEntityAddress($entityIdentifier))
+                {
+                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
+                }
                 else
                 {
-                    throw new RequestException('Given identifier is not a valid UUID or SHA-256 input', 400);
+                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, 400);
                 }
 
                 if($entityRecord === null)
                 {
-                    throw new RequestException('Entity not found', HttpResponseCode::NOT_FOUND);
+                    throw new RequestException(self::ERROR_ENTITY_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
                 if($evidence !== null && !EvidenceManager::evidenceExists($evidence))
                 {
-                    throw new RequestException('Evidence not found', HttpResponseCode::NOT_FOUND);
+                    throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
                 $blacklistUuid = BlacklistManager::blacklistEntity(
@@ -101,9 +117,137 @@
             }
             catch(DatabaseOperationException $e)
             {
-                throw new RequestException('Failed to blacklist entity', 500, $e);
+                throw new RequestException(self::ERROR_FAILED_TO_BLACKLIST, 500, $e);
             }
 
             self::successResponse($blacklistUuid, HttpResponseCode::CREATED);
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getTags(): array
+        {
+            return ['Blacklist'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getSummary(): string
+        {
+            return 'Blacklist an entity';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getDescription(): string
+        {
+            return 'Creates a new blacklist entry for an entity. The entity can be identified by UUID, SHA-256 hash, or entity address. Requires management permissions.';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getOperationId(): string
+        {
+            return 'blacklistEntity';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getParameters(): array
+        {
+            return [];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getRequestBody(): ?array
+        {
+            return [
+                'required' => true,
+                'content' => [
+                    'application/json' => [
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'entity_identifier' => [
+                                    'type' => 'string',
+                                    'description' => 'UUID, SHA-256 hash, or entity address of the entity to blacklist',
+                                ],
+                                'type' => [
+                                    'type' => 'string',
+                                    'description' => 'The type of incident (e.g. spam, scam, malware)',
+                                ],
+                                'evidence_uuid' => [
+                                    'type' => 'string',
+                                    'format' => 'uuid',
+                                    'description' => 'UUID of evidence supporting the blacklist',
+                                    'nullable' => true,
+                                ],
+                                'expires' => [
+                                    'type' => 'integer',
+                                    'description' => 'Unix timestamp when the blacklist should expire',
+                                    'nullable' => true,
+                                ],
+                            ],
+                            'required' => ['entity_identifier', 'type'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getResponses(): array
+        {
+            return [
+                '201' => [
+                    'description' => 'Entity blacklisted successfully',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the created blacklist record'],
+                        ],
+                    ],
+                ],
+                '400' => [
+                    'description' => self::ERROR_INVALID_IDENTIFIER,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '403' => [
+                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '404' => [
+                    'description' => self::ERROR_ENTITY_NOT_FOUND,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '500' => [
+                    'description' => self::ERROR_FAILED_TO_BLACKLIST,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+            ];
         }
     }
