@@ -12,21 +12,27 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\UploadResult;
     use Symfony\Component\Uid\Uuid;
     use Throwable;
+    use FederationLib\Interfaces\RequestSpecificationInterface;
 
-    class UploadAttachment extends RequestHandler
+    class UploadAttachment extends RequestHandler implements RequestSpecificationInterface
     {
+        private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to upload attachments';
+        private const string ERROR_EVIDENCE_NOT_FOUND = 'Evidence not found';
+        private const string ERROR_UNABLE_TO_UPLOAD = 'Unable to upload file attachment to server';
+
         /**
          * @inheritDoc
          */
         public static function handleRequest(): void
         {
             $operator = FederationServer::requireAuthenticatedOperator();
-            if(!$operator->canManageBlacklist())
+            if(!$operator->hasClientPermissions())
             {
-                throw new RequestException('Insufficient Permissions to upload attachments', 403);
+                throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
             $evidenceUuid = FederationServer::getParameter('evidence_uuid') ?? null;
@@ -42,12 +48,12 @@
                 {
                     if(!EvidenceManager::evidenceExists($evidenceUuid))
                     {
-                        throw new RequestException('Evidence not found', 404);
+                        throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, 404);
                     }
                 }
                 catch (DatabaseOperationException $e)
                 {
-                    throw new RequestException('Evidence not found or database error', 404, $e);
+                    throw new RequestException('Unable to verify evidence record', 500, $e);
                 }
             }
 
@@ -67,12 +73,12 @@
             // Validate the file size
             if (!isset($file['size']) || $file['size'] <= 0)
             {
-                throw new RequestException('Invalid file size');
+                throw new RequestException('Invalid file size', 400);
             }
 
             if ($file['size'] > Configuration::getServerConfiguration()->getMaxUploadSize())
             {
-                throw new RequestException(sprintf("File exceeds maximum allowed size (%d bytes)", Configuration::getServerConfiguration()->getMaxUploadSize()), 401);
+                throw new RequestException(sprintf("File exceeds maximum allowed size (%d bytes)", Configuration::getServerConfiguration()->getMaxUploadSize()), 400);
             }
 
             // Validate file upload status
@@ -84,7 +90,7 @@
             // Validate file exists and is readable
             if (!is_file($file['tmp_name']) || !is_readable($file['tmp_name']))
             {
-                throw new RequestException('Uploaded file is not accessible');
+                throw new RequestException('Uploaded file is not accessible', 400);
             }
 
             $detectedMimeType = self::detectMimeType($file['tmp_name']);
@@ -104,7 +110,7 @@
             $realpath = realpath($file['tmp_name']);
             if ($realpath === false || !str_starts_with($realpath, sys_get_temp_dir()))
             {
-                throw new RequestException('Path traversal attempt detected');
+                throw new RequestException('Request not allowed', 400);
             }
 
             // Get file storage path and ensure the directory exists
@@ -170,7 +176,7 @@
             {
                 // Handle any other unexpected errors
                 @unlink($destinationPath);
-                throw new RequestException('Unable to upload file attachment to server', 500, $e);
+                throw new RequestException(self::ERROR_UNABLE_TO_UPLOAD, 500, $e);
             }
             finally
             {
@@ -268,6 +274,125 @@
             }
 
             return $filename;
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getTags(): array
+        {
+            return ['Attachments'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getSummary(): string
+        {
+            return 'Upload a file attachment';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getDescription(): string
+        {
+            return 'Uploads a file as an attachment, optionally associating it with an evidence record. Client permissions are required.';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getOperationId(): string
+        {
+            return 'uploadAttachment';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getParameters(): array
+        {
+            return [];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getRequestBody(): ?array
+        {
+            return [
+                'required' => true,
+                'content' => [
+                    'multipart/form-data' => [
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'file' => [
+                                    'type' => 'string',
+                                    'format' => 'binary',
+                                    'description' => 'The file to upload',
+                                ],
+                                'evidence_uuid' => [
+                                    'type' => 'string',
+                                    'format' => 'uuid',
+                                    'description' => 'UUID of the evidence record to associate the attachment with',
+                                ],
+                            ],
+                            'required' => ['file'],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getResponses(): array
+        {
+            return [
+                '201' => [
+                    'description' => 'File uploaded successfully',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => UploadResult::getReference()],
+                        ],
+                    ],
+                ],
+                '400' => [
+                    'description' => 'Invalid request, missing file, invalid UUID, or validation failure',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '403' => [
+                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '404' => [
+                    'description' => self::ERROR_EVIDENCE_NOT_FOUND,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '500' => [
+                    'description' => self::ERROR_UNABLE_TO_UPLOAD,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+            ];
         }
     }
 
