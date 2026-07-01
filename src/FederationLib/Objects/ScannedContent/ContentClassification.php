@@ -117,6 +117,11 @@
             return '#/components/schemas/ContentClassification';
         }
 
+        /**
+         * Returns a string representation of the content classification
+         *
+         * @return string Human-readable classification details
+         */
         public function __toString(): string
         {
             return sprintf('Detected Classification Type: %s (Confidence: %f%%), content language: %s', $this->classificationFlag->value, $this->confidence, $this->detectedLanguage);
