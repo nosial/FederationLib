@@ -10,9 +10,9 @@ create table entities
     reputation              int           default 0                    not null comment 'The reputation score of the entity',
     reputation_last_updated timestamp     default null                 null comment 'The timestamp for when the reputation score was last updated',
     relationship_entity     varchar(36)                                null comment 'Optional. The target entity UUID that this entity has a relationship with',
-    relationship_type       enum ('ALTERNATIVE', 'PROXY', 'DEPENDENT') null comment 'Optional. The type of relationship with the target peer',
+    relationship_type       enum ('ALTERNATIVE', 'PROXY', 'DEPENDENT', 'CHILD') null comment 'Optional. The type of relationship with the target peer',
     created                 timestamp     default current_timestamp()  not null comment 'The Timestamp for when this entity was created',
-    updated                 timestamp     default null                 null comment 'The Timestamp for when the entity record was last updted',
+    updated                 timestamp     default null                 null comment 'The Timestamp for when the entity record was last updated',
     constraint entities_hash_uindex
         unique (hash),
     constraint entities_id_domain_uindex
