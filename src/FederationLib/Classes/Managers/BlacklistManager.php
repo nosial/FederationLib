@@ -37,6 +37,16 @@
                 throw new InvalidArgumentException("Entity and operator cannot be empty.");
             }
 
+            if(!Validate::uuid($entityUuid))
+            {
+                throw new InvalidArgumentException("Entity must be a valid UUID.");
+            }
+
+            if(!Validate::uuid($operatorUuid))
+            {
+                throw new InvalidArgumentException("Operator must be a valid UUID.");
+            }
+
             if(!is_null($expires) && $expires < time())
             {
                 throw new InvalidArgumentException("Expiration time must be in the future or null for permanent blacklisting.");
@@ -92,6 +102,11 @@
             if(empty($entityUuid))
             {
                 throw new InvalidArgumentException("Entity cannot be empty.");
+            }
+
+            if(!Validate::uuid($entityUuid))
+            {
+                throw new InvalidArgumentException("Entity must be a valid UUID.");
             }
 
             try
@@ -190,7 +205,7 @@
             if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getBlacklistCacheLimit()))
             {
                 RedisConnection::setRecord(
-                    record: $result, cacheKey: self::CACHE_PREFIX,
+                    record: $result, cacheKey: self::CACHE_PREFIX . $result->getUuid(),
                     ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
                 );
             }
@@ -444,23 +459,63 @@
         }
 
         /**
-         * Cleans up blacklist entries that have expired based on the specified number of days.
+         * Retrieves all blacklist entries associated with a specific evidence record.
          *
-         * @param int $getCleanBlacklistDays The number of days to consider for cleaning expired entries.
-         * @return int The number of entries cleaned.
-         * @throws InvalidArgumentException If the number of days is less than or equal to zero.
+         * @param string $evidenceUuid The UUID of the evidence.
+         * @return BlacklistRecord[] An array of BlacklistRecord objects.
+         * @throws InvalidArgumentException If the evidence UUID is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function cleanEntries(int $getCleanBlacklistDays): int
+        public static function getEntriesByEvidence(string $evidenceUuid): array
         {
-            // Remove blacklist records older than $cleanBlacklistDays and if the expiration hasn't been expired yet
-            if($getCleanBlacklistDays <= 0)
+            if(empty($evidenceUuid))
             {
-                throw new InvalidArgumentException("Number of days must be greater than zero.");
+                throw new InvalidArgumentException("Evidence UUID cannot be empty.");
             }
 
-            // Mariadb uses Timestamp
-            $dateThreshold = date('Y-m-d H:i:s', strtotime("-$getCleanBlacklistDays days"));
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE evidence=:evidence_uuid ORDER BY created DESC, uuid DESC");
+                $stmt->bindParam(':evidence_uuid', $evidenceUuid);
+                $stmt->execute();
+
+                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $results = array_map(fn($data) => new BlacklistRecord($data), $results);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve blacklist entries by evidence: " . $e->getMessage(), 0, $e);
+            }
+
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
+            }
+
+            return $results;
+        }
+
+        /**
+         * Cleans up blacklist entries that have expired based on the specified TTL.
+         *
+         * @param int $ttl The TTL in seconds to consider for cleaning expired entries.
+         * @return int The number of entries cleaned.
+         * @throws InvalidArgumentException If the TTL is less than or equal to zero.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $ttl): int
+        {
+            // Remove blacklist records older than $ttl and if the expiration hasn't been expired yet
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException("TTL must be greater than zero.");
+            }
+
+            $dateThreshold = date('Y-m-d H:i:s', time() - $ttl);
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE (expires IS NOT NULL AND expires < :date_threshold) OR (expires IS NULL AND created < :date_threshold)");
