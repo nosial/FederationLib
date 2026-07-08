@@ -13,7 +13,6 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use RedisException;
 
     class FileAttachmentManager
     {
@@ -124,10 +123,6 @@
             {
                 throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), $e->getCode(), $e);
             }
-            catch (RedisException $e)
-            {
-                throw new CacheOperationException("Cache operation failed: " . $e->getMessage(), $e->getCode(), $e);
-            }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
@@ -162,6 +157,10 @@
 
             // Retrieve the attachment first before deleting it.
             $existingAttachment = self::getRecord($uuid);
+            if($existingAttachment === null)
+            {
+                throw new DatabaseOperationException("File attachment record not found");
+            }
 
             try
             {
@@ -260,6 +259,104 @@
             {
                 throw new DatabaseOperationException("Failed to count file attachment records: " . $e->getMessage(), $e->getCode(), $e);
             }
+        }
+
+        /**
+         * Retrieves file attachment records older than the specified TTL.
+         *
+         * @param int $ttl The TTL in seconds to look back
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page number for pagination
+         * @return array[] An array of raw file attachment record data
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM file_attachments WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve old file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Deletes file attachment records older than the specified TTL.
+         * Physical files on disk are also removed.
+         *
+         * @param int $ttl The TTL in seconds after which file attachment records are considered old
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $ttl): int
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            $deletedCount = 0;
+
+            try
+            {
+                // First, fetch records to delete physical files
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT uuid FROM file_attachments WHERE created < :timestamp"
+                );
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->execute();
+
+                $uuids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+                // Delete physical files
+                $storagePath = Configuration::getServerConfiguration()->getStoragePath();
+                foreach ($uuids as $uuid)
+                {
+                    $filePath = rtrim($storagePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $uuid;
+                    if(file_exists($filePath) && is_writable($filePath))
+                    {
+                        @unlink($filePath);
+                    }
+                }
+
+                // Delete database records
+                $deleteStmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE created < :timestamp");
+                $deleteStmt->bindParam(':timestamp', $timestamp);
+                $deleteStmt->execute();
+                $deletedCount = $deleteStmt->rowCount();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clean file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                }
+            }
+
+            return $deletedCount;
         }
 
         /**
