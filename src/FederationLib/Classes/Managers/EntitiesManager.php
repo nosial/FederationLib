@@ -547,6 +547,11 @@
                 throw new InvalidArgumentException("Entity UUID must be provided.");
             }
 
+            if(!Validate::uuid($uuid))
+            {
+                throw new InvalidArgumentException("Entity UUID must be valid.");
+            }
+
             if(self::isCachingEnabled())
             {
                 if(RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $uuid)))
@@ -953,12 +958,12 @@
                 $parentUuid = $entity->getRelationshipEntity();
                 if($parentUuid !== null)
                 {
-                    self::clearReputation($parentUuid);
+                    self::clearReputation($parentUuid, $affectParent);
                 }
             }
         }
 
-        /**
+        /**AuditLogManager
          * Checks whether a single entity's reputation window has elapsed and, if so, computes the
          * reputation delta, persists it to SQL, and cleans up the Redis window data.
          *
@@ -1084,6 +1089,82 @@
         private static function getReputationRedis(): ?Redis
         {
             return RedisConnection::getConnection();
+        }
+
+        /**
+         * Retrieves entity records older than the specified TTL.
+         *
+         * @param int $ttl The TTL in seconds to look back
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page number for pagination
+         * @return array[] An array of raw entity record data
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM entities WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve old entity records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Deletes entity records older than the specified TTL.
+         * Related evidence, reports, and blacklist records are cascade-deleted by the database.
+         *
+         * @param int $ttl The TTL in seconds after which entity records are considered old
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $ttl): int
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE created < :timestamp");
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->execute();
+                return $stmt->rowCount();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clean entity records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
+                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
+                }
+            }
         }
 
         /**
