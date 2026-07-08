@@ -583,6 +583,80 @@
         }
 
         /**
+         * Retrieves report records older than the specified TTL.
+         *
+         * @param int $ttl The TTL in seconds to look back
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page number for pagination
+         * @return array[] An array of raw report record data
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM reports WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve old report records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Deletes report records older than the specified TTL.
+         * Related evidence records have their report FK set to NULL by the database.
+         *
+         * @param int $ttl The TTL in seconds after which report records are considered old
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $ttl): int
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM reports WHERE created < :timestamp");
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->execute();
+                return $stmt->rowCount();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clean report records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                }
+            }
+        }
+
+        /**
          * Checks if caching is enabled based on the configuration.
          *
          * @return bool True if caching is enabled, false otherwise.
