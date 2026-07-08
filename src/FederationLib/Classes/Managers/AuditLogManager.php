@@ -7,6 +7,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\AuditLog;
@@ -37,29 +38,29 @@
                 throw new InvalidArgumentException("Message cannot be empty.");
             }
 
-            if($operatorUuid !== null && strlen($operatorUuid) === 0)
+            if($operatorUuid !== null && !Validate::uuid($operatorUuid))
             {
-                throw new InvalidArgumentException("Operator UUID cannot be empty.");
+                throw new InvalidArgumentException("Operator UUID must be valid.");
             }
 
-            if($entityUuid !== null && strlen($entityUuid) === 0)
+            if($entityUuid !== null && !Validate::uuid($entityUuid))
             {
-                throw new InvalidArgumentException("Entity UUID cannot be empty.");
+                throw new InvalidArgumentException("Entity UUID must be valid.");
             }
 
-            if($blacklistUuid !== null && strlen($blacklistUuid) === 0)
+            if($blacklistUuid !== null && !Validate::uuid($blacklistUuid))
             {
-                throw new InvalidArgumentException("Blacklist UUID cannot be empty.");
+                throw new InvalidArgumentException("Blacklist UUID must be valid.");
             }
 
-            if($evidenceUuid !== null && strlen($evidenceUuid) === 0)
+            if($evidenceUuid !== null && !Validate::uuid($evidenceUuid))
             {
-                throw new InvalidArgumentException("Evidence UUID cannot be empty.");
+                throw new InvalidArgumentException("Evidence UUID must be valid.");
             }
 
-            if($fileAttachmentUuid !== null && strlen($fileAttachmentUuid) === 0)
+            if($fileAttachmentUuid !== null && !Validate::uuid($fileAttachmentUuid))
             {
-                throw new InvalidArgumentException("File attachment UUID cannot be empty.");
+                throw new InvalidArgumentException("File attachment UUID must be valid.");
             }
 
             if($operatorUuid !== null && $entityUuid !== null)
@@ -390,19 +391,20 @@
         }
 
         /**
-         * Deletes all audit log entries.
+         * Deletes audit log entries older than the given TTL.
          *
+         * @param int $ttl The TTL in seconds.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @return int The number of rows deleted.
          */
-        public static function cleanEntries(int $olderThanDays): int
+        public static function cleanEntries(int $ttl): int
         {
-            if($olderThanDays <= 0)
+            if($ttl <= 0)
             {
-                throw new InvalidArgumentException("Days must be greater than zero.");
+                throw new InvalidArgumentException("TTL must be greater than zero.");
             }
 
-            $timestamp = time() - ($olderThanDays * 86400); // Convert days to seconds
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
 
             try
             {
