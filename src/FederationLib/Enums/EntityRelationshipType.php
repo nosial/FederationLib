@@ -24,5 +24,5 @@
          * Indicates the entity acts as a dependent entity for the target entity. eg; the target peer created a bot as
          * a dependent entity
          */
-        case DEPENDENT = 'dependent';
+        case CHILD = 'child';
     }
