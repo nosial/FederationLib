@@ -119,7 +119,7 @@
                     $values .= ', :metadata';
                 }
 
-                $sql = "INSERT INTO evidence ({$columns}) VALUES ({$values})";
+                $sql = "INSERT INTO evidence ($columns) VALUES ($values)";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
@@ -134,14 +134,6 @@
                 {
                     $stmt->bindParam(':metadata', $metadataJson);
                 }
-                $stmt->bindParam(':uuid', $uuid);
-                $stmt->bindParam(':entity', $entity);
-                $stmt->bindParam(':operator', $operator);
-                $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
-                $stmt->bindParam(':text_content', $textContent);
-                $stmt->bindParam(':note', $note);
-                $stmt->bindParam(':tag', $tag);
-                $stmt->bindParam(':report', $report);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -198,9 +190,7 @@
          *
          * @param string $evidenceUuid The UUID of the evidence record.
          * @return EvidenceRecord|null The EvidenceRecord object if found, null otherwise.
-         * @throws InvalidArgumentException If the UUID is not provided or is empty.
-         * @throws Denum('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER')atabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws InvalidArgumentException If the UUID is not a valid UUID format.
+         * @throws DatabaseOperationException Thrown if there was a database exception
          */
         public static function getEvidence(string $evidenceUuid): ?EvidenceRecord
         {
@@ -313,7 +303,7 @@
         }
 
         /**
-         * Retrieves all evidence records associated with a specific operator.
+         * Retrieves all evidence records associated with a specific entity.
          *
          * @param string $entityUuid The UUID of the entity.
          * @param int $limit The maximum number of records to return (default is 100).
@@ -548,6 +538,16 @@
                 throw new InvalidArgumentException('Report record not found');
             }
 
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than zero.');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than zero.');
+            }
+
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -694,7 +694,7 @@
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET tag=:tag, updated=:updated WHERE uuid=:uuid");
                 $stmt->bindParam(':uuid', $evidenceUuid);
-                $stmt->bindParam(':tag', $tagName, PDO::PARAM_BOOL);
+                $stmt->bindParam(':tag', $tagName);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
             }
@@ -721,13 +721,13 @@
         public static function updateClassificationFlag(string $evidence, ClassificationFlag $classification): void
         {
             $now = date('Y-m-d H:i:s');
+            $classificationValue = $classification->value;
 
             try
             {
-                $classification = $classification->value;
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET evidence.classification_flag=:classification_flag, updated=:updated WHERE uuid=:uuid");
-                $stmt->bindParam(':uuid', $evidenceUuid);
-                $stmt->bindParam(':classification_flag', $classification, PDO::PARAM_BOOL);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET classification_flag=:classification_flag, updated=:updated WHERE uuid=:uuid");
+                $stmt->bindParam(':uuid', $evidence);
+                $stmt->bindParam(':classification_flag', $classificationValue);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
             }
@@ -737,9 +737,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidence)))
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidence));
                 }
             }
         }
@@ -818,6 +818,82 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to count evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Retrieves evidence records older than the specified TTL.
+         *
+         * @param int $ttl The TTL in seconds to look back
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page number for pagination
+         * @return array[] An array of raw evidence record data
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM evidence WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve old evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Deletes evidence records older than the specified TTL.
+         * Related file_attachments and blacklist records are cascade-deleted by the database.
+         *
+         * @param int $ttl The TTL in seconds after which evidence records are considered old
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function cleanEntries(int $ttl): int
+        {
+            if($ttl <= 0)
+            {
+                throw new InvalidArgumentException('TTL must be greater than zero.');
+            }
+
+            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM evidence WHERE created < :timestamp");
+                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt->execute();
+                return $stmt->rowCount();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to clean evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(FileAttachmentManager::CACHE_PREFIX);
+                    RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
+                }
             }
         }
 
