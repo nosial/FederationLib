@@ -23,7 +23,7 @@
             $this->posterior = (float)$array['posterior'];
             $this->probability = (float)$array['probability'];
             $this->logScore = (float)$array['log_score'];
-            $this->lrProbability = $array['lr_probability'] ?? null;
+            $this->lrProbability = isset($array['lr_probability']) && $array['lr_probability'] !== null ? (float)$array['lr_probability'] : null;
         }
 
         /**
