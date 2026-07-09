@@ -76,7 +76,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse($attachmentRecord);
+            self::successResponse($attachmentRecord->toArray());
         }
 
         /**
