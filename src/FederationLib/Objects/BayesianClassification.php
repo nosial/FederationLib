@@ -2,6 +2,7 @@
 
     namespace FederationLib\Objects;
 
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Interfaces\SerializableInterface;
     use FederationLib\Objects\BayesianClassification\LabelClassification;
     use InvalidArgumentException;
@@ -33,18 +34,18 @@
         public function __construct(array $array)
         {
             $this->labels = [];
-            $this->topLabel = $array['top_label'];
-            $this->topProbability = (float)$array['top_probability'];
-            $this->predictedLabels = $array['predicted_labels'];
-            $this->threshold = (float)$array['threshold'];
-            $this->totalTokens = (int)$array['total_tokens'];
-            $this->knownTokens = (int)$array['known_tokens'];
-            $this->unknownTokenCount = (int)$array['unknown_token_count'];
-            $this->modelVersion = (float)$array['model_version'];
-            $this->scoringMethod = $array['scoring_method'];
-            $this->languageCode = $array['language_code'];
-            $this->confidence = (float)$array['confidence'];
-            $this->processingTimeMs = (float)$array['processing_time_ms'];
+            $this->topLabel = !empty($array['top_label']) ? $array['top_label'] : ClassificationFlag::NORMAL->value;
+            $this->topProbability = (float)($array['top_probability'] ?? 0.0);
+            $this->predictedLabels = $array['predicted_labels'] ?? [];
+            $this->threshold = (float)($array['threshold'] ?? 0.5);
+            $this->totalTokens = (int)($array['total_tokens'] ?? 0);
+            $this->knownTokens = (int)($array['known_tokens'] ?? 0);
+            $this->unknownTokenCount = (int)($array['unknown_token_count'] ?? 0);
+            $this->modelVersion = (float)($array['model_version'] ?? 0.0);
+            $this->scoringMethod = $array['scoring_method'] ?? 'naive_bayes';
+            $this->languageCode = $array['language_code'] ?? 'unknown';
+            $this->confidence = (float)($array['confidence'] ?? 0.0);
+            $this->processingTimeMs = (float)($array['processing_time_ms'] ?? 0.0);
 
             if(isset($array['labels']))
             {
