@@ -38,6 +38,7 @@
             self::$uri = $_SERVER['REQUEST_URI'] ?? '/';
             self::$path = parse_url(self::$uri, PHP_URL_PATH) ?? '/';
             self::$inputContent = file_get_contents('php://input') ?: '';
+            self::$decodedContent = null;
 
             // Decode the input content if it's JSON
             if (self::$inputContent && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json'))
