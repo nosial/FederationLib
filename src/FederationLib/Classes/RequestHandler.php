@@ -198,7 +198,18 @@
         protected static function returnHeaders(): void
         {
             header('Content-Type: application/json; charset=utf-8');
-            header('Access-Control-Allow-Origin: *');
+
+            $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+            if ($origin !== null)
+            {
+                header('Access-Control-Allow-Origin: ' . $origin);
+                header('Vary: Origin');
+            }
+            else
+            {
+                header('Access-Control-Allow-Origin: *');
+            }
+
             header('Access-Control-Allow-Methods: POST, PUT, GET, DELETE, PATCH');
             header('Access-Control-Allow-Headers: Content-Type, Authorization');
         }
