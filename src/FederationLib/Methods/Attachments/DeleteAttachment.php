@@ -32,7 +32,6 @@
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
 
-            // Ensure the authenticated operator has permission to delete operators.
             if(!$authenticatedOperator->hasManagementPermissions())
             {
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
@@ -44,7 +43,7 @@
             }
 
             $attachmentUuid = $matches[1];
-            if(!$attachmentUuid | !Validate::uuid($attachmentUuid))
+            if(!$attachmentUuid || !Validate::uuid($attachmentUuid))
             {
                 throw new RequestException(self::ERROR_INVALID_ATTACHMENT_UUID, 400);
             }
