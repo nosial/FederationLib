@@ -25,7 +25,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 403);
+                throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 401);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
