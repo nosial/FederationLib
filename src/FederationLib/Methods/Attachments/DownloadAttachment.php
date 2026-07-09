@@ -104,7 +104,7 @@
 
             // Set headers for file download
             header('Content-Type: ' . $attachment->getFileMime());
-            header('Content-Disposition: attachment; filename="' . $attachment->getFileName() . '"');
+            header('Content-Disposition: attachment; filename="' . str_replace(['"', '\\', "\n", "\r"], '_', $attachment->getFileName()) . '"');
             header('Content-Length: ' . filesize($fileLocation));
             header('Cache-Control: no-cache, no-store, must-revalidate'); // HTTP 1.1
             header('Pragma: no-cache'); // HTTP 1.0
