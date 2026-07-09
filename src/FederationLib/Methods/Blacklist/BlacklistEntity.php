@@ -113,7 +113,7 @@
                     $authenticatedOperator->getName(),
                     $type->name,
                     $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ' as a permanent'
-                ), $authenticatedOperator->getUuid(), $entityIdentifier, $blacklistUuid, $evidence, null);
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid(), $blacklistUuid, $evidence, null);
             }
             catch(DatabaseOperationException $e)
             {
