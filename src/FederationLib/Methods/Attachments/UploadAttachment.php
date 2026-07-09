@@ -35,11 +35,10 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            $evidenceUuid = FederationServer::getParameter('evidence_uuid') ?? null;
-
-            if($evidenceUuid !== null && !Validate::uuid($evidenceUuid))
+            $evidenceUuid = FederationServer::getParameter('evidence_uuid');
+            if(empty($evidenceUuid) || !Validate::uuid($evidenceUuid))
             {
-                throw new RequestException('A valid evidence UUID is required if one is provided', 400);
+                throw new RequestException('A valid evidence UUID is required', 400);
             }
 
             if($evidenceUuid !== null)
@@ -339,7 +338,7 @@
                                     'description' => 'UUID of the evidence record to associate the attachment with',
                                 ],
                             ],
-                            'required' => ['file'],
+                            'required' => ['file', 'evidence_uuid'],
                         ],
                     ],
                 ],
