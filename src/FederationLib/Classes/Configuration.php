@@ -84,9 +84,17 @@
             // Maintenance configuration
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
             self::$configuration->setDefault('maintenance.clean_audit_logs', true, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS');
-            self::$configuration->setDefault('maintenance.clean_audit_logs_days', 30, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS_DAYS');
+            self::$configuration->setDefault('maintenance.clean_audit_logs_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS_TTL'); // 2 years
             self::$configuration->setDefault('maintenance.clean_blacklist', true, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST');
-            self::$configuration->setDefault('maintenance.clean_blacklist_days', 730, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST_DAYS'); // 2 years
+            self::$configuration->setDefault('maintenance.clean_blacklist_ttl', 31536000, 'FEDERATION_MAINTENANCE_CLEAN_BLACKLIST_TTL'); // 1 year
+            self::$configuration->setDefault('maintenance.clean_evidence', true, 'FEDERATION_MAINTENANCE_CLEAN_EVIDENCE');
+            self::$configuration->setDefault('maintenance.clean_evidence_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_EVIDENCE_TTL'); // 2 years
+            self::$configuration->setDefault('maintenance.clean_reports', true, 'FEDERATION_MAINTENANCE_CLEAN_REPORTS');
+            self::$configuration->setDefault('maintenance.clean_reports_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_REPORTS_TTL'); // 2 years
+            self::$configuration->setDefault('maintenance.clean_file_attachments', true, 'FEDERATION_MAINTENANCE_CLEAN_FILE_ATTACHMENTS');
+            self::$configuration->setDefault('maintenance.clean_file_attachments_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_FILE_ATTACHMENTS_TTL'); // 2 years
+            self::$configuration->setDefault('maintenance.clean_entities', false, 'FEDERATION_MAINTENANCE_CLEAN_ENTITIES');
+            self::$configuration->setDefault('maintenance.clean_entities_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_ENTITIES_TTL'); // 2 years
 
             // Database configuration
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
