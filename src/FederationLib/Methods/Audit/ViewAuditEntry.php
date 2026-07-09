@@ -29,7 +29,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 403);
+                throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 401);
             }
 
             if(!preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
