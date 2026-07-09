@@ -865,6 +865,30 @@
         }
 
         /**
+         * Queries an entity with the given UUID, including evidence and blacklist records.
+         *
+         * @param string $entityUuid The UUID of the entity to query
+         * @param bool $includeConfidential Whether to include confidential evidence records
+         * @param bool $includeLifted Whether to include lifted blacklist records
+         * @return mixed The query result containing entity record, evidence, and blacklist data
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity UUID is empty
+         */
+        public function queryEntity(string $entityUuid, bool $includeConfidential = false, bool $includeLifted = false): mixed
+        {
+            if(empty($entityUuid))
+            {
+                throw new InvalidArgumentException('Entity UUID cannot be empty');
+            }
+
+            return $this->makeRequest('GET', 'entities/' . $entityUuid . '/query',
+                ['include_confidential' => $includeConfidential, 'include_lifted' => $includeLifted],
+                [HttpResponseCode::OK],
+                sprintf('Failed to query entity %s', $entityUuid)
+            );
+        }
+
+        /**
          * Clears the reputation of the given entity.
          *
          * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose reputation to clear
@@ -1268,6 +1292,9 @@
             $params = [];
             if($classification !== null)
             {
+                // Send both parameter names for compatibility with server builds that
+                // read either 'classification' or 'classification_flag'.
+                $params['classification_flag'] = $classification->value;
                 $params['classification'] = $classification->value;
             }
             $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/close', $params, [HttpResponseCode::OK],
@@ -1295,7 +1322,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/assign', ['operator_uuid' => $operatorUuid], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'reports/' . $reportUuid . '/assign', ['operator' => $operatorUuid], [HttpResponseCode::OK],
                 sprintf('Failed to assign operator %s to report %s', $operatorUuid, $reportUuid)
             );
         }
@@ -1677,7 +1704,7 @@
             $body = substr($response, $headerSize);
 
             $suggestedFilename = $this->extractFilenameFromHeaders($headers);
-            $filename = $suggestedFilename ?? $attachmentUuid;
+            $filename = !empty($suggestedFilename) ? $suggestedFilename : $attachmentUuid;
             $finalFilePath = $directoryPath . DIRECTORY_SEPARATOR . $filename;
 
             $fileHandle = fopen($finalFilePath, 'wb');
