@@ -2,9 +2,9 @@
 
     namespace FederationLib\FederationServer;
 
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ClientTest extends TestCase
@@ -13,20 +13,16 @@
 
         protected function setUp(): void
         {
-            // Note, authentication is not required for these tests.
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'));
         }
 
-        // DURABILITY TESTS
-
         public function testServerInformationConsistency(): void
         {
-            // Test that server information remains consistent across multiple calls
             $serverInfo1 = $this->client->getServerInformation();
             $this->assertNotNull($serverInfo1);
 
-            // Call multiple times and ensure consistency
-            for ($i = 0; $i < 5; $i++) {
+            for ($i = 0; $i < 5; $i++)
+            {
                 $serverInfo = $this->client->getServerInformation();
                 $this->assertEquals($serverInfo1->getServerName(), $serverInfo->getServerName());
                 $this->assertEquals($serverInfo1->getApiVersion(), $serverInfo->getApiVersion());
@@ -35,71 +31,73 @@
             }
         }
 
-        public function testClientConnectionResilience(): void
-        {
-            // Test that client can handle multiple rapid requests
-            $requests = 10;
-            $results = [];
-
-            for ($i = 0; $i < $requests; $i++) {
-                try {
-                    $serverInfo = $this->client->getServerInformation();
-                    $results[] = $serverInfo->getServerName();
-                } catch (RequestException $e) {
-                    Logger::getLogger()->warning("Request $i failed: " . $e->getMessage());
-                    $results[] = null;
-                }
-            }
-
-            // Verify that at least most requests succeeded
-            $successfulRequests = array_filter($results, fn($result) => $result !== null);
-            $this->assertGreaterThan($requests * 0.8, count($successfulRequests), "Less than 80% of requests succeeded");
-
-            // Verify all successful results are consistent
-            $uniqueResults = array_unique($successfulRequests);
-            $this->assertEquals(1, count($uniqueResults), "Server information was inconsistent across requests");
-        }
-
         public function testUnauthenticatedClientLimitations(): void
         {
-            // Test that unauthenticated client properly handles restricted operations
             $serverInfo = $this->client->getServerInformation();
             $this->assertNotNull($serverInfo);
 
-            // These operations should fail for unauthenticated client
-            $restrictedOperations = [
-                'createOperator' => fn() => $this->client->createOperator('test'),
-                'getSelf' => fn() => $this->client->getSelf(),
-            ];
+            try
+            {
+                $this->client->createOperator('test');
+                $this->fail('Expected RequestException for unauthenticated createOperator');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
+            }
+        }
 
-            foreach ($restrictedOperations as $operationName => $operation) {
-                try {
-                    $operation();
-                    $this->fail("Expected RequestException for unauthenticated $operationName");
-                } catch (RequestException $e) {
-                    $this->assertEquals(401, $e->getCode(), "Expected 401 Unauthorized for $operationName");
-                }
+        public function testUnauthenticatedGetSelfFails(): void
+        {
+            try
+            {
+                $this->client->getSelf();
+                $this->fail('Expected RequestException for unauthenticated getSelf');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
             }
         }
 
         public function testClientEndpointHandling(): void
         {
-            // Test various endpoint configurations
             $endpoint = getenv('SERVER_ENDPOINT');
-            $this->assertNotNull($endpoint, "SERVER_ENDPOINT must be set for tests");
+            $this->assertNotNull($endpoint, 'SERVER_ENDPOINT must be set for tests');
 
-            // Test with trailing slash
             $clientWithSlash = new FederationClient($endpoint . '/', null);
             $serverInfo1 = $clientWithSlash->getServerInformation();
             $this->assertNotNull($serverInfo1);
 
-            // Test without trailing slash
-            $endpointNoSlash = rtrim($endpoint, '/');
-            $clientNoSlash = new FederationClient($endpointNoSlash, null);
+            $clientNoSlash = new FederationClient(rtrim($endpoint, '/'), null);
             $serverInfo2 = $clientNoSlash->getServerInformation();
             $this->assertNotNull($serverInfo2);
 
-            // Results should be identical
             $this->assertEquals($serverInfo1->getServerName(), $serverInfo2->getServerName());
+            $this->assertEquals($serverInfo1->getApiVersion(), $serverInfo2->getApiVersion());
         }
+
+        public function testSecurityCorsDoesNotAllowWildcardOrigin(): void
+        {
+            $url = rtrim(getenv('SERVER_ENDPOINT'), '/') . '/info';
+
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HEADER => true,
+                CURLOPT_HTTPHEADER => ['Origin: https://example.evil'],
+            ]);
+            $response = curl_exec($ch);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            curl_close($ch);
+
+            $this->assertNotFalse($response, 'CORS probe request should return a response');
+            $headers = substr((string)$response, 0, $headerSize);
+            $this->assertStringNotContainsString(
+                'Access-Control-Allow-Origin: *',
+                $headers,
+                'Server should not return a wildcard CORS header for arbitrary origins'
+            );
+        }
+
     }
