@@ -3,15 +3,18 @@
     namespace FederationLib\FederationServer;
 
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\SecurityTestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class AuditLogClientTest extends TestCase
     {
+        use SecurityTestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -25,7 +28,6 @@
 
         protected function tearDown(): void
         {
-            // Clean up in reverse dependency order
             foreach ($this->createdBlacklistRecords as $blacklistUuid)
             {
                 try
@@ -74,43 +76,34 @@
                 }
             }
 
-            // Reset arrays
             $this->createdOperators = [];
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
         }
 
-        // BASIC AUDIT LOG OPERATIONS
-
         public function testListAuditLogs(): void
         {
-            // Perform some operations to generate audit logs
             $this->generateSampleAuditLogs();
 
-            // List audit logs
             $auditLogs = $this->client->listAuditLogs();
             $this->assertIsArray($auditLogs);
             $this->assertNotEmpty($auditLogs);
 
-            // Verify structure of audit log entries
             foreach ($auditLogs as $auditLog)
             {
-                $this->assertNotNull($auditLog->getUuid());
                 $this->assertNotEmpty($auditLog->getUuid());
                 $this->assertNotNull($auditLog->getType());
-                $this->assertNotNull($auditLog->getMessage());
-                $this->assertNotNull($auditLog->getTimestamp());
-                // Entity UUID can be null for some operations
+                $this->assertNotEmpty($auditLog->getMessage());
+                $this->assertIsInt($auditLog->getTimestamp());
+                $this->assertGreaterThan(0, $auditLog->getTimestamp());
             }
         }
 
         public function testListAuditLogsWithPagination(): void
         {
-            // Generate enough audit logs to test pagination
             $this->generateSampleAuditLogs();
 
-            // Test pagination
             $page1 = $this->client->listAuditLogs(1, 3);
             $page2 = $this->client->listAuditLogs(2, 3);
 
@@ -119,36 +112,30 @@
             $this->assertLessThanOrEqual(3, count($page1));
             $this->assertLessThanOrEqual(3, count($page2));
 
-            // Verify pages contain different records (if we have enough)
             if (count($page1) > 0 && count($page2) > 0)
             {
                 $page1Uuids = array_map(fn($log) => $log->getUuid(), $page1);
                 $page2Uuids = array_map(fn($log) => $log->getUuid(), $page2);
-                $this->assertCount(0, array_intersect($page1Uuids, $page2Uuids), "Pages should contain different records");
+                $this->assertCount(0, array_intersect($page1Uuids, $page2Uuids), 'Pages should contain different records');
             }
         }
 
         public function testListOperatorAuditLogs(): void
         {
-            // Create an operator to generate specific audit logs
             $operatorUuid = $this->client->createOperator('operator-audit-test');
             $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
 
-            // Perform operations with this operator
             $operator = $this->client->getOperator($operatorUuid);
-            $this->client->setClientPermission($operatorUuid, true);
-
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
-            // Perform some operations that should generate audit logs
             $entityUuid = $operatorClient->pushEntity('operator-audit-test.com', 'audit_user');
             $this->createdEntities[] = $entityUuid;
 
-            // List audit logs for this specific operator
             $operatorAuditLogs = $this->client->listOperatorAuditLogs($operatorUuid);
             $this->assertIsArray($operatorAuditLogs);
+            $this->assertNotEmpty($operatorAuditLogs);
 
-            // All logs should be for this operator
             foreach ($operatorAuditLogs as $log)
             {
                 $this->assertEquals($operatorUuid, $log->getOperatorUuid());
@@ -157,17 +144,14 @@
 
         public function testListOperatorAuditLogsWithPagination(): void
         {
-            // Create an operator and perform multiple operations
             $operatorUuid = $this->client->createOperator('paginated-audit-test');
             $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
-            $this->client->setClientPermission($operatorUuid, true);
-            $this->client->setManageBlacklistPermission($operatorUuid, true);
-
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
-            // Generate multiple audit log entries
             for ($i = 1; $i <= 3; $i++)
             {
                 $entityUuid = $operatorClient->pushEntity("paginated-audit-$i.com", "user_$i");
@@ -177,7 +161,6 @@
                 $this->createdEvidenceRecords[] = $evidenceUuid;
             }
 
-            // Test pagination
             $page1 = $this->client->listOperatorAuditLogs($operatorUuid, 1, 3);
             $page2 = $this->client->listOperatorAuditLogs($operatorUuid, 2, 3);
 
@@ -185,14 +168,11 @@
             $this->assertIsArray($page2);
             $this->assertLessThanOrEqual(3, count($page1));
 
-            // Verify all logs are for the correct operator
             foreach (array_merge($page1, $page2) as $log)
             {
                 $this->assertEquals($operatorUuid, $log->getOperatorUuid());
             }
         }
-
-        // VALIDATION AND ERROR HANDLING
 
         public function testListAuditLogsInvalidPage(): void
         {
@@ -216,7 +196,7 @@
         {
             $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(404);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->getAuditLogRecord($fakeUuid);
         }
 
@@ -230,7 +210,7 @@
         {
             $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(404);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->listOperatorAuditLogs($fakeUuid);
         }
 
@@ -252,82 +232,61 @@
             $this->client->listOperatorAuditLogs($operatorUuid, 1, -1);
         }
 
-        // PERMISSION AND AUTHORIZATION TESTS
-
         public function testAuditLogAccessLimitedOperator(): void
         {
-            // Create an operator with minimal permissions
             $operatorUuid = $this->client->createOperator('limited-audit-access');
             $this->createdOperators[] = $operatorUuid;
-
-            // Give minimal permissions
-            $this->client->setClientPermission($operatorUuid, true);
+            $this->client->setClientPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
             $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
-            try
-            {
-                // This operator should be able to see their own audit logs
-                $operatorAuditLogs = $limitedClient->listOperatorAuditLogs($operatorUuid);
-                $this->assertIsArray($operatorAuditLogs);
-            }
-            catch (RequestException $e)
-            {
-                // If system restricts audit log access, this is acceptable
-                $this->assertContains($e->getCode(), [401, 403], "Expected 401/403 for restricted audit log access");
-            }
+            $operatorAuditLogs = $limitedClient->listOperatorAuditLogs($operatorUuid);
+            $this->assertIsArray($operatorAuditLogs);
         }
 
         public function testAuditLogContentForEntityOperations(): void
         {
-            // Create operator with client permissions
             $operatorUuid = $this->client->createOperator('entity-audit-test');
             $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermission($operatorUuid, true);
+            $this->client->setClientPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
-            // Perform entity operations
             $entityUuid = $operatorClient->pushEntity('audit-entity-test.com', 'audit_entity_user');
             $this->createdEntities[] = $entityUuid;
 
-            // Get audit logs for this operator
             $operatorLogs = $this->client->listOperatorAuditLogs($operatorUuid);
             $newLogCount = count($operatorLogs);
 
-            // Should have more logs than before
             $this->assertGreaterThan($initialLogCount, $newLogCount);
 
-            // Look for entity creation log
             $foundEntityCreation = false;
             foreach ($operatorLogs as $log)
             {
-                if($log->getEntityUuid() === $entityUuid && $log->getType() === AuditLogType::ENTITY_PUSHED)
+                if ($log->getEntityUuid() === $entityUuid && $log->getType() === AuditLogType::ENTITY_PUSHED)
                 {
                     $foundEntityCreation = true;
                     break;
                 }
             }
 
-            $this->assertTrue($foundEntityCreation, "Should find entity creation audit log");
+            $this->assertTrue($foundEntityCreation, 'Should find entity creation audit log');
         }
 
         public function testAuditLogContentForBlacklistOperations(): void
         {
-            // Create operator with blacklist permissions
             $operatorUuid = $this->client->createOperator('blacklist-audit-test');
             $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermission($operatorUuid, true);
-            $this->client->setManageBlacklistPermission($operatorUuid, true);
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
-            // Create entity and evidence
             $entityUuid = $operatorClient->pushEntity('blacklist-audit-test.com', 'blacklist_audit_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -336,60 +295,50 @@
 
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
-            // Perform blacklist operations
             $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $operatorClient->liftBlacklistRecord($blacklistUuid);
 
-            // Get audit logs for this operator
             $operatorLogs = $this->client->listOperatorAuditLogs($operatorUuid);
             $newLogCount = count($operatorLogs);
 
-            // Should have more logs than before
             $this->assertGreaterThan($initialLogCount, $newLogCount);
 
-            // Look for blacklist operation logs
             $foundBlacklistCreation = false;
             $foundBlacklistLift = false;
 
             foreach ($operatorLogs as $log)
             {
                 $message = $log->getMessage();
-                
+
                 if (str_contains($message, 'blacklist') && str_contains($message, 'created'))
                 {
                     $foundBlacklistCreation = true;
                 }
-                
+
                 if (str_contains($message, 'blacklist') && (str_contains($message, 'lifted') || str_contains($message, 'removed')))
                 {
                     $foundBlacklistLift = true;
                 }
             }
 
-            $this->assertTrue($foundBlacklistCreation, "Should find blacklist creation audit log");
-            $this->assertTrue($foundBlacklistLift, "Should find blacklist lift audit log");
+            $this->assertTrue($foundBlacklistCreation, 'Should find blacklist creation audit log');
+            $this->assertTrue($foundBlacklistLift, 'Should find blacklist lift audit log');
         }
-
-        // DURABILITY AND PERFORMANCE TESTS
 
         public function testAuditLogConsistencyOverTime(): void
         {
-            // Perform an operation
             $operatorUuid = $this->client->createOperator('consistency-test');
             $this->createdOperators[] = $operatorUuid;
 
-            // Get audit logs immediately
             $immediateAuditLogs = $this->client->listAuditLogs(1, 10);
-            
-            // Wait a brief moment and get again
+
             sleep(1);
             $delayedAuditLogs = $this->client->listAuditLogs(1, 10);
 
-            // Recent logs should be consistent
             $this->assertEquals(count($immediateAuditLogs), count($delayedAuditLogs));
-            
+
             for ($i = 0; $i < min(count($immediateAuditLogs), count($delayedAuditLogs)); $i++)
             {
                 $this->assertEquals($immediateAuditLogs[$i]->getUuid(), $delayedAuditLogs[$i]->getUuid());
@@ -399,41 +348,201 @@
 
         public function testHighVolumeAuditLogRetrieval(): void
         {
-            // Generate multiple audit log entries
             for ($i = 1; $i <= 5; $i++)
             {
                 $operatorUuid = $this->client->createOperator("high-volume-test-$i");
                 $this->createdOperators[] = $operatorUuid;
             }
 
-            // Test retrieving large number of audit logs
             $auditLogs = $this->client->listAuditLogs(1, 100);
             $this->assertIsArray($auditLogs);
+            $this->assertGreaterThanOrEqual(5, count($auditLogs));
 
-            // Verify all logs have required fields
             foreach ($auditLogs as $log)
             {
-                $this->assertNotNull($log->getUuid());
+                $this->assertNotEmpty($log->getUuid());
                 $this->assertNotNull($log->getType());
-                $this->assertNotNull($log->getMessage());
-                $this->assertNotNull($log->getTimestamp());
+                $this->assertNotEmpty($log->getMessage());
+                $this->assertIsInt($log->getTimestamp());
             }
         }
 
-        // HELPER METHODS
-
         private function generateSampleAuditLogs(): void
         {
-            // Create some operations to generate audit logs
             $operatorUuid = $this->client->createOperator('sample-audit-operator');
             $this->createdOperators[] = $operatorUuid;
 
-            $this->client->setClientPermission($operatorUuid, true);
+            $this->client->setClientPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('sample-audit.com', 'sample_user');
             $this->createdEntities[] = $entityUuid;
+        }
+
+        public function testSecurityUnauthenticatedAuditLogAccessIsPublic(): void
+        {
+            $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), null);
+
+            // Audit logs are public by default; unauthenticated clients can list and view
+            // public entries, so these calls succeed rather than fail.
+            $logs = $unauthenticatedClient->listAuditLogs();
+            $this->assertIsArray($logs);
+
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
+            $unauthenticatedClient->getAuditLogRecord('00000000-0000-0000-0000-000000000000');
+        }
+
+        public function testAuditLogRecordsOperatorActorForEntityCreation(): void
+        {
+            $operatorUuid = $this->client->createOperator('actor-entity-test');
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $beforeLogs = $this->client->listOperatorAuditLogs($operatorUuid);
+            $beforeCount = count($beforeLogs);
+
+            $entityUuid = $operatorClient->pushEntity('actor-entity.com', 'actor_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $afterLogs = $this->client->listOperatorAuditLogs($operatorUuid);
+            $this->assertGreaterThan($beforeCount, count($afterLogs));
+
+            $found = false;
+            foreach ($afterLogs as $log)
+            {
+                if ($log->getOperatorUuid() === $operatorUuid && $log->getEntityUuid() === $entityUuid)
+                {
+                    $found = true;
+                    break;
+                }
+            }
+            $this->assertTrue($found, 'Audit log should record the acting operator and affected entity');
+        }
+
+        public function testAuditLogRecordsEvidenceAndBlacklistActor(): void
+        {
+            $operatorUuid = $this->client->createOperator('actor-evidence-test');
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $entityUuid = $operatorClient->pushEntity('actor-evidence.com', 'actor_evidence_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Actor evidence', 'Note', 'actor');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            $logs = $this->client->listOperatorAuditLogs($operatorUuid);
+            $foundEvidence = false;
+            $foundBlacklist = false;
+
+            foreach ($logs as $log)
+            {
+                if ($log->getEvidenceUuid() === $evidenceUuid && $log->getOperatorUuid() === $operatorUuid)
+                {
+                    $foundEvidence = true;
+                }
+
+                if ($log->getBlacklistUuid() === $blacklistUuid && $log->getOperatorUuid() === $operatorUuid)
+                {
+                    $foundBlacklist = true;
+                }
+            }
+
+            $this->assertTrue($foundEvidence, 'Audit log should record evidence submitted by operator');
+            $this->assertTrue($foundBlacklist, 'Audit log should record blacklist created by operator');
+        }
+
+        public function testAuditLogFiltersByType(): void
+        {
+            $operatorUuid = $this->client->createOperator('type-filter-test');
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $entityUuid = $operatorClient->pushEntity('type-filter.com', 'type_filter_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $allLogs = $this->client->listAuditLogs(1, 100);
+            $entityPushLogs = array_filter(
+                $allLogs,
+                fn($log) => $log->getType() === AuditLogType::ENTITY_PUSHED && $log->getEntityUuid() === $entityUuid
+            );
+            $this->assertNotEmpty($entityPushLogs);
+        }
+
+        public function testAuditLogEntryRetrievableByUuid(): void
+        {
+            $operatorUuid = $this->client->createOperator('uuid-audit-test');
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $entityUuid = $operatorClient->pushEntity('uuid-audit.com', 'uuid_audit_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logs = $this->client->listOperatorAuditLogs($operatorUuid);
+            $this->assertNotEmpty($logs);
+
+            $firstLog = reset($logs);
+            $retrieved = $this->client->getAuditLogRecord($firstLog->getUuid());
+            $this->assertEquals($firstLog->getUuid(), $retrieved->getUuid());
+            $this->assertEquals($firstLog->getMessage(), $retrieved->getMessage());
+            $this->assertEquals($firstLog->getType(), $retrieved->getType());
+        }
+
+        public function testAuditLogRemainsAfterEntityDeletion(): void
+        {
+            $entityUuid = $this->client->pushEntity('audit-survive.com', 'audit_survive_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logsBefore = $this->client->listEntityAuditLogs($entityUuid);
+            $this->assertNotEmpty($logsBefore);
+
+            $this->client->deleteEntity($entityUuid);
+            $this->removeFromCleanup($this->createdEntities, $entityUuid);
+
+            foreach ($logsBefore as $log)
+            {
+                $retrieved = $this->client->getAuditLogRecord($log->getUuid());
+                $this->assertNotNull($retrieved);
+                // The entity UUID may be nullified when the entity is deleted.
+                if ($retrieved->getEntityUuid() !== null)
+                {
+                    $this->assertEquals($entityUuid, $retrieved->getEntityUuid());
+                }
+            }
+        }
+
+        public function testSecurityOperatorAuditLogsAreIsolated(): void
+        {
+            $actor = $this->createLimitedOperator('audit_actor', operator: true);
+            $victim = $this->createLimitedOperator('audit_victim', management: true);
+            $snooper = $this->createLimitedOperator('audit_snooper', client: true);
+
+            // Generate a private audit log entry (OPERATOR_PERMISSIONS_CHANGED) as the actor.
+            $actor->setManagementPermissions($victim->getSelf()->getUuid(), false);
+
+            $this->expectRequestFailure(
+                fn() => $snooper->listOperatorAuditLogs($actor->getSelf()->getUuid()),
+                [HttpResponseCode::FORBIDDEN->value],
+                'One operator should not be able to list another operator\'s audit logs'
+            );
         }
     }
