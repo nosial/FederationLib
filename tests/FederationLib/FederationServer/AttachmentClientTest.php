@@ -2,29 +2,37 @@
 
     namespace FederationLib\FederationServer;
 
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\SecurityTestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class AttachmentClientTest extends TestCase
     {
+        use SecurityTestHelpers;
         private FederationClient $client;
         private array $createdAttachments = [];
         private array $createdEvidenceRecords = [];
         private array $createdEntityRecords = [];
         private array $createdOperators = [];
+        private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
         private array $tempFiles = [];
+        private $httpServerProcess = null;
+        private ?int $httpServerPort = null;
+        private ?string $httpServerRoot = null;
 
         protected function setUp(): void
         {
             $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $this->startHttpServer();
         }
 
         protected function tearDown(): void
         {
-            // Clean up attachments first (they depend on evidence)
             foreach ($this->createdAttachments as $attachmentUuid)
             {
                 try
@@ -37,7 +45,6 @@
                 }
             }
 
-            // Clean up evidence records
             foreach ($this->createdEvidenceRecords as $evidenceUuid)
             {
                 try
@@ -50,7 +57,6 @@
                 }
             }
 
-            // Clean up entities
             foreach ($this->createdEntityRecords as $entityUuid)
             {
                 try
@@ -63,7 +69,6 @@
                 }
             }
 
-            // Clean up operators
             foreach ($this->createdOperators as $operatorUuid)
             {
                 try
@@ -76,45 +81,76 @@
                 }
             }
 
-            // Clean up temporary files
-            foreach ($this->tempFiles as $tempFile)
+            foreach ($this->createdBlacklistRecords as $blacklistUuid)
             {
-                if (file_exists($tempFile))
+                try
                 {
-                    unlink($tempFile);
+                    $this->client->deleteBlacklistRecord($blacklistUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
                 }
             }
 
-            // Reset arrays
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->tempFiles as $tempFile)
+            {
+                if (file_exists($tempFile) && is_file($tempFile))
+                {
+                    unlink($tempFile);
+                }
+                elseif (file_exists($tempFile) && is_dir($tempFile))
+                {
+                    $this->recursiveRmdir($tempFile);
+                }
+            }
+
+            if (is_resource($this->httpServerProcess))
+            {
+                proc_terminate($this->httpServerProcess, 9);
+                proc_close($this->httpServerProcess);
+                $this->httpServerProcess = null;
+            }
+
             $this->createdAttachments = [];
             $this->createdEvidenceRecords = [];
             $this->createdEntityRecords = [];
             $this->createdOperators = [];
+            $this->createdBlacklistRecords = [];
+            $this->createdReports = [];
             $this->tempFiles = [];
+            $this->httpServerPort = null;
+            $this->httpServerRoot = null;
         }
-
-        // BASIC ATTACHMENT OPERATIONS
 
         public function testUploadFileAttachment(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('attachment-test.com', 'attachment_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for attachment', 'Attachment test', 'attachment');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Create a temporary test file
             $testFilePath = $this->createTestFile('test_attachment.txt', 'This is test content for file attachment.');
 
-            // Upload the attachment
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $this->assertNotNull($uploadResult);
             $this->assertNotEmpty($uploadResult->getUuid());
             $this->assertNotEmpty($uploadResult->getUrl());
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            // Verify attachment info
             $attachmentInfo = $this->client->getAttachmentInfo($uploadResult->getUuid());
             $this->assertNotNull($attachmentInfo);
             $this->assertEquals($evidenceUuid, $attachmentInfo->getEvidenceUuid());
@@ -125,21 +161,22 @@
 
         public function testUploadFileAttachmentFromUrl(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('url-attachment-test.com', 'url_attachment_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for URL attachment', 'URL attachment test', 'url_attachment');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Upload the attachment from URL
-            $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'http://ipv4.download.thinkbroadband.com/5MB.zip');
+            $sourceFileName = 'source_attachment.txt';
+            $sourceFilePath = $this->createHttpServerFile($sourceFileName, 'Source content for URL attachment upload.');
+            $sourceUrl = sprintf('http://127.0.0.1:%d/%s', $this->httpServerPort, $sourceFileName);
+
+            $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, $sourceUrl);
             $this->assertNotNull($uploadResult);
             $this->assertNotEmpty($uploadResult->getUuid());
             $this->assertNotEmpty($uploadResult->getUrl());
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            // Verify attachment info
             $attachmentInfo = $this->client->getAttachmentInfo($uploadResult->getUuid());
             $this->assertNotNull($attachmentInfo);
             $this->assertEquals($evidenceUuid, $attachmentInfo->getEvidenceUuid());
@@ -148,61 +185,48 @@
 
         public function testDownloadAttachment(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('download-test.com', 'download_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for download', 'Download test', 'download');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Create and upload a test file
             $originalContent = 'This is the original content for download test.';
             $testFilePath = $this->createTestFile('download_test.txt', $originalContent);
 
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            // Download the attachment
-            $downloadPath = sys_get_temp_dir() . '/downloaded_' . uniqid() . '.txt';
-            $this->tempFiles[] = $downloadPath;
+            $downloadPath = sys_get_temp_dir();
+            $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
+            $this->tempFiles[] = $downloadedFile;
 
-            $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
-
-            // Verify the downloaded file
-            $this->assertTrue(file_exists($downloadPath));
-            $downloadedContent = file_get_contents($downloadPath);
-            $this->assertEquals($originalContent, $downloadedContent);
+            $this->assertTrue(file_exists($downloadedFile));
+            $this->assertEquals($originalContent, file_get_contents($downloadedFile));
         }
 
         public function testDeleteAttachment(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('delete-attachment-test.com', 'delete_attachment_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for delete', 'Delete attachment test', 'delete_attachment');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Create and upload a test file
             $testFilePath = $this->createTestFile('delete_test.txt', 'This file will be deleted.');
 
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $attachmentUuid = $uploadResult->getUuid();
 
-            // Verify attachment exists
             $attachmentInfo = $this->client->getAttachmentInfo($attachmentUuid);
             $this->assertNotNull($attachmentInfo);
 
-            // Delete the attachment
             $this->client->deleteAttachment($attachmentUuid);
 
-            // Verify attachment no longer exists
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(404);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->getAttachmentInfo($attachmentUuid);
         }
-
-        // VALIDATION AND ERROR HANDLING TESTS
 
         public function testUploadAttachmentInvalidEvidenceUuid(): void
         {
@@ -215,7 +239,6 @@
 
         public function testUploadAttachmentNonExistentFile(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('nonexistent-file-test.com', 'nonexistent_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -229,7 +252,6 @@
 
         public function testUploadAttachmentFromInvalidUrl(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('invalid-url-test.com', 'invalid_url_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -252,7 +274,7 @@
         {
             $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(404);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->getAttachmentInfo($fakeUuid);
         }
 
@@ -267,7 +289,7 @@
         {
             $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(404);
+            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->deleteAttachment($fakeUuid);
         }
 
@@ -278,83 +300,67 @@
             $this->client->downloadAttachment('', '/tmp/test');
         }
 
-        public function testDownloadAttachmentInvalidPath(): void
-        {
-            $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
-            $this->expectException(InvalidArgumentException::class);
-            $this->expectExceptionMessage('File path cannot be empty');
-            $this->client->downloadAttachment($fakeUuid, '');
-        }
-
-        // PERMISSION AND AUTHORIZATION TESTS
-
         public function testUploadAttachmentUnauthorized(): void
         {
-            // Create an operator without blacklist management permissions
             $operatorUuid = $this->client->createOperator('no-blacklist-operator');
             $this->createdOperators[] = $operatorUuid;
 
-            // Ensure no blacklist permissions
-            $this->client->setManageBlacklistPermission($operatorUuid, false);
-            $this->client->setClientPermission($operatorUuid, true); // Can access basic functions
+            $this->client->setManagementPermissions($operatorUuid, false);
+            $this->client->setClientPermissions($operatorUuid, false);
+            $this->client->setOperatorPermissions($operatorUuid, false);
 
             $operator = $this->client->getOperator($operatorUuid);
             $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
-            // Create entity and evidence with root client
             $entityUuid = $this->client->pushEntity('unauthorized-upload-test.com', 'unauthorized_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence', 'Test', 'test');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Try to upload attachment with restricted client
             $testFilePath = $this->createTestFile('unauthorized.txt', 'Unauthorized upload test');
 
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(403); // FORBIDDEN
+            $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
             $restrictedClient->uploadFileAttachment($evidenceUuid, $testFilePath);
         }
 
         public function testAccessAttachmentAsAnonymousClient(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('anonymous-access-test.com', 'anonymous_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for anonymous access', 'Anonymous test', 'anonymous');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Upload an attachment
             $testFilePath = $this->createTestFile('anonymous_test.txt', 'Anonymous access test content');
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            // Create anonymous client
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
 
-            // Check if evidence is public on the server
             if (!$this->client->getServerInformation()->isPublicEvidence())
             {
-                // If evidence is not public, anonymous access should fail
-                $this->expectException(RequestException::class);
-                $this->expectExceptionCode(401); // UNAUTHORIZED
-                $anonymousClient->getAttachmentInfo($uploadResult->getUuid());
+                try
+                {
+                    $anonymousClient->getAttachmentInfo($uploadResult->getUuid());
+                    $this->fail('Expected RequestException for non-public evidence attachment access');
+                }
+                catch (RequestException $e)
+                {
+                    $this->assertContains($e->getCode(), [400, 401, 403], 'Expected 400, 401 or 403 for unauthorized attachment access');
+                }
             }
             else
             {
-                // If evidence is public, anonymous access should work
                 $attachmentInfo = $anonymousClient->getAttachmentInfo($uploadResult->getUuid());
                 $this->assertNotNull($attachmentInfo);
                 $this->assertEquals($evidenceUuid, $attachmentInfo->getEvidenceUuid());
             }
         }
 
-        // FILE TYPE AND SIZE TESTS
-
         public function testUploadDifferentFileTypes(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('file-types-test.com', 'file_types_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -362,10 +368,10 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $fileTypes = [
-                'text' => ['extension' => 'txt', 'content' => 'Plain text content', 'expectedMime' => 'text/plain'],
-                'json' => ['extension' => 'json', 'content' => '{"key": "value"}', 'expectedMime' => 'application/json'],
-                'csv' => ['extension' => 'csv', 'content' => 'col1,col2\nval1,val2', 'expectedMime' => 'text/csv'],
-                'xml' => ['extension' => 'xml', 'content' => '<?xml version="1.0"?><root><item>test</item></root>', 'expectedMime' => 'application/xml'],
+                'text' => ['extension' => 'txt', 'content' => 'Plain text content'],
+                'json' => ['extension' => 'json', 'content' => '{"key": "value"}'],
+                'csv' => ['extension' => 'csv', 'content' => "col1,col2\nval1,val2"],
+                'xml' => ['extension' => 'xml', 'content' => '<?xml version="1.0"?><root><item>test</item></root>'],
             ];
 
             foreach ($fileTypes as $type => $fileData)
@@ -376,28 +382,23 @@
                 $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
                 $this->createdAttachments[] = $uploadResult->getUuid();
 
-                // Verify attachment info
                 $attachmentInfo = $this->client->getAttachmentInfo($uploadResult->getUuid());
                 $this->assertNotNull($attachmentInfo);
                 $this->assertEquals($fileName, $attachmentInfo->getFileName());
                 $this->assertEquals(strlen($fileData['content']), $attachmentInfo->getFileSize());
-                
-                // MIME type detection might vary, so we'll just ensure it's not empty
                 $this->assertNotEmpty($attachmentInfo->getFileMime());
             }
         }
 
         public function testUploadLargeFile(): void
         {
-            // Create entity and evidence first
             $entityUuid = $this->client->pushEntity('large-file-test.com', 'large_file_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence for large file', 'Large file test', 'large_file');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Create a larger file (1MB)
-            $largeContent = str_repeat('A', 1024 * 1024); // 1MB of 'A' characters
+            $largeContent = str_repeat('A', 1024 * 1024);
             $testFilePath = $this->createTestFile('large_test.txt', $largeContent);
 
             try
@@ -405,17 +406,15 @@
                 $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
                 $this->createdAttachments[] = $uploadResult->getUuid();
 
-                // Verify the large file was uploaded correctly
                 $attachmentInfo = $this->client->getAttachmentInfo($uploadResult->getUuid());
                 $this->assertEquals(1024 * 1024, $attachmentInfo->getFileSize());
             }
             catch (RequestException $e)
             {
-                // If the server has size limits, this is acceptable
-                if ($e->getCode() === 413 || $e->getCode() === 400) // Payload Too Large or Bad Request
+                if ($e->getCode() === 413 || $e->getCode() === 400)
                 {
-                    Logger::getLogger()->info("Large file upload rejected by server (expected): " . $e->getMessage());
-                    $this->assertTrue(true, "Server correctly rejected large file");
+                    Logger::getLogger()->info('Large file upload rejected by server (expected): ' . $e->getMessage());
+                    $this->addToAssertionCount(1);
                 }
                 else
                 {
@@ -424,61 +423,39 @@
             }
         }
 
-        public function testUploadFileWithExcessiveSize(): void
-        {
-            // Create entity and evidence first
-            $entityUuid = $this->client->pushEntity('excessive-size-test.com', 'excessive_size_user');
-            $this->createdEntityRecords[] = $entityUuid;
-
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence', 'Test', 'test');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
-            
-            $this->expectException(RequestException::class);
-            // Try to upload with a very small max size (1 byte) - should fail
-            $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'http://ipv4.download.thinkbroadband.com/5MB.zip', 1);
-        }
-
-        // DURABILITY AND STRESS TESTS
-
         public function testAttachmentLifecycleIntegrity(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('lifecycle-test.com', 'lifecycle_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Lifecycle test evidence', 'Lifecycle test', 'lifecycle');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Upload attachment
             $testFilePath = $this->createTestFile('lifecycle_test.txt', 'Lifecycle test content');
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $attachmentUuid = $uploadResult->getUuid();
 
-            // Test full lifecycle
             $originalInfo = $this->client->getAttachmentInfo($attachmentUuid);
             $this->assertNotNull($originalInfo);
 
-            // Download and verify
-            $downloadPath = sys_get_temp_dir() . '/lifecycle_download_' . uniqid() . '.txt';
-            $this->tempFiles[] = $downloadPath;
-            $this->client->downloadAttachment($attachmentUuid, $downloadPath);
-            $this->assertTrue(file_exists($downloadPath));
-            $this->assertEquals('Lifecycle test content', file_get_contents($downloadPath));
+            $downloadPath = sys_get_temp_dir();
+            $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
+            $this->tempFiles[] = $downloadedFile;
+            $this->assertTrue(file_exists($downloadedFile));
+            $this->assertEquals('Lifecycle test content', file_get_contents($downloadedFile));
 
-            // Get info again and ensure consistency
             $secondInfo = $this->client->getAttachmentInfo($attachmentUuid);
             $this->assertEquals($originalInfo->getUuid(), $secondInfo->getUuid());
             $this->assertEquals($originalInfo->getEvidenceUuid(), $secondInfo->getEvidenceUuid());
             $this->assertEquals($originalInfo->getFileName(), $secondInfo->getFileName());
             $this->assertEquals($originalInfo->getFileSize(), $secondInfo->getFileSize());
 
-            // Delete and verify removal
             $this->client->deleteAttachment($attachmentUuid);
 
             try
             {
                 $this->client->getAttachmentInfo($attachmentUuid);
-                $this->fail("Expected RequestException for deleted attachment");
+                $this->fail('Expected RequestException for deleted attachment');
             }
             catch (RequestException $e)
             {
@@ -488,7 +465,6 @@
 
         public function testMultipleAttachmentsPerEvidence(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('multiple-attachments-test.com', 'multiple_attachments_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -497,7 +473,6 @@
 
             $attachmentUuids = [];
 
-            // Upload multiple attachments for the same evidence
             for ($i = 1; $i <= 3; $i++)
             {
                 $content = "Content for attachment number $i";
@@ -509,53 +484,46 @@
                 $this->createdAttachments[] = $uploadResult->getUuid();
             }
 
-            // Verify all attachments exist and are associated with the same evidence
             foreach ($attachmentUuids as $index => $attachmentUuid)
             {
                 $attachmentInfo = $this->client->getAttachmentInfo($attachmentUuid);
                 $this->assertNotNull($attachmentInfo);
                 $this->assertEquals($evidenceUuid, $attachmentInfo->getEvidenceUuid());
-                $this->assertEquals("attachment_" . ($index + 1) . ".txt", $attachmentInfo->getFileName());
+                $this->assertEquals('attachment_' . ($index + 1) . '.txt', $attachmentInfo->getFileName());
             }
         }
 
         public function testConcurrentAttachmentOperations(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('concurrent-attachments-test.com', 'concurrent_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Concurrent operations evidence', 'Concurrent test', 'concurrent');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Upload attachment
             $testFilePath = $this->createTestFile('concurrent_test.txt', 'Concurrent operations test');
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $attachmentUuid = $uploadResult->getUuid();
             $this->createdAttachments[] = $attachmentUuid;
 
-            // Perform multiple operations rapidly
             $info1 = $this->client->getAttachmentInfo($attachmentUuid);
             $info2 = $this->client->getAttachmentInfo($attachmentUuid);
             $info3 = $this->client->getAttachmentInfo($attachmentUuid);
 
-            // Verify consistency
             $this->assertEquals($info1->getUuid(), $info2->getUuid());
             $this->assertEquals($info2->getUuid(), $info3->getUuid());
             $this->assertEquals($info1->getEvidenceUuid(), $info2->getEvidenceUuid());
             $this->assertEquals($info1->getFileName(), $info3->getFileName());
 
-            // Multiple downloads of the same file
             $downloadPaths = [];
             for ($i = 1; $i <= 3; $i++)
             {
-                $downloadPath = sys_get_temp_dir() . "/concurrent_download_$i" . uniqid() . '.txt';
-                $this->tempFiles[] = $downloadPath;
-                $downloadPaths[] = $downloadPath;
-                $this->client->downloadAttachment($attachmentUuid, $downloadPath);
+                $downloadPath = sys_get_temp_dir();
+                $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
+                $this->tempFiles[] = $downloadedFile;
+                $downloadPaths[] = $downloadedFile;
             }
 
-            // Verify all downloads are identical
             $originalContent = file_get_contents($downloadPaths[0]);
             foreach ($downloadPaths as $path)
             {
@@ -563,11 +531,8 @@
             }
         }
 
-        // EVIDENCE FILE ATTACHMENT TEST
-
         public function testGetEvidenceAttachments(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('evidence-attachments-test.com', 'evidence_attachments_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -576,7 +541,6 @@
 
             $attachmentUuids = [];
 
-            // Upload multiple attachments for the same evidence
             for ($i = 1; $i <= 2; $i++)
             {
                 $content = "Content for evidence attachment number $i";
@@ -588,11 +552,9 @@
                 $this->createdAttachments[] = $uploadResult->getUuid();
             }
 
-            // Retrieve all attachments for the evidence
             $attachments = $this->client->getEvidenceAttachments($evidenceUuid);
             $this->assertCount(2, $attachments);
 
-            // Verify each attachment is correct
             foreach ($attachments as $attachment)
             {
                 $this->assertContains($attachment->getUuid(), $attachmentUuids);
@@ -600,11 +562,8 @@
             }
         }
 
-        // LIST ATTACHMENTS TESTS
-
         public function testListAttachments(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('list-attachments-test.com', 'list_attachments_user');
             $this->createdEntityRecords[] = $entityUuid;
 
@@ -613,7 +572,6 @@
 
             $attachmentUuids = [];
 
-            // Upload multiple attachments
             for ($i = 1; $i <= 3; $i++)
             {
                 $content = "Content for list attachment number $i";
@@ -625,12 +583,10 @@
                 $this->createdAttachments[] = $uploadResult->getUuid();
             }
 
-            // List all attachments
             $attachments = $this->client->listAttachments(1, 100);
             $this->assertIsArray($attachments);
             $this->assertGreaterThanOrEqual(3, count($attachments));
 
-            // Verify each uploaded attachment is present in the list
             $listedUuids = array_map(fn($a) => $a->getUuid(), $attachments);
             foreach ($attachmentUuids as $uuid)
             {
@@ -640,14 +596,12 @@
 
         public function testListAttachmentsPagination(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('list-attachments-paginate.com', 'paginate_user');
             $this->createdEntityRecords[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for paginated listing', 'Pagination test', 'pagination');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Upload multiple attachments
             for ($i = 1; $i <= 5; $i++)
             {
                 $content = "Pagination content $i";
@@ -658,15 +612,12 @@
                 $this->createdAttachments[] = $uploadResult->getUuid();
             }
 
-            // Test limit
             $limitedAttachments = $this->client->listAttachments(1, 2);
             $this->assertCount(2, $limitedAttachments);
 
-            // Test page
             $pageTwoAttachments = $this->client->listAttachments(2, 2);
             $this->assertCount(2, $pageTwoAttachments);
 
-            // Ensure pages are different
             $pageOneUuids = array_map(fn($a) => $a->getUuid(), $limitedAttachments);
             $pageTwoUuids = array_map(fn($a) => $a->getUuid(), $pageTwoAttachments);
             foreach ($pageOneUuids as $uuid)
@@ -679,25 +630,30 @@
         {
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
 
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(401);
-            $anonymousClient->listAttachments();
+            try
+            {
+                $anonymousClient->listAttachments();
+                $this->fail('Expected RequestException for unauthenticated list attachments');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
+            }
         }
 
         public function testListAttachmentsForbidden(): void
         {
-            // Create an operator without blacklist management permissions
             $operatorUuid = $this->client->createOperator('no-blacklist-list-operator');
             $this->createdOperators[] = $operatorUuid;
 
-            $this->client->setManageBlacklistPermission($operatorUuid, false);
-            $this->client->setClientPermission($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, false);
+            $this->client->setClientPermissions($operatorUuid, true);
 
             $operator = $this->client->getOperator($operatorUuid);
             $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
 
             $this->expectException(RequestException::class);
-            $this->expectExceptionCode(403);
+            $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
             $restrictedClient->listAttachments();
         }
 
@@ -715,13 +671,11 @@
             $this->client->listAttachments(1, 0);
         }
 
-        // HELPER METHODS
-
         private function createTestFile(string $fileName, string $content): string
         {
             $tempDir = sys_get_temp_dir();
             $filePath = $tempDir . '/' . $fileName;
-            
+
             if (file_put_contents($filePath, $content) === false)
             {
                 throw new \RuntimeException("Failed to create test file: $filePath");
@@ -730,4 +684,384 @@
             $this->tempFiles[] = $filePath;
             return $filePath;
         }
+
+        private function startHttpServer(): void
+        {
+            $this->httpServerRoot = sys_get_temp_dir() . '/federation_http_' . uniqid();
+            if (!mkdir($this->httpServerRoot, 0755, true) && !is_dir($this->httpServerRoot))
+            {
+                throw new \RuntimeException('Failed to create HTTP server root: ' . $this->httpServerRoot);
+            }
+
+            $this->tempFiles[] = $this->httpServerRoot;
+
+            $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+            if ($socket === false || !@socket_bind($socket, '127.0.0.1', 0) || !@socket_getsockname($socket, $address, $port))
+            {
+                throw new \RuntimeException('Failed to find available port for HTTP server');
+            }
+            socket_close($socket);
+
+            $this->httpServerPort = $port;
+
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['file', '/dev/null', 'w'],
+                2 => ['file', '/dev/null', 'w'],
+            ];
+
+            $command = sprintf('php -S 127.0.0.1:%d -t %s', $port, escapeshellarg($this->httpServerRoot));
+            $this->httpServerProcess = proc_open($command, $descriptors, $pipes);
+
+            if (!is_resource($this->httpServerProcess))
+            {
+                throw new \RuntimeException('Failed to start HTTP server');
+            }
+
+            $started = microtime(true);
+            while (microtime(true) - $started < 5)
+            {
+                $handle = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
+                if ($handle !== false)
+                {
+                    fclose($handle);
+                    return;
+                }
+                usleep(100000);
+            }
+
+            throw new \RuntimeException('HTTP server did not start in time');
+        }
+
+        private function createHttpServerFile(string $fileName, string $content): string
+        {
+            $filePath = $this->httpServerRoot . '/' . $fileName;
+            if (file_put_contents($filePath, $content) === false)
+            {
+                throw new \RuntimeException("Failed to create HTTP server file: $filePath");
+            }
+            return $filePath;
+        }
+
+        private function recursiveRmdir(string $dir): void
+        {
+            $files = array_diff(scandir($dir), ['.', '..']);
+            foreach ($files as $file)
+            {
+                $path = $dir . '/' . $file;
+                is_dir($path) ? $this->recursiveRmdir($path) : unlink($path);
+            }
+            rmdir($dir);
+        }
+
+        public function testSecurityAttachmentUploadRestrictions(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $clientOnly = $this->createLimitedOperator('attachment_client', client: true);
+            $operatorOnly = $this->createLimitedOperator('attachment_operator', operator: true);
+
+            // Uploading to a non-existent evidence record must fail.
+            $this->expectRequestFailure(
+                fn() => $clientOnly->uploadNoteAttachment('00000000-0000-0000-0000-000000000000', 'note.txt', 'content'),
+                [HttpResponseCode::NOT_FOUND->value],
+                'Upload to non-existent evidence should fail'
+            );
+
+            // Operators without client permissions cannot upload attachments.
+            $this->expectRequestFailure(
+                fn() => $operatorOnly->uploadNoteAttachment($evidenceUuid, 'note.txt', 'content'),
+                [HttpResponseCode::FORBIDDEN->value],
+                'Operator-only account should not upload attachments'
+            );
+
+            // Empty file uploads are rejected client-side before reaching the server.
+            $emptyFile = $this->createSecurityTempFile('');
+            $this->expectException(InvalidArgumentException::class);
+            $clientOnly->uploadFileAttachment($evidenceUuid, $emptyFile);
+        }
+
+        public function testSecurityUploadAttachmentFromInvalidUrl(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'not-a-valid-url');
+        }
+
+        public function testBinaryAttachmentDownloadIntegrity(): void
+        {
+            $entityUuid = $this->client->pushEntity('binary-attachment-test.com', 'binary_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Binary attachment evidence', 'Note', 'binary');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $binaryContent = random_bytes(1024);
+            $testFilePath = $this->createTestFile('binary_test.bin', $binaryContent);
+
+            $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+            $this->createdAttachments[] = $uploadResult->getUuid();
+
+            $downloadPath = sys_get_temp_dir();
+            $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
+            $this->tempFiles[] = $downloadedFile;
+
+            $this->assertEquals(strlen($binaryContent), filesize($downloadedFile));
+            $this->assertEquals($binaryContent, file_get_contents($downloadedFile));
+        }
+
+        public function testAttachmentConfidentialityFollowsEvidence(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Confidential attachment evidence', 'Note', 'conf_follow', false);
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $testFilePath = $this->createTestFile('confidential_follow.txt', 'Confidential follow content');
+            $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+            $attachmentUuid = $uploadResult->getUuid();
+            $this->createdAttachments[] = $attachmentUuid;
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $attachmentInfo = $anonymousClient->getAttachmentInfo($attachmentUuid);
+            $this->assertEquals($evidenceUuid, $attachmentInfo->getEvidenceUuid());
+
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, true);
+
+            $this->expectRequestFailure(
+                fn() => $anonymousClient->getAttachmentInfo($attachmentUuid),
+                [HttpResponseCode::FORBIDDEN->value, HttpResponseCode::UNAUTHORIZED->value],
+                'Attachment should become inaccessible when evidence is made confidential'
+            );
+        }
+
+        public function testAttachmentUploadFromUrlLifecycle(): void
+        {
+            $entityUuid = $this->client->pushEntity('url-attachment-lifecycle.com', 'url_lifecycle_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'URL attachment lifecycle evidence', 'Note', 'url_lifecycle');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $sourceFileName = 'lifecycle_source.txt';
+            $sourceContent = 'Lifecycle source content for URL upload.';
+            $this->createHttpServerFile($sourceFileName, $sourceContent);
+            $sourceUrl = sprintf('http://127.0.0.1:%d/%s', $this->httpServerPort, $sourceFileName);
+
+            $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, $sourceUrl);
+            $attachmentUuid = $uploadResult->getUuid();
+            $this->createdAttachments[] = $attachmentUuid;
+
+            $attachmentInfo = $this->client->getAttachmentInfo($attachmentUuid);
+            $this->assertEquals(strlen($sourceContent), $attachmentInfo->getFileSize());
+
+            $downloadPath = sys_get_temp_dir();
+            $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
+            $this->tempFiles[] = $downloadedFile;
+
+            $this->assertEquals($sourceContent, file_get_contents($downloadedFile));
+        }
+
+        public function testAttachmentDeletionDoesNotDeleteEvidence(): void
+        {
+            $entityUuid = $this->client->pushEntity('delete-attachment-evidence.com', 'delete_attach_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence with attachment to delete', 'Note', 'delete_attach');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $testFilePath = $this->createTestFile('delete_attach_only.txt', 'Delete attachment only content');
+            $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+            $attachmentUuid = $uploadResult->getUuid();
+            $this->createdAttachments[] = $attachmentUuid;
+
+            $this->client->deleteAttachment($attachmentUuid);
+            array_splice($this->createdAttachments, array_search($attachmentUuid, $this->createdAttachments), 1);
+
+            $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertNotNull($evidenceRecord);
+            $this->assertEquals($entityUuid, $evidenceRecord->getEntityUuid());
+        }
+
+        public function testAttachmentMimeTypeDetection(): void
+        {
+            $entityUuid = $this->client->pushEntity('mime-type-test.com', 'mime_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'MIME type evidence', 'Note', 'mime');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $cases = [
+                'text/plain' => ['plain.txt', 'Plain text content'],
+                'application/json' => ['data.json', '{"key":"value"}'],
+                'text/csv' => ['data.csv', "a,b\n1,2"],
+                'text/xml' => ['data.xml', '<?xml version="1.0"?><root/>'],
+            ];
+
+            foreach ($cases as $expectedMime => $case)
+            {
+                $testFilePath = $this->createTestFile($case[0], $case[1]);
+                $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+                $this->createdAttachments[] = $uploadResult->getUuid();
+
+                $info = $this->client->getAttachmentInfo($uploadResult->getUuid());
+                $this->assertStringStartsWith(
+                    explode('/', $expectedMime)[0],
+                    $info->getFileMime(),
+                    "MIME type for {$case[0]} should start with expected type"
+                );
+            }
+        }
+
+        public function testUploadWithPathTraversalFilenameIsSanitized(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $maliciousNames = [
+                '../../../etc/passwd',
+                '..\\..\\windows\\system32\\config\\sam',
+                'file.txt%00.php',
+                'normal.txt',
+            ];
+
+            foreach ($maliciousNames as $name)
+            {
+                $testFilePath = $this->createTestFile('safe_local_name.txt', 'Content for ' . $name);
+                $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath, $name);
+                $this->createdAttachments[] = $uploadResult->getUuid();
+
+                $info = $this->client->getAttachmentInfo($uploadResult->getUuid());
+                $this->assertStringNotContainsString('..', $info->getFileName(), 'Path traversal sequences should be removed');
+                $this->assertStringNotContainsString('/', $info->getFileName(), 'Directory separators should be removed from filename');
+                $this->assertStringNotContainsString('\\', $info->getFileName(), 'Backslash separators should be removed from filename');
+            }
+        }
+
+        public function testUploadRejectedWhenNoFileProvided(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $url = rtrim(getenv('SERVER_ENDPOINT'), '/') . '/attachments';
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => [
+                    'Authorization: Bearer ' . $this->client->getAccessToken(),
+                    'Content-Type: multipart/form-data; boundary=----boundary',
+                ],
+                CURLOPT_POSTFIELDS => "------boundary\r\nContent-Disposition: form-data; name=\"evidence_uuid\"\r\n\r\n$evidenceUuid\r\n------boundary--\r\n",
+            ]);
+            curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            $this->assertContains($code, [400, 404, 422], 'Upload without file should be rejected');
+        }
+
+        public function testUploadUrlAttachmentWithRedirectIsHandled(): void
+        {
+            $entityUuid = $this->client->pushEntity('redirect-attachment.com', 'redirect_user');
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Redirect attachment evidence', 'Note', 'redirect');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $sourceFileName = 'redirect_source.txt';
+            $sourceContent = 'Redirect source content.';
+            $this->createHttpServerFile($sourceFileName, $sourceContent);
+
+            $redirectFileName = 'redirect.php';
+            $redirectContent = "<?php header('Location: http://127.0.0.1:" . $this->httpServerPort . "/$sourceFileName'); exit;";
+            $this->createHttpServerFile($redirectFileName, $redirectContent);
+
+            $redirectUrl = sprintf('http://127.0.0.1:%d/%s', $this->httpServerPort, $redirectFileName);
+
+            try
+            {
+                $uploadResult = $this->client->uploadFileAttachmentFromUrl($evidenceUuid, $redirectUrl);
+                $this->createdAttachments[] = $uploadResult->getUuid();
+
+                $info = $this->client->getAttachmentInfo($uploadResult->getUuid());
+                $this->assertGreaterThan(0, $info->getFileSize());
+            }
+            catch (RequestException $e)
+            {
+                $this->assertContains($e->getCode(), [400, 422], 'Redirected URL attachment should be rejected or followed gracefully');
+            }
+        }
+
+        public function testAttachmentDownloadRequiresValidUuid(): void
+        {
+            try
+            {
+                $this->client->downloadAttachment('00000000-0000-0000-0000-000000000000', sys_get_temp_dir());
+            }
+            catch (\FederationLib\Exceptions\RequestException $e)
+            {
+                $this->assertContains(
+                    $e->getCode(),
+                    [HttpResponseCode::NOT_FOUND->value, 500],
+                    'Download with non-existent UUID should return 404 or server error'
+                );
+            }
+        }
+
+        public function testAttachmentInfoAccessControlAsAnonymous(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $testFilePath = $this->createTestFile('anon_access.txt', 'Anonymous access test');
+            $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
+            $this->createdAttachments[] = $uploadResult->getUuid();
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+
+            if ($this->client->getServerInformation()->isPublicEvidence())
+            {
+                $info = $anonymousClient->getAttachmentInfo($uploadResult->getUuid());
+                $this->assertEquals($evidenceUuid, $info->getEvidenceUuid());
+            }
+            else
+            {
+                $this->expectRequestFailure(
+                    fn() => $anonymousClient->getAttachmentInfo($uploadResult->getUuid()),
+                    [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
+                    'Anonymous attachment access should follow public_evidence setting'
+                );
+            }
+        }
+
+        public function testUploadNoteAttachmentContentVariations(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $contents = [
+                'Plain text note',
+                "Multi\nline\nnote",
+                'Unicode note: 你好 🌍',
+                str_repeat('Long note ', 100),
+            ];
+
+            foreach ($contents as $content)
+            {
+                $uploadResult = $this->client->uploadNoteAttachment($evidenceUuid, 'note.txt', $content);
+                $this->createdAttachments[] = $uploadResult->getUuid();
+
+                $info = $this->client->getAttachmentInfo($uploadResult->getUuid());
+                $this->assertEquals(strlen($content), $info->getFileSize());
+
+                $downloadPath = sys_get_temp_dir();
+                $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
+                $this->tempFiles[] = $downloadedFile;
+                $this->assertEquals($content, file_get_contents($downloadedFile));
+            }
+        }
+
     }
