@@ -124,7 +124,7 @@
          */
         public function hasClientPermissions(): bool
         {
-            return $this->clientPermissions || $this->managementPermissions;
+            return $this->clientPermissions;
         }
 
         /**
