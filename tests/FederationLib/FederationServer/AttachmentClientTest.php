@@ -9,6 +9,7 @@
     use FederationLib\Helpers\SecurityTestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
+    use RuntimeException;
 
     class AttachmentClientTest extends TestCase
     {
@@ -678,7 +679,7 @@
 
             if (file_put_contents($filePath, $content) === false)
             {
-                throw new \RuntimeException("Failed to create test file: $filePath");
+                throw new RuntimeException("Failed to create test file: $filePath");
             }
 
             $this->tempFiles[] = $filePath;
@@ -690,7 +691,7 @@
             $this->httpServerRoot = sys_get_temp_dir() . '/federation_http_' . uniqid();
             if (!mkdir($this->httpServerRoot, 0755, true) && !is_dir($this->httpServerRoot))
             {
-                throw new \RuntimeException('Failed to create HTTP server root: ' . $this->httpServerRoot);
+                throw new RuntimeException('Failed to create HTTP server root: ' . $this->httpServerRoot);
             }
 
             $this->tempFiles[] = $this->httpServerRoot;
@@ -698,7 +699,7 @@
             $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
             if ($socket === false || !@socket_bind($socket, '127.0.0.1', 0) || !@socket_getsockname($socket, $address, $port))
             {
-                throw new \RuntimeException('Failed to find available port for HTTP server');
+                throw new RuntimeException('Failed to find available port for HTTP server');
             }
             socket_close($socket);
 
@@ -715,7 +716,7 @@
 
             if (!is_resource($this->httpServerProcess))
             {
-                throw new \RuntimeException('Failed to start HTTP server');
+                throw new RuntimeException('Failed to start HTTP server');
             }
 
             $started = microtime(true);
@@ -730,7 +731,7 @@
                 usleep(100000);
             }
 
-            throw new \RuntimeException('HTTP server did not start in time');
+            throw new RuntimeException('HTTP server did not start in time');
         }
 
         private function createHttpServerFile(string $fileName, string $content): string
@@ -738,7 +739,7 @@
             $filePath = $this->httpServerRoot . '/' . $fileName;
             if (file_put_contents($filePath, $content) === false)
             {
-                throw new \RuntimeException("Failed to create HTTP server file: $filePath");
+                throw new RuntimeException("Failed to create HTTP server file: $filePath");
             }
             return $filePath;
         }
@@ -1001,7 +1002,7 @@
             {
                 $this->client->downloadAttachment('00000000-0000-0000-0000-000000000000', sys_get_temp_dir());
             }
-            catch (\FederationLib\Exceptions\RequestException $e)
+            catch (RequestException $e)
             {
                 $this->assertContains(
                     $e->getCode(),
