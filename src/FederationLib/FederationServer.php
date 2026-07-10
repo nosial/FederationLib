@@ -75,13 +75,19 @@
                 Logger::log()->critical('Uncaught Exception:' . $e->getMessage(), $e);
                 self::errorResponse('Internal Server Error');
             }
+            catch(\Throwable $e)
+            {
+                Logger::log()->critical('Uncaught Throwable:' . $e->getMessage(), $e);
+                self::errorResponse('Internal Server Error');
+            }
         }
 
         /**
          * Get a parameter from the request, checking POST, GET, and decoded JSON content.
          *
          * This method retrieves a parameter by name from the POST data, GET parameters,
-         * or decoded JSON content if available. It trims the value and returns it.
+         * or decoded JSON content if available. Values are returned as-is so that whitespace
+         * content is preserved exactly.
          *
          * @param string $name The name of the parameter to retrieve.
          * @return mixed The value of the parameter or null if not found.
@@ -91,13 +97,13 @@
             // Check if the parameter exists in the POST data.
             if (isset($_POST[$name]) && is_string($_POST[$name]))
             {
-                return trim($_POST[$name]);
+                return $_POST[$name];
             }
 
             // If not found in POST, check the GET parameters.
             if (isset($_GET[$name]) && is_string($_GET[$name]))
             {
-                return trim($_GET[$name]);
+                return $_GET[$name];
             }
 
             $decodedContent = self::getDecodedContent();
