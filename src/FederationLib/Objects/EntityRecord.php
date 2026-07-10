@@ -35,7 +35,7 @@
             $this->metadata = null;
             $this->reputation = (int)$data['reputation'] ?? 0;
             $this->whitelisted = (bool)$data['whitelisted'] ?? false;
-            $this->relationshipEntity = $data['relationship_entity'] ?? null;
+            $this->relationshipEntity = (isset($data['relationship_entity']) && $data['relationship_entity'] !== '') ? $data['relationship_entity'] : null;
 
             if(isset($data['relationship_type']))
             {
@@ -47,6 +47,10 @@
                 {
                     $this->relationshipType = $data['relationship_type'];
                 }
+            }
+            else
+            {
+                $this->relationshipType = null;
             }
 
             // Parse the JSON metadata
