@@ -17,11 +17,11 @@
 
     class ListOperatorBlacklist extends RequestHandler implements RequestSpecificationInterface
     {
-        private const ERROR_AUTHENTICATION_REQUIRED = 'You must be authenticated to list blacklist records';
-        private const ERROR_UUID_REQUIRED = 'Operator UUID is required';
-        private const ERROR_INVALID_UUID = 'A valid operator UUID is required';
-        private const ERROR_NOT_FOUND = 'Operator not found';
-        private const ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve blacklist records from the operator';
+        private const string ERROR_AUTHENTICATION_REQUIRED = 'You must be authenticated to list blacklist records';
+        private const string ERROR_UUID_REQUIRED = 'Operator UUID is required';
+        private const string ERROR_INVALID_UUID = 'A valid operator UUID is required';
+        private const string ERROR_NOT_FOUND = 'Operator not found';
+        private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve blacklist records from the operator';
 
         /**
          * @inheritDoc
