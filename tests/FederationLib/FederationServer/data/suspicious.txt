@@ -1,0 +1,20 @@
+We detected unusual activity on your account and need you to verify your identity immediately.
+Your account has been temporarily suspended due to suspicious login attempts.
+Please confirm your account details to avoid access limitation and review the alert.
+Unusual sign-in activity was noticed on your profile, click here to verify now.
+Security warning: your account may be compromised, please check your activity immediately.
+We need you to verify your identity because of suspicious transactions on your account.
+Your access has been flagged for review, please confirm your information within 24 hours.
+Temporary limitation placed on your account until you verify your identity.
+Alert: someone tried to access your account from an unknown device, please verify.
+Please review and confirm your account activity to restore full access right away.
+Suspicious behavior was detected, verify your credentials to secure your account.
+We have placed a temporary hold on your account, click to confirm your identity.
+Warning: your account security is at risk, please verify your login details now.
+Your profile has been flagged for suspicious activity, complete the verification steps.
+Immediate action required: confirm your identity to prevent account suspension.
+Unusual request detected on your account, please verify and update your security settings.
+Access to your account has been limited, verify your information to continue.
+We noticed suspicious changes to your account, please review and confirm them.
+Your account needs verification due to a recent suspicious login attempt.
+Security alert: confirm your identity or your account access will be restricted.
