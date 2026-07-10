@@ -14,6 +14,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\UploadHandler;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\IncidentType;
@@ -22,6 +23,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ScannedContent\ContentClassification;
@@ -29,6 +31,7 @@
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use FederationLib\Objects\UploadResult;
     use FederationLib\Interfaces\RequestSpecificationInterface;
+    use InvalidArgumentException;
     use Throwable;
 
     class ScanContent extends RequestHandler implements RequestSpecificationInterface
@@ -118,7 +121,7 @@
                 // Classify the content
                 try
                 {
-                    $contentClassification = self::classifyContent($contentClassification, $threshold, $topK);
+                    $contentClassification = self::classifyContent($content, $threshold, $topK);
                 }
                 catch (RequestException $e)
                 {
@@ -243,6 +246,11 @@
          */
         private static function resolveEntity(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?ResolvedEntity
         {
+            if(strlen($entityIdentifier) < 1)
+            {
+                return null;
+            }
+
             if(Utilities::isUuid($entityIdentifier))
             {
                 $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
@@ -258,7 +266,7 @@
             }
             else
             {
-                return null;
+                $entityRecord = self::resolveEntityByIdentifier($entityIdentifier, $entityPosition);
             }
 
             if($entityRecord === null)
@@ -271,7 +279,7 @@
             // Optionally resolve the parent entity if a relationship is defined
             $parentResolvedEntity = null;
             $parentUuid = $entityRecord->getRelationshipEntity();
-            if($parentUuid !== null)
+            if(!empty($parentUuid))
             {
                 try
                 {
@@ -290,6 +298,80 @@
             }
 
             return new ResolvedEntity($entityRecord, $activeBlacklists, $entityPosition, $parentResolvedEntity);
+        }
+
+        /**
+         * Resolves a raw named-entity identifier (domain, URL, email, IPv4 or IPv6) to an EntityRecord by hashing
+         * the canonical host (and optional id) the same way pushEntity stores it.
+         *
+         * @param string $entityIdentifier The raw identifier extracted from the content
+         * @param ResolvedEntityPosition|null $entityPosition Optional position metadata carrying the entity type
+         * @return EntityRecord|null The matching entity record, or null if none exists
+         * @throws DatabaseOperationException Thrown if there was a database exception
+         */
+        private static function resolveEntityByIdentifier(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?EntityRecord
+        {
+            $host = null;
+            $id = null;
+
+            if($entityPosition !== null)
+            {
+                $type = $entityPosition->getType();
+
+                switch($type)
+                {
+                    case NamedEntityType::URL:
+                        $host = parse_url($entityIdentifier, PHP_URL_HOST);
+                        break;
+
+                    case NamedEntityType::EMAIL:
+                        $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                        if($parsedAddress !== null)
+                        {
+                            $host = $parsedAddress['host'];
+                            $id = $parsedAddress['id'];
+                        }
+                        break;
+
+                    case NamedEntityType::DOMAIN:
+                    case NamedEntityType::IPv4:
+                    case NamedEntityType::IPv6:
+                        $host = $entityIdentifier;
+                        break;
+                }
+            }
+            else
+            {
+                if(Utilities::isEntityAddress($entityIdentifier))
+                {
+                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                    $host = $parsedAddress['host'];
+                    $id = $parsedAddress['id'];
+                }
+                elseif(Validate::url($entityIdentifier))
+                {
+                    $host = parse_url($entityIdentifier, PHP_URL_HOST);
+                }
+                elseif(Validate::domain($entityIdentifier) || Validate::ipv4($entityIdentifier) || Validate::ipv6($entityIdentifier))
+                {
+                    $host = $entityIdentifier;
+                }
+            }
+
+            if($host === null || $host === '')
+            {
+                return null;
+            }
+
+            try
+            {
+                return EntitiesManager::getEntityByHash(Utilities::hashEntity($host, $id));
+            }
+            catch (InvalidArgumentException $e)
+            {
+                Logger::log()->warning('Failed to resolve entity by identifier ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                return null;
+            }
         }
 
         /**
@@ -323,14 +405,17 @@
                 $reportMessage .= "\n";
                 foreach($scannedContent->getScanResults() as $scanningRule => $value)
                 {
-                    $reportMessage .= sprintf(' - %s: %f%%\n', $scanningRule, $value);
+                    $reportMessage .= sprintf(" - %s: %f%%\n", $scanningRule, $value);
                 }
             }
+
             if($scannedContent->getClassification() !== null)
             {
                 $reportMessage .= "\n" . $scannedContent->getClassification();
             }
-            $reportMessage .= sprintf("\nSuggested Action: %s\nRisk Score: %f", $scannedContent->getSuggestedAction()->value, $scannedContent->getRiskScore());
+
+            $suggestedAction = $scannedContent->getSuggestedAction();
+            $reportMessage .= sprintf("\nSuggested Action: %s\nRisk Score: %f", $suggestedAction?->value ?? 'none', $scannedContent->getRiskScore());
 
             // Generate the evidence message
             if($scannedContent->getClassification() !== null)
@@ -359,7 +444,7 @@
                 operator: $systemOperator->getUuid(),
                 textContent: $content,
                 note: $evidenceMessage,
-                tag: $scannedContent->getClassification()?->getClassificationFlag()->value ?? $scannedContent->getSuggestedAction()->value,
+                tag: $scannedContent->getClassification()?->getClassificationFlag()->value ?? $suggestedAction?->value ?? 'scan',
                 report: $reportUuid,
                 metadata: $metadata
             );
