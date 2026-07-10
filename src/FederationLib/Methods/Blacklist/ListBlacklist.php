@@ -8,9 +8,15 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Interfaces\RequestSpecificationInterface;
+    use FederationLib\Objects\BlacklistRecord;
+    use FederationLib\Objects\ErrorResponse;
 
-    class ListBlacklist extends RequestHandler
+    class ListBlacklist extends RequestHandler implements RequestSpecificationInterface
     {
+        private const string ERROR_AUTHENTICATION_REQUIRED = 'You must be authenticated to list blacklist records';
+        private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve blacklist records';
+
         /**
          * @inheritDoc
          */
@@ -19,7 +25,7 @@
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
-                throw new RequestException('You must be authenticated to list blacklist records', 401);
+                throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
             }
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
@@ -42,10 +48,115 @@
             }
             catch (DatabaseOperationException $e)
             {
-                throw new RequestException('Unable to retrieve blacklist records', 500, $e);
+                throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, 500, $e);
             }
 
-            self::successResponse(array_map(fn($evidence) => $evidence->toArray(), $blacklistRecords));
+            self::successResponse(array_map(fn($record) => $record->toArray(), $blacklistRecords));
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getTags(): array
+        {
+            return ['Blacklist'];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getSummary(): string
+        {
+            return 'List blacklist records';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getDescription(): string
+        {
+            return 'Retrieves a paginated list of blacklist records. If the blacklist is public, authentication is optional; otherwise, an operator must be authenticated.';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getOperationId(): string
+        {
+            return 'listBlacklist';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getParameters(): array
+        {
+            return [
+                [
+                    'name' => 'limit',
+                    'in' => 'query',
+                    'description' => 'Maximum number of blacklist records to return per page',
+                    'required' => false,
+                    'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'page',
+                    'in' => 'query',
+                    'description' => 'Page number for pagination',
+                    'required' => false,
+                    'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'include_lifted',
+                    'in' => 'query',
+                    'description' => 'Whether to include lifted blacklist records',
+                    'required' => false,
+                    'schema' => ['type' => 'boolean'],
+                ],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getRequestBody(): ?array
+        {
+            return null;
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getResponses(): array
+        {
+            return [
+                '200' => [
+                    'description' => 'List of blacklist records',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => [
+                                'type' => 'array',
+                                'items' => ['$ref' => BlacklistRecord::getReference()],
+                            ],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => self::ERROR_AUTHENTICATION_REQUIRED,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '500' => [
+                    'description' => self::ERROR_UNABLE_TO_RETRIEVE,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+            ];
         }
     }
-
