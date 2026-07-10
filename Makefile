@@ -14,10 +14,10 @@ docs:
 	phpdoc --config phpdoc.dist.xml
 
 clean:
-	rm target/release/net.nosial.federation.ncc
-	rm target/web/net.nosial.federation.ncc
-	rm target/debug/net.nosial.federation.ncc
-	rm target/docs
-	rm target/cache
+	rm -f target/release/net.nosial.federation.ncc
+	rm -f target/web/net.nosial.federation.ncc
+	rm -f target/debug/net.nosial.federation.ncc
+	rm -rf target/docs
+	rm -rf target/cache
 
 .PHONY: all install clean test docs
