@@ -22,7 +22,7 @@
         private const string ERROR_INVALID_UUID = 'A valid operator UUID is required';
         private const string ERROR_CANNOT_ENABLE_SELF = 'You cannot enable yourself';
         private const string ERROR_NOT_FOUND = 'Operator not found';
-        private const string ERROR_CANNOT_ENABLE_ROOT = 'Cannot enable the root operator';
+        private const string ERROR_CANNOT_ENABLE_ROOT = 'Cannot enable a builtin operator';
         private const string ERROR_ALREADY_ENABLED = 'Operator is already enabled';
         private const string ERROR_UNABLE_TO_ENABLE = 'Unable to enable operator';
 
@@ -63,7 +63,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if(OperatorManager::isRootOperator($operatorUuid))
+                if(OperatorManager::isRootOperator($operatorUuid) || OperatorManager::isSystemOperator($operatorUuid))
                 {
                     throw new RequestException(self::ERROR_CANNOT_ENABLE_ROOT, HttpResponseCode::FORBIDDEN);
                 }
@@ -108,7 +108,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Enables a previously disabled operator by UUID. Cannot enable the root operator or yourself. Requires operator management permissions.';
+            return 'Enables a previously disabled operator by UUID. Cannot enable a builtin (root/system) operator or yourself. Requires operator management permissions.';
         }
 
         /**

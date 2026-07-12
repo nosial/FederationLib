@@ -17,7 +17,7 @@
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to generate other operators Access Tokens';
         private const string ERROR_NOT_FOUND = 'Operator not found';
-        private const string ERROR_CANNOT_GENERATE_ROOT = 'Cannot generate Access Token for root operator';
+        private const string ERROR_CANNOT_GENERATE_ROOT = 'Cannot generate Access Token for a builtin operator';
         private const string ERROR_UNABLE_TO_GENERATE = 'Unable to generate operator\'s Access token';
 
         /**
@@ -55,7 +55,7 @@
                     $existingOperator = $authenticatedOperator;
                 }
 
-                if(OperatorManager::isRootOperator($operatorUuid))
+                if(OperatorManager::isRootOperator($operatorUuid) || OperatorManager::isSystemOperator($operatorUuid))
                 {
                     throw new RequestException(self::ERROR_CANNOT_GENERATE_ROOT, HttpResponseCode::FORBIDDEN);
                 }
@@ -97,7 +97,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Generates a new access token for an operator (or the authenticated operator if no UUID is provided). Cannot generate the root operator\'s token. Requires operator management permissions to generate another operator\'s token.';
+            return 'Generates a new access token for an operator (or the authenticated operator if no UUID is provided). Cannot generate a builtin (root/system) operator\'s token. Requires operator management permissions to generate another operator\'s token.';
         }
 
         /**

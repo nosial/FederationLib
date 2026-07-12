@@ -22,7 +22,7 @@
         private const string ERROR_INVALID_UUID = 'A valid operator UUID is required';
         private const string ERROR_CANNOT_DISABLE_SELF = 'You cannot disable yourself';
         private const string ERROR_NOT_FOUND = 'Operator not found';
-        private const string ERROR_CANNOT_DISABLE_ROOT = 'Cannot disable the root operator';
+        private const string ERROR_CANNOT_DISABLE_ROOT = 'Cannot disable a builtin operator';
         private const string ERROR_ALREADY_DISABLED = 'Operator is already disabled';
         private const string ERROR_UNABLE_TO_DISABLE = 'Unable to disable operator';
 
@@ -63,7 +63,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if(OperatorManager::isRootOperator($operatorUuid))
+                if(OperatorManager::isRootOperator($operatorUuid) || OperatorManager::isSystemOperator($operatorUuid))
                 {
                     throw new RequestException(self::ERROR_CANNOT_DISABLE_ROOT, HttpResponseCode::FORBIDDEN);
                 }
@@ -108,7 +108,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Disables an operator by UUID, preventing them from authenticating. Cannot disable the root operator or yourself. Requires operator management permissions.';
+            return 'Disables an operator by UUID, preventing them from authenticating. Cannot disable a builtin (root/system) operator or yourself. Requires operator management permissions.';
         }
 
         /**
