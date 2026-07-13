@@ -696,12 +696,12 @@
 
             $this->tempFiles[] = $this->httpServerRoot;
 
-            $socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-            if ($socket === false || !@socket_bind($socket, '127.0.0.1', 0) || !@socket_getsockname($socket, $address, $port))
+            $socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+            if ($socket === false || !@\socket_bind($socket, '127.0.0.1', 0) || !@\socket_getsockname($socket, $address, $port))
             {
                 throw new RuntimeException('Failed to find available port for HTTP server');
             }
-            socket_close($socket);
+            \socket_close($socket);
 
             $this->httpServerPort = $port;
 
