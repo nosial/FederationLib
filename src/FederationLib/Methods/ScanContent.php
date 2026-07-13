@@ -226,8 +226,6 @@
                 }
             }
 
-            // Classify the content
-            $bayesianClassification = FederationServer::getBayesianClient()->classify($content, $topK, $threshold);
             return new ContentClassification(
                 ClassificationFlag::from($bayesianClassification->getTopLabel()),
                 $bayesianClassification->getConfidence(),
