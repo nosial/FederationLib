@@ -65,7 +65,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if(OperatorManager::isRootOperator($operatorUuid))
+                if(OperatorManager::isRootOperator($operatorUuid) || OperatorManager::isSystemOperator($operatorUuid))
                 {
                     throw new RequestException(self::ERROR_CANNOT_MODIFY_ROOT, HttpResponseCode::FORBIDDEN);
                 }
