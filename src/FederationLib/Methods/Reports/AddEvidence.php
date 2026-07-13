@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
+    use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
@@ -22,6 +23,7 @@
         private const string ERROR_EVIDENCE_UUID_REQUIRED = 'Evidence UUID is required';
         private const string ERROR_INVALID_EVIDENCE_UUID = 'Invalid evidence UUID';
         private const string ERROR_REPORT_UUID_REQUIRED = 'A valid report UUID is required';
+        private const string ERROR_REPORT_NOT_FOUND = 'The report was not found';
         private const string ERROR_EVIDENCE_NOT_FOUND = 'Evidence not found';
         private const string ERROR_UNABLE_TO_LINK = 'Unable to link evidence to report';
 
@@ -31,7 +33,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(!$authenticatedOperator->hasOperatorPermissions())
+            if(!$authenticatedOperator->hasManagementPermissions())
             {
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
@@ -59,6 +61,11 @@
                 if($evidenceRecord === null)
                 {
                     throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                }
+
+                if(!ReportManager::reportExists($reportUuid))
+                {
+                    throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
                 EvidenceManager::updateEvidenceReport($evidenceUuid, $reportUuid);
