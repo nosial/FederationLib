@@ -109,6 +109,11 @@
                 throw new RequestException(self::ERROR_FAILED_TO_GET, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
+            if($reportRecord === null)
+            {
+                throw new RequestException(self::ERROR_INVALID_UUID, HttpResponseCode::NOT_FOUND);
+            }
+
             // Prevent report management by non-assigned operator
             if($reportRecord->getAssignedOperator() !== $authenticatedOperator->getUuid())
             {
