@@ -45,12 +45,12 @@
             $this->averageTokensPerLabel = (float)$array['average_tokens_per_label'];
             $this->tokenDensity = (float)$array['token_density'];
             $this->modelVersion = (int)$array['model_version'];
-            $this->bm25Enabled = (bool)$array['bm25_enabled'];
-            $this->onlineLrEnabled = (bool)$array['online_lr_enabled'];
-            $this->lrInitialLearningRate = (float)$array['lr_initial_learning_rate'];
-            $this->lrDecayRate = (float)$array['lr_decay_rate'];
-            $this->bm25K1 = (float)$array['bm25_k1'];
-            $this->bm25B = (float)$array['bm25_b'];
+            $this->bm25Enabled = (bool)($array['bm25_enabled'] ?? false);
+            $this->onlineLrEnabled = (bool)($array['online_lr_enabled'] ?? false);
+            $this->lrInitialLearningRate = (float)($array['lr_initial_learning_rate'] ?? 0.0);
+            $this->lrDecayRate = (float)($array['lr_decay_rate'] ?? 0.0);
+            $this->bm25K1 = (float)($array['bm25_k1'] ?? 0.0);
+            $this->bm25B = (float)($array['bm25_b'] ?? 0.0);
             $this->labels = [];
 
             if(isset($array['labels']))
