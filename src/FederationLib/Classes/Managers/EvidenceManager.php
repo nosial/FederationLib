@@ -837,6 +837,16 @@
                 throw new InvalidArgumentException('TTL must be greater than zero.');
             }
 
+            if($limit < 1 || $limit > 10000)
+            {
+                throw new InvalidArgumentException('Limit must be between 1 and 10000.');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than zero.');
+            }
+
             $timestamp = date('Y-m-d H:i:s', time() - $ttl);
             $offset = ($page - 1) * $limit;
 
