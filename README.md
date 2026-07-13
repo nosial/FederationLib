@@ -47,13 +47,13 @@ FederationLib can be used as a library using [Nosial Code Compiler (ncc)](https:
 From the n64 repository
 ```yaml
 dependencies:
-  net.nosial.loglib2: nosial/loglib2@n64
+  net.nosial.federation: nosial/federationlib@n64
 ```
 
 From the github repository
 ```yaml
 dependencies:
-  net.nosial.loglib2: nosial/loglib2@github
+  net.nosial.federation: nosial/federationlib@github
 ```
 
 You can also build the library from the source code, first ensure all the dependencies are available in the environment
