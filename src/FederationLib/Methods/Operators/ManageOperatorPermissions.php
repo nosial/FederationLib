@@ -41,7 +41,16 @@
             }
 
             $operatorUuid = $matches[1];
-            $enabled = (bool)filter_var(FederationServer::getParameter('enabled'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            $enabledParam = FederationServer::getParameter('enabled');
+            if($enabledParam === null)
+            {
+                throw new RequestException(self::ERROR_MISSING_PARAMETERS, HttpResponseCode::BAD_REQUEST);
+            }
+            $enabled = filter_var($enabledParam, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if($enabled === null)
+            {
+                throw new RequestException(self::ERROR_MISSING_PARAMETERS, HttpResponseCode::BAD_REQUEST);
+            }
 
             if(!Validate::uuid($operatorUuid))
             {
