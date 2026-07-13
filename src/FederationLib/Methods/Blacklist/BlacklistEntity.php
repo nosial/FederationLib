@@ -103,7 +103,7 @@
                     entityUuid: $entityRecord->getUuid(),
                     operatorUuid: $authenticatedOperator->getUuid(),
                     type: $type,
-                    expires: $expires,
+                    expires: $expires !== null ? (int)$expires : null,
                     evidenceUuid: $evidence
                 );
 
