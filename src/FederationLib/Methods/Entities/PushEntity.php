@@ -34,6 +34,11 @@
             $id = FederationServer::getParameter('id') ?? null;
             $metadata = FederationServer::getParameter('metadata');
 
+            if($host === null || !is_string($host))
+            {
+                throw new RequestException(self::ERROR_INVALID_METADATA, 400);
+            }
+
             if($metadata !== null && (!is_array($metadata) || !Validate::entityMetadata($metadata)))
             {
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
