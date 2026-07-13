@@ -67,7 +67,8 @@
             {
                 if(Utilities::isUuid($entity))
                 {
-                    $entityUuid = $entity;
+                    $entityRecord = EntitiesManager::getEntityByUuid($entity);
+                    $entityUuid = $entityRecord?->getUuid();
                 }
                 elseif(Utilities::isSha256($entity))
                 {
