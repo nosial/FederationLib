@@ -18,7 +18,8 @@
 
             for ($i = 0; $i < $length; $i++)
             {
-                $randomString .= $characters[rand(0, $charactersLength - 1)];
+                // Use a cryptographically secure random source; access tokens are generated with this method.
+                $randomString .= $characters[random_int(0, $charactersLength - 1)];
 
             }
             return $randomString;
