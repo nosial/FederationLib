@@ -6,6 +6,7 @@
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\AuditLogType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -49,6 +50,15 @@
                 if(!$logRecord)
                 {
                     throw new RequestException(self::ERROR_AUDIT_LOG_NOT_FOUND, 404);
+                }
+
+                if($authenticatedOperator === null)
+                {
+                    $publicTypes = Configuration::getServerConfiguration()->getPublicAuditEntries();
+                    if(!in_array($logRecord->getType(), $publicTypes, true))
+                    {
+                        throw new RequestException(self::ERROR_AUDIT_LOG_NOT_FOUND, 404);
+                    }
                 }
 
                 self::successResponse($logRecord->toArray());
