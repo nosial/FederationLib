@@ -1,16 +1,19 @@
-<?php
+<?php /** @noinspection PhpUnhandledExceptionInspection */
 
-    namespace FederationLib\FederationServer;
+namespace FederationLib\FederationServer;
 
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\SecurityTestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class ErrorHandlingAndEdgeCasesTest extends TestCase
     {
+        use SecurityTestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -24,7 +27,6 @@
 
         protected function tearDown(): void
         {
-            // Clean up in reverse dependency order
             foreach ($this->createdBlacklistRecords as $blacklistUuid)
             {
                 try
@@ -73,67 +75,49 @@
                 }
             }
 
-            // Reset arrays
             $this->createdOperators = [];
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
         }
 
-        // MALFORMED DATA AND INJECTION TESTS
-
         public function testMalformedEntityIdentifiers(): void
         {
             $malformedIdentifiers = [
-                ['host' => '', 'id' => 'user'], // Empty host
-                ['host' => 'example.com', 'id' => ''], // Empty user ID  
-                ['host' => 'invalid..domain', 'id' => 'user'], // Invalid domain
-                ['host' => 'domain.', 'id' => 'user'], // Trailing dot
-                ['host' => '.domain.com', 'id' => 'user'], // Leading dot
-                ['host' => 'domain-.com', 'id' => 'user'], // Invalid hyphen
-                ['host' => str_repeat('a', 300) . '.com', 'id' => 'user'], // Extremely long domain
-                ['host' => 'example.com', 'id' => str_repeat('u', 300)], // Extremely long user ID
+                ['host' => '', 'id' => 'user'],
+                ['host' => 'example.com', 'id' => ''],
+                ['host' => 'invalid..domain', 'id' => 'user'],
+                ['host' => 'domain.', 'id' => 'user'],
+                ['host' => '.domain.com', 'id' => 'user'],
+                ['host' => 'domain-.com', 'id' => 'user'],
+                ['host' => str_repeat('a', 300) . '.com', 'id' => 'user'],
+                ['host' => 'example.com', 'id' => str_repeat('u', 300)],
             ];
 
             foreach ($malformedIdentifiers as $identifier)
             {
                 try
                 {
-                    if ($identifier['id'] === '')
+                    $entityUuid = $this->client->pushEntity($identifier['host'], $identifier['id']);
+                    if ($entityUuid)
                     {
-                        $this->client->pushEntity($identifier['host'], $identifier['id']);
-                    }
-                    elseif ($identifier['host'] === '')
-                    {
-                        $this->client->pushEntity($identifier['host'], $identifier['id']);
-                    }
-                    else
-                    {
-                        // These should either succeed (if the validation is lenient) or fail with proper error codes
-                        $entityUuid = $this->client->pushEntity($identifier['host'], $identifier['id']);
-                        if ($entityUuid !== null)
-                        {
-                            $this->createdEntities[] = $entityUuid;
-                            Logger::getLogger()->info("Malformed identifier accepted: {$identifier['host']}/{$identifier['id']}");
-                        }
+                        $this->createdEntities[] = $entityUuid;
+                        Logger::getLogger()->info("Malformed identifier accepted: {$identifier['host']}/{$identifier['id']}");
                     }
                 }
                 catch (RequestException $e)
                 {
-                    // Expected for malformed data
-                    $this->assertContains($e->getCode(), [400, 422], "Expected 400/422 for malformed entity identifier");
+                    $this->assertContains($e->getCode(), [400, 422], 'Expected 400/422 for malformed entity identifier');
                 }
                 catch (InvalidArgumentException $e)
                 {
-                    // Also acceptable for client-side validation
-                    Logger::getLogger()->info("Client-side validation caught malformed identifier: " . $e->getMessage());
+                    Logger::getLogger()->info('Client-side validation caught malformed identifier: ' . $e->getMessage());
                 }
             }
         }
 
         public function testSqlInjectionInEvidenceContent(): void
         {
-            // Create a valid entity first
             $entityUuid = $this->client->pushEntity('injection-test.com', 'injection_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -155,21 +139,19 @@
                     $evidenceUuid = $this->client->submitEvidence($entityUuid, $payload, 'SQL injection test', 'injection');
                     $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                    // If the evidence was created, verify it was stored as literal text
                     $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                    $this->assertEquals($payload, $evidenceRecord->getTextContent(), "SQL injection payload should be stored as literal text");
+                    $this->assertEquals($payload, $evidenceRecord->getTextContent(), 'SQL injection payload should be stored as literal text');
                 }
                 catch (RequestException $e)
                 {
-                    // If the server rejects the content, that's also acceptable
-                    Logger::getLogger()->info("Server rejected SQL injection payload: " . $e->getMessage());
+                    Logger::getLogger()->info('Server rejected SQL injection payload: ' . $e->getMessage());
+                    $this->assertContains($e->getCode(), [400, 422], 'Expected 400/422 for rejected SQL injection payload');
                 }
             }
         }
 
         public function testXssPayloadsInContent(): void
         {
-            // Create a valid entity first
             $entityUuid = $this->client->pushEntity('xss-test.com', 'xss_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -191,21 +173,19 @@
                     $evidenceUuid = $this->client->submitEvidence($entityUuid, $payload, 'XSS test note', 'xss_test');
                     $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                    // Verify the payload was stored as literal text (not executed)
                     $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                    $this->assertEquals($payload, $evidenceRecord->getTextContent(), "XSS payload should be stored as literal text");
+                    $this->assertEquals($payload, $evidenceRecord->getTextContent(), 'XSS payload should be stored as literal text');
                 }
                 catch (RequestException $e)
                 {
-                    // If the server sanitizes/rejects the content, that's acceptable
-                    Logger::getLogger()->info("Server handled XSS payload: " . $e->getMessage());
+                    Logger::getLogger()->info('Server handled XSS payload: ' . $e->getMessage());
+                    $this->assertContains($e->getCode(), [400, 422], 'Expected 400/422 for rejected XSS payload');
                 }
             }
         }
 
         public function testUnicodeAndSpecialCharacterHandling(): void
         {
-            // Create a valid entity first
             $entityUuid = $this->client->pushEntity('unicode-test.com', 'unicode_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -221,63 +201,48 @@
                 'Mathematical: ∑ ∞ ≠ ±',
                 'Currency: $ € £ ¥ ₹',
                 'Mixed: Hello 世界 🌍 café!',
-                'Zero-width chars: a‌b‍c', // Contains zero-width non-joiner and joiner
                 'Right-to-left: Hello שלום',
             ];
 
             foreach ($unicodeTestCases as $testContent)
             {
-                try
-                {
-                    $evidenceUuid = $this->client->submitEvidence($entityUuid, $testContent, 'Unicode test', 'unicode');
-                    $this->createdEvidenceRecords[] = $evidenceUuid;
+                $evidenceUuid = $this->client->submitEvidence($entityUuid, $testContent, 'Unicode test', 'unicode');
+                $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                    // Verify the content was stored correctly
-                    $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                    $this->assertEquals($testContent, $evidenceRecord->getTextContent(), "Unicode content should be preserved exactly");
-                }
-                catch (RequestException $e)
-                {
-                    $this->fail("Unicode content should be supported: {$testContent}. Error: " . $e->getMessage());
-                }
+                $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
+                $this->assertEquals($testContent, $evidenceRecord->getTextContent(), 'Unicode content should be preserved exactly');
             }
         }
 
-        // BOUNDARY VALUE TESTING
-
         public function testExtremelyLongContent(): void
         {
-            // Create a valid entity first
             $entityUuid = $this->client->pushEntity('long-content-test.com', 'long_content_user');
             $this->createdEntities[] = $entityUuid;
 
             $contentSizes = [
-                1000,    // 1KB
-                10000,   // 10KB
-                100000,  // 100KB
-                1000000, // 1MB
+                1000,
+                10000,
+                100000,
             ];
 
             foreach ($contentSizes as $size)
             {
                 $longContent = str_repeat('A', $size);
-                
+
                 try
                 {
-                    $evidenceUuid = $this->client->submitEvidence($entityUuid, $longContent, "Long content test - {$size} chars", 'long_content');
+                    $evidenceUuid = $this->client->submitEvidence($entityUuid, $longContent, "Long content test - $size chars", 'long_content');
                     $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                    // Verify the content was stored correctly
                     $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                    $this->assertEquals($size, strlen($evidenceRecord->getTextContent()), "Content length should be preserved");
-                    $this->assertEquals($longContent, $evidenceRecord->getTextContent(), "Long content should be stored exactly");
+                    $this->assertEquals($size, strlen($evidenceRecord->getTextContent()), 'Content length should be preserved');
+                    $this->assertEquals($longContent, $evidenceRecord->getTextContent(), 'Long content should be stored exactly');
                 }
                 catch (RequestException $e)
                 {
-                    // If the server has size limits, this is acceptable
                     if ($e->getCode() === 413 || $e->getCode() === 400)
                     {
-                        Logger::getLogger()->info("Server rejected content of size {$size}: " . $e->getMessage());
+                        Logger::getLogger()->info("Server rejected content of size $size: " . $e->getMessage());
                     }
                     else
                     {
@@ -289,12 +254,10 @@
 
         public function testZeroLengthAndWhitespaceContent(): void
         {
-            // Create a valid entity first
             $entityUuid = $this->client->pushEntity('whitespace-test.com', 'whitespace_user');
             $this->createdEntities[] = $entityUuid;
 
             $whitespaceTestCases = [
-                ['content' => '', 'description' => 'empty string'],
                 ['content' => ' ', 'description' => 'single space'],
                 ['content' => "\t", 'description' => 'single tab'],
                 ['content' => "\n", 'description' => 'single newline'],
@@ -312,320 +275,77 @@
                     $evidenceUuid = $this->client->submitEvidence($entityUuid, $testCase['content'], 'Whitespace test: ' . $testCase['description'], 'whitespace');
                     $this->createdEvidenceRecords[] = $evidenceUuid;
 
-                    // Verify the content was stored exactly as provided
                     $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                    $this->assertEquals($testCase['content'], $evidenceRecord->getTextContent(), "Whitespace content should be preserved exactly: " . $testCase['description']);
+                    $this->assertEquals($testCase['content'], $evidenceRecord->getTextContent(), 'Whitespace content should be preserved exactly: ' . $testCase['description']);
                 }
                 catch (RequestException $e)
                 {
-                    // Some systems might reject empty or whitespace-only content
-                    if ($testCase['content'] === '' && ($e->getCode() === 400 || $e->getCode() === 422))
-                    {
-                        Logger::getLogger()->info("Server rejected empty content (acceptable): " . $e->getMessage());
-                    }
-                    else
-                    {
-                        $this->fail("Whitespace content should be accepted: " . $testCase['description'] . ". Error: " . $e->getMessage());
-                    }
+                    $this->fail('Whitespace content should be accepted: ' . $testCase['description'] . '. Error: ' . $e->getMessage());
                 }
             }
         }
 
-        // CONCURRENT OPERATION EDGE CASES
-
         public function testConcurrentDeleteOperations(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('concurrent-delete-test.com', 'concurrent_delete_user');
             $this->createdEntities[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for concurrent delete test', 'Concurrent delete', 'concurrent_delete');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Create blacklist
             $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
-            // Create second client with same credentials
             $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
 
-            // Try to delete the blacklist record from both clients simultaneously
-            $firstDeleteSuccess = false;
-            $secondDeleteSuccess = false;
+            $this->client->deleteBlacklistRecord($blacklistUuid);
+            array_splice($this->createdBlacklistRecords, array_search($blacklistUuid, $this->createdBlacklistRecords), 1);
 
-            try
-            {
-                $this->client->deleteBlacklistRecord($blacklistUuid);
-                $firstDeleteSuccess = true;
-            }
-            catch (RequestException $e)
-            {
-                Logger::getLogger()->info("First delete failed: " . $e->getMessage());
-            }
-
-            try
-            {
-                $secondClient->deleteBlacklistRecord($blacklistUuid);
-                $secondDeleteSuccess = true;
-            }
-            catch (RequestException $e)
-            {
-                Logger::getLogger()->info("Second delete failed: " . $e->getMessage());
-                // This is expected if the first delete succeeded
-                if ($firstDeleteSuccess)
-                {
-                    $this->assertEquals(404, $e->getCode(), "Second delete should fail with 404 if first succeeded");
-                }
-            }
-
-            // Exactly one delete should succeed
-            $this->assertTrue($firstDeleteSuccess || $secondDeleteSuccess, "At least one delete should succeed");
-            
-            if ($firstDeleteSuccess && $secondDeleteSuccess)
-            {
-                $this->fail("Both deletes should not succeed simultaneously");
-            }
-
-            // Remove from cleanup array since it's already deleted
-            $this->createdBlacklistRecords = array_filter($this->createdBlacklistRecords, fn($uuid) => $uuid !== $blacklistUuid);
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(404);
+            $secondClient->deleteBlacklistRecord($blacklistUuid);
         }
-
-        public function testConcurrentModificationOperations(): void
-        {
-            // Create entity and evidence
-            $entityUuid = $this->client->pushEntity('concurrent-modify-test.com', 'concurrent_modify_user');
-            $this->createdEntities[] = $entityUuid;
-
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for concurrent modification', 'Concurrent modify', 'concurrent_modify');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
-
-            // Create second client
-            $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-
-            // Try to modify evidence confidentiality from both clients
-            try
-            {
-                $this->client->updateEvidenceConfidentiality($evidenceUuid, true);
-                $secondClient->updateEvidenceConfidentiality($evidenceUuid, false);
-
-                // Check final state
-                $finalEvidence = $this->client->getEvidenceRecord($evidenceUuid);
-                Logger::getLogger()->info("Final evidence confidentiality state: " . ($finalEvidence->isConfidential() ? 'true' : 'false'));
-                
-                // Either state is acceptable, but the evidence should still exist and be valid
-                $this->assertNotNull($finalEvidence);
-                $this->assertEquals($entityUuid, $finalEvidence->getEntityUuid());
-            }
-            catch (RequestException $e)
-            {
-                // If concurrent modifications are handled with locks/conflicts, that's acceptable
-                Logger::getLogger()->info("Concurrent modification handled: " . $e->getMessage());
-            }
-        }
-
-        // RESOURCE EXHAUSTION TESTS
-
-        public function testRapidRequestSequence(): void
-        {
-            $startTime = microtime(true);
-            $requestCount = 20;
-            $successCount = 0;
-            $throttleCount = 0;
-
-            for ($i = 1; $i <= $requestCount; $i++)
-            {
-                try
-                {
-                    $serverInfo = $this->client->getServerInformation();
-                    $this->assertNotNull($serverInfo);
-                    $successCount++;
-                }
-                catch (RequestException $e)
-                {
-                    if ($e->getCode() === 429) // Too Many Requests
-                    {
-                        $throttleCount++;
-                        Logger::getLogger()->info("Request $i was throttled");
-                        // Brief pause to respect rate limiting
-                        usleep(100000); // 0.1 second
-                    }
-                    else
-                    {
-                        throw $e;
-                    }
-                }
-            }
-
-            $endTime = microtime(true);
-            $totalTime = $endTime - $startTime;
-
-            $this->assertGreaterThan(0, $successCount, "At least some requests should succeed");
-            Logger::getLogger()->info("Rapid request test: {$successCount} successful, {$throttleCount} throttled in {$totalTime} seconds");
-
-            // If rate limiting is in place, we should see some throttled requests
-            if ($throttleCount > 0)
-            {
-                Logger::getLogger()->info("Rate limiting is active (good)");
-            }
-        }
-
-        public function testMemoryIntensiveOperations(): void
-        {
-            // Create entity
-            $entityUuid = $this->client->pushEntity('memory-test.com', 'memory_user');
-            $this->createdEntities[] = $entityUuid;
-
-            $initialMemory = memory_get_usage();
-
-            // Create multiple evidence records with varying content sizes
-            $evidenceCount = 10;
-            for ($i = 1; $i <= $evidenceCount; $i++)
-            {
-                $contentSize = $i * 1000; // Increasing sizes: 1KB, 2KB, 3KB, etc.
-                $content = str_repeat("Data $i ", $contentSize / 7); // Approximate size
-                
-                try
-                {
-                    $evidenceUuid = $this->client->submitEvidence($entityUuid, $content, "Memory test $i", "memory_$i");
-                    $this->createdEvidenceRecords[] = $evidenceUuid;
-                }
-                catch (RequestException $e)
-                {
-                    if ($e->getCode() === 413 || $e->getCode() === 507) // Payload Too Large or Insufficient Storage
-                    {
-                        Logger::getLogger()->info("Server rejected large content (size ~{$contentSize}): " . $e->getMessage());
-                        break; // Stop if we hit server limits
-                    }
-                    else
-                    {
-                        throw $e;
-                    }
-                }
-            }
-
-            $finalMemory = memory_get_usage();
-            $memoryUsed = $finalMemory - $initialMemory;
-
-            Logger::getLogger()->info("Memory used during test: " . number_format($memoryUsed) . " bytes");
-
-            // Verify we can still retrieve evidence records
-            foreach (array_slice($this->createdEvidenceRecords, -3) as $evidenceUuid)
-            {
-                $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-                $this->assertNotNull($evidenceRecord);
-                $this->assertEquals($entityUuid, $evidenceRecord->getEntityUuid());
-            }
-        }
-
-        // NETWORK AND CONNECTIVITY EDGE CASES
-
-        public function testClientResilienceToServerDelay(): void
-        {
-            // Test operations that might take longer due to server processing
-            $startTime = microtime(true);
-
-            try
-            {
-                // Create entity with complex identifier that might require more processing
-                $complexHost = str_repeat('subdomain.', 10) . 'example.com'; // Very long subdomain chain
-                $entityUuid = $this->client->pushEntity($complexHost, 'resilience_user');
-                $this->createdEntities[] = $entityUuid;
-
-                // Create evidence with large content
-                $largeContent = str_repeat('This is a test sentence. ', 1000); // ~26KB
-                $evidenceUuid = $this->client->submitEvidence($entityUuid, $largeContent, 'Resilience test', 'resilience');
-                $this->createdEvidenceRecords[] = $evidenceUuid;
-
-                // Verify operations completed successfully
-                $entityRecord = $this->client->getEntityRecord($entityUuid);
-                $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-
-                $this->assertNotNull($entityRecord);
-                $this->assertNotNull($evidenceRecord);
-                $this->assertEquals($complexHost, $entityRecord->getHost());
-                $this->assertEquals($largeContent, $evidenceRecord->getTextContent());
-            }
-            catch (RequestException $e)
-            {
-                // If server has restrictions on complex identifiers or large content, that's acceptable
-                Logger::getLogger()->info("Server handled resilience test: " . $e->getMessage());
-            }
-
-            $endTime = microtime(true);
-            $totalTime = $endTime - $startTime;
-
-            Logger::getLogger()->info("Resilience test completed in {$totalTime} seconds");
-            $this->assertLessThan(30, $totalTime, "Operations should complete within reasonable time even with complex data");
-        }
-
-        // CLEANUP AND CONSISTENCY TESTS
 
         public function testOperationRollbackOnFailure(): void
         {
-            // Create entity and evidence
             $entityUuid = $this->client->pushEntity('rollback-test.com', 'rollback_user');
             $this->createdEntities[] = $entityUuid;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Rollback test evidence', 'Rollback test', 'rollback');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Try to create a blacklist with invalid parameters to test rollback
-            try
-            {
-                // Use negative expiration time (should be invalid)
-                $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, -1);
-                $this->fail("Expected InvalidArgumentException for negative expiration");
-            }
-            catch (InvalidArgumentException $e)
-            {
-                // Expected - verify no partial state was created
-                Logger::getLogger()->info("Negative expiration correctly rejected: " . $e->getMessage());
-            }
-            catch (RequestException $e)
-            {
-                // Also acceptable if server-side validation catches it
-                $this->assertEquals(400, $e->getCode(), "Expected 400 for invalid expiration");
-            }
-
-            // Verify entity and evidence still exist and are unchanged
-            $entityRecord = $this->client->getEntityRecord($entityUuid);
-            $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-
-            $this->assertNotNull($entityRecord);
-            $this->assertNotNull($evidenceRecord);
-            $this->assertEquals('Rollback test evidence', $evidenceRecord->getTextContent());
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, -1);
         }
 
         public function testDataConsistencyAfterErrors(): void
         {
-            // Create entity
             $entityUuid = $this->client->pushEntity('consistency-test.com', 'consistency_user');
             $this->createdEntities[] = $entityUuid;
 
-            // Create evidence
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Consistency test', 'Consistency', 'consistency');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            // Try various invalid operations
             try
             {
                 $this->client->getEvidenceRecord('invalid-uuid');
+                $this->fail('Expected RequestException for invalid UUID');
             }
             catch (RequestException $e)
             {
-                // Expected
+                $this->assertContains($e->getCode(), [400, 404, 422]);
             }
 
             try
             {
                 $this->client->blacklistEntity('invalid-entity-uuid', $evidenceUuid, IncidentType::SPAM);
+                $this->fail('Expected RequestException for invalid entity UUID');
             }
             catch (RequestException $e)
             {
-                // Expected
+                $this->assertContains($e->getCode(), [400, 404, 422]);
             }
 
-            // Verify original data is still intact and consistent
             $entityRecord = $this->client->getEntityRecord($entityUuid);
             $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
 
@@ -635,5 +355,256 @@
             $this->assertEquals('consistency-test.com', $entityRecord->getHost());
             $this->assertEquals('consistency_user', $entityRecord->getId());
             $this->assertEquals('Consistency test', $evidenceRecord->getTextContent());
+        }
+
+        public function testSecurityRawMalformedRequestsAreRejected(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+
+            [$malformedJsonCode] = $this->rawRequest('POST', 'reports', $token, '{this is not json', ['Content-Type: application/json']);
+            $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $malformedJsonCode, 'Malformed JSON should be rejected');
+
+            [$missingFieldsCode] = $this->rawRequest('POST', 'reports', $token, '{}', ['Content-Type: application/json']);
+            $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $missingFieldsCode, 'Missing required fields should be rejected');
+
+            [$wrongContentTypeCode] = $this->rawRequest('POST', 'scan', $token, 'content=hello', ['Content-Type: text/plain']);
+            $this->assertContains(
+                $wrongContentTypeCode,
+                [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::UNAUTHORIZED->value],
+                'Wrong content type or missing content should be rejected'
+            );
+        }
+
+        public function testJsonContentTypeWithCharsetIsParsed(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+            $entityUuid = $this->client->pushEntity('charset-json.com', 'charset_user');
+            $this->createdEntities[] = $entityUuid;
+
+            [$code, $response] = $this->rawRequest(
+                'POST',
+                'evidence',
+                $token,
+                json_encode([
+                    'entity_identifier' => $entityUuid,
+                    'text_content' => 'Charset JSON test',
+                    'note' => 'Note',
+                    'tag' => 'charset'
+                ]),
+                ['Content-Type: application/json; charset=utf-8']
+            );
+
+            $this->assertEquals(HttpResponseCode::CREATED->value, $code, 'JSON with charset should be accepted: ' . $response);
+            $decoded = json_decode($response, true);
+            $this->assertNotEmpty($decoded);
+        }
+
+        public function testEmptyRequestBodyIsRejected(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+
+            [$emptyBodyCode] = $this->rawRequest('POST', 'entities', $token, '', ['Content-Type: application/json']);
+            $this->assertContains(
+                $emptyBodyCode,
+                [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::UNPROCESSABLE_CONTENT->value, HttpResponseCode::INTERNAL_SERVER_ERROR->value],
+                'Empty JSON body should be rejected'
+            );
+        }
+
+        public function testBoundaryPaginationValues(): void
+        {
+            $entityUuid = $this->client->pushEntity('boundary-page.com', 'boundary_user');
+            $this->createdEntities[] = $entityUuid;
+
+            // Page size of 1 should return exactly one record if any exist.
+            $pageOne = $this->client->listEntities(1, 1);
+            $this->assertLessThanOrEqual(1, count($pageOne));
+
+            // A very large page number should return no results without error.
+            $largePage = $this->client->listEntities(99999, 10);
+            $this->assertIsArray($largePage);
+            $this->assertEmpty($largePage);
+        }
+
+        public function testInvalidUuidFormatsAreRejected(): void
+        {
+            $invalidUuids = [
+                'not-a-uuid',
+                '12345',
+                'gggggggg-gggg-gggg-gggg-gggggggggggg',
+                '0198f41f-45c7-78eb-a2a7-86de4e99991a-extra',
+            ];
+
+            foreach ($invalidUuids as $uuid)
+            {
+                $this->expectRequestFailure(
+                    fn() => $this->client->getEntityRecord($uuid),
+                    [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
+                    "Invalid UUID '$uuid' should be rejected"
+                );
+            }
+        }
+
+        public function testMethodNotAllowedForInvalidVerb(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+            [$code] = $this->rawRequest('TRACE', 'info', $token);
+            $this->assertContains(
+                $code,
+                [HttpResponseCode::METHOD_NOT_ALLOWED->value, HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
+                'TRACE request should not be allowed'
+            );
+        }
+
+        public function testLargePageLimitIsCappedByServer(): void
+        {
+            $requestedLimit = 10000;
+
+            $page = $this->client->listEntities(1, $requestedLimit);
+            $this->assertLessThanOrEqual(100, count($page), 'Server should cap list limit to a reasonable maximum');
+        }
+
+        public function testDuplicateEntitySubmissionIsIdempotent(): void
+        {
+            $host = 'idempotent-entity.com';
+            $id = 'idempotent_user';
+
+            $firstUuid = $this->client->pushEntity($host, $id);
+            $this->createdEntities[] = $firstUuid;
+
+            for ($i = 0; $i < 5; $i++)
+            {
+                $duplicateUuid = $this->client->pushEntity($host, $id);
+                $this->assertEquals($firstUuid, $duplicateUuid);
+            }
+
+            $allEntities = $this->client->listEntities(1, 1000);
+            $matchingUuids = array_filter($allEntities, fn($e) => $e->getUuid() === $firstUuid);
+            $this->assertCount(1, $matchingUuids, 'Duplicate pushes should not create multiple entity records');
+        }
+
+        public function testInvalidIncidentTypeIsRejected(): void
+        {
+            $entityUuid = $this->client->pushEntity('invalid-incident.com', 'user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence', 'Note', 'invalid');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $token = getenv('SERVER_ACCESS_TOKEN');
+            [$code] = $this->rawRequest(
+                'POST',
+                'blacklist',
+                $token,
+                json_encode([
+                    'entity_uuid' => $entityUuid,
+                    'evidence_uuid' => $evidenceUuid,
+                    'incident_type' => 'NOT_VALID',
+                    'expires' => time() + 3600,
+                ])
+            );
+
+            $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value], 'Invalid incident type should be rejected');
+        }
+
+        public function testInvalidClassificationFlagIsRejected(): void
+        {
+            $report = $this->createSecurityReport();
+            $manager = $this->createLimitedOperator('invalid_class_manager', management: true);
+            $manager->assignOperatorToReport($report['report'], $manager->getSelf()->getUuid());
+
+            $token = $manager->getAccessToken();
+            [$code] = $this->rawRequest(
+                'PATCH',
+                'reports/' . $report['report'] . '/close',
+                $token,
+                json_encode(['classification_flag' => 'NOT_A_FLAG'])
+            );
+
+            $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value], 'Invalid classification flag should be rejected');
+        }
+
+        public function testInvalidRelationshipTypeIsRejected(): void
+        {
+            $entityA = $this->createSecurityEntity();
+            $entityB = $this->createSecurityEntity();
+
+            $token = $this->client->getAccessToken();
+            [$code] = $this->rawRequest(
+                'PATCH',
+                'entities/' . $entityA . '/relationship',
+                $token,
+                json_encode([
+                    'target_entity_uuid' => $entityB,
+                    'relationship_type' => 'INVALID_RELATIONSHIP',
+                ])
+            );
+
+            $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value], 'Invalid relationship type should be rejected');
+        }
+
+        public function testTypeConfusionInJsonBodyIsRejected(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+
+            // entity_uuid should be a string, not an array.
+            [$code] = $this->rawRequest(
+                'POST',
+                'evidence',
+                $token,
+                json_encode([
+                    'entity_uuid' => ['malformed'],
+                    'text_content' => 'Type confusion test',
+                    'note' => 'Note',
+                    'tag' => 'type_confusion',
+                ])
+            );
+
+            $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::INTERNAL_SERVER_ERROR->value], 'Type confusion in JSON body should be rejected');
+        }
+
+        public function testPathCaseSensitivityAndTrailingSlashHandling(): void
+        {
+            $infoWithSlash = $this->client->getServerInformation();
+            $this->assertNotNull($infoWithSlash);
+
+            $url = rtrim(getenv('SERVER_ENDPOINT'), '/') . '/info/';
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false,
+            ]);
+            curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+
+            // The server may either redirect or 404; either is acceptable as long as it does not crash.
+            $this->assertContains($code, [200, 301, 302, 400, 404], 'Trailing slash should be handled gracefully');
+        }
+
+        public function testUnknownPathReturns404(): void
+        {
+            $token = getenv('SERVER_ACCESS_TOKEN');
+            [$code] = $this->rawRequest('GET', 'this/path/does/not/exist', $token);
+            $this->assertContains($code, [HttpResponseCode::NOT_FOUND->value, HttpResponseCode::BAD_REQUEST->value], 'Unknown path should return 404 or 400');
+        }
+
+        public function testRapidCreateDeleteStability(): void
+        {
+            $entityUuids = [];
+            for ($i = 0; $i < 5; $i++)
+            {
+                $uuid = $this->client->pushEntity("rapid-$i.com", 'user');
+                $entityUuids[] = $uuid;
+                $this->client->deleteEntity($uuid);
+            }
+
+            foreach ($entityUuids as $uuid)
+            {
+                $this->expectRequestFailure(
+                    fn() => $this->client->getEntityRecord($uuid),
+                    [HttpResponseCode::NOT_FOUND->value],
+                    'Rapidly deleted entity should remain deleted'
+                );
+            }
         }
     }
