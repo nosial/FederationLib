@@ -64,12 +64,16 @@
             }
 
             $content = FederationServer::getParameter('content');
-            if($content === null || strlen($content) === 0)
+            if(!is_string($content) || strlen($content) === 0)
             {
                 throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
             }
 
             $incidentType = FederationServer::getParameter('incident_type');
+            if(!is_string($incidentType))
+            {
+                throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
+            }
             $incidentType = IncidentType::tryFrom($incidentType);
             if($incidentType === null)
             {
