@@ -25,7 +25,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
