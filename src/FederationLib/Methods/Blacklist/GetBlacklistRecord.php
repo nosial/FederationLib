@@ -45,12 +45,11 @@
 
             try
             {
-                if(!BlacklistManager::blacklistExists($blacklistUuid))
+                $blacklistRecord = BlacklistManager::getBlacklistEntry($blacklistUuid);
+                if($blacklistRecord === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
-
-                $blacklistRecord = BlacklistManager::getBlacklistEntry($blacklistUuid);
             }
             catch (DatabaseOperationException $e)
             {
