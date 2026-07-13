@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -200,14 +201,23 @@
             header('Content-Type: application/json; charset=utf-8');
 
             $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+            $baseUrl = Configuration::getServerConfiguration()->getBaseUrl();
+            $allowedOrigin = $baseUrl;
+
             if ($origin !== null)
             {
-                header('Access-Control-Allow-Origin: ' . $origin);
+                $originHost = parse_url($origin, PHP_URL_HOST);
+                $baseHost = parse_url($baseUrl, PHP_URL_HOST);
+                if ($originHost === $baseHost)
+                {
+                    $allowedOrigin = $origin;
+                }
+                header('Access-Control-Allow-Origin: ' . $allowedOrigin);
                 header('Vary: Origin');
             }
             else
             {
-                header('Access-Control-Allow-Origin: *');
+                header('Access-Control-Allow-Origin: ' . $allowedOrigin);
             }
 
             header('Access-Control-Allow-Methods: POST, PUT, GET, DELETE, PATCH');
