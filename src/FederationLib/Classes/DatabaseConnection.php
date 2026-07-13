@@ -106,8 +106,10 @@
          */
         private static function tableExists(string $table): bool
         {
-            $stmt = self::getConnection()->query("SHOW TABLES LIKE '$table'");
-            if($stmt === false || $stmt->rowCount() === 0)
+            $stmt = self::getConnection()->prepare('SHOW TABLES LIKE :table');
+            $stmt->bindValue(':table', $table);
+            $stmt->execute();
+            if($stmt->rowCount() === 0)
             {
                 return false;
             }
