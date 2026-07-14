@@ -58,7 +58,7 @@
                 throw new InvalidArgumentException('Invalid entity metadata provided');
             }
 
-            $uuid = Uuid::v4()->toRfc4122();
+            $uuid = Uuid::v7()->toRfc4122();
             $hash = Utilities::hashEntity($host, $id);
 
             try
@@ -1174,6 +1174,37 @@
                     RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
                     RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                 }
+            }
+        }
+
+        /**
+         * Searches entities by a LIKE pattern across uuid, host, and id columns.
+         *
+         * @param string $likePattern The SQL LIKE pattern to search with.
+         * @param int $limit The maximum number of results to return.
+         * @param int $page The page number for pagination.
+         * @return EntityRecord[] An array of matching EntityRecord objects.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function searchEntities(string $likePattern, int $limit, int $page): array
+        {
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM entities WHERE uuid LIKE :q ESCAPE '\\\\' OR host LIKE :q ESCAPE '\\\\' OR id LIKE :q ESCAPE '\\\\' ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindValue(':q', $likePattern);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to search entities: ' . $e->getMessage(), $e->getCode(), $e);
             }
         }
 

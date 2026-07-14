@@ -462,6 +462,62 @@
         }
 
         /**
+         * Searches audit logs by a LIKE pattern across uuid and message columns.
+         *
+         * @param string $likePattern The SQL LIKE pattern to search with.
+         * @param int $limit The maximum number of results to return.
+         * @param int $page The page number for pagination.
+         * @param bool $public True to view search results only available to the public
+         * @return AuditLog[] An array of matching AuditLog objects.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function searchAuditLogs(string $likePattern, int $limit, int $page, bool $public=false): array
+        {
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $sql = "SELECT * FROM audit_log WHERE (uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\')";
+
+                if (!$public)
+                {
+                    $publicEntries = Configuration::getServerConfiguration()->getPublicAuditEntries();
+                    if (!empty($publicEntries))
+                    {
+                        $placeholders = [];
+                        foreach ($publicEntries as $i => $entry)
+                        {
+                            $placeholders[":type$i"] = $entry->value;
+                        }
+                        $sql .= " AND type IN (" . implode(", ", array_keys($placeholders)) . ")";
+                    }
+                }
+
+                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                $stmt->bindValue(':q', $likePattern);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+
+                if (isset($placeholders))
+                {
+                    foreach ($placeholders as $key => $value)
+                    {
+                        $stmt->bindValue($key, $value);
+                    }
+                }
+
+                $stmt->execute();
+                return array_map(fn($row) => new AuditLog($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to search audit logs: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Checks if caching is enabled based on the configuration.
          *
          * @return bool True if caching is enabled, false otherwise.

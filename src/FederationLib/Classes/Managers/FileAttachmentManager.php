@@ -370,6 +370,52 @@
         }
 
         /**
+         * Searches file attachments by a LIKE pattern across uuid, file_name, and evidence columns.
+         *
+         * @param string $likePattern The SQL LIKE pattern to search with.
+         * @param int $limit The maximum number of results to return.
+         * @param int $page The page number for pagination.
+         * @param bool $includeConfidential if True, confidential records are included in the search results
+         * @return FileAttachmentRecord[] An array of matching FileAttachmentRecord objects.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false): array
+        {
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $sql = "SELECT fa.* FROM file_attachments fa";
+
+                if (!$includeConfidential)
+                {
+                    $sql .= " LEFT JOIN evidence e ON fa.evidence = e.uuid";
+                }
+
+                $sql .= " WHERE (fa.uuid LIKE :q ESCAPE '\\\\' OR fa.file_name LIKE :q ESCAPE '\\\\' OR fa.evidence LIKE :q ESCAPE '\\\\')";
+
+                if (!$includeConfidential)
+                {
+                    $sql .= " AND (e.confidential IS NULL OR e.confidential = 0)";
+                }
+
+                $sql .= " ORDER BY fa.created DESC, fa.uuid DESC LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                $stmt->bindValue(':q', $likePattern);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return array_map(fn($row) => new FileAttachmentRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to search attachments: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Returns True if caching & file attachment caching is enabled for this class
          *
          * @return bool True if caching & caching for file attachments is enabled, False otherwise

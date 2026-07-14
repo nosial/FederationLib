@@ -558,6 +558,37 @@
         }
 
         /**
+         * Searches blacklist records by a LIKE pattern across uuid and entity columns.
+         *
+         * @param string $likePattern The SQL LIKE pattern to search with.
+         * @param int $limit The maximum number of results to return.
+         * @param int $page The page number for pagination.
+         * @return BlacklistRecord[] An array of matching BlacklistRecord objects.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function searchBlacklist(string $likePattern, int $limit, int $page): array
+        {
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE b.uuid LIKE :q ESCAPE '\\\\' OR b.entity LIKE :q ESCAPE '\\\\' OR e.host LIKE :q ESCAPE '\\\\' OR e.id LIKE :q ESCAPE '\\\\' ORDER BY b.created DESC, b.uuid DESC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindValue(':q', $likePattern);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return array_map(fn($row) => new BlacklistRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to search blacklist: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Checks if caching is enabled based on the configuration.
          *
          * @return bool True if caching is enabled, false otherwise.

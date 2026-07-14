@@ -804,6 +804,49 @@
             }
         }
 
+        /**
+         * Searches operators by a LIKE pattern across uuid and name columns.
+         *
+         * @param string $likePattern The SQL LIKE pattern to search with.
+         * @param int $limit The maximum number of results to return.
+         * @param int $page The page number for pagination.
+         * @param bool $hideToken if True, the access token property is hidden from the search results
+         * @return OperatorRecord[] An array of matching OperatorRecord objects.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function searchOperators(string $likePattern, int $limit, int $page, bool $hideToken=true): array
+        {
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM operators WHERE uuid LIKE :q ESCAPE '\\\\' OR name LIKE :q ESCAPE '\\\\' ORDER BY created, uuid LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindValue(':q', $likePattern);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                $results = [];
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row)
+                {
+                    $record = new OperatorRecord($row);
+                    if ($hideToken)
+                    {
+                        $record->clearAccessToken();
+                    }
+                    $results[] = $record;
+                }
+
+                return $results;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to search operators: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
         // Caching operations
 
         /**
