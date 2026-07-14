@@ -75,7 +75,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                EntitiesManager::clear-reputation($entityRecord->getUuid());
+                EntitiesManager::clearReputation($entityRecord->getUuid());
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_REPUTATION_CLEARED, sprintf(
                     'Reputation cleared for entity %s by %s',
