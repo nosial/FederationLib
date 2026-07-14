@@ -33,6 +33,7 @@
     use FederationLib\Methods\Entities\PushEntity;
     use FederationLib\Methods\Entities\SearchEntities;
     use FederationLib\Methods\Entities\SetRelationship;
+    use FederationLib\Methods\Entities\TopThreats;
     use FederationLib\Methods\Evidence\DeleteEvidence;
     use FederationLib\Methods\Evidence\GetEvidenceAttachments;
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
@@ -110,6 +111,7 @@
         case SET_ENTITY_RELATIONSHIP;
         case CLEAR_ENTITY_RELATIONSHIP;
         case SEARCH_ENTITIES;
+        case TOP_THREATS;
 
         case LIST_EVIDENCE;
         case SUBMIT_EVIDENCE;
@@ -190,6 +192,7 @@
                 self::LIST_ENTITY_BLACKLIST_RECORDS => ['/entities/{identifier}/blacklist', 'get', ListEntityBlacklistRecords::class],
                 self::CLEAR_REPUTATION => ['/entities/{identifier}/clear-reputation', 'patch', ClearReputation::class],
                 self::SEARCH_ENTITIES => ['/entities/search', 'get', SearchEntities::class],
+                self::TOP_THREATS => ['/entities/top-threats', 'get', TopThreats::class],
                 self::LIST_ENTITIES => ['/entities', 'get', ListEntities::class],
                 self::PUSH_ENTITY => ['/entities', 'post', PushEntity::class],
                 self::LIST_BLACKLIST => ['/blacklist', 'get', ListBlacklist::class],
@@ -281,6 +284,7 @@
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
                 $path === '/entities/search' && $requestMethod === 'GET' => Method::SEARCH_ENTITIES,
+                $path === '/entities/top-threats' && $requestMethod === 'GET' => Method::TOP_THREATS,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
