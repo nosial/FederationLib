@@ -29,6 +29,7 @@
         private bool $publicReports;
         private bool $publicScanContent;
         private int $minBlacklistTime;
+        private int $topThreatsLimit;
 
         /**
          * ServerConfiguration constructor.
@@ -57,6 +58,7 @@
             $this->publicReports = $config['public_reports'] ?? true;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
+            $this->topThreatsLimit = $config['top_threats_limit'] ?? 25;
         }
 
         /**
@@ -259,5 +261,15 @@
         public function getMinBlacklistTime(): int
         {
             return $this->minBlacklistTime;
+        }
+
+        /**
+         * Get the maximum number of top threats to return.
+         *
+         * @return int The maximum number of top threats to return.
+         */
+        public function getTopThreatsLimit(): int
+        {
+            return $this->topThreatsLimit;
         }
     }

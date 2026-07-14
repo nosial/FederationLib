@@ -9,6 +9,7 @@
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Helpers\Logger;
     use FederationLib\Helpers\SecurityTestHelpers;
     use InvalidArgumentException;
@@ -827,6 +828,135 @@
                 [HttpResponseCode::BAD_REQUEST->value],
                 'Clearing reputation for malformed identifier should fail'
             );
+        }
+
+        public function testGetTopThreatsBasic(): void
+        {
+            for ($i = 0; $i < 5; $i++)
+            {
+                $uuid = $this->client->pushEntity("top-threats-basic-$i.com", "user_$i");
+                $this->createdEntities[] = $uuid;
+            }
+
+            $topThreats = $this->client->getTopThreats();
+
+            $this->assertIsArray($topThreats);
+            $this->assertNotEmpty($topThreats);
+
+            foreach ($topThreats as $threat)
+            {
+                $this->assertInstanceOf(EntityRecord::class, $threat);
+                $this->assertNotEmpty($threat->getUuid());
+                $this->assertIsInt($threat->getReputation());
+            }
+        }
+
+        public function testGetTopThreatsWithCustomLimit(): void
+        {
+            $expected = 3;
+            for ($i = 0; $i < 10; $i++)
+            {
+                $uuid = $this->client->pushEntity("top-threats-limit-$i.com", "user_$i");
+                $this->createdEntities[] = $uuid;
+            }
+
+            $topThreats = $this->client->getTopThreats($expected);
+
+            $this->assertIsArray($topThreats);
+            $this->assertCount($expected, $topThreats);
+        }
+
+        public function testGetTopThreatsInvalidLimit(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->getTopThreats(0);
+
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->getTopThreats(-1);
+
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->getTopThreats(-100);
+        }
+
+        public function testGetTopThreatsAsAnonymousClient(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Skipping because server is configured to keep entities private from anonymous users');
+            }
+
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->pushEntity("top-threats-anon-$i.com", "anon_$i");
+                $this->createdEntities[] = $uuid;
+            }
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $topThreats = $anonymousClient->getTopThreats();
+
+            $this->assertIsArray($topThreats);
+            $this->assertNotEmpty($topThreats);
+
+            foreach ($topThreats as $threat)
+            {
+                $this->assertInstanceOf(EntityRecord::class, $threat);
+                $this->assertNotEmpty($threat->getUuid());
+            }
+        }
+
+        public function testGetTopThreatsOrderedByReputation(): void
+        {
+            $entityUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->pushEntity("top-threats-order-$i.com", "order_$i");
+                $this->createdEntities[] = $uuid;
+                $entityUuids[] = $uuid;
+            }
+
+            // Submit and close 2 reports for entity[0] to lower reputation further
+            for ($j = 0; $j < 2; $j++)
+            {
+                $submission = $this->client->submitReport($entityUuids[0], "Order threat report $j", IncidentType::SPAM);
+                $this->createdReports[] = $submission->getReport()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
+            }
+
+            // Submit and close 1 report for entity[1]
+            $submission = $this->client->submitReport($entityUuids[1], 'Order threat report', IncidentType::SPAM);
+            $this->createdReports[] = $submission->getReport()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
+
+            // entity[2] has no reports, reputation = 0
+            $topThreats = $this->client->getTopThreats(10);
+
+            $this->assertIsArray($topThreats);
+            $this->assertNotEmpty($topThreats);
+
+            // Reputations should be sorted ascending (most negative first)
+            $reputations = array_map(fn($e) => $e->getReputation(), $topThreats);
+            $sortedReputations = $reputations;
+            sort($sortedReputations);
+            $this->assertEquals($sortedReputations, $reputations, 'Top threats must be ordered by reputation ascending');
+
+            // Find positions of our test entities in the result
+            $positions = [];
+            foreach ($entityUuids as $uuid)
+            {
+                $positions[$uuid] = array_search($uuid, array_map(fn($e) => $e->getUuid(), $topThreats));
+            }
+
+            $this->assertNotFalse($positions[$entityUuids[0]], 'Entity with 2 malicious reports must appear in top threats');
+            $this->assertNotFalse($positions[$entityUuids[1]], 'Entity with 1 malicious report must appear in top threats');
+
+            $this->assertLessThan($positions[$entityUuids[1]], $positions[$entityUuids[0]], 'Entity with the lowest (most negative) reputation should appear first');
+        }
+
+        public function testGetTopThreatsReturnsEmptyForNoEntities(): void
+        {
+            $this->assertIsArray($this->client->getTopThreats());
         }
 
     }

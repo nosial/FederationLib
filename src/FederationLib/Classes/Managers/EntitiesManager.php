@@ -1215,7 +1215,7 @@
          * @return EntityRecord[] An array of EntityRecord objects ordered by reputation ascending.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function getTopThreats(int $limit = 10): array
+        public static function getTopThreats(int $limit=25): array
         {
             if($limit < 1)
             {
