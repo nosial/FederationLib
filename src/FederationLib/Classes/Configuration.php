@@ -7,6 +7,7 @@
     use FederationLib\Classes\Configuration\MaintenanceConfiguration;
     use FederationLib\Classes\Configuration\RedisConfiguration;
     use FederationLib\Classes\Configuration\ScanningConfiguration;
+    use FederationLib\Classes\Configuration\SearchConfiguration;
     use FederationLib\Classes\Configuration\ServerConfiguration;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ScanningRules;
@@ -20,6 +21,7 @@
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?MaintenanceConfiguration $maintenanceConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
+        private static ?SearchConfiguration $searchConfiguration = null;
 
         /**
          * Initialize the configuration with default values.
@@ -96,6 +98,18 @@
             self::$configuration->setDefault('maintenance.clean_entities', false, 'FEDERATION_MAINTENANCE_CLEAN_ENTITIES');
             self::$configuration->setDefault('maintenance.clean_entities_ttl', 63072000, 'FEDERATION_MAINTENANCE_CLEAN_ENTITIES_TTL'); // 2 years
 
+            // Search configuration
+            self::$configuration->setDefault('search.enabled', true, 'FEDERATION_SEARCH_ENABLED');
+            self::$configuration->setDefault('search.public_search', false, 'FEDERATION_SEARCH_PUBLIC');
+            self::$configuration->setDefault('search.max_limit', 50, 'FEDERATION_SEARCH_MAX_LIMIT');
+            self::$configuration->setDefault('search.enable_entities', true, 'FEDERATION_SEARCH_ENABLE_ENTITIES');
+            self::$configuration->setDefault('search.enable_evidence', true, 'FEDERATION_SEARCH_ENABLE_EVIDENCE');
+            self::$configuration->setDefault('search.enable_blacklist', true, 'FEDERATION_SEARCH_ENABLE_BLACKLIST');
+            self::$configuration->setDefault('search.enable_reports', true, 'FEDERATION_SEARCH_ENABLE_REPORTS');
+            self::$configuration->setDefault('search.enable_attachments', false, 'FEDERATION_SEARCH_ENABLE_ATTACHMENTS');
+            self::$configuration->setDefault('search.enable_audit_logs', true, 'FEDERATION_SEARCH_ENABLE_AUDIT_LOGS');
+            self::$configuration->setDefault('search.enable_operators', true, 'FEDERATION_SEARCH_ENABLE_OPERATORS');
+
             // Database configuration
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
             self::$configuration->setDefault('database.port', 3306, 'FEDERATION_DATABASE_PORT');
@@ -150,6 +164,7 @@
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
             self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
+            self::$searchConfiguration = new SearchConfiguration(self::$configuration->get('search'));
         }
 
         /**
@@ -270,6 +285,21 @@
             }
 
             return self::$maintenanceConfiguration;
+        }
+
+        /**
+         * Get the search configuration.
+         *
+         * @return SearchConfiguration
+         */
+        public static function getSearchConfiguration(): SearchConfiguration
+        {
+            if(self::$searchConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$searchConfiguration;
         }
     }
 
