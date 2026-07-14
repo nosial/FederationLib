@@ -148,8 +148,8 @@
             $this->assertSame(Method::GET_EVIDENCE_RECORD, Method::matchHandle('GET', "/evidence/$uuid"));
             $this->assertSame(Method::DELETE_EVIDENCE, Method::matchHandle('DELETE', "/evidence/$uuid"));
             $this->assertSame(Method::GET_EVIDENCE_ATTACHMENTS, Method::matchHandle('GET', "/evidence/$uuid/attachments"));
-            $this->assertSame(Method::UPDATE_CONFIDENTIALITY, Method::matchHandle('PATCH', "/evidence/$uuid/update_confidentiality"));
-            $this->assertSame(Method::UPDATE_EVIDENCE_TAG, Method::matchHandle('PATCH', "/evidence/$uuid/update_tag"));
+            $this->assertSame(Method::UPDATE_CONFIDENTIALITY, Method::matchHandle('PATCH', "/evidence/$uuid/update-confidentiality"));
+            $this->assertSame(Method::UPDATE_EVIDENCE_TAG, Method::matchHandle('PATCH', "/evidence/$uuid/update-tag"));
             $this->assertSame(Method::ADD_EVIDENCE_TO_REPORT, Method::matchHandle('PATCH', "/evidence/$uuid/link-report"));
         }
 
