@@ -5,6 +5,7 @@
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\BlacklistManager;
+    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
@@ -159,6 +160,16 @@
             try
             {
                 ReportManager::closeReport($reportUuid);
+
+                if($classificationFlag !== null && $reportRecord->getReportingEntity() !== null)
+                {
+                    match($classificationFlag)
+                    {
+                        ClassificationFlag::MALICIOUS => EntitiesManager::updateEntityReputation($reportRecord->getReportingEntity(), -1),
+                        ClassificationFlag::NORMAL => EntitiesManager::updateEntityReputation($reportRecord->getReportingEntity(), 1),
+                        default => null,
+                    };
+                }
 
                 if($blacklistType !== null && $reportRecord->getReportingEntity() !== null)
                 {
