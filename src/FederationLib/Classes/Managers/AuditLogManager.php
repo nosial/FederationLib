@@ -14,6 +14,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Symfony\Component\Uid\Uuid;
 
     class AuditLogManager
     {
@@ -82,9 +83,12 @@
 
             $type = $type->value;
 
+            $uuid = Uuid::v7()->toRfc4122();
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (type, message, operator, entity, blacklist, evidence, file_attachment) VALUES (:type, :message, :operator, :entity, :blacklist, :evidence, :file_attachment)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (uuid, type, message, operator, entity, blacklist, evidence, file_attachment) VALUES (:uuid, :type, :message, :operator, :entity, :blacklist, :evidence, :file_attachment)");
+                $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':message', $message);
                 $stmt->bindParam(':operator', $operatorUuid);
