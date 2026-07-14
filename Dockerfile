@@ -34,7 +34,8 @@ COPY docker-entrypoint.sh /usr/local/bin/
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/* \
-    && install-php-extensions sockets \
+    && install-php-extensions sockets apcu \
+    && echo "apc.enable_cli=1" >> /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini \
     && docker-php-ext-install -j$(nproc) pdo_mysql \
     && pecl install redis && docker-php-ext-enable redis \
     && curl -sL "https://github.com/nosial/LogLib2Server/releases/latest/download/LogLib2Server-linux-x86_64" -o /usr/bin/ll2s \
