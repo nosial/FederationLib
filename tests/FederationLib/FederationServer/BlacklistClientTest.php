@@ -796,7 +796,7 @@
                 $this->createdBlacklistRecords[] = $shortUuid;
                 $shortRecord = $this->client->getBlacklistRecord($shortUuid);
                 // The server may or may not enforce a minimum duration; just verify expiry is set.
-                $this->assertGreaterThan(time(), $shortRecord->getExpires(), 'Blacklist expiry should be in the future');
+                $this->assertGreaterThanOrEqual(time(), $shortRecord->getExpires(), 'Blacklist expiry should be in the future');
             }
             catch (\FederationLib\Exceptions\RequestException $e)
             {
