@@ -247,6 +247,51 @@
         }
 
         /**
+         * Extends the expiration time of an active, non-permanent blacklist record.
+         *
+         * @param string $blacklistUuid The UUID of the blacklist record to extend.
+         * @param int $seconds The number of seconds to add to the current expiration.
+         * @throws InvalidArgumentException If the UUID is empty or seconds is not positive.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function extendBlacklistRecord(string $blacklistUuid, int $seconds): void
+        {
+            if(empty($blacklistUuid))
+            {
+                throw new InvalidArgumentException("UUID cannot be empty.");
+            }
+
+            if($seconds <= 0)
+            {
+                throw new InvalidArgumentException("Extension seconds must be positive.");
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE blacklist SET expires = DATE_ADD(expires, INTERVAL :seconds SECOND) WHERE uuid = :blacklist_uuid");
+
+                $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
+                $stmt->bindParam(':seconds', $seconds, PDO::PARAM_INT);
+
+                if(!$stmt->execute() || $stmt->rowCount() === 0)
+                {
+                    throw new DatabaseOperationException("No blacklist record found with the specified UUID to extend.");
+                }
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to extend blacklist record: " . $e->getMessage(), 0, $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                }
+            }
+        }
+
+        /**
          * Lifts a blacklist record, marking it as no longer active.
          *
          * @param string $blacklistUuid The UUID of the blacklist record to lift.
