@@ -206,7 +206,7 @@
                     submittingOperator: $authenticatedOperator->getUuid(),
                     reportingEntity: $entityRecord->getUuid(),
                     type: $incidentType,
-                    message: $content
+                    message: $reportMessage ?? null
                 );
 
                 ReportManager::assignOperator($reportUuid, $authenticatedOperator->getUuid());

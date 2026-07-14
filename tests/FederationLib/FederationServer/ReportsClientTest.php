@@ -128,7 +128,8 @@
             $this->createdEntities[] = $entityUuid;
 
             $content = ClassificationTextGenerator::generate(ClassificationFlag::NORMAL);
-            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM);
+            $reportMessage = "Normal content";
+            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM, $reportMessage);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
@@ -136,7 +137,7 @@
             $this->assertNotNull($submission->getReport());
             $this->assertNotNull($submission->getEvidence());
             $this->assertEquals($entityUuid, $submission->getReport()->getReportingEntity());
-            $this->assertEquals($content, $submission->getReport()->getMessage());
+            $this->assertEquals($reportMessage, $submission->getReport()->getMessage());
             $this->assertNotEmpty($submission->getReport()->getUuid());
         }
 
@@ -210,7 +211,8 @@
             $entityUuid = $this->client->pushEntity('get-report.com', 'get_user');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report to get', IncidentType::SPAM);
+            $reportMessage = 'Get Report';
+            $submission = $this->client->submitReport($entityUuid, 'Report to get', IncidentType::SPAM, $reportMessage);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
@@ -218,7 +220,7 @@
             $report = $this->client->getReport($reportUuid);
             $this->assertNotNull($report);
             $this->assertEquals($reportUuid, $report->getUuid());
-            $this->assertEquals('Report to get', $report->getMessage());
+            $this->assertEquals($reportMessage, $report->getMessage());
             $this->assertEquals($entityUuid, $report->getReportingEntity());
             $this->assertGreaterThan(0, $report->getCreated());
         }
