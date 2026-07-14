@@ -1209,6 +1209,34 @@
         }
 
         /**
+         * Retrieves the top threats (entities with the lowest reputation scores).
+         *
+         * @param int $limit The maximum number of entities to return.
+         * @return EntityRecord[] An array of EntityRecord objects ordered by reputation ascending.
+         * @throws DatabaseOperationException If there is an error executing the query.
+         */
+        public static function getTopThreats(int $limit = 10): array
+        {
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY reputation ASC, uuid DESC LIMIT :limit");
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve top threats: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Returns True if caching & entity caching is enabled for this class
          *
          * @return bool True if caching & caching for entities is enabled, False otherwise

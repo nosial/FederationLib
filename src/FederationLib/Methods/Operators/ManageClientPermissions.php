@@ -35,7 +35,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/client_permissions$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/client-permissions$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_MISSING_PARAMETERS, HttpResponseCode::BAD_REQUEST);
             }

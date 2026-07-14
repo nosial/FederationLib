@@ -36,9 +36,9 @@
             $path = FederationServer::getPath();
 
             if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/clearReputation$#', $path, $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/clearReputation$#', $path, $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/clearReputation$#', $path, $matches)
+                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/clear-reputation$#', $path, $matches) &&
+                !preg_match('#^/entities/([a-f0-9\-]{64})/clear-reputation$#', $path, $matches) &&
+                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/clear-reputation$#', $path, $matches)
             )
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
@@ -75,7 +75,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                EntitiesManager::clearReputation($entityRecord->getUuid());
+                EntitiesManager::clear-reputation($entityRecord->getUuid());
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_REPUTATION_CLEARED, sprintf(
                     'Reputation cleared for entity %s by %s',

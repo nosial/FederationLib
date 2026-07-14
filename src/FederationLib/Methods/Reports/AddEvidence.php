@@ -38,7 +38,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36})/link_report$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36})/link-report$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_EVIDENCE_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }

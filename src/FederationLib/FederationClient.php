@@ -660,7 +660,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/operator_permissions', ['enabled' => $hasOperatorPermissions], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/operator-permissions', ['enabled' => $hasOperatorPermissions], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s operator permissions', ($hasOperatorPermissions ? 'enable' : 'disable'))
             );
         }
@@ -680,7 +680,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/client_permissions', ['enabled' => $hasClientPermissions], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/client-permissions', ['enabled' => $hasClientPermissions], [HttpResponseCode::OK],
                 sprintf('Failed to %s the operator\'s client permissions', ($hasClientPermissions ? 'enable' : 'disable'))
             );
         }
@@ -700,7 +700,7 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/management_permissions', ['enabled' => $hasManagementPermissions], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/management-permissions', ['enabled' => $hasManagementPermissions], [HttpResponseCode::OK],
                 sprintf('Failed to %s operator\'s management permission', ($hasManagementPermissions ? 'enable' : 'disable'))
             );
         }
@@ -847,6 +847,29 @@
                 fn($item) => EntityRecord::fromArray($item),
                 $this->makeRequest('GET', 'entities', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
                     sprintf('Failed to list entities, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Retrieves the top threat entities with the lowest reputation scores.
+         *
+         * @param int $limit The maximum number of threats to return (default is 10)
+         * @return EntityRecord[] An array of EntityRecord objects ordered by reputation ascending
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the limit is invalid
+         */
+        public function getTopThreats(int $limit = 10): array
+        {
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => EntityRecord::fromArray($item),
+                $this->makeRequest('GET', 'entities/top-threats', ['limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to retrieve top threats, limit: %d', $limit)
                 )
             );
         }
@@ -1029,7 +1052,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/clearReputation', null, [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/clear-reputation', null, [HttpResponseCode::OK],
                 sprintf('Failed to clear reputation for entity %s', $entityIdentifier)
             );
         }
@@ -1269,7 +1292,7 @@
                 throw new InvalidArgumentException('Evidence UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update_confidentiality', ['confidential' => $confidential], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update-confidentiality', ['confidential' => $confidential], [HttpResponseCode::OK],
                 sprintf('Failed to %s confidentiality for evidence with UUID %s', ($confidential ? 'set' : 'unset'), $evidenceUuid)
             );
         }
@@ -1294,7 +1317,7 @@
                 throw new InvalidArgumentException('Tag cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update_tag', ['tag' => $tag], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update-tag', ['tag' => $tag], [HttpResponseCode::OK],
                 sprintf('Failed to update tag for evidence with UUID %s', $evidenceUuid)
             );
         }
@@ -1354,7 +1377,7 @@
                 throw new InvalidArgumentException('Report UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/link_report', ['report_uuid' => $reportUuid], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/link-report', ['report_uuid' => $reportUuid], [HttpResponseCode::OK],
                 sprintf('Failed to link evidence %s to report %s', $evidenceUuid, $reportUuid)
             );
         }

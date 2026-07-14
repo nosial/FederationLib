@@ -35,7 +35,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update_tag$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-tag$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_UUID_REQUIRED, 400);
             }
