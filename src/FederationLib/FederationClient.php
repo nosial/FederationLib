@@ -9,6 +9,7 @@
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
@@ -18,6 +19,7 @@
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
+    use FederationLib\Objects\SearchResult;
     use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ServerInformation;
     use FederationLib\Objects\UploadResult;
@@ -293,6 +295,41 @@
         }
 
         /**
+         * Searches audit logs by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return AuditLog[] An array of matching AuditLog objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchAuditLogs(string $query, int $page=1, int $limit=10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => AuditLog::fromArray($item),
+                $this->makeRequest('GET', 'audit/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search audit logs, query: %s', $query)
+                )
+            );
+        }
+
+        /**
          * Retrieves server information.
          *
          * @return ServerInformation The server information object
@@ -303,6 +340,61 @@
             return ServerInformation::fromArray($this->makeRequest('GET', 'info', null, [HttpResponseCode::OK],
                 'Failed to get server information'
             ));
+        }
+
+        /**
+         * Searches across multiple resource types simultaneously.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param string[]|null $types Optional array of RecordType values to restrict search to specific types
+         * @param int $page The page number (default 1)
+         * @param int $limit The number of results per type (default 10)
+         * @return SearchResult[] An array of SearchResult objects containing typed records
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function search(string $query, ?array $types=null, int $page=1, int $limit=10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if(!empty($types))
+            {
+                $params['type'] = implode(',', $types);
+            }
+
+            $results = $this->makeRequest('GET', 'search', $params, [HttpResponseCode::OK],
+                sprintf('Failed to search, query: %s', $query)
+            );
+
+            return array_map(function(array $item): SearchResult
+            {
+                $recordType = RecordType::from($item['type']);
+                $record = match($recordType)
+                {
+                    RecordType::ENTITY => EntityRecord::fromArray($item['record']),
+                    RecordType::EVIDENCE => EvidenceRecord::fromArray($item['record']),
+                    RecordType::BLACKLIST => BlacklistRecord::fromArray($item['record']),
+                    RecordType::REPORT => ReportRecord::fromArray($item['record']),
+                    RecordType::ATTACHMENT => FileAttachmentRecord::fromArray($item['record']),
+                    RecordType::AUDIT_LOG => AuditLog::fromArray($item['record']),
+                    RecordType::OPERATOR => OperatorRecord::fromArray($item['record']),
+                };
+                return new SearchResult($recordType, $record);
+            }, $results);
         }
 
         /**
@@ -654,6 +746,41 @@
             );
         }
 
+        /**
+         * Searches operators by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return OperatorRecord[] An array of matching OperatorRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchOperators(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => OperatorRecord::fromArray($item),
+                $this->makeRequest('GET', 'operators/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search operators, query: %s', $query)
+                )
+            );
+        }
+
         // ENTITY METHODS
 
         /**
@@ -953,6 +1080,41 @@
             );
         }
 
+        /**
+         * Searches entities by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return EntityRecord[] An array of matching EntityRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchEntities(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => EntityRecord::fromArray($item),
+                $this->makeRequest('GET', 'entities/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search entities, query: %s', $query)
+                )
+            );
+        }
+
         // EVIDENCE METHODS
 
         /**
@@ -1134,6 +1296,41 @@
 
             $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update_tag', ['tag' => $tag], [HttpResponseCode::OK],
                 sprintf('Failed to update tag for evidence with UUID %s', $evidenceUuid)
+            );
+        }
+
+        /**
+         * Searches evidence by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return EvidenceRecord[] An array of matching EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchEvidence(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => EvidenceRecord::fromArray($item),
+                $this->makeRequest('GET', 'evidence/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search evidence, query: %s', $query)
+                )
             );
         }
 
@@ -1433,6 +1630,41 @@
         }
 
         /**
+         * Searches reports by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return ReportRecord[] An array of matching ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchReports(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'reports/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search reports, query: %s', $query)
+                )
+            );
+        }
+
+        /**
          * Retrieves the OpenAPI specification from the server.
          *
          * @return array The OpenAPI specification as an associative array
@@ -1567,6 +1799,41 @@
                 fn($item) => BlacklistRecord::fromArray($item),
                 $this->makeRequest('GET', 'blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
                     sprintf('Failed to list blacklist records, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Searches blacklist records by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return BlacklistRecord[] An array of matching BlacklistRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchBlacklist(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => BlacklistRecord::fromArray($item),
+                $this->makeRequest('GET', 'blacklist/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search blacklist records, query: %s', $query)
                 )
             );
         }
@@ -2165,6 +2432,41 @@
                     unlink($tempFile);
                 }
             }
+        }
+
+        /**
+         * Searches file attachments by a query string.
+         *
+         * @param string $query The search query (minimum 2 characters)
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of results per page (default is 10)
+         * @return FileAttachmentRecord[] An array of matching FileAttachmentRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the query is too short or parameters are invalid
+         */
+        public function searchAttachments(string $query, int $page = 1, int $limit = 10): array
+        {
+            if(strlen($query) < 2)
+            {
+                throw new InvalidArgumentException('Search query must be at least 2 characters');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            return array_map(
+                fn($item) => FileAttachmentRecord::fromArray($item),
+                $this->makeRequest('GET', 'attachments/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                    sprintf('Failed to search attachments, query: %s', $query)
+                )
+            );
         }
 
         // INTERNAL METHODS

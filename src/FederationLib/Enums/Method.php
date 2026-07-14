@@ -9,14 +9,17 @@
     use FederationLib\Methods\Attachments\DownloadAttachment;
     use FederationLib\Methods\Attachments\GetAttachmentInfo;
     use FederationLib\Methods\Attachments\ListAttachments;
+    use FederationLib\Methods\Attachments\SearchAttachments;
     use FederationLib\Methods\Attachments\UploadAttachment;
     use FederationLib\Methods\Audit\ListAuditLogs;
+    use FederationLib\Methods\Audit\SearchAuditLogs;
     use FederationLib\Methods\Audit\ViewAuditEntry;
     use FederationLib\Methods\Blacklist\BlacklistEntity;
     use FederationLib\Methods\Blacklist\DeleteBlacklist;
     use FederationLib\Methods\Blacklist\GetBlacklistRecord;
     use FederationLib\Methods\Blacklist\LiftBlacklist;
     use FederationLib\Methods\Blacklist\ListBlacklist;
+    use FederationLib\Methods\Blacklist\SearchBlacklist;
     use FederationLib\Methods\Entities\ClearRelationship;
     use FederationLib\Methods\Entities\ClearReputation;
     use FederationLib\Methods\Entities\DeleteEntity;
@@ -27,11 +30,13 @@
     use FederationLib\Methods\Entities\ListEntityEvidence;
     use FederationLib\Methods\Entities\ListEntityReports;
     use FederationLib\Methods\Entities\PushEntity;
+    use FederationLib\Methods\Entities\SearchEntities;
     use FederationLib\Methods\Entities\SetRelationship;
     use FederationLib\Methods\Evidence\DeleteEvidence;
     use FederationLib\Methods\Evidence\GetEvidenceAttachments;
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
     use FederationLib\Methods\Evidence\ListEvidence;
+    use FederationLib\Methods\Evidence\SearchEvidence;
     use FederationLib\Methods\Evidence\SubmitEvidence;
     use FederationLib\Methods\Evidence\UpdateConfidentiality;
     use FederationLib\Methods\Evidence\UpdateTag;
@@ -53,25 +58,29 @@
     use FederationLib\Methods\Operators\ManageManagementPermissions;
     use FederationLib\Methods\Operators\ManageOperatorPermissions;
     use FederationLib\Methods\Operators\GenerateOperatorAccessToken;
+    use FederationLib\Methods\Operators\SearchOperators;
     use FederationLib\Methods\Reports\AddEvidence;
     use FederationLib\Methods\Reports\CloseReport;
     use FederationLib\Methods\Reports\DeleteReport;
     use FederationLib\Methods\Reports\GetReport;
     use FederationLib\Methods\Reports\ListReports;
     use FederationLib\Methods\Reports\AssignOperator;
+    use FederationLib\Methods\Reports\SearchReports;
     use FederationLib\Methods\Reports\SubmitReport;
     use FederationLib\Methods\ScanContent;
+    use FederationLib\Methods\Search;
 
     enum Method
     {
         case GET_SERVER_INFORMATION;
-
-        case SCAN_CONTENT;
-
         case GET_SPECIFICATION;
+
+        case SEARCH;
+        case SCAN_CONTENT;
 
         case LIST_AUDIT_LOGS;
         case VIEW_AUDIT_ENTRY;
+        case SEARCH_AUDIT_LOGS;
 
         case LIST_OPERATORS;
         case CREATE_OPERATOR;
@@ -87,6 +96,7 @@
         case LIST_OPERATOR_EVIDENCE;
         case LIST_OPERATOR_AUDIT_LOGS;
         case LIST_OPERATOR_BLACKLIST;
+        case SEARCH_OPERATORS;
 
         case GET_ENTITY_RECORD;
         case DELETE_ENTITY;
@@ -98,6 +108,7 @@
         case CLEAR_REPUTATION;
         case SET_ENTITY_RELATIONSHIP;
         case CLEAR_ENTITY_RELATIONSHIP;
+        case SEARCH_ENTITIES;
 
         case LIST_EVIDENCE;
         case SUBMIT_EVIDENCE;
@@ -106,12 +117,14 @@
         case UPDATE_CONFIDENTIALITY;
         case UPDATE_EVIDENCE_TAG;
         case DELETE_EVIDENCE;
+        case SEARCH_EVIDENCE;
 
         case LIST_BLACKLIST;
         case BLACKLIST_ENTITY;
         case DELETE_BLACKLIST;
         case LIFT_BLACKLIST;
         case GET_BLACKLIST_RECORD;
+        case SEARCH_BLACKLIST;
 
         case SUBMIT_REPORT;
         case LIST_REPORTS;
@@ -123,12 +136,14 @@
         case DELETE_REPORT;
         case ASSIGN_OPERATOR_TO_REPORT;
         case ADD_EVIDENCE_TO_REPORT;
+        case SEARCH_REPORTS;
 
         case UPLOAD_ATTACHMENT;
         case DOWNLOAD_ATTACHMENT;
         case GET_ATTACHMENT_INFO;
         case DELETE_ATTACHMENT;
         case LIST_ATTACHMENTS;
+        case SEARCH_ATTACHMENTS;
 
         /**
          * Handles the request of the method
@@ -153,14 +168,17 @@
             {
                 self::GET_SERVER_INFORMATION => ['/info', 'get', GetServerInformation::class],
                 self::SCAN_CONTENT => ['/scan', 'post', ScanContent::class],
+                self::SEARCH => ['/search', 'get', Search::class],
                 self::GET_SPECIFICATION => ['/specification', 'get', GetSpecification::class],
                 self::VIEW_AUDIT_ENTRY => ['/audit/{uuid}', 'get', ViewAuditEntry::class],
+                self::SEARCH_AUDIT_LOGS => ['/audit/search', 'get', SearchAuditLogs::class],
                 self::LIST_AUDIT_LOGS => ['/', 'get', ListAuditLogs::class],
                 self::DOWNLOAD_ATTACHMENT => ['/attachments/{uuid}', 'get', DownloadAttachment::class],
                 self::DELETE_ATTACHMENT => ['/attachments/{uuid}', 'delete', DeleteAttachment::class],
                 self::GET_ATTACHMENT_INFO => ['/attachments/{uuid}/info', 'get', GetAttachmentInfo::class],
                 self::LIST_ATTACHMENTS => ['/attachments', 'get', ListAttachments::class],
                 self::UPLOAD_ATTACHMENT => ['/attachments', 'post', UploadAttachment::class],
+                self::SEARCH_ATTACHMENTS => ['/attachments/search', 'get', SearchAttachments::class],
                 self::GET_ENTITY_RECORD => ['/entities/{identifier}', 'get', GetEntityRecord::class],
                 self::DELETE_ENTITY => ['/entities/{identifier}', 'delete', DeleteEntity::class],
                 self::SET_ENTITY_RELATIONSHIP => ['/entities/{identifier}/relationship', 'patch', SetRelationship::class],
@@ -169,6 +187,7 @@
                 self::LIST_ENTITY_AUDIT_LOGS => ['/entities/{identifier}/audit', 'get', ListEntityAuditLogs::class],
                 self::LIST_ENTITY_BLACKLIST_RECORDS => ['/entities/{identifier}/blacklist', 'get', ListEntityBlacklistRecords::class],
                 self::CLEAR_REPUTATION => ['/entities/{identifier}/clearReputation', 'patch', ClearReputation::class],
+                self::SEARCH_ENTITIES => ['/entities/search', 'get', SearchEntities::class],
                 self::LIST_ENTITIES => ['/entities', 'get', ListEntities::class],
                 self::PUSH_ENTITY => ['/entities', 'post', PushEntity::class],
                 self::LIST_BLACKLIST => ['/blacklist', 'get', ListBlacklist::class],
@@ -176,6 +195,7 @@
                 self::GET_BLACKLIST_RECORD => ['/blacklist/{uuid}', 'get', GetBlacklistRecord::class],
                 self::DELETE_BLACKLIST => ['/blacklist/{uuid}', 'delete', DeleteBlacklist::class],
                 self::LIFT_BLACKLIST => ['/blacklist/{uuid}/lift', 'patch', LiftBlacklist::class],
+                self::SEARCH_BLACKLIST => ['/blacklist/search', 'get', SearchBlacklist::class],
                 self::LIST_EVIDENCE => ['/evidence', 'get', ListEvidence::class],
                 self::SUBMIT_EVIDENCE => ['/evidence', 'post', SubmitEvidence::class],
                 self::GET_EVIDENCE_RECORD => ['/evidence/{uuid}', 'get', GetEvidenceRecord::class],
@@ -183,11 +203,13 @@
                 self::GET_EVIDENCE_ATTACHMENTS => ['/evidence/{uuid}/attachments', 'get', GetEvidenceAttachments::class],
                 self::UPDATE_CONFIDENTIALITY => ['/evidence/{uuid}/update_confidentiality', 'patch', UpdateConfidentiality::class],
                 self::UPDATE_EVIDENCE_TAG => ['/evidence/{uuid}/update_tag', 'patch', UpdateTag::class],
+                self::SEARCH_EVIDENCE => ['/evidence/search', 'get', SearchEvidence::class],
                 self::SUBMIT_REPORT => ['/reports', 'post', SubmitReport::class],
                 self::LIST_REPORTS => ['/reports', 'get', ListReports::class],
                 self::GET_REPORT => ['/reports/{uuid}', 'get', GetReport::class],
                 self::CLOSE_REPORT => ['/reports/{uuid}/close', 'patch', CloseReport::class],
                 self::DELETE_REPORT => ['/reports/{uuid}', 'delete', DeleteReport::class],
+                self::SEARCH_REPORTS => ['/reports/search', 'get', SearchReports::class],
                 self::LIST_OPERATOR_REPORTS => ['/operators/{uuid}/reports', 'get', ListOperatorReports::class],
                 self::LIST_ENTITY_REPORTS => ['/entities/{identifier}/reports', 'get', ListEntityReports::class],
                 self::LIST_ASSIGNED_OPERATOR_REPORTS => ['/operators/{uuid}/reports/assigned', 'get', ListAssignedOperatorReports::class],
@@ -207,6 +229,7 @@
                 self::LIST_OPERATOR_EVIDENCE => ['/operators/{uuid}/evidence', 'get', ListOperatorEvidence::class],
                 self::LIST_OPERATOR_AUDIT_LOGS => ['/operators/{uuid}/audit', 'get', ListOperatorAuditLogs::class],
                 self::LIST_OPERATOR_BLACKLIST => ['/operators/{uuid}/blacklist', 'get', ListOperatorBlacklist::class],
+                self::SEARCH_OPERATORS => ['/operators/search', 'get', SearchOperators::class],
             };
         }
 
@@ -228,13 +251,16 @@
                 $path === '/info' && $requestMethod === 'GET' => Method::GET_SERVER_INFORMATION,
                 $path === '/specification' && $requestMethod === 'GET' => Method::GET_SPECIFICATION,
                 $path === '/specification.json' && $requestMethod === 'GET' => Method::GET_SPECIFICATION,
+                $path === '/search' && $requestMethod === 'GET' => Method::SEARCH,
                 $path === '/scan' && $requestMethod === 'POST' => Method::SCAN_CONTENT,
                 preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::VIEW_AUDIT_ENTRY,
+                $path === '/audit/search' && $requestMethod === 'GET' => Method::SEARCH_AUDIT_LOGS,
 
                 // Attachment methods
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) && $requestMethod === 'GET' => Method::GET_ATTACHMENT_INFO,
+                $path === '/attachments/search' && $requestMethod === 'GET' => Method::SEARCH_ATTACHMENTS,
                 $path === '/attachments' && $requestMethod === 'GET' => Method::LIST_ATTACHMENTS,
                 $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
 
@@ -251,6 +277,7 @@
                 // UUID entity routing
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
+                $path === '/entities/search' && $requestMethod === 'GET' => Method::SEARCH_ENTITIES,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
@@ -278,6 +305,7 @@
                 // Blcaklist Methods
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
                 $path === '/blacklist' && $requestMethod === 'POST' => Method::BLACKLIST_ENTITY,
+                $path === '/blacklist/search' && $requestMethod === 'GET' => Method::SEARCH_BLACKLIST,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST_RECORD,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', $path) && $requestMethod === 'PATCH' => Method::LIFT_BLACKLIST,
@@ -285,6 +313,7 @@
                 // Evidence Methods
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
                 $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
+                $path === '/evidence/search' && $requestMethod === 'GET' => Method::SEARCH_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/attachments$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_ATTACHMENTS,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update_confidentiality$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_CONFIDENTIALITY,
@@ -295,6 +324,7 @@
                 // Operator Methods
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
+                $path === '/operators/search' && $requestMethod === 'GET' => Method::SEARCH_OPERATORS,
                 $path === '/operators/self' && $requestMethod === 'GET' => Method::GET_SELF_OPERATOR,
                 $path === '/operators/refresh' && $requestMethod === 'POST' => Method::GENERATE_OPERATOR_ACCESS_TOKEN,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
@@ -314,6 +344,7 @@
                 // Reports methods
                 $path === '/reports' && $requestMethod === 'GET' => Method::LIST_REPORTS,
                 $path === '/reports' && $requestMethod === 'POST' => Method::SUBMIT_REPORT,
+                $path === '/reports/search' && $requestMethod === 'GET' => Method::SEARCH_REPORTS,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})/close$#', $path) && $requestMethod === 'PATCH' => Method::CLOSE_REPORT,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})/assign$#', $path) && $requestMethod === 'PATCH' => Method::ASSIGN_OPERATOR_TO_REPORT,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_REPORT,
