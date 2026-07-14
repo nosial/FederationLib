@@ -12,7 +12,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use Symfony\Component\Uid\UuidV4;
+    use Symfony\Component\Uid\Uuid;
 
     class EvidenceManager
     {
@@ -105,7 +105,7 @@
                 }
             }
 
-            $uuid = UuidV4::v4()->toRfc4122();
+            $uuid = Uuid::v7()->toRfc4122();
 
             try
             {

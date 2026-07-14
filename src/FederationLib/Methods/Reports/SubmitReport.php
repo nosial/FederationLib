@@ -161,7 +161,7 @@
                 $originalName = self::getSafeFileName($file['name'] ?? '');
                 if (empty($originalName) || $originalName === 'unnamed')
                 {
-                    $originalName = Uuid::v4()->toRfc4122();
+                    $originalName = Uuid::v7()->toRfc4122();
                 }
 
                 if (is_link($file['tmp_name']))
@@ -189,7 +189,7 @@
                     throw new RequestException(self::ERROR_STORAGE_NOT_WRITABLE, HttpResponseCode::INTERNAL_SERVER_ERROR);
                 }
 
-                $fileAttachmentUuid = Uuid::v4()->toRfc4122();
+                $fileAttachmentUuid = Uuid::v7()->toRfc4122();
                 $destinationPath = $storagePath . DIRECTORY_SEPARATOR . $fileAttachmentUuid;
                 $tempDestination = $storagePath . DIRECTORY_SEPARATOR . uniqid('tmp_', true);
 

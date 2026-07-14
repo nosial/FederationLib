@@ -288,7 +288,7 @@
 
         public function testDeleteNonExistentOperator(): void
         {
-            $nonExistentOperatorUuid = Uuid::v4()->toRfc4122();
+            $nonExistentOperatorUuid = Uuid::v7()->toRfc4122();
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->deleteOperator($nonExistentOperatorUuid);
@@ -296,7 +296,7 @@
 
         public function testGetNonExistentOperator(): void
         {
-            $nonExistentOperatorUuid = Uuid::v4()->toRfc4122();
+            $nonExistentOperatorUuid = Uuid::v7()->toRfc4122();
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
             $this->client->getOperator($nonExistentOperatorUuid);
@@ -452,7 +452,7 @@
 
         public function testOperatorPermissionConsistency(): void
         {
-            $operatorUuid = $this->client->createOperator('permission_test_operator');
+            $operatorUuid = $this->client->createOperator(uniqid('prm_test_operator_'));
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, true);

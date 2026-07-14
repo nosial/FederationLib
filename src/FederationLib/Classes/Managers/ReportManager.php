@@ -12,7 +12,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use Symfony\Component\Uid\UuidV4;
+    use Symfony\Component\Uid\Uuid;
 
     class ReportManager
     {
@@ -52,7 +52,7 @@
                 throw new InvalidArgumentException('Message cannot be empty if provided');
             }
 
-            $uuid = UuidV4::v4()->toRfc4122();
+            $uuid = Uuid::v7()->toRfc4122();
             $incidentType = $type->value;
 
             try

@@ -194,7 +194,7 @@
         {
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->deleteEntity(Uuid::v4()->toRfc4122());
+            $this->client->deleteEntity(Uuid::v7()->toRfc4122());
         }
 
         public function testListEntities(): void

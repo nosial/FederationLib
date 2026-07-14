@@ -320,6 +320,34 @@
         }
 
         /**
+         * Checks if an operator name already exists in the database.
+         *
+         * @param string $name The name to check.
+         * @return bool True if the name exists, false otherwise.
+         * @throws InvalidArgumentException If the name is empty.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function operatorNameExists(string $name): bool
+        {
+            if(empty($name))
+            {
+                throw new InvalidArgumentException('Operator name cannot be empty.');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM operators WHERE name=:name");
+                $stmt->bindParam(':name', $name);
+                $stmt->execute();
+                return $stmt->fetchColumn() > 0;
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException(sprintf("Failed to check existence of operator name '%s'", $name), 0, $e);
+            }
+        }
+
+        /**
          * Retrieve an operator by their Access Token.
          *
          * @param string $accessToken The Access Token of the operator.

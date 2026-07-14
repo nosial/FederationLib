@@ -1,6 +1,6 @@
 create table blacklist
 (
-    uuid      varchar(36) default uuid()                                                                        not null comment 'The Unique Universal Identifier Primary Unique Index'
+    uuid      varchar(36)                                                                                       not null comment 'The Unique Universal Identifier Primary Unique Index'
         primary key,
     operator  varchar(36)                                                                                       not null comment 'The operator that created this blacklist record',
     entity    varchar(36)                                                                                       not null comment 'The target entity that is blacklisted',

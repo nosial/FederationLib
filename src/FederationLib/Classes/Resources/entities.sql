@@ -1,6 +1,6 @@
 create table entities
 (
-    uuid                    varchar(36)   default uuid()               not null comment 'The primary unique index of the entity'
+    uuid                    varchar(36)                                not null comment 'The primary unique index of the entity'
         primary key,
     hash                    varchar(64)                                not null comment 'The Unique Hash combination of the entity (sha256 ''id@domain'', or ''id'' if no domain is set)',
     host                    varchar(255)                               not null comment 'The domain',

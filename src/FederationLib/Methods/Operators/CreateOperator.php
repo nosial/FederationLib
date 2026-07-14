@@ -44,9 +44,16 @@
                 throw new RequestException(self::ERROR_NAME_RESERVED, HttpResponseCode::BAD_REQUEST);
             }
 
+            $name = FederationServer::getParameter('name');
+
+            if(OperatorManager::operatorNameExists($name))
+            {
+                throw new RequestException('Operator name already exists', HttpResponseCode::CONFLICT);
+            }
+
             try
             {
-                $operatorUuid = OperatorManager::createOperator(FederationServer::getParameter('name'));
+                $operatorUuid = OperatorManager::createOperator($name);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf('Operator %s (%s) created by %s',
                     FederationServer::getParameter('name'),
                     $operatorUuid,

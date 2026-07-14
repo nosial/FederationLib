@@ -62,9 +62,10 @@
                     throw new RequestException(self::ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND, 404);
                 }
 
-                AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Attachment deleted by operator %s',
+                AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Attachment %s deleted by operator %s',
+                    $attachmentUuid,
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid(), null, $existingAttachment->getEvidenceUuid(), $attachmentUuid);
+                ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid(), null, $existingAttachment->getEvidenceUuid());
                 FileAttachmentManager::deleteRecord($attachmentUuid); // This will delete the file automatically
             }
             catch(InvalidArgumentException $e)

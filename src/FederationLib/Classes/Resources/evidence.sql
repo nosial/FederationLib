@@ -1,6 +1,6 @@
 create table evidence
 (
-    uuid                varchar(36) default uuid()                 not null comment 'The Unique Universal Identifier index for the evidence'
+    uuid                varchar(36)                                not null comment 'The Unique Universal Identifier index for the evidence'
         primary key,
     entity              varchar(36)                                not null comment 'The UUID of the entity that this evidence is related to',
     operator            varchar(36)                                not null comment 'The operator that submitted the evidence',

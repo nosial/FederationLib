@@ -1,6 +1,6 @@
 create table audit_log
 (
-    uuid            varchar(36) default uuid()              not null comment 'The Unique Universal Identifier of the log record'
+    uuid            varchar(36)                             not null comment 'The Unique Universal Identifier of the log record'
         primary key,
     operator        varchar(36)                             null comment 'Optional. The operator involved in the action',
     entity          varchar(36)                             null comment 'The Unique Universal Identifier of the entity involved in this action',

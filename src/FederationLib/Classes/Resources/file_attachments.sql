@@ -1,6 +1,6 @@
 create table file_attachments
 (
-    uuid      varchar(36) default uuid()              not null comment 'The Unique Universal Identifier Unique Index'
+    uuid      varchar(36)                             not null comment 'The Unique Universal Identifier Unique Index'
         primary key,
     evidence  varchar(36)                             not null comment 'The Unique Universal Identifier of the evidence that this file is attached to',
     file_name varchar(255)                            not null comment 'The name of the file',

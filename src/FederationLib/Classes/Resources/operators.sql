@@ -1,6 +1,6 @@
 create table operators
 (
-    uuid                   varchar(36) default uuid()              not null comment 'The Unique Primary Index for the operator UUID'
+    uuid                   varchar(36)                             not null comment 'The Unique Primary Index for the operator UUID'
         primary key,
     name                   varchar(32)                             not null comment 'The public name of the operator',
     access_token           varchar(32)                             not null comment 'The current Access Token of the operator',
