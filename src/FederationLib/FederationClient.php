@@ -1015,30 +1015,6 @@
         }
 
         /**
-         * Queries an entity with the given UUID, including evidence and blacklist records.
-         *
-         * @param string $entityUuid The UUID of the entity to query
-         * @param bool $includeConfidential Whether to include confidential evidence records
-         * @param bool $includeLifted Whether to include lifted blacklist records
-         * @return mixed The query result containing entity record, evidence, and blacklist data
-         * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the entity UUID is empty
-         */
-        public function queryEntity(string $entityUuid, bool $includeConfidential = false, bool $includeLifted = false): mixed
-        {
-            if(empty($entityUuid))
-            {
-                throw new InvalidArgumentException('Entity UUID cannot be empty');
-            }
-
-            return $this->makeRequest('GET', 'entities/' . $entityUuid . '/query',
-                ['include_confidential' => $includeConfidential, 'include_lifted' => $includeLifted],
-                [HttpResponseCode::OK],
-                sprintf('Failed to query entity %s', $entityUuid)
-            );
-        }
-
-        /**
          * Clears the reputation of the given entity.
          *
          * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose reputation to clear
