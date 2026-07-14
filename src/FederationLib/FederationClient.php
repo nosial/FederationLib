@@ -1774,6 +1774,31 @@
         }
 
         /**
+         * Extends the expiration time of an active, non-permanent blacklist record.
+         *
+         * @param string $blacklistRecordUuid The UUID of the blacklist record to extend
+         * @param int $seconds The number of seconds to add to the current expiration
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the blacklist record UUID is empty or seconds is not positive
+         */
+        public function extendBlacklistRecord(string $blacklistRecordUuid, int $seconds): void
+        {
+            if(empty($blacklistRecordUuid))
+            {
+                throw new InvalidArgumentException('Blacklist record UUID cannot be empty');
+            }
+
+            if($seconds <= 0)
+            {
+                throw new InvalidArgumentException('Extension seconds must be positive');
+            }
+
+            $this->makeRequest('PATCH', 'blacklist/' . $blacklistRecordUuid . '/extend', ['seconds' => $seconds], [HttpResponseCode::OK],
+                sprintf('Failed to extend blacklist record with UUID %s', $blacklistRecordUuid)
+            );
+        }
+
+        /**
          * Lists blacklist records with pagination support.
          *
          * @param int $page The page number to retrieve (default is 1)

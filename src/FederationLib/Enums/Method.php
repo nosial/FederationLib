@@ -16,6 +16,7 @@
     use FederationLib\Methods\Audit\ViewAuditEntry;
     use FederationLib\Methods\Blacklist\BlacklistEntity;
     use FederationLib\Methods\Blacklist\DeleteBlacklist;
+    use FederationLib\Methods\Blacklist\ExtendBlacklist;
     use FederationLib\Methods\Blacklist\GetBlacklistRecord;
     use FederationLib\Methods\Blacklist\LiftBlacklist;
     use FederationLib\Methods\Blacklist\ListBlacklist;
@@ -123,6 +124,7 @@
         case BLACKLIST_ENTITY;
         case DELETE_BLACKLIST;
         case LIFT_BLACKLIST;
+        case EXTEND_BLACKLIST;
         case GET_BLACKLIST_RECORD;
         case SEARCH_BLACKLIST;
 
@@ -195,6 +197,7 @@
                 self::GET_BLACKLIST_RECORD => ['/blacklist/{uuid}', 'get', GetBlacklistRecord::class],
                 self::DELETE_BLACKLIST => ['/blacklist/{uuid}', 'delete', DeleteBlacklist::class],
                 self::LIFT_BLACKLIST => ['/blacklist/{uuid}/lift', 'patch', LiftBlacklist::class],
+                self::EXTEND_BLACKLIST => ['/blacklist/{uuid}/extend', 'patch', ExtendBlacklist::class],
                 self::SEARCH_BLACKLIST => ['/blacklist/search', 'get', SearchBlacklist::class],
                 self::LIST_EVIDENCE => ['/evidence', 'get', ListEvidence::class],
                 self::SUBMIT_EVIDENCE => ['/evidence', 'post', SubmitEvidence::class],
@@ -309,6 +312,7 @@
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST_RECORD,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
                 preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', $path) && $requestMethod === 'PATCH' => Method::LIFT_BLACKLIST,
+                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/extend$#', $path) && $requestMethod === 'PATCH' => Method::EXTEND_BLACKLIST,
 
                 // Evidence Methods
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
