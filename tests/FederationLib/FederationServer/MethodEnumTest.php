@@ -97,7 +97,7 @@
             $this->assertSame(Method::LIST_ENTITY_EVIDENCE, Method::matchHandle('GET', "/entities/$uuid/evidence"));
             $this->assertSame(Method::LIST_ENTITY_AUDIT_LOGS, Method::matchHandle('GET', "/entities/$uuid/audit"));
             $this->assertSame(Method::LIST_ENTITY_BLACKLIST_RECORDS, Method::matchHandle('GET', "/entities/$uuid/blacklist"));
-            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$uuid/clearReputation"));
+            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$uuid/clear-reputation"));
             $this->assertSame(Method::LIST_ENTITY_REPORTS, Method::matchHandle('GET', "/entities/$uuid/reports"));
             $this->assertSame(Method::SET_ENTITY_RELATIONSHIP, Method::matchHandle('PATCH', "/entities/$uuid/relationship"));
             $this->assertSame(Method::CLEAR_ENTITY_RELATIONSHIP, Method::matchHandle('DELETE', "/entities/$uuid/relationship"));
@@ -111,7 +111,7 @@
             $this->assertSame(Method::LIST_ENTITY_EVIDENCE, Method::matchHandle('GET', "/entities/$sha256/evidence"));
             $this->assertSame(Method::LIST_ENTITY_AUDIT_LOGS, Method::matchHandle('GET', "/entities/$sha256/audit"));
             $this->assertSame(Method::LIST_ENTITY_BLACKLIST_RECORDS, Method::matchHandle('GET', "/entities/$sha256/blacklist"));
-            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$sha256/clearReputation"));
+            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$sha256/clear-reputation"));
             $this->assertSame(Method::LIST_ENTITY_REPORTS, Method::matchHandle('GET', "/entities/$sha256/reports"));
             $this->assertSame(Method::SET_ENTITY_RELATIONSHIP, Method::matchHandle('PATCH', "/entities/$sha256/relationship"));
             $this->assertSame(Method::CLEAR_ENTITY_RELATIONSHIP, Method::matchHandle('DELETE', "/entities/$sha256/relationship"));
@@ -125,7 +125,7 @@
             $this->assertSame(Method::LIST_ENTITY_EVIDENCE, Method::matchHandle('GET', "/entities/$email/evidence"));
             $this->assertSame(Method::LIST_ENTITY_AUDIT_LOGS, Method::matchHandle('GET', "/entities/$email/audit"));
             $this->assertSame(Method::LIST_ENTITY_BLACKLIST_RECORDS, Method::matchHandle('GET', "/entities/$email/blacklist"));
-            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$email/clearReputation"));
+            $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$email/clear-reputation"));
             $this->assertSame(Method::LIST_ENTITY_REPORTS, Method::matchHandle('GET', "/entities/$email/reports"));
             $this->assertSame(Method::SET_ENTITY_RELATIONSHIP, Method::matchHandle('PATCH', "/entities/$email/relationship"));
             $this->assertSame(Method::CLEAR_ENTITY_RELATIONSHIP, Method::matchHandle('DELETE', "/entities/$email/relationship"));
@@ -150,7 +150,7 @@
             $this->assertSame(Method::GET_EVIDENCE_ATTACHMENTS, Method::matchHandle('GET', "/evidence/$uuid/attachments"));
             $this->assertSame(Method::UPDATE_CONFIDENTIALITY, Method::matchHandle('PATCH', "/evidence/$uuid/update_confidentiality"));
             $this->assertSame(Method::UPDATE_EVIDENCE_TAG, Method::matchHandle('PATCH', "/evidence/$uuid/update_tag"));
-            $this->assertSame(Method::ADD_EVIDENCE_TO_REPORT, Method::matchHandle('PATCH', "/evidence/$uuid/link_report"));
+            $this->assertSame(Method::ADD_EVIDENCE_TO_REPORT, Method::matchHandle('PATCH', "/evidence/$uuid/link-report"));
         }
 
         public function testOperatorRoutesMatchHandle(): void
@@ -165,9 +165,9 @@
             $this->assertSame(Method::DELETE_OPERATOR, Method::matchHandle('DELETE', "/operators/$uuid"));
             $this->assertSame(Method::ENABLE_OPERATOR, Method::matchHandle('PATCH', "/operators/$uuid/enable"));
             $this->assertSame(Method::DISABLE_OPERATOR, Method::matchHandle('PATCH', "/operators/$uuid/disable"));
-            $this->assertSame(Method::MANAGE_OPERATOR_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/operator_permissions"));
-            $this->assertSame(Method::MANAGE_MANAGEMENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/management_permissions"));
-            $this->assertSame(Method::MANAGE_CLIENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/client_permissions"));
+            $this->assertSame(Method::MANAGE_OPERATOR_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/operator-permissions"));
+            $this->assertSame(Method::MANAGE_MANAGEMENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/management-permissions"));
+            $this->assertSame(Method::MANAGE_CLIENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/client-permissions"));
             $this->assertSame(Method::LIST_OPERATOR_EVIDENCE, Method::matchHandle('GET', "/operators/$uuid/evidence"));
             $this->assertSame(Method::LIST_OPERATOR_AUDIT_LOGS, Method::matchHandle('GET', "/operators/$uuid/audit"));
             $this->assertSame(Method::LIST_OPERATOR_BLACKLIST, Method::matchHandle('GET', "/operators/$uuid/blacklist"));
