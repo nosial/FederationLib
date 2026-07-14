@@ -15,7 +15,7 @@
         private float $confidence;
         private int $processingTimeMs;
         private int $modelVersion;
-        private bool $success;
+        private ?bool $success;
         private ?string $rejectedReason;
         private int $textLength;
 
@@ -27,16 +27,16 @@
         public function __construct(array $array)
         {
             $this->timestamp = (int)$array['timestamp'];
-            $this->type = BayesianEventType::tryFrom($array['type']) ?? BayesianEventType::UNKNOWN;
-            $this->languageCode = $array['language_code'];
-            $this->labels = $array['labels'];
-            $this->tokenCount = $array['token_count'];
-            $this->confidence = $array['confidence'];
-            $this->processingTimeMs = $array['processing_time_ms'];
-            $this->modelVersion = (int)$array['model_version'];
-            $this->success = $array['success'];
-            $this->rejectedReason = $array['rejected_reason'];
-            $this->textLength = $array['text_length'];
+            $this->type = BayesianEventType::tryFrom($array['type'] ?? '') ?? BayesianEventType::UNKNOWN;
+            $this->languageCode = $array['language_code'] ?? 'und';
+            $this->labels = $array['labels'] ?? [];
+            $this->tokenCount = (int)($array['token_count'] ?? -1);
+            $this->confidence = (float)($array['confidence'] ?? -1.0);
+            $this->processingTimeMs = (int)($array['processing_time_ms'] ?? -1);
+            $this->modelVersion = (int)($array['model_version'] ?? -1);
+            $this->success = $array['success'] ?? null;
+            $this->rejectedReason = $array['rejected_reason'] ?? null;
+            $this->textLength = (int)($array['text_length'] ?? -1);
         }
 
         /**
@@ -122,9 +122,9 @@
         /**
          * Returns whether the operation was successful
          *
-         * @return bool True if successful, False otherwise
+         * @return bool|null True if successful, False otherwise, null if not applicable
          */
-        public function isSuccess(): bool
+        public function isSuccess(): ?bool
         {
             return $this->success;
         }

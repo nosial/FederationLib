@@ -85,7 +85,7 @@
                 'labels' => $labels
             ];
 
-            $response = $this->request('PUT', '/', $data, [202, 503], 'Learn failed');
+            $response = $this->request('PUSH', '/', $data, [202, 503], 'Learn failed');
             return BayesianLearn::fromArray($response);
         }
 
@@ -118,7 +118,7 @@
             }
 
             $data = ['documents' => $normalized];
-            $response = $this->request('PUT', '/', $data, [202, 503], 'Batch learn failed');
+            $response = $this->request('PUSH', '/', $data, [202, 503], 'Batch learn failed');
 
             return BayesianLearn::fromArray($response);
         }
@@ -201,7 +201,8 @@
                     break;
 
                 case 'PUT':
-                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+                case 'PUSH':
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
                     if($data)
                     {
                         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));

@@ -20,11 +20,11 @@
         private int $totalTokens;
         private int $knownTokens;
         private int $unknownTokenCount;
-        private float $modelVersion;
+        private int $modelVersion;
         private string $scoringMethod;
         private string $languageCode;
         private float $confidence;
-        private float $processingTimeMs;
+        private int $processingTimeMs;
 
         /**
          * Constructs a BayesianClassification from an array
@@ -41,11 +41,11 @@
             $this->totalTokens = (int)($array['total_tokens'] ?? 0);
             $this->knownTokens = (int)($array['known_tokens'] ?? 0);
             $this->unknownTokenCount = (int)($array['unknown_token_count'] ?? 0);
-            $this->modelVersion = (float)($array['model_version'] ?? 0.0);
+            $this->modelVersion = (int)($array['model_version'] ?? 0);
             $this->scoringMethod = $array['scoring_method'] ?? 'naive_bayes';
             $this->languageCode = $array['language_code'] ?? 'unknown';
             $this->confidence = (float)($array['confidence'] ?? 0.0);
-            $this->processingTimeMs = (float)($array['processing_time_ms'] ?? 0.0);
+            $this->processingTimeMs = (int)($array['processing_time_ms'] ?? 0);
 
             if(isset($array['labels']))
             {
@@ -159,9 +159,9 @@
         /**
          * Returns the model version
          *
-         * @return float The model version number
+         * @return int The model version number
          */
-        public function getModelVersion(): float
+        public function getModelVersion(): int
         {
             return $this->modelVersion;
         }
@@ -199,9 +199,9 @@
         /**
          * Returns the processing time in milliseconds
          *
-         * @return float Processing time in ms
+         * @return int Processing time in ms
          */
-        public function getProcessingTimeMs(): float
+        public function getProcessingTimeMs(): int
         {
             return $this->processingTimeMs;
         }
@@ -224,7 +224,7 @@
                 'scoring_method' => $this->scoringMethod,
                 'language_code' => $this->languageCode,
                 'confidence' => $this->confidence,
-                'processing_time_ms' => $this->processingTimeMs
+                'processing_time_ms' => $this->processingTimeMs,
             ];
         }
 

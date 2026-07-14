@@ -257,7 +257,7 @@
                 'total_documents' => $this->totalDocuments,
                 'label_count' => $this->labelCount,
                 'vocabulary_size' => $this->vocabularySize,
-                'total_token_occurances' => $this->totalTokenOccurrences,
+                'total_token_occurrences' => $this->totalTokenOccurrences,
                 'total_document_tokens' => $this->totalDocumentTokens,
                 'smoothing_alpha' => $this->smoothingAlpha,
                 'average_document_length' => $this->averageDocumentLength,

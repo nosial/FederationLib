@@ -149,6 +149,7 @@
                 'submitted' => $this->submitted,
                 'processed' => $this->processed,
                 'failed' => $this->failed,
+                'rejected' => $this->rejected,
                 'rejected_max_docs' => $this->rejectedMaxDocs,
                 'max_docs' => $this->maxDocs,
                 'current_docs' => $this->currentDocs
