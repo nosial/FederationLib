@@ -6,6 +6,7 @@
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\ReportCategory;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -42,10 +43,13 @@
                 $page = 1;
             }
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? ReportCategory::tryFrom(strtoupper($categoryInput)) : null;
+
             try
             {
                 self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReports($limit, $page))
+                    ReportManager::getReports($limit, $page, $category))
                 );
             }
             catch (DatabaseOperationException $e)
@@ -105,6 +109,13 @@
                     'description' => 'Page number for pagination',
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter by report category: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => ['OPENED', 'CLOSED', 'AUTOMATED', 'UNASSIGNED', 'ASSIGNED']],
                 ],
             ];
         }

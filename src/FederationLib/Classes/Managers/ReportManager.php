@@ -7,6 +7,7 @@
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\IncidentType;
+    use FederationLib\Enums\ReportCategory;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
@@ -316,7 +317,7 @@
          * @throws InvalidArgumentException If limit or page parameters are invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReports(int $limit=100, int $page=1): array
+        public static function getReports(int $limit=100, int $page=1, ?ReportCategory $category=null): array
         {
             if($limit <= 0)
             {
@@ -331,9 +332,14 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $categoryCondition = self::buildCategoryCondition($category);
+                $sql = "SELECT * FROM reports";
+                if($categoryCondition !== '')
+                {
+                    $sql .= " WHERE $categoryCondition";
+                }
+                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -372,7 +378,7 @@
          * @throws InvalidArgumentException If the operator UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsBySubmittingOperator(string $operatorUuid, int $limit=100, int $page=1): array
+        public static function getReportsBySubmittingOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
         {
             if(strlen($operatorUuid) < 1)
             {
@@ -397,9 +403,14 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports WHERE submitting_operator = :operator ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $categoryCondition = self::buildCategoryCondition($category);
+                $sql = "SELECT * FROM reports WHERE submitting_operator = :operator";
+                if($categoryCondition !== '')
+                {
+                    $sql .= " AND $categoryCondition";
+                }
+                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -439,7 +450,7 @@
          * @throws InvalidArgumentException If the entity UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsByReportingEntity(string $entityUuid, int $limit=100, int $page=1): array
+        public static function getReportsByReportingEntity(string $entityUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
         {
             if(strlen($entityUuid) < 1)
             {
@@ -464,9 +475,14 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports WHERE reporting_entity = :entity ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $categoryCondition = self::buildCategoryCondition($category);
+                $sql = "SELECT * FROM reports WHERE reporting_entity = :entity";
+                if($categoryCondition !== '')
+                {
+                    $sql .= " AND $categoryCondition";
+                }
+                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':entity', $entityUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -506,7 +522,7 @@
          * @throws InvalidArgumentException If the operator UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsByAssignedOperator(string $operatorUuid, int $limit=100, int $page=1): array
+        public static function getReportsByAssignedOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
         {
             if(strlen($operatorUuid) < 1)
             {
@@ -531,9 +547,14 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports WHERE assigned_operator = :operator ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $categoryCondition = self::buildCategoryCondition($category);
+                $sql = "SELECT * FROM reports WHERE assigned_operator = :operator";
+                if($categoryCondition !== '')
+                {
+                    $sql .= " AND $categoryCondition";
+                }
+                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -695,6 +716,25 @@
             {
                 throw new DatabaseOperationException('Failed to search reports: ' . $e->getMessage(), $e->getCode(), $e);
             }
+        }
+
+        /**
+         * Builds a SQL WHERE condition snippet for the given ReportCategory.
+         *
+         * @param ReportCategory|null $category The category to filter by, or null for no filter.
+         * @return string The SQL condition string, or an empty string if no filter is needed.
+         */
+        private static function buildCategoryCondition(?ReportCategory $category): string
+        {
+            return match($category)
+            {
+                ReportCategory::OPENED => 'opened = 1',
+                ReportCategory::CLOSED => 'opened = 0',
+                ReportCategory::AUTOMATED => 'automated = 1',
+                ReportCategory::UNASSIGNED => 'assigned_operator IS NULL',
+                ReportCategory::ASSIGNED => 'assigned_operator IS NOT NULL',
+                default => '',
+            };
         }
 
         /**

@@ -1428,11 +1428,12 @@
          *
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of reports per page (default is 100)
+         * @param string|null $category Optional category filter: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED
          * @return ReportRecord[] An array of ReportRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listReports(int $page = 1, int $limit = 100): array
+        public function listReports(int $page = 1, int $limit = 100, ?string $category = null): array
         {
             if($page < 1)
             {
@@ -1444,9 +1445,15 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'reports', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list reports, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -1530,11 +1537,12 @@
          * @param string $operatorUuid The UUID of the operator whose reports are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of reports per page (default is 100)
+         * @param string|null $category Optional category filter: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED
          * @return ReportRecord[] An array of ReportRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
          */
-        public function listOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100): array
+        public function listOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null): array
         {
             if(empty($operatorUuid))
             {
@@ -1551,9 +1559,15 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list reports for operator %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -1565,11 +1579,12 @@
          * @param string $entityIdentifier The entity UUID, hash, or address whose reports are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of reports per page (default is 100)
+         * @param string|null $category Optional category filter: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED
          * @return ReportRecord[] An array of ReportRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or page/limit are invalid
          */
-        public function listEntityReports(string $entityIdentifier, int $page = 1, int $limit = 100): array
+        public function listEntityReports(string $entityIdentifier, int $page = 1, int $limit = 100, ?string $category = null): array
         {
             if(empty($entityIdentifier))
             {
@@ -1586,9 +1601,15 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/reports', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/reports', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list reports for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
@@ -1600,11 +1621,12 @@
          * @param string $operatorUuid The UUID of the operator whose assigned reports are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of reports per page (default is 100)
+         * @param string|null $category Optional category filter: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED
          * @return ReportRecord[] An array of ReportRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
          */
-        public function listAssignedOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100): array
+        public function listAssignedOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null): array
         {
             if(empty($operatorUuid))
             {
@@ -1621,9 +1643,15 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports/assigned', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/reports/assigned', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list assigned reports for operator %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );

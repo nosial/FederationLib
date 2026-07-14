@@ -198,6 +198,20 @@
             {
                 $this->assertContains($uuid, $foundUuids);
             }
+
+            $openedReports = $this->client->listReports(1, 10, 'OPENED');
+            $openedUuids = array_map(fn($r) => $r->getUuid(), $openedReports);
+            foreach ($reportUuids as $uuid)
+            {
+                $this->assertContains($uuid, $openedUuids);
+            }
+
+            $closedReports = $this->client->listReports(1, 10, 'CLOSED');
+            $closedUuids = array_map(fn($r) => $r->getUuid(), $closedReports);
+            foreach ($reportUuids as $uuid)
+            {
+                $this->assertNotContains($uuid, $closedUuids);
+            }
         }
 
         public function testListReportsInvalidLimit(): void
@@ -321,6 +335,14 @@
 
             $foundUuids = array_map(fn($report) => $report->getUuid(), $reports);
             $this->assertContains($reportUuid, $foundUuids);
+
+            $openedReports = $this->client->listOperatorReports($submission->getReport()->getSubmittingOperator(), 1, 10, 'OPENED');
+            $openedUuids = array_map(fn($r) => $r->getUuid(), $openedReports);
+            $this->assertContains($reportUuid, $openedUuids);
+
+            $closedReports = $this->client->listOperatorReports($submission->getReport()->getSubmittingOperator(), 1, 10, 'CLOSED');
+            $closedUuids = array_map(fn($r) => $r->getUuid(), $closedReports);
+            $this->assertNotContains($reportUuid, $closedUuids);
         }
 
         public function testListOperatorReportsInvalidPage(): void
@@ -344,6 +366,14 @@
 
             $foundUuids = array_map(fn($report) => $report->getUuid(), $reports);
             $this->assertContains($reportUuid, $foundUuids);
+
+            $openedReports = $this->client->listEntityReports($entityUuid, 1, 10, 'OPENED');
+            $openedUuids = array_map(fn($r) => $r->getUuid(), $openedReports);
+            $this->assertContains($reportUuid, $openedUuids);
+
+            $closedReports = $this->client->listEntityReports($entityUuid, 1, 10, 'CLOSED');
+            $closedUuids = array_map(fn($r) => $r->getUuid(), $closedReports);
+            $this->assertNotContains($reportUuid, $closedUuids);
         }
 
         public function testGetNonExistentReport(): void
@@ -566,6 +596,14 @@
             $assignedReports = $this->client->listAssignedOperatorReports($manager->getSelf()->getUuid());
             $foundUuids = array_map(fn($r) => $r->getUuid(), $assignedReports);
             $this->assertContains($report['report'], $foundUuids);
+
+            $openedAssigned = $this->client->listAssignedOperatorReports($manager->getSelf()->getUuid(), 1, 100, 'OPENED');
+            $openedUuids = array_map(fn($r) => $r->getUuid(), $openedAssigned);
+            $this->assertContains($report['report'], $openedUuids);
+
+            $closedAssigned = $this->client->listAssignedOperatorReports($manager->getSelf()->getUuid(), 1, 100, 'CLOSED');
+            $closedUuids = array_map(fn($r) => $r->getUuid(), $closedAssigned);
+            $this->assertNotContains($report['report'], $closedUuids);
         }
 
         public function testReportFullLifecycleWorkflow(): void

@@ -9,6 +9,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\ReportCategory;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -49,6 +50,9 @@
                 $page = 1;
             }
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? ReportCategory::tryFrom(strtoupper($categoryInput)) : null;
+
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports/assigned$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
@@ -79,7 +83,7 @@
             try
             {
                 self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReportsByAssignedOperator($operator, $limit, $page))
+                    ReportManager::getReportsByAssignedOperator($operator, $limit, $page, $category))
                 );
             }
             catch (DatabaseOperationException $e)
@@ -146,6 +150,13 @@
                     'description' => 'Page number for pagination',
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter by report category: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => ['OPENED', 'CLOSED', 'AUTOMATED', 'UNASSIGNED', 'ASSIGNED']],
                 ],
             ];
         }
