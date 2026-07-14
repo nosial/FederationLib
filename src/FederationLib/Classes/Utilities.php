@@ -2,6 +2,8 @@
 
     namespace FederationLib\Classes;
 
+    use Random\RandomException;
+
     class Utilities
     {
         /**
@@ -9,6 +11,7 @@
          *
          * @param int $length Length of the random string to generate.
          * @return string Randomly generated string.
+         * @throws RandomException Thrown if the string cannot be generated due to an environment error
          */
         public static function generateString(int $length=32): string
         {
@@ -45,8 +48,7 @@
          */
         public static function isUuid(string $input): bool
         {
-            // Check if the input is a valid UUID (version 4)
-            return preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $input) === 1;
+            return preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[47][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $input) === 1;
         }
 
         /**
