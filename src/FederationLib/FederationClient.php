@@ -2114,7 +2114,7 @@
                     if ($upload_size > 0)
                     {
                         $percent = round(($uploaded / $upload_size) * 100, 2);
-                        Logger::log()->debug("Upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                        Logger::log()->debug("Upload progress: $percent% ($uploaded/$upload_size bytes)");
                     }
                     return 0; // Continue upload
                 }
@@ -2231,7 +2231,7 @@
                         if ($upload_size > 0)
                         {
                             $percent = round(($uploaded / $upload_size) * 100, 2);
-                            Logger::log()->debug("Note upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                            Logger::log()->debug("Note upload progress: $percent% ($uploaded/$upload_size bytes)");
                         }
                         return 0;
                     }
@@ -2280,6 +2280,7 @@
          * @return UploadResult The upload result containing UUID and download URL
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the URL is invalid or evidence UUID is invalid
+         * @noinspection PhpUnusedParameterInspection
          */
         public function uploadFileAttachmentFromUrl(string $evidenceUuid, string $fileUrl, int $maxFileSize = 52428800): UploadResult
         {
@@ -2339,7 +2340,7 @@
                         if ($download_size > 0)
                         {
                             $percent = round(($downloaded / $download_size) * 100, 2);
-                            Logger::log()->debug("Download progress: {$percent}% ({$downloaded}/{$download_size} bytes)");
+                            Logger::log()->debug("Download progress: $percent% ($downloaded/$download_size bytes)");
                         }
                         return 0; // Continue download
                     }
@@ -2439,7 +2440,7 @@
                         if ($upload_size > 0)
                         {
                             $percent = round(($uploaded / $upload_size) * 100, 2);
-                            Logger::log()->debug("Upload progress: {$percent}% ({$uploaded}/{$upload_size} bytes)");
+                            Logger::log()->debug("Upload progress: $percent% ($uploaded/$upload_size bytes)");
                         }
 
                         return 0; // Continue upload
