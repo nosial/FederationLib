@@ -9,8 +9,12 @@ ARG PHP_VERSION=8.5
 
 FROM ghcr.io/nosial/ncc:latest AS builder
 WORKDIR /app
+
+COPY project.yml /app/
+RUN ncc project install -y
+
 COPY . /app
-RUN ncc project install -y && ncc build --configuration web_release
+RUN ncc build --configuration web_release
 
 FROM ghcr.io/nosial/ncc:fpm AS production
 
