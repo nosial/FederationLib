@@ -741,6 +741,57 @@
         }
 
         /**
+         * Update the name of an operator.
+         *
+         * @param string $uuid The UUID of the operator.
+         * @param string $newName The new name for the operator.
+         * @throws InvalidArgumentException If the UUID or name is empty, or name exceeds 32 characters.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function updateOperatorName(string $uuid, string $newName): void
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty.');
+            }
+
+            if(empty($newName))
+            {
+                throw new InvalidArgumentException('Operator name cannot be empty.');
+            }
+
+            if(strlen($newName) > 32)
+            {
+                throw new InvalidArgumentException('Operator name cannot exceed 32 characters.');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET name=:name, updated=NOW() WHERE uuid=:uuid");
+                $stmt->bindParam(':name', $newName);
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException(sprintf("Failed to update name for operator with UUID '%s'", $uuid), 0, $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                    }
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                }
+            }
+        }
+
+        /**
          * Retrieve a list of operators with pagination support.
          *
          * @param int $limit The maximum number of operators to retrieve.

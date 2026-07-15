@@ -18,6 +18,7 @@ This is an ongoing update
    category using `OPENED`, `CLOSED`, `AUTOMATED`, `UNASSIGNED` and `ASSIGNED`
  - Added method `/blacklist/top-threats` to display an array of entities to be considered top threats based off their
    reputation score
+ - Added method `/operator/update-name` to update the name of an existing operator
 
 ### Changed
  - Updated Dockerfile build order so that caching can improve the build speed
@@ -25,10 +26,14 @@ This is an ongoing update
    inconsistencies like `clearReputation` to become `clear-reputation` instead
  - Updated CloseReport so that upon closing a report, the entities reputation is affected depending on the classification flag.
  - Updated BlacklistClientTest to ensure that the timing is greater than or equal than just greater than
+ - Updated ServerInformation to include information about reports
 
 ### Fixed
  - Updated BayesianClient
  - Ensured consistency across the implementation to use UUID v7
+
+### Removed
+ - Removed deprecated method from FederationClient `queryEntity`
 
 
 ## [0.0.8] - 2026-07-13

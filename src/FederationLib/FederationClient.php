@@ -781,6 +781,31 @@
             );
         }
 
+        /**
+         * Updates the name of an operator.
+         *
+         * @param string $operatorUuid The UUID of the operator to update
+         * @param string $newName The new name for the operator (max 32 characters, must be unique)
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID or name is empty
+         */
+        public function updateOperatorName(string $operatorUuid, string $newName): void
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            if(empty($newName))
+            {
+                throw new InvalidArgumentException('Operator name cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/update-name', ['name' => $newName], [HttpResponseCode::OK],
+                sprintf('Failed to update name for operator with UUID %s', $operatorUuid)
+            );
+        }
+
         // ENTITY METHODS
 
         /**

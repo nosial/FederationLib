@@ -12,6 +12,7 @@
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\OperatorManager;
+    use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\HttpResponseCode;
@@ -210,6 +211,7 @@
                     'public_evidence' => Configuration::getServerConfiguration()->isEvidencePublic(),
                     'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
                     'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
+                    'public_reports' => Configuration::getServerConfiguration()->isReportsPublic(),
                     'public_audit_logs_visibility' => array_map(
                         fn($type) => $type->value,
                         Configuration::getServerConfiguration()->getPublicAuditEntries()
@@ -219,7 +221,8 @@
                     'known_entities' => EntitiesManager::countRecords(),
                     'evidence_records' => EvidenceManager::countRecords(),
                     'file_attachment_records' => FileAttachmentManager::countRecords(),
-                    'operators' => OperatorManager::countRecords()
+                    'operators' => OperatorManager::countRecords(),
+                    'reports' => ReportManager::countRecords()
                 ]);
             }
             catch (Exceptions\DatabaseOperationException $e)

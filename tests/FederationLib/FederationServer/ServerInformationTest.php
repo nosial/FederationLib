@@ -145,7 +145,7 @@
             $before = $authenticatedClient->getServerInformation();
             $this->assertIsInt($before->getOperators());
 
-            $operatorUuid = $authenticatedClient->createOperator('count-accuracy-operator');
+            $operatorUuid = $authenticatedClient->createOperator(uniqid('count_accuracy_'));
             $afterCreate = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getOperators() + 1, $afterCreate->getOperators());
 
@@ -159,7 +159,7 @@
             $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
             $before = $authenticatedClient->getServerInformation();
 
-            $entityUuid = $authenticatedClient->pushEntity('count-accuracy.com', 'count_user');
+            $entityUuid = $authenticatedClient->pushEntity(uniqid('count-accuracy-') . '.com', 'count_user');
             $afterEntity = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getKnownEntities() + 1, $afterEntity->getKnownEntities());
 
@@ -332,5 +332,80 @@
             $this->assertIsBool($serverInfo->isPublicEvidence());
             $this->assertIsBool($serverInfo->isPublicBlacklist());
             $this->assertIsBool($serverInfo->isPublicEntities());
+            $this->assertIsBool($serverInfo->isPublicReports());
+        }
+
+        public function testServerInformationReportsCountIsInt(): void
+        {
+            $serverInfo = $this->client->getServerInformation();
+
+            $this->assertIsInt($serverInfo->getReports());
+        }
+
+        public function testServerInformationReportsCountAccuracyAfterReportMutation(): void
+        {
+            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $before = $authenticatedClient->getServerInformation();
+            $this->assertIsInt($before->getReports());
+
+            $entityUuid = $authenticatedClient->pushEntity('report-count-test.com', 'report_count_user');
+            $submission = $authenticatedClient->submitReport($entityUuid, 'Report count test', \FederationLib\Enums\IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+
+            $afterCreate = $authenticatedClient->getServerInformation();
+            $this->assertEquals($before->getReports() + 1, $afterCreate->getReports());
+
+            $authenticatedClient->deleteReport($reportUuid);
+            $authenticatedClient->deleteEvidence($submission->getEvidence()->getUuid());
+            $authenticatedClient->deleteEntity($entityUuid);
+
+            $afterDelete = $authenticatedClient->getServerInformation();
+            $this->assertEquals($before->getReports(), $afterDelete->getReports());
+        }
+
+        public function testServerInformationReportsInUnauthenticatedMatchesAuthenticated(): void
+        {
+            $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+
+            $public = $unauthenticatedClient->getServerInformation();
+            $private = $authenticatedClient->getServerInformation();
+
+            $this->assertEquals($private->getReports(), $public->getReports());
+            $this->assertEquals($private->isPublicReports(), $public->isPublicReports());
+        }
+
+        public function testPublicReportsFlagControlsAnonymousReadAccess(): void
+        {
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $serverInfo = $authenticatedClient->getServerInformation();
+
+            $entityUuid = $authenticatedClient->pushEntity('public-report-flag-test.com', 'public_report_user');
+            $submission = $authenticatedClient->submitReport($entityUuid, 'Public report flag test', \FederationLib\Enums\IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+
+            if ($serverInfo->isPublicReports())
+            {
+                $this->assertNotNull($anonymousClient->getReport($reportUuid));
+            }
+            else
+            {
+                $this->expectException(RequestException::class);
+                $anonymousClient->getReport($reportUuid);
+            }
+
+            $authenticatedClient->deleteReport($reportUuid);
+            $authenticatedClient->deleteEvidence($submission->getEvidence()->getUuid());
+            $authenticatedClient->deleteEntity($entityUuid);
+        }
+
+        public function testServerInformationReportsCountInSpecification(): void
+        {
+            $authenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $specification = $authenticatedClient->getSpecification();
+
+            $this->assertArrayHasKey('reports', $specification['components']['schemas']['ServerInformation']['properties']);
+            $this->assertArrayHasKey('public_reports', $specification['components']['schemas']['ServerInformation']['properties']);
         }
     }

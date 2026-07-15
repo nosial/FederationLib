@@ -61,6 +61,7 @@
     use FederationLib\Methods\Operators\ManageOperatorPermissions;
     use FederationLib\Methods\Operators\GenerateOperatorAccessToken;
     use FederationLib\Methods\Operators\SearchOperators;
+    use FederationLib\Methods\Operators\UpdateOperatorName;
     use FederationLib\Methods\Reports\AddEvidence;
     use FederationLib\Methods\Reports\CloseReport;
     use FederationLib\Methods\Reports\DeleteReport;
@@ -72,7 +73,7 @@
     use FederationLib\Methods\ScanContent;
     use FederationLib\Methods\Search;
 
-    enum Method
+    enum    Method
     {
         case GET_SERVER_INFORMATION;
         case GET_SPECIFICATION;
@@ -99,6 +100,7 @@
         case LIST_OPERATOR_AUDIT_LOGS;
         case LIST_OPERATOR_BLACKLIST;
         case SEARCH_OPERATORS;
+        case UPDATE_OPERATOR_NAME;
 
         case GET_ENTITY_RECORD;
         case DELETE_ENTITY;
@@ -236,6 +238,7 @@
                 self::LIST_OPERATOR_AUDIT_LOGS => ['/operators/{uuid}/audit', 'get', ListOperatorAuditLogs::class],
                 self::LIST_OPERATOR_BLACKLIST => ['/operators/{uuid}/blacklist', 'get', ListOperatorBlacklist::class],
                 self::SEARCH_OPERATORS => ['/operators/search', 'get', SearchOperators::class],
+                self::UPDATE_OPERATOR_NAME => ['/operators/{uuid}/update-name', 'patch', UpdateOperatorName::class],
             };
         }
 
@@ -347,6 +350,7 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_AUDIT_LOGS,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_BLACKLIST,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports/assigned$#', $path) && $requestMethod === 'GET' => Method::LIST_ASSIGNED_OPERATOR_REPORTS,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36})/update-name$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_NAME,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_REPORTS,
 
                 // Reports methods

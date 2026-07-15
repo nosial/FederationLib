@@ -14,6 +14,7 @@
         private bool $publicEvidence;
         private bool $publicBlacklist;
         private bool $publicEntities;
+        private bool $publicReports;
         /**
          * @var AuditLogType[]
          */
@@ -24,6 +25,7 @@
         private int $evidenceRecords;
         private int $fileAttachmentRecords;
         private int $operators;
+        private int $reports;
 
         /**
          * Public constructor for the ServerInformation object
@@ -38,6 +40,7 @@
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicReports = $config['public_reports'] ?? true;
             $this->publicAuditLogsVisibility = isset($config['public_audit_logs_visibility']) ? array_map(
                 fn($type) => AuditLogType::from($type),
                 $config['public_audit_logs_visibility']
@@ -48,6 +51,7 @@
             $this->evidenceRecords = $config['evidence_records'] ?? 0;
             $this->fileAttachmentRecords = $config['file_attachment_records'] ?? 0;
             $this->operators = $config['operators'] ?? 0;
+            $this->reports = $config['reports'] ?? 0;
         }
 
         /**
@@ -182,6 +186,26 @@
         }
 
         /**
+         * Returns whether the reports are public
+         *
+         * @return bool True if public, false otherwise
+         */
+        public function isPublicReports(): bool
+        {
+            return $this->publicReports;
+        }
+
+        /**
+         * Returns the number of reports
+         *
+         * @return int The number of reports
+         */
+        public function getReports(): int
+        {
+            return $this->reports;
+        }
+
+        /**
          * @inheritDoc
          */
         public function toArray(): array
@@ -193,6 +217,7 @@
                 'public_evidence' => $this->publicEvidence,
                 'public_blacklist' => $this->publicBlacklist,
                 'public_entities' => $this->publicEntities,
+                'public_reports' => $this->publicReports,
                 'public_audit_logs_visibility' => array_map(
                     fn(AuditLogType $type) => $type->value,
                     $this->publicAuditLogsVisibility
@@ -203,6 +228,7 @@
                 'evidence_records' => $this->evidenceRecords,
                 'file_attachment_records' => $this->fileAttachmentRecords,
                 'operators' => $this->operators,
+                'reports' => $this->reports,
             ];
         }
 
@@ -234,6 +260,7 @@
                 'public_evidence' => ['type' => 'boolean', 'description' => 'Whether evidence is publicly accessible'],
                 'public_blacklist' => ['type' => 'boolean', 'description' => 'Whether the blacklist is publicly accessible'],
                 'public_entities' => ['type' => 'boolean', 'description' => 'Whether entities are publicly accessible'],
+                'public_reports' => ['type' => 'boolean', 'description' => 'Whether reports are publicly accessible'],
                 'public_audit_logs_visibility' => [
                     'type' => 'array',
                     'items' => ['type' => 'string'],
@@ -245,6 +272,7 @@
                 'evidence_records' => ['type' => 'integer', 'description' => 'Total number of evidence records'],
                 'file_attachment_records' => ['type' => 'integer', 'description' => 'Total number of file attachments'],
                 'operators' => ['type' => 'integer', 'description' => 'Total number of operators'],
+                'reports' => ['type' => 'integer', 'description' => 'Total number of reports'],
             ];
         }
 
@@ -253,7 +281,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['name', 'api_version', 'public_audit_logs', 'public_evidence', 'public_blacklist', 'public_entities'];
+            return ['name', 'api_version', 'public_audit_logs', 'public_evidence', 'public_blacklist', 'public_entities', 'public_reports'];
         }
 
         /**

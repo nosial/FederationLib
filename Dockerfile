@@ -7,7 +7,7 @@
 
 ARG PHP_VERSION=8.5
 
-FROM ghcr.io/nosial/ncc:latest AS builder
+FROM ghcr.io/nosial/ncc:dev AS builder
 WORKDIR /app
 
 COPY project.yml /app/
@@ -16,7 +16,7 @@ RUN ncc project install -y
 COPY . /app
 RUN ncc build --configuration web_release
 
-FROM ghcr.io/nosial/ncc:fpm AS production
+FROM ghcr.io/nosial/ncc:dev-fpm AS production
 
 LABEL org.opencontainers.image.title="FederationServer" \
       org.opencontainers.image.description="FederationServer Docker image" \
