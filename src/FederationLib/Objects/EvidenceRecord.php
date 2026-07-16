@@ -38,6 +38,7 @@
             $this->tag = $data['tag'] ?? null;
             $this->report = $data['report'] ?? null;
             $this->metadata = null;
+            $this->classificationFlag = null;
             if(isset($data['metadata']))
             {
                 if(is_array($data['metadata']))
