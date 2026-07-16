@@ -1,0 +1,16 @@
+.git/
+.gitignore
+.forgejo/
+.github/
+.idea/
+.phpunit.result.cache
+CHANGELOG.md
+docker-compose.yml
+LICENSE
+Makefile
+phpdoc.dist.xml
+phpunit.xml
+README.md
+target/
+tests/
+vendor/
