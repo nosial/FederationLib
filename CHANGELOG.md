@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.9] - 2026-07-16
 
-This is an ongoing update
+This update introduces new methods, bug fixes and additional tests
 
 ### Added
  - Added a search functionality to the server, enabling the methods `/search`, `/entities/search`, `/audit/search`,
