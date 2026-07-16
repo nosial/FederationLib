@@ -32,7 +32,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $includeConfidential = (bool) (FederationServer::getParameter('include_confidential') ?? false);
+            $includeConfidential = filter_var(FederationServer::getParameter('include_confidential') ?? false, FILTER_VALIDATE_BOOLEAN);
 
             if($includeConfidential)
             {

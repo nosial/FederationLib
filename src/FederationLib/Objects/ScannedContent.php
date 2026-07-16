@@ -366,7 +366,7 @@
                 'suggested_action' => $this->getSuggestedAction()?->value ?? null,
                 'suggested_lift_timestamp' => $this->getSuggestedLiftTimestamp(),
                 'classification' => $this->classification?->toArray() ?? null,
-                'scan_results' => $this->getScanResults(),
+                'scan_results' => (object) $this->getScanResults(),
                 'risk_score' => $this->getRiskScore()
             ];
         }

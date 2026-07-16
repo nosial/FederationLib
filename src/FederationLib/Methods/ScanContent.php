@@ -163,7 +163,7 @@
                 }
             }
 
-            self::successResponse($scannedContent);
+            self::successResponse($scannedContent->toStandardArray());
         }
 
         /**

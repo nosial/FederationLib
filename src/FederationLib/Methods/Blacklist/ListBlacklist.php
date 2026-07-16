@@ -30,7 +30,7 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $includeLifted = (bool) (FederationServer::getParameter('include_lifted') ?? false);
+            $includeLifted = filter_var(FederationServer::getParameter('include_lifted'), FILTER_VALIDATE_BOOLEAN);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
