@@ -2,13 +2,15 @@
 
     namespace FederationLib\Classes\Managers;
 
-    use DateTime;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\Categories\AuditLogCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\AuditLogOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\AuditLog;
     use InvalidArgumentException;
@@ -169,7 +171,7 @@
          * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntries(int $limit=100, int $page=1, ?array $filterType=null): array
+        public static function getEntries(int $limit=100, int $page=1, ?array $filterType=null, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -182,6 +184,7 @@
             {
                 $sql = "SELECT * FROM audit_log";
                 $params = [];
+                $conditions = [];
 
                 if ($filterType !== null && count($filterType) > 0)
                 {
@@ -194,10 +197,22 @@
                         $params[":type$i"] = $t->value;
                     }
                     $placeholders = implode(", ", array_keys($params));
-                    $sql .= " WHERE type IN ($placeholders)";
+                    $conditions[] = "type IN ($placeholders)";
                 }
 
-                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                if ($categoryCondition !== '')
+                {
+                    $conditions[] = $categoryCondition;
+                    $params = array_merge($params, $categoryParams);
+                }
+
+                if (!empty($conditions))
+                {
+                    $sql .= " WHERE " . implode(' AND ', $conditions);
+                }
+
+                $sql .= " " . self::buildAuditLogSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
 
                 foreach ($params as $key => $value)
@@ -243,7 +258,7 @@
          * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByOperator(string $operatorUuid, int $limit=100, int $page=1, ?array $filterType=null): array
+        public static function getEntriesByOperator(string $operatorUuid, int $limit=100, int $page=1, ?array $filterType=null, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($operatorUuid) === 0)
             {
@@ -261,6 +276,7 @@
             {
                 $sql = "SELECT * FROM audit_log WHERE operator = :operator";
                 $params = [':operator' => $operatorUuid];
+                $conditions = [];
 
                 if ($filterType !== null && count($filterType) > 0)
                 {
@@ -275,10 +291,22 @@
                     }
 
                     $placeholders = implode(", ", array_keys(array_slice($params, 1)));
-                    $sql .= " AND type IN ($placeholders)";
+                    $conditions[] = "type IN ($placeholders)";
                 }
 
-                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                if ($categoryCondition !== '')
+                {
+                    $conditions[] = $categoryCondition;
+                    $params = array_merge($params, $categoryParams);
+                }
+
+                if (!empty($conditions))
+                {
+                    $sql .= " AND " . implode(' AND ', $conditions);
+                }
+
+                $sql .= " " . self::buildAuditLogSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
 
@@ -326,7 +354,7 @@
          * @return AuditLog[] An array of AuditLogRecord objects representing the entries.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntriesByEntity(string $entityUuid, int $limit=100, int $page=1, ?array $filterType=null): array
+        public static function getEntriesByEntity(string $entityUuid, int $limit=100, int $page=1, ?array $filterType=null, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($entityUuid) === 0)
             {
@@ -343,6 +371,7 @@
             {
                 $sql = "SELECT * FROM audit_log WHERE entity = :entity";
                 $params = [':entity' => $entityUuid];
+                $conditions = [];
 
                 if ($filterType !== null && count($filterType) > 0)
                 {
@@ -356,10 +385,22 @@
                         $params[":type$i"] = $t->value;
                     }
                     $placeholders = implode(", ", array_keys(array_slice($params, 1)));
-                    $sql .= " AND type IN ($placeholders)";
+                    $conditions[] = "type IN ($placeholders)";
                 }
 
-                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                if ($categoryCondition !== '')
+                {
+                    $conditions[] = $categoryCondition;
+                    $params = array_merge($params, $categoryParams);
+                }
+
+                if (!empty($conditions))
+                {
+                    $sql .= " AND " . implode(' AND ', $conditions);
+                }
+
+                $sql .= " " . self::buildAuditLogSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 foreach ($params as $key => $value)
                 {
@@ -529,5 +570,75 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isAuditLogCacheEnabled();
+        }
+
+        /**
+         * Builds a SQL condition for filtering audit log entries by category.
+         *
+         * @param AuditLogCategory|null $category The category to filter by.
+         * @return array An array containing the SQL condition and parameters.
+         */
+        private static function buildAuditLogCategoryCondition(?AuditLogCategory $category): array
+        {
+            if ($category === null)
+            {
+                return ['', []];
+            }
+
+            $typeValues = [];
+            foreach (AuditLogType::cases() as $type)
+            {
+                if ($type->getCategory() === $category)
+                {
+                    $typeValues[] = $type->value;
+                }
+            }
+
+            if (empty($typeValues))
+            {
+                return ['', []];
+            }
+
+            $placeholders = [];
+            $params = [];
+            foreach ($typeValues as $i => $value)
+            {
+                $key = ":cat_type_$i";
+                $placeholders[] = $key;
+                $params[$key] = $value;
+            }
+
+            return ['type IN (' . implode(', ', $placeholders) . ')', $params];
+        }
+
+
+        /**
+         * Builds the SQL sort clause for audit log entries.
+         *
+         * @param string|null $by The field to sort by. Defaults to 'timestamp'.
+         * @param OrderType|null $order The order direction. Defaults to 'DESC'.
+         * @return string The SQL sort clause.
+         */
+        private static function buildAuditLogSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'timestamp';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = AuditLogOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->value;
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
