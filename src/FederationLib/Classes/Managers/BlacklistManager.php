@@ -6,7 +6,10 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\Categories\BlacklistCategory;
     use FederationLib\Enums\IncidentType;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\BlacklistOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\BlacklistRecord;
     use InvalidArgumentException;
@@ -87,39 +90,6 @@
             }
 
             return $uuid;
-        }
-
-        /**
-         * Checks if an entity is currently blacklisted.
-         *
-         * @param string $entityUuid The UUID of the entity to check.
-         * @return bool True if the entity is blacklisted, false otherwise.
-         * @throws InvalidArgumentException If the entity is empty.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function isBlacklisted(string $entityUuid): bool
-        {
-            if(empty($entityUuid))
-            {
-                throw new InvalidArgumentException("Entity cannot be empty.");
-            }
-
-            if(!Validate::uuid($entityUuid))
-            {
-                throw new InvalidArgumentException("Entity must be a valid UUID.");
-            }
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT COUNT(*) FROM blacklist WHERE entity = :entity_uuid AND (expires IS NULL OR expires > NOW())");
-                $stmt->bindParam(':entity_uuid', $entityUuid);
-                $stmt->execute();
-                return $stmt->fetchColumn() > 0;
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to check if entity is blacklisted: " . $e->getMessage(), 0, $e);
-            }
         }
 
         /**
@@ -339,7 +309,7 @@
          * @return BlacklistRecord[] An array of blacklist records as the result
          * @throws DatabaseOperationException Thrown if there was a database issue
          */
-        public static function getEntries(int $limit=100, int $page=1, bool $includeLifted=false): array
+        public static function getEntries(int $limit=100, int $page=1, bool $includeLifted=false, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -347,17 +317,28 @@
             }
 
             $offset = ($page - 1) * $limit;
+            $sortClause = self::buildBlacklistSortClause($by, $order);
+            $categoryCondition = $category?->toCondition() ?? '';
 
             try
             {
-                if ($includeLifted)
+                $conditions = [];
+                if (!$includeLifted)
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
+                    $conditions[] = 'lifted=0';
                 }
-                else
+                if ($categoryCondition !== '')
                 {
-                    $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE lifted=0 ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
+                    $conditions[] = $categoryCondition;
                 }
+
+                $sql = "SELECT * FROM blacklist";
+                if (!empty($conditions))
+                {
+                    $sql .= " WHERE " . implode(' AND ', $conditions);
+                }
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
 
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -641,5 +622,35 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isBlacklistCacheEnabled();
+        }
+
+        /**
+         * Builds the SQL sort clause for blacklist entries based on specified criteria.
+         *
+         * @param string|null $by The column to sort by. If null, defaults to 'created'.
+         * @param OrderType|null $order The order direction. If null, defaults to 'DESC'.
+         * @return string The SQL ORDER BY clause.
+         */
+        private static function buildBlacklistSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = BlacklistOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
