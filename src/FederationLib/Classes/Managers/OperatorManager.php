@@ -6,6 +6,9 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Enums\Categories\OperatorCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\OperatorOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
@@ -23,7 +26,6 @@
          *
          * @param string $name The name of the operator.
          * @return string The generated UUID for the operator.
-         * @throws InvalidArgumentException If the name is empty or exceeds 255 characters.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
         public static function createOperator(string $name): string
@@ -799,7 +801,7 @@
          * @return OperatorRecord[] An array of OperatorRecord objects representing the operators.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function getOperators(int $limit=100, int $page=1): array
+        public static function getOperators(int $limit=100, int $page=1, ?OperatorCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit < 1 || $page < 1)
             {
@@ -810,7 +812,15 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators ORDER BY created, uuid LIMIT :limit OFFSET :offset");
+                $categoryCondition = $category?->toCondition() ?? '';
+                $sortClause = self::buildOperatorSortClause($by, $order);
+                $sql = "SELECT * FROM operators";
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " WHERE $categoryCondition";
+                }
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -936,5 +946,35 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isOperatorCacheEnabled();
+        }
+
+        /**
+         * Builds the operator sort clause
+         *
+         * @param string|null $by The column to sort by
+         * @param OrderType|null $order The order to sort by
+         * @return string Returns the SQL sort caluse
+         */
+        private static function buildOperatorSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'ASC';
+
+            if ($by !== null)
+            {
+                $filterType = OperatorOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
