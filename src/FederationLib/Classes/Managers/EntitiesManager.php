@@ -9,6 +9,9 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\EntityRelationshipType;
+    use FederationLib\Enums\Categories\EntityCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\EntityOrderType;
     use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityRecord;
@@ -667,96 +670,6 @@
         }
 
         /**
-         * Deletes an entity by its ID and domain.
-         *
-         * @param string $host The host of the entity to delete.
-         * @param string|null $id Optional. The ID of the entity if associated with a specific domain
-         * @throws InvalidArgumentException If the ID or host is not provided or is invalid.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function deleteEntityById(string $host, ?string $id=null): void
-        {
-            if(strlen($host) < 1 || ($id !== null && strlen($id) < 1))
-            {
-                throw new InvalidArgumentException("Entity ID and host must be provided.");
-            }
-
-            // Remove from cache
-            $hash = Utilities::hashEntity($host, $id);
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE hash=:hash");
-                $stmt->bindParam(':hash', $hash);
-                $stmt->execute();
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to delete entity by ID and host: " . $e->getMessage(), $e->getCode(), $e);
-            }
-            finally
-            {
-                if(self::isCachingEnabled())
-                {
-                    $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                    if($cachedUuid !== false && strlen($cachedUuid) > 0)
-                    {
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
-                        
-                        // Handle cascading cache deletions for data that should be deleted with entity
-                        RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $cachedUuid);
-                        RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $cachedUuid);
-                    }
-
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                }
-            }
-        }
-
-        /**
-         * Deletes an entity by its hash.
-         *
-         * @param string $hash The SHA-256 hash of the entity to delete.
-         * @throws InvalidArgumentException If the hash is not provided or is invalid.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function deleteEntityByHash(string $hash): void
-        {
-            if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
-            {
-                throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
-            }
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE hash = :hash");
-                $stmt->bindParam(':hash', $hash);
-                $stmt->execute();
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to delete entity by hash: " . $e->getMessage(), $e->getCode(), $e);
-            }
-            finally
-            {
-                if(self::isCachingEnabled())
-                {
-                    $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                    if($cachedUuid !== false && strlen($cachedUuid) > 0)
-                    {
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
-                        
-                        // Handle cascading cache deletions for data that should be deleted with entity
-                        RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $cachedUuid);
-                        RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $cachedUuid);
-                    }
-
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                }
-            }
-        }
-
-        /**
          * Retrieves a list of entities with pagination.
          *
          * @param int $limit The maximum number of entities to retrieve per page.
@@ -764,7 +677,7 @@
          * @return EntityRecord[] An array of EntityRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntities(int $limit=100, int $page=1): array
+        public static function getEntities(int $limit=100, int $page=1, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit < 1)
             {
@@ -778,7 +691,15 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
+                $categoryCondition = $category?->toCondition() ?? '';
+                $sortClause = self::buildEntitySortClause($by, $order);
+                $sql = "SELECT * FROM entities";
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " WHERE $categoryCondition";
+                }
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -1244,5 +1165,35 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isEntitiesCacheEnabled();
+        }
+
+        /**
+         * Builds the Entity Short SQL Clause.
+         *
+         * @param string|null $by The column to sort by
+         * @param OrderType|null $order The order to sort by
+         * @return string Returns the condition clause.
+         */
+        private static function buildEntitySortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = EntityOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
