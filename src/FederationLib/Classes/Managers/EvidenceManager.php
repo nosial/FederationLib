@@ -6,7 +6,10 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\Categories\EvidenceCategory;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\EvidenceOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EvidenceRecord;
     use InvalidArgumentException;
@@ -249,7 +252,7 @@
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws InvalidArgumentException If the limit or page parameters are invalid.
          */
-        public static function getEvidenceRecords(int $limit=100, int $page=1, bool $includeConfidential=false): array
+        public static function getEvidenceRecords(int $limit=100, int $page=1, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit <= 0)
             {
@@ -264,14 +267,26 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $query = "SELECT * FROM evidence";
+                $conditions = [];
 
                 if(!$includeConfidential)
                 {
-                    $query .= " WHERE confidential=0";
+                    $conditions[] = "confidential=0";
                 }
 
-                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $conditions[] = $categoryCondition;
+                }
+
+                $query = "SELECT * FROM evidence";
+                if (!empty($conditions))
+                {
+                    $query .= " WHERE " . implode(' AND ', $conditions);
+                }
+
+                $query .= " " . self::buildEvidenceSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
@@ -954,5 +969,35 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isEvidenceCacheEnabled();
+        }
+
+        /**
+         * Builds the evidence sort clause
+         *
+         * @param string|null $by The column to sort by
+         * @param OrderType|null $order The order to sort by
+         * @return string Returns the SQL sort clause
+         */
+        private static function buildEvidenceSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = EvidenceOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
