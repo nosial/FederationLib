@@ -7,6 +7,9 @@
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\Categories\AttachmentCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\AttachmentOrderType;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\FileAttachmentRecord;
@@ -203,7 +206,7 @@
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws InvalidArgumentException If the limit or page parameters are invalid.
          */
-        public static function getAttachmentRecords(int $limit=100, int $page=1): array
+        public static function getAttachmentRecords(int $limit=100, int $page=1, ?AttachmentCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit <= 0)
             {
@@ -218,7 +221,15 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset");
+                $categoryCondition = $category?->toCondition() ?? '';
+                $sortClause = self::buildAttachmentSortClause($by, $order);
+                $sql = "SELECT * FROM file_attachments";
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " WHERE $categoryCondition";
+                }
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
@@ -423,6 +434,36 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isFileAttachmentCacheEnabled();
+        }
+
+        /**
+         * Builds the attachment sort clause
+         *
+         * @param string|null $by The column to sort by
+         * @param OrderType|null $order The order to sort by
+         * @return string Returns the SQL sort clause
+         */
+        private static function buildAttachmentSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = AttachmentOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
 
