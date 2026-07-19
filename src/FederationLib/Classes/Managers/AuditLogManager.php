@@ -200,7 +200,7 @@
                     $conditions[] = "type IN ($placeholders)";
                 }
 
-                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                [$categoryCondition, $categoryParams] = $category?->toCondition() ?? ['', []];
                 if ($categoryCondition !== '')
                 {
                     $conditions[] = $categoryCondition;
@@ -294,7 +294,7 @@
                     $conditions[] = "type IN ($placeholders)";
                 }
 
-                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                [$categoryCondition, $categoryParams] = $category?->toCondition() ?? ['', []];
                 if ($categoryCondition !== '')
                 {
                     $conditions[] = $categoryCondition;
@@ -388,7 +388,7 @@
                     $conditions[] = "type IN ($placeholders)";
                 }
 
-                [$categoryCondition, $categoryParams] = self::buildAuditLogCategoryCondition($category);
+                [$categoryCondition, $categoryParams] = $category?->toCondition() ?? ['', []];
                 if ($categoryCondition !== '')
                 {
                     $conditions[] = $categoryCondition;
@@ -573,46 +573,6 @@
         }
 
         /**
-         * Builds a SQL condition for filtering audit log entries by category.
-         *
-         * @param AuditLogCategory|null $category The category to filter by.
-         * @return array An array containing the SQL condition and parameters.
-         */
-        private static function buildAuditLogCategoryCondition(?AuditLogCategory $category): array
-        {
-            if ($category === null)
-            {
-                return ['', []];
-            }
-
-            $typeValues = [];
-            foreach (AuditLogType::cases() as $type)
-            {
-                if ($type->getCategory() === $category)
-                {
-                    $typeValues[] = $type->value;
-                }
-            }
-
-            if (empty($typeValues))
-            {
-                return ['', []];
-            }
-
-            $placeholders = [];
-            $params = [];
-            foreach ($typeValues as $i => $value)
-            {
-                $key = ":cat_type_$i";
-                $placeholders[] = $key;
-                $params[$key] = $value;
-            }
-
-            return ['type IN (' . implode(', ', $placeholders) . ')', $params];
-        }
-
-
-        /**
          * Builds the SQL sort clause for audit log entries.
          *
          * @param string|null $by The field to sort by. Defaults to 'timestamp'.
@@ -629,7 +589,7 @@
                 $filterType = AuditLogOrderType::tryFrom($by);
                 if ($filterType !== null)
                 {
-                    $column = $filterType->value;
+                    $column = $filterType->toColumn();
                 }
             }
 
