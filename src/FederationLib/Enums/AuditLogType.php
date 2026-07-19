@@ -2,6 +2,8 @@
 
     namespace FederationLib\Enums;
 
+    use FederationLib\Enums\Categories\AuditLogCategory;
+
     enum AuditLogType : string
     {
         case OPERATOR_CREATED = 'OPERATOR_CREATED';
@@ -57,5 +59,49 @@
                 self::ENTITY_UPDATED,
                 self::REPORT_GENERATED
             ];
+        }
+
+        /**
+         * Returns the category related to the audit log
+         *
+         * @return AuditLogCategory
+         */
+        public function getCategory(): AuditLogCategory
+        {
+            return match($this)
+            {
+                self::OPERATOR_CREATED,
+                self::OPERATOR_DELETED,
+                self::OPERATOR_DISABLED,
+                self::OPERATOR_ENABLED,
+                self::OPERATOR_PERMISSIONS_CHANGED,
+                self::OPERATOR_ACCESS_TOKEN_GENERATED,
+                self::OPERATOR_NAME_CHANGED => AuditLogCategory::OPERATOR_EVENTS,
+
+                self::ATTACHMENT_UPLOADED,
+                self::ATTACHMENT_DELETED => AuditLogCategory::ATTACHMENT_EVENTS,
+
+                self::EVIDENCE_SUBMITTED,
+                self::EVIDENCE_UPDATED,
+                self::EVIDENCE_DELETED => AuditLogCategory::EVIDENCE_EVENTS,
+
+                self::REPORT_GENERATED,
+                self::REPORT_SUBMITTED,
+                self::REPORT_OPERATOR_ASSIGNED,
+                self::REPORT_CLOSED,
+                self::REPORT_DELETED => AuditLogCategory::REPORT_EVENTS,
+
+                self::ENTITY_DELETED,
+                self::ENTITY_BLACKLISTED,
+                self::ENTITY_PUSHED,
+                self::ENTITY_REPUTATION_CLEARED => AuditLogCategory::ENTITY_EVENTS,
+
+                self::BLACKLIST_RECORD_DELETED,
+                self::BLACKLIST_LIFTED,
+                self::BLACKLIST_EXTENDED,
+                self::BLACKLIST_ATTACHMENT_ADDED => AuditLogCategory::BLACKLIST_EVENTS,
+
+                default => AuditLogCategory::OTHER
+            };
         }
     }
