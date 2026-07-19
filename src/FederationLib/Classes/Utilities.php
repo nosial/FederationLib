@@ -3,6 +3,7 @@
     namespace FederationLib\Classes;
 
     use Random\RandomException;
+    use RuntimeException;
 
     class Utilities
     {
@@ -11,7 +12,6 @@
          *
          * @param int $length Length of the random string to generate.
          * @return string Randomly generated string.
-         * @throws RandomException Thrown if the string cannot be generated due to an environment error
          */
         public static function generateString(int $length=32): string
         {
@@ -22,7 +22,14 @@
             for ($i = 0; $i < $length; $i++)
             {
                 // Use a cryptographically secure random source; access tokens are generated with this method.
-                $randomString .= $characters[random_int(0, $charactersLength - 1)];
+                try
+                {
+                    $randomString .= $characters[random_int(0, $charactersLength - 1)];
+                }
+                catch (RandomException $e)
+                {
+                    throw new RuntimeException($e->getMessage(), $e->getCode(), $e);
+                }
 
             }
             return $randomString;
