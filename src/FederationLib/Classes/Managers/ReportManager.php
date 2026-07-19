@@ -6,8 +6,10 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\Categories\ReportCategory;
     use FederationLib\Enums\IncidentType;
-    use FederationLib\Enums\ReportCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\ReportOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
@@ -317,7 +319,7 @@
          * @throws InvalidArgumentException If limit or page parameters are invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReports(int $limit=100, int $page=1, ?ReportCategory $category=null): array
+        public static function getReports(int $limit=100, int $page=1, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if($limit <= 0)
             {
@@ -332,13 +334,13 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $categoryCondition = self::buildCategoryCondition($category);
+                $categoryCondition = $category?->toCondition() ?? '';
                 $sql = "SELECT * FROM reports";
                 if($categoryCondition !== '')
                 {
                     $sql .= " WHERE $categoryCondition";
                 }
-                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $sql .= " " . self::buildReportSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -403,7 +405,7 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $categoryCondition = self::buildCategoryCondition($category);
+                $categoryCondition = $category?->toCondition() ?? '';
                 $sql = "SELECT * FROM reports WHERE submitting_operator = :operator";
                 if($categoryCondition !== '')
                 {
@@ -475,7 +477,7 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $categoryCondition = self::buildCategoryCondition($category);
+                $categoryCondition = $category?->toCondition() ?? '';
                 $sql = "SELECT * FROM reports WHERE reporting_entity = :entity";
                 if($categoryCondition !== '')
                 {
@@ -547,7 +549,7 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $categoryCondition = self::buildCategoryCondition($category);
+                $categoryCondition = $category?->toCondition() ?? '';
                 $sql = "SELECT * FROM reports WHERE assigned_operator = :operator";
                 if($categoryCondition !== '')
                 {
@@ -724,19 +726,6 @@
          * @param ReportCategory|null $category The category to filter by, or null for no filter.
          * @return string The SQL condition string, or an empty string if no filter is needed.
          */
-        private static function buildCategoryCondition(?ReportCategory $category): string
-        {
-            return match($category)
-            {
-                ReportCategory::OPENED => 'opened = 1',
-                ReportCategory::CLOSED => 'opened = 0',
-                ReportCategory::AUTOMATED => 'automated = 1',
-                ReportCategory::UNASSIGNED => 'assigned_operator IS NULL',
-                ReportCategory::ASSIGNED => 'assigned_operator IS NOT NULL',
-                default => '',
-            };
-        }
-
         /**
          * Checks if caching is enabled based on the configuration.
          *
@@ -745,5 +734,35 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isReportCacheEnabled();
+        }
+
+        /**
+         * Builds the Report Sort Clause
+         *
+         * @param string|null $by The column to sort by
+         * @param OrderType|null $order The order to sort by
+         * @return string Returns the SQL report sort clause
+         */
+        private static function buildReportSortClause(?string $by, ?OrderType $order): string
+        {
+            $column = 'created';
+            $direction = 'DESC';
+
+            if ($by !== null)
+            {
+                $filterType = ReportOrderType::tryFrom($by);
+                if ($filterType !== null)
+                {
+                    $column = $filterType->toColumn();
+                }
+            }
+
+            if ($order !== null)
+            {
+                $direction = $order->value;
+            }
+
+            $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
+            return "ORDER BY $column $direction, uuid $secondaryDirection";
         }
     }
