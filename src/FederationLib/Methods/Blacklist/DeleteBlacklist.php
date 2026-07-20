@@ -47,8 +47,7 @@
 
             try
             {
-                $blacklistRecord = BlacklistManager::getBlacklistEntry($blacklistUuid);
-                if($blacklistRecord === null)
+                if(!BlacklistManager::blacklistExists($blacklistUuid))
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
@@ -57,7 +56,7 @@
                     'Blacklist record %s deleted by operator %s',
                     $blacklistUuid,
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $blacklistRecord->getEntityUuid());
+                ), $authenticatedOperator->getUuid());
                 BlacklistManager::deleteBlacklistRecord($blacklistUuid);
             }
             catch (DatabaseOperationException $e)
