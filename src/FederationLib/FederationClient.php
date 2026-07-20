@@ -307,11 +307,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return AuditLog[] An array of matching AuditLog objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchAuditLogs(string $query, int $page=1, int $limit=10): array
+        public function searchAuditLogs(string $query, int $page=1, int $limit=10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -328,9 +331,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', 'audit/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'audit/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search audit logs, query: %s', $query)
                 )
             );
@@ -780,11 +790,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return OperatorRecord[] An array of matching OperatorRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchOperators(string $query, int $page = 1, int $limit = 10): array
+        public function searchOperators(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -801,9 +814,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => OperatorRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search operators, query: %s', $query)
                 )
             );
@@ -1157,11 +1177,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return EntityRecord[] An array of matching EntityRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchEntities(string $query, int $page = 1, int $limit = 10): array
+        public function searchEntities(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -1178,9 +1201,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EntityRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search entities, query: %s', $query)
                 )
             );
@@ -1383,11 +1413,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return EvidenceRecord[] An array of matching EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchEvidence(string $query, int $page = 1, int $limit = 10): array
+        public function searchEvidence(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -1404,9 +1437,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'evidence/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'evidence/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search evidence, query: %s', $query)
                 )
             );
@@ -1745,11 +1785,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return ReportRecord[] An array of matching ReportRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchReports(string $query, int $page = 1, int $limit = 10): array
+        public function searchReports(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -1766,9 +1809,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'reports/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'reports/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search reports, query: %s', $query)
                 )
             );
@@ -1951,11 +2001,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @param string|null $category Optional category filter
          * @return BlacklistRecord[] An array of matching BlacklistRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchBlacklist(string $query, int $page = 1, int $limit = 10): array
+        public function searchBlacklist(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -1972,9 +2025,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'blacklist/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'blacklist/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search blacklist records, query: %s', $query)
                 )
             );
@@ -2590,11 +2650,14 @@
          * @param string $query The search query (minimum 2 characters)
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of results per page (default is 10)
+         * @param string|null $category Optional category filter
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
          * @return FileAttachmentRecord[] An array of matching FileAttachmentRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchAttachments(string $query, int $page = 1, int $limit = 10): array
+        public function searchAttachments(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
         {
             if(strlen($query) < 2)
             {
@@ -2611,9 +2674,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => FileAttachmentRecord::fromArray($item),
-                $this->makeRequest('GET', 'attachments/search', ['q' => $query, 'page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'attachments/search', $params, [HttpResponseCode::OK],
                     sprintf('Failed to search attachments, query: %s', $query)
                 )
             );
