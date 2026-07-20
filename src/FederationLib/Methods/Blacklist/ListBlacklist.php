@@ -5,6 +5,9 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\BlacklistCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\BlacklistOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -32,6 +35,9 @@
             $page = (int) (FederationServer::getParameter('page') ?? 1);
             $includeLifted = filter_var(FederationServer::getParameter('include_lifted'), FILTER_VALIDATE_BOOLEAN);
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? BlacklistCategory::tryFrom(strtoupper($categoryInput)) : null;
+
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
                 $limit = Configuration::getServerConfiguration()->getListBlacklistMaxItems();
@@ -42,9 +48,13 @@
                 $page = 1;
             }
 
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+
             try
             {
-                $blacklistRecords = BlacklistManager::getEntries($limit, $page, $includeLifted);
+                $blacklistRecords = BlacklistManager::getEntries($limit, $page, $includeLifted, $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -112,6 +122,33 @@
                     'description' => 'Whether to include lifted blacklist records',
                     'required' => false,
                     'schema' => ['type' => 'boolean'],
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter blacklist records by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(BlacklistCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(BlacklistOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
