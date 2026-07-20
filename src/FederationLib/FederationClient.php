@@ -254,7 +254,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listAuditLogs(int $page=1, int $limit=100): array
+        public function listAuditLogs(int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -266,9 +266,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', '', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', '', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -518,7 +525,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listOperators(int $page=1, int $limit=100): array
+        public function listOperators(int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -530,10 +537,17 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return
                 array_map(
                 fn($item) => OperatorRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list operators, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -549,7 +563,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
          */
-        public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100): array
+        public function listOperatorAuditLogs(string $operatorUuid, int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if(empty($operatorUuid))
             {
@@ -566,9 +580,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/audit', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for operator with UUID %s, page: %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -584,7 +605,7 @@
          * @return EvidenceRecord[] An array of EvidenceRecord objects
          * @throws RequestException If the request fails or the response is invalid
          */
-        public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100, bool $includeConfidential=false): array
+        public function listOperatorEvidence(string $operatorUuid, int $page=1, int $limit=100, bool $includeConfidential=false, ?string $by=null, ?string $order=null): array
         {
             if(empty($operatorUuid))
             {
@@ -601,9 +622,12 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential];
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/evidence', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for operator with UUID %s, page %d, limit: %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -620,7 +644,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or if the page or limit parameters are invalid
          */
-        public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100, bool $includeLifted=false): array
+        public function listOperatorBlacklist(string $operatorUuid, int $page=1, int $limit=100, bool $includeLifted=false, ?string $by=null, ?string $order=null): array
         {
             if(empty($operatorUuid))
             {
@@ -637,9 +661,12 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted];
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'operators/' . $operatorUuid . '/blacklist', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list operator blacklist records with UUID %s, page %d, limit %d', $operatorUuid, $page, $limit)
                 )
             );
@@ -856,7 +883,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listEntities(int $page=1, int $limit=100): array
+        public function listEntities(int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -868,9 +895,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EntityRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list entities, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -909,7 +943,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
-        public function listEntityAuditLogs(string $entityIdentifier, int $page=1, int $limit=100): array
+        public function listEntityAuditLogs(string $entityIdentifier, int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if(empty($entityIdentifier))
             {
@@ -926,9 +960,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if ($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/audit', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/audit', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
@@ -945,7 +986,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
-        public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeLifted=false): array
+        public function listEntityBlacklistRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeLifted=false, ?string $by=null, ?string $order=null): array
         {
             if(empty($entityIdentifier))
             {
@@ -962,9 +1003,12 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted];
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list blacklist records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
@@ -981,7 +1025,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
-        public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeConfidential=false): array
+        public function listEntityEvidenceRecords(string $entityIdentifier, int $page=1, int $limit=100, bool $includeConfidential=false, ?string $by=null, ?string $order=null): array
         {
             if(empty($entityIdentifier))
             {
@@ -998,10 +1042,12 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential];
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence',
-                    ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
@@ -1213,7 +1259,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listEvidence(int $page=1, int $limit=100, bool $includeConfidential=false): array
+        public function listEvidence(int $page=1, int $limit=100, bool $includeConfidential=false, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -1225,9 +1271,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'evidence', ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'evidence', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -1457,7 +1510,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listReports(int $page = 1, int $limit = 100, ?string $category = null): array
+        public function listReports(int $page = 1, int $limit = 100, ?string $category = null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -1474,6 +1527,7 @@
             {
                 $params['category'] = $category;
             }
+            self::applySortParams($params, $by, $order);
 
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
@@ -1566,7 +1620,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
          */
-        public function listOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null): array
+        public function listOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null, ?string $by=null, ?string $order=null): array
         {
             if(empty($operatorUuid))
             {
@@ -1588,6 +1642,7 @@
             {
                 $params['category'] = $category;
             }
+            self::applySortParams($params, $by, $order);
 
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
@@ -1608,7 +1663,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or page/limit are invalid
          */
-        public function listEntityReports(string $entityIdentifier, int $page = 1, int $limit = 100, ?string $category = null): array
+        public function listEntityReports(string $entityIdentifier, int $page = 1, int $limit = 100, ?string $category = null, ?string $by=null, ?string $order=null): array
         {
             if(empty($entityIdentifier))
             {
@@ -1630,6 +1685,7 @@
             {
                 $params['category'] = $category;
             }
+            self::applySortParams($params, $by, $order);
 
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
@@ -1650,7 +1706,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty or page/limit are invalid
          */
-        public function listAssignedOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null): array
+        public function listAssignedOperatorReports(string $operatorUuid, int $page = 1, int $limit = 100, ?string $category = null, ?string $by=null, ?string $order=null): array
         {
             if(empty($operatorUuid))
             {
@@ -1672,6 +1728,7 @@
             {
                 $params['category'] = $category;
             }
+            self::applySortParams($params, $by, $order);
 
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
@@ -1860,7 +1917,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listBlacklistRecords(int $page=1, int $limit=100, bool $includeLifted=false): array
+        public function listBlacklistRecords(int $page=1, int $limit=100, bool $includeLifted=false, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -1872,9 +1929,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'blacklist', ['page' => $page, 'limit' => $limit, 'include_lifted' => $includeLifted], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'blacklist', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list blacklist records, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -1946,7 +2010,7 @@
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listAttachments(int $page=1, int $limit=100): array
+        public function listAttachments(int $page=1, int $limit=100, ?string $category=null, ?string $by=null, ?string $order=null): array
         {
             if($page < 1)
             {
@@ -1958,9 +2022,16 @@
                 throw new InvalidArgumentException('Limit must be greater than 0');
             }
 
+            $params = ['page' => $page, 'limit' => $limit];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
             return array_map(
                 fn($item) => FileAttachmentRecord::fromArray($item),
-                $this->makeRequest('GET', 'attachments', ['page' => $page, 'limit' => $limit], [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'attachments', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list attachments, page: %d, limit: %d', $page, $limit)
                 )
             );
@@ -2569,6 +2640,28 @@
             }
 
             return null;
+        }
+
+        /**
+         * Applies sort parameters to the request params array, normalizing case:
+         * - `by` is lowercased to match server-side enum values
+         * - `order` is uppercased to match OrderType enum values
+         *
+         * @param array &$params The request parameters array to modify
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction
+         */
+        private static function applySortParams(array &$params, ?string $by, ?string $order): void
+        {
+            if ($by !== null)
+            {
+                $params['by'] = strtolower($by);
+            }
+
+            if ($order !== null)
+            {
+                $params['order'] = strtoupper($order);
+            }
         }
 
         /**
