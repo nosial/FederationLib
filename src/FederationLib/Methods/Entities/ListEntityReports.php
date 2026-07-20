@@ -8,8 +8,8 @@
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Enums\Categories\ReportCategory;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Enums\ReportCategory;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
