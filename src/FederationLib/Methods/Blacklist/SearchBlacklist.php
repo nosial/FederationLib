@@ -5,6 +5,9 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\BlacklistCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\BlacklistOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -69,9 +72,15 @@
 
             $likePattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $query) . '%';
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? BlacklistCategory::tryFromCaseInsensitive($categoryInput) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
+
             try
             {
-                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page);
+                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page, $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -139,6 +148,33 @@
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1, 'default' => 1],
                     'description' => 'Page number for pagination',
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter blacklist records by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(BlacklistCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(BlacklistOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }

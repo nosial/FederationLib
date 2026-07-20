@@ -5,6 +5,9 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\EvidenceCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\EvidenceOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -69,9 +72,15 @@
 
             $likePattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $query) . '%';
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? EvidenceCategory::tryFromCaseInsensitive($categoryInput) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
+
             try
             {
-                $results = EvidenceManager::searchEvidence($likePattern, $limit, $page, $authenticatedOperator !== null && $authenticatedOperator->hasManagementPermissions());
+                $results = EvidenceManager::searchEvidence($likePattern, $limit, $page, $authenticatedOperator !== null && $authenticatedOperator->hasManagementPermissions(), $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -139,6 +148,33 @@
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1, 'default' => 1],
                     'description' => 'Page number for pagination',
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter evidence by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(EvidenceCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(EvidenceOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
