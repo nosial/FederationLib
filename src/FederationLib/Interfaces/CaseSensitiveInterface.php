@@ -10,5 +10,5 @@
          * @param string $value The input, can be case-insensitive
          * @return static|null The matched enum case, null otherwise.
          */
-        public static function tryFromCaseInsensitive(string $value): ?static;
+        public static function tryFromCaseInsensitive(string $value): ?CaseSensitiveInterface;
     }
