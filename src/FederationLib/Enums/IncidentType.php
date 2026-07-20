@@ -2,7 +2,9 @@
 
     namespace FederationLib\Enums;
 
-    enum IncidentType : string
+    use FederationLib\Interfaces\CaseSensitiveInterface;
+
+    enum IncidentType : string implements CaseSensitiveInterface
     {
         /**
          * Spam or automated spam content.
@@ -39,4 +41,12 @@
          * Should rarely be used.
          */
         case OTHER = 'OTHER';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?IncidentType
+        {
+            return self::tryFrom(strtoupper($value));
+        }
     }

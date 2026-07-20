@@ -2,13 +2,22 @@
 
     namespace FederationLib\Enums\Categories;
 
+    use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\CategorizableDatabaseInterface;
 
-    enum AttachmentCategory : string implements CategorizableDatabaseInterface
+    enum AttachmentCategory : string implements CategorizableDatabaseInterface, CaseSensitiveInterface
     {
         case IMAGE = 'IMAGE';
         case DOCUMENT = 'DOCUMENT';
         case ARCHIVE = 'ARCHIVE';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?AttachmentCategory
+        {
+            return self::tryFrom(strtoupper($value));
+        }
 
         /**
          * @inheritDoc

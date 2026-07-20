@@ -2,7 +2,9 @@
 
     namespace FederationLib\Enums;
 
-    enum EntityRelationshipType : string
+    use FederationLib\Interfaces\CaseSensitiveInterface;
+
+    enum EntityRelationshipType : string implements CaseSensitiveInterface
     {
         /**
          * Indicates the entity acts as an alternative entity for the target entity. eg; JohnDoe321@example.com is
@@ -25,4 +27,12 @@
          * a dependent entity
          */
         case CHILD = 'child';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?EntityRelationshipType
+        {
+            return self::tryFrom(strtolower($value));
+        }
     }

@@ -2,15 +2,24 @@
 
     namespace FederationLib\Enums\Categories;
 
+    use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\CategorizableDatabaseInterface;
 
-    enum ReportCategory : string implements CategorizableDatabaseInterface
+    enum ReportCategory : string implements CategorizableDatabaseInterface, CaseSensitiveInterface
     {
         case OPENED = 'OPENED';
         case CLOSED = 'CLOSED';
         case AUTOMATED = 'AUTOMATED';
         case UNASSIGNED = 'UNASSIGNED';
         case ASSIGNED = 'ASSIGNED';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?ReportCategory
+        {
+            return self::tryFrom(strtoupper($value));
+        }
 
         /**
          * @inheritDoc
