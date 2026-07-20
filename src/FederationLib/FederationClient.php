@@ -380,7 +380,8 @@
             $params = ['q' => $query, 'page' => $page, 'limit' => $limit];
             if(!empty($types))
             {
-                $params['type'] = implode(',', $types);
+                $normalized = array_map(fn($t) => strtoupper(trim((string)$t)), $types);
+                $params['type'] = implode(',', $normalized);
             }
 
             $results = $this->makeRequest('GET', 'search', $params, [HttpResponseCode::OK],

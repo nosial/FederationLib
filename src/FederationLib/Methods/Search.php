@@ -50,16 +50,16 @@
 
             if ($typeParam !== null)
             {
-                $types = explode(',', $typeParam);
-                $types = array_map('trim', $types);
-
-                $validValues = self::getValidTypeValues();
-                foreach ($types as $t)
+                $typeParts = explode(',', $typeParam);
+                $types = [];
+                foreach ($typeParts as $t)
                 {
-                    if (!in_array($t, $validValues, true))
+                    $recordType = RecordType::tryFromCaseInsensitive(trim($t));
+                    if ($recordType === null)
                     {
                         throw new RequestException(self::ERROR_TYPE_INVALID, 400);
                     }
+                    $types[] = $recordType->value;
                 }
             }
 
@@ -100,12 +100,6 @@
 
             self::successResponse(array_map(fn(SearchResult $r) => $r->toArray(), $searchResults));
         }
-
-        private static function getValidTypeValues(): array
-        {
-            return array_map(fn(RecordType $case) => $case->value, RecordType::cases());
-        }
-
 
         /**
          * @inheritDoc
@@ -177,6 +171,14 @@
                     'description' => 'Page number for pagination',
                 ],
             ];
+        }
+
+        /**
+         * @return string[]
+         */
+        private static function getValidTypeValues(): array
+        {
+            return array_map(fn(RecordType $case) => $case->value, RecordType::cases());
         }
 
         /**

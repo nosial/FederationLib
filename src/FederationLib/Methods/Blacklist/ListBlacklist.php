@@ -36,7 +36,7 @@
             $includeLifted = filter_var(FederationServer::getParameter('include_lifted'), FILTER_VALIDATE_BOOLEAN);
 
             $categoryInput = FederationServer::getParameter('category');
-            $category = $categoryInput !== null ? BlacklistCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $category = $categoryInput !== null ? BlacklistCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
@@ -50,7 +50,7 @@
 
             $by = FederationServer::getParameter('by');
             $orderInput = FederationServer::getParameter('order');
-            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
             {

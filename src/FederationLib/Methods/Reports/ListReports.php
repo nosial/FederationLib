@@ -46,10 +46,10 @@
             }
 
             $categoryInput = FederationServer::getParameter('category');
-            $category = $categoryInput !== null ? ReportCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $category = $categoryInput !== null ? ReportCategory::tryFromCaseInsensitive($categoryInput) : null;
             $by = FederationServer::getParameter('by');
             $orderInput = FederationServer::getParameter('order');
-            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
             {

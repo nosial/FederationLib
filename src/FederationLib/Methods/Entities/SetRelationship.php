@@ -68,7 +68,7 @@
                 throw new RequestException(self::ERROR_RELATIONSHIP_TYPE_REQUIRED, 400);
             }
 
-            $type = EntityRelationshipType::tryFrom($relationshipType);
+            $type = EntityRelationshipType::tryFromCaseInsensitive($relationshipType);
             if($type === null)
             {
                 throw new RequestException(self::ERROR_INVALID_RELATIONSHIP_TYPE, 400);

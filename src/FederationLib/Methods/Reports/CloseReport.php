@@ -60,7 +60,7 @@
             // Check the classification flag
             if(!empty($classificationFlag))
             {
-                $classificationFlag = ClassificationFlag::tryFrom($classificationFlag);
+                $classificationFlag = ClassificationFlag::tryFromCaseInsensitive($classificationFlag);
                 if($classificationFlag === null)
                 {
                     throw new RequestException(self::ERROR_INVALID_CLASSIFICATION, HttpResponseCode::BAD_REQUEST);
@@ -75,7 +75,7 @@
             $blacklistType = null;
             if(!empty($blacklistIncidentType))
             {
-                $blacklistType = IncidentType::tryFrom($blacklistIncidentType);
+                $blacklistType = IncidentType::tryFromCaseInsensitive($blacklistIncidentType);
                 if($blacklistType === null)
                 {
                     throw new RequestException(self::ERROR_INVALID_BLACKLIST_TYPE, HttpResponseCode::BAD_REQUEST);

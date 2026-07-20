@@ -57,9 +57,9 @@
 
             $by = FederationServer::getParameter('by');
             $orderInput = FederationServer::getParameter('order');
-            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
             $categoryInput = FederationServer::getParameter('category');
-            $category = $categoryInput !== null ? AuditLogCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $category = $categoryInput !== null ? AuditLogCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             try
             {

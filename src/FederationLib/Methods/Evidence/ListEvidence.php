@@ -37,10 +37,10 @@
             $page = (int) (FederationServer::getParameter('page') ?? 1);
             $includeConfidential = filter_var(FederationServer::getParameter('include_confidential') ?? false, FILTER_VALIDATE_BOOLEAN);
             $categoryInput = FederationServer::getParameter('category');
-            $category = $categoryInput !== null ? EvidenceCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $category = $categoryInput !== null ? EvidenceCategory::tryFromCaseInsensitive($categoryInput) : null;
             $by = FederationServer::getParameter('by');
             $orderInput = FederationServer::getParameter('order');
-            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+            $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             if($includeConfidential)
             {

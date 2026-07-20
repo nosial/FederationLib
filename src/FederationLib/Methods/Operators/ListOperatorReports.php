@@ -51,7 +51,7 @@
             }
 
             $categoryInput = FederationServer::getParameter('category');
-            $category = $categoryInput !== null ? ReportCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $category = $categoryInput !== null ? ReportCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports$#', FederationServer::getPath(), $matches))
             {

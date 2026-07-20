@@ -43,7 +43,7 @@
 
             $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
             $evidence = FederationServer::getParameter('evidence_uuid') ?? null;
-            $type = IncidentType::tryFrom(FederationServer::getParameter('type') ?? '');
+            $type = IncidentType::tryFromCaseInsensitive(FederationServer::getParameter('type') ?? '');
             $expires = FederationServer::getParameter('expires');
 
             if($entityIdentifier === null)

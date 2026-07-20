@@ -74,7 +74,7 @@
             {
                 throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
             }
-            $incidentType = IncidentType::tryFrom($incidentType);
+            $incidentType = IncidentType::tryFromCaseInsensitive($incidentType);
             if($incidentType === null)
             {
                 throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
