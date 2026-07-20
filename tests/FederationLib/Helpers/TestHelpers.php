@@ -19,7 +19,7 @@
      *   - array $createdReports
      *   - array $tempFiles
      */
-    trait SecurityTestHelpers
+    trait TestHelpers
     {
         /**
          * Creates an operator with the requested permission bits and returns a client authenticated as that operator.

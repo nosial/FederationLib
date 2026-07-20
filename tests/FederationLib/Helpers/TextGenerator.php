@@ -12,7 +12,7 @@
      * clean text without random noise. A separate noisy() helper is available for
      * the few tests that specifically need gibberish input.
      */
-    class ClassificationTextGenerator
+    class TextGenerator
     {
         private const int TRAINING_SAMPLES_PER_CLASS = 15;
         private const int TEST_SAMPLE_INDEX = 15;
