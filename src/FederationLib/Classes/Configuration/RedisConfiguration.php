@@ -33,6 +33,7 @@
         private bool $reportCacheEnabled;
         private int $reportCacheLimit;
         private int $reportCacheTtl;
+        private int $searchCacheTtl;
 
         /**
          * RedisConfiguration constructor.
@@ -70,6 +71,7 @@
             $this->reportCacheEnabled = $configuration['report_cache_enabled'] ?? true;
             $this->reportCacheLimit = $configuration['report_cache_limit'] ?? 1000;
             $this->reportCacheTtl = $configuration['report_cache_ttl'] ?? 600;
+            $this->searchCacheTtl = $configuration['search_cache_ttl'] ?? 60;
         }
 
         /**
@@ -364,5 +366,15 @@
         public function getReportCacheTtl(): int
         {
             return $this->reportCacheTtl;
+        }
+
+        /**
+         * Returns the search/listing result set cache TTL in seconds.
+         *
+         * @return int The time to live in seconds for cached search/listing results.
+         */
+        public function getSearchCacheTtl(): int
+        {
+            return $this->searchCacheTtl;
         }
     }

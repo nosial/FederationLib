@@ -146,11 +146,13 @@
             // Evidence cache
             self::$configuration->setDefault('redis.evidence_cache_enabled', true, 'FEDERATION_EVIDENCE_CACHE_ENABLED');
             self::$configuration->setDefault('redis.evidence_cache_limit', 3000, 'FEDERATION_EVIDENCE_CACHE_LIMIT');
-            self::$configuration->setDefault('redis.evidence_cache_ttl', 600, 'FEspiciousDERATION_EVIDENCE_CACHE_TTL');
+            self::$configuration->setDefault('redis.evidence_cache_ttl', 600, 'FEDERATION_EVIDENCE_CACHE_TTL');
             // Reports cache
             self::$configuration->setDefault('redis.report_cache_enabled', true, 'FEDERATION_REPORT_CACHE_ENABLED');
             self::$configuration->setDefault('redis.report_cache_limit', 1000, 'FEDERATION_REPORT_CACHE_LIMIT');
             self::$configuration->setDefault('redis.report_cache_ttl', 600, 'FEDERATION_REPORT_CACHE_TTL');
+            // Search and listing result set TTL (how long cached query results live)
+            self::$configuration->setDefault('redis.search_cache_ttl', 60, 'FEDERATION_SEARCH_CACHE_TTL');
 
             // Only save if the configuration file does not exist or we're in CLI mode
             if(!file_exists(self::$configuration->getPath()) || php_sapi_name() === 'cli')
