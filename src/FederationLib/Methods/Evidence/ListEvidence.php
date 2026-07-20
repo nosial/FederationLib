@@ -5,6 +5,9 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\EvidenceCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\EvidenceOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -33,6 +36,11 @@
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
             $includeConfidential = filter_var(FederationServer::getParameter('include_confidential') ?? false, FILTER_VALIDATE_BOOLEAN);
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? EvidenceCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
 
             if($includeConfidential)
             {
@@ -59,7 +67,7 @@
 
             try
             {
-                $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page, $includeConfidential);
+                $evidenceRecords = EvidenceManager::getEvidenceRecords($limit, $page, $includeConfidential, $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -127,6 +135,33 @@
                     'required' => false,
                     'schema' => ['type' => 'boolean', 'default' => false],
                     'description' => 'Include confidential evidence (requires management permissions)',
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter evidence by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(EvidenceCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(EvidenceOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
