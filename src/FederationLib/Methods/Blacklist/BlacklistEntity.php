@@ -94,9 +94,18 @@
                     throw new RequestException(self::ERROR_ENTITY_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if($evidence !== null && !EvidenceManager::evidenceExists($evidence))
+                if($evidence !== null)
                 {
-                    throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                    $evidenceRecord = EvidenceManager::getEvidence($evidence);
+                    if($evidenceRecord === null)
+                    {
+                        throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                    }
+
+                    if($evidenceRecord->getEntityUuid() !== $entityRecord->getUuid())
+                    {
+                        throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                    }
                 }
 
                 $blacklistUuid = BlacklistManager::blacklistEntity(
