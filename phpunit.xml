@@ -9,6 +9,9 @@
         <ini name="error_reporting" value="-1"/>
         <ini name="memory_limit" value="1026M" />
 
+        <!-- ncc configuration -->
+        <env name="NCC_DISABLE_APCU" value="1"/>
+
         <!-- Tests configuration -->
         <env name="SERVER_ENDPOINT" value="http://172.17.0.1:7000"/>
         <env name="SERVER_ACCESS_TOKEN" value="abcdefghijklmnopqrstuvwxyz123456"/>
