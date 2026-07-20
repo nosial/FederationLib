@@ -151,8 +151,8 @@
 
             foreach($input as $key => $value)
             {
-                // key cannot be greater than 64 characters
-                if(strlen($key) > 64)
+                // key cannot be empty or greater than 64 characters
+                if(strlen($key) < 1 || strlen($key) > 64)
                 {
                     return false;
                 }
