@@ -2,12 +2,21 @@
 
     namespace FederationLib\Enums\Categories;
 
+    use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\CategorizableDatabaseInterface;
 
-    enum OperatorCategory : string implements CategorizableDatabaseInterface
+    enum OperatorCategory : string implements CategorizableDatabaseInterface, CaseSensitiveInterface
     {
         case DISABLED = 'DISABLED';
         case ENABLED = 'ENABLED';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?OperatorCategory
+        {
+            return self::tryFrom(strtoupper($value));
+        }
 
         /**
          * @inheritDoc

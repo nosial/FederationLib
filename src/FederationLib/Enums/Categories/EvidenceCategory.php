@@ -2,14 +2,23 @@
 
     namespace FederationLib\Enums\Categories;
 
+    use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\CategorizableDatabaseInterface;
 
-    enum EvidenceCategory : string implements CategorizableDatabaseInterface
+    enum EvidenceCategory : string implements CategorizableDatabaseInterface, CaseSensitiveInterface
     {
         case CONFIDENTIAL = 'CONFIDENTIAL';
         case NOT_CONFIDENTIAL = 'NOT_CONFIDENTIAL';
         case CLASSIFIED = 'CLASSIFIED';
         case UNCLASSIFIED = 'UNCLASSIFIED';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?EvidenceCategory
+        {
+            return self::tryFrom(strtoupper($value));
+        }
 
         /**
          * @inheritDoc

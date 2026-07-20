@@ -2,14 +2,23 @@
 
     namespace FederationLib\Enums\Categories;
 
+    use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\CategorizableDatabaseInterface;
 
-    enum EntityCategory : string implements CategorizableDatabaseInterface
+    enum EntityCategory : string implements CategorizableDatabaseInterface, CaseSensitiveInterface
     {
         case WHITELISTED = 'WHITELISTED';
         case NOT_WHITELISTED = 'NOT_WHITELISTED';
         case WITH_RELATIONSHIP = 'WITH_RELATIONSHIP';
         case WITHOUT_RELATIONSHIP = 'WITHOUT_RELATIONSHIP';
+
+        /**
+         * @inheritDoc
+         */
+        public static function tryFromCaseInsensitive(string $value): ?EntityCategory
+        {
+            return self::tryFrom(strtoupper($value));
+        }
 
         /**
          * @inheritDoc
