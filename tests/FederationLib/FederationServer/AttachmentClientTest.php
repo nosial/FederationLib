@@ -6,14 +6,14 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
     use RuntimeException;
 
     class AttachmentClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdAttachments = [];
         private array $createdEvidenceRecords = [];
@@ -672,6 +672,72 @@
             $this->client->listAttachments(1, 0);
         }
 
+        public function testListAttachmentsSortByFileSizeDescending(): void
+        {
+            $entityUuid = $this->client->pushEntity('attachment-sort-size.com', 'att_size_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Attachment size sort', 'Note', 'att_size_sort');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $sizes = [100, 300, 200];
+            $attachmentUuids = [];
+            foreach ($sizes as $size)
+            {
+                $content = str_repeat('x', $size);
+                $filePath = $this->createTestFile("att_size_$size.txt", $content);
+                $result = $this->client->uploadFileAttachment($evidenceUuid, $filePath);
+                $this->createdAttachments[] = $result->getUuid();
+                $attachmentUuids[] = $result->getUuid();
+            }
+
+            $attachments = $this->client->listAttachments(1, 100, null, 'file_size', 'DESC');
+            $filtered = array_values(array_filter($attachments, fn($a) => in_array($a->getUuid(), $attachmentUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals(300, $filtered[0]->getFileSize());
+            $this->assertEquals(200, $filtered[1]->getFileSize());
+            $this->assertEquals(100, $filtered[2]->getFileSize());
+        }
+
+        public function testListAttachmentsSortByFileNameAscending(): void
+        {
+            $entityUuid = $this->client->pushEntity('attachment-sort-name.com', 'att_name_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Attachment name sort', 'Note', 'att_name_sort');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $files = ['c_file.txt', 'a_file.txt', 'b_file.txt'];
+            $attachmentUuids = [];
+            foreach ($files as $fileName)
+            {
+                $filePath = $this->createTestFile($fileName, 'content for ' . $fileName);
+                $result = $this->client->uploadFileAttachment($evidenceUuid, $filePath, $fileName);
+                $this->createdAttachments[] = $result->getUuid();
+                $attachmentUuids[] = $result->getUuid();
+            }
+
+            $attachments = $this->client->listAttachments(1, 100, null, 'file_name', 'ASC');
+            $filtered = array_values(array_filter($attachments, fn($a) => in_array($a->getUuid(), $attachmentUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertStringEndsWith('a_file.txt', $filtered[0]->getFileName());
+            $this->assertStringEndsWith('b_file.txt', $filtered[1]->getFileName());
+            $this->assertStringEndsWith('c_file.txt', $filtered[2]->getFileName());
+        }
+
+        public function testListAttachmentsSortInvalidOrderFallsBack(): void
+        {
+            $resultDefault = $this->client->listAttachments(1, 10, null, 'created', 'DESC');
+            $resultInvalid = $this->client->listAttachments(1, 10, null, 'created', 'NONEXISTENT');
+
+            $defaultUuids = array_map(fn($a) => $a->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($a) => $a->getUuid(), $resultInvalid);
+
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
         private function createTestFile(string $fileName, string $content): string
         {
             $tempDir = sys_get_temp_dir();
@@ -1065,4 +1131,136 @@
             }
         }
 
+        private function createMinimalPng(): string
+        {
+            $filePath = tempnam(sys_get_temp_dir(), 'png_') . '.png';
+            $minimalPng = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+            file_put_contents($filePath, $minimalPng);
+            $this->tempFiles[] = $filePath;
+            return $filePath;
+        }
+
+        public function testListAttachmentsCategoryImage(): void
+        {
+            $entityUuid = $this->client->pushEntity('att-cat-img.com', 'att_img_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Image cat attachment', 'Note', 'att_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $imagePath = $this->createMinimalPng();
+            $imageResult = $this->client->uploadFileAttachment($evidenceUuid, $imagePath);
+            $this->createdAttachments[] = $imageResult->getUuid();
+
+            $textContent = str_repeat('x', 100);
+            $textPath = $this->createTestFile('test_doc.txt', $textContent);
+            $textResult = $this->client->uploadFileAttachment($evidenceUuid, $textPath);
+            $this->createdAttachments[] = $textResult->getUuid();
+
+            $attachments = $this->client->listAttachments(1, 100, 'IMAGE');
+            $uuids = array_map(fn($a) => $a->getUuid(), $attachments);
+
+            $this->assertContains($imageResult->getUuid(), $uuids);
+            $this->assertNotContains($textResult->getUuid(), $uuids);
+        }
+
+        public function testListAttachmentsCategoryDocument(): void
+        {
+            $entityUuid = $this->client->pushEntity('att-cat-doc.com', 'att_doc_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Doc cat attachment', 'Note', 'att_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $textContent = str_repeat('x', 100);
+            $textPath = $this->createTestFile('test_doc.txt', $textContent);
+            $textResult = $this->client->uploadFileAttachment($evidenceUuid, $textPath);
+            $this->createdAttachments[] = $textResult->getUuid();
+
+            $imagePath = $this->createMinimalPng();
+            $imageResult = $this->client->uploadFileAttachment($evidenceUuid, $imagePath);
+            $this->createdAttachments[] = $imageResult->getUuid();
+
+            $attachments = $this->client->listAttachments(1, 100, 'DOCUMENT');
+            $uuids = array_map(fn($a) => $a->getUuid(), $attachments);
+
+            $this->assertContains($textResult->getUuid(), $uuids);
+            $this->assertNotContains($imageResult->getUuid(), $uuids);
+        }
+
+        public function testListAttachmentsCategoryWithSort(): void
+        {
+            $entityUuid = $this->client->pushEntity('att-cat-sort.com', 'att_cat_sort_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Att cat sort', 'Note', 'att_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $sizes = [200, 100];
+            $uuids = [];
+            foreach ($sizes as $size)
+            {
+                $content = str_repeat('x', $size);
+                $filePath = $this->createTestFile("att_cat_$size.txt", $content);
+                $result = $this->client->uploadFileAttachment($evidenceUuid, $filePath);
+                $this->createdAttachments[] = $result->getUuid();
+                $uuids[] = $result->getUuid();
+            }
+
+            $attachments = $this->client->listAttachments(1, 100, 'DOCUMENT', 'file_size', 'DESC');
+            $filtered = array_values(array_filter($attachments, fn($a) => in_array($a->getUuid(), $uuids, true)));
+
+            $this->assertCount(2, $filtered);
+            $this->assertEquals(200, $filtered[0]->getFileSize());
+            $this->assertEquals(100, $filtered[1]->getFileSize());
+        }
+
+        public function testListAttachmentsCategoryInvalidFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('att-cat-inv.com', 'att_cat_inv_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Cat fallback test', 'Note', 'att_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $content = str_repeat('x', 50);
+            $filePath = $this->createTestFile('fallback.txt', $content);
+            $result = $this->client->uploadFileAttachment($evidenceUuid, $filePath);
+            $this->createdAttachments[] = $result->getUuid();
+
+            $resultDefault = $this->client->listAttachments(1, 10);
+            $resultInvalid = $this->client->listAttachments(1, 10, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($a) => $a->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($a) => $a->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListAttachmentsCategoryCaseInsensitive(): void
+        {
+            $entityUuid = $this->client->pushEntity('att-cat-ci.com', 'att_ci_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'CI test', 'Note', 'att_ci');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $content = str_repeat('x', 50);
+            $filePath = $this->createTestFile('ci_test.txt', $content);
+            $result = $this->client->uploadFileAttachment($evidenceUuid, $filePath);
+            $this->createdAttachments[] = $result->getUuid();
+
+            $resultUpper = $this->client->listAttachments(1, 10, 'DOCUMENT');
+            $resultLower = $this->client->listAttachments(1, 10, 'document');
+            $resultMixed = $this->client->listAttachments(1, 10, 'Document');
+
+            $upperUuids = array_map(fn($a) => $a->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($a) => $a->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($a) => $a->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
     }

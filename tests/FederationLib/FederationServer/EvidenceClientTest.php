@@ -7,13 +7,13 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class EvidenceClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdEvidenceRecords = [];
         private array $createdEntityRecords = [];
@@ -288,6 +288,45 @@
 
                 $page++;
             } while (count($evidenceList) === 5);
+        }
+
+        public function testListEvidenceSortByCreatedAscending(): void
+        {
+            $entityUuid = $this->client->pushEntity('evidence-sort-asc.com', 'evidence_asc_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $evidenceUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->submitEvidence($entityUuid, "Evidence sort ASC $i", "Note $i", "sort_asc_$i");
+                $this->createdEvidenceRecords[] = $uuid;
+                $evidenceUuids[] = $uuid;
+            }
+
+            $records = $this->client->listEvidence(1, 100, false, null, 'created', 'ASC');
+            $filtered = array_values(array_filter($records, fn($r) => in_array($r->getUuid(), $evidenceUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($evidenceUuids[0], $filtered[0]->getUuid());
+            $this->assertEquals($evidenceUuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($evidenceUuids[2], $filtered[2]->getUuid());
+        }
+
+        public function testListEvidenceSortInvalidOrderFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('evidence-invalid-order.com', 'evidence_order_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $uuid = $this->client->submitEvidence($entityUuid, 'Evidence invalid order', 'Note', 'invalid_order');
+            $this->createdEvidenceRecords[] = $uuid;
+
+            $resultDefault = $this->client->listEvidence(1, 10, false);
+            $resultInvalid = $this->client->listEvidence(1, 10, false, null, 'created', 'BAD_ORDER');
+
+            $defaultUuids = array_map(fn($r) => $r->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($r) => $r->getUuid(), $resultInvalid);
+
+            $this->assertSame($defaultUuids, $invalidUuids);
         }
 
         public function testNonConfidentialEvidenceAccess(): void
@@ -868,4 +907,156 @@
             $this->assertContains($publicUuid, $fullUuids);
             $this->assertContains($confidentialUuid, $fullUuids);
         }
+
+        public function testListEvidenceCategoryConfidential(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-conf.com', 'ev_conf_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $publicUuid = $this->client->submitEvidence($entityUuid, 'Public cat evidence', 'Note', 'cat_public');
+            $this->createdEvidenceRecords[] = $publicUuid;
+
+            $confUuid = $this->client->submitEvidence($entityUuid, 'Confidential cat evidence', 'Note', 'cat_conf', true);
+            $this->createdEvidenceRecords[] = $confUuid;
+
+            $records = $this->client->listEvidence(1, 100, true, 'CONFIDENTIAL');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+
+            $this->assertContains($confUuid, $uuids);
+            $this->assertNotContains($publicUuid, $uuids);
+            foreach ($records as $r)
+            {
+                $this->assertTrue($r->isConfidential());
+            }
+        }
+
+        public function testListEvidenceCategoryNotConfidential(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-not-conf.com', 'ev_not_conf_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $publicUuid = $this->client->submitEvidence($entityUuid, 'Public cat evidence', 'Note', 'cat_public');
+            $this->createdEvidenceRecords[] = $publicUuid;
+
+            $confUuid = $this->client->submitEvidence($entityUuid, 'Confidential cat evidence', 'Note', 'cat_conf', true);
+            $this->createdEvidenceRecords[] = $confUuid;
+
+            $records = $this->client->listEvidence(1, 100, true, 'NOT_CONFIDENTIAL');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+
+            $this->assertContains($publicUuid, $uuids);
+            $this->assertNotContains($confUuid, $uuids);
+            foreach ($records as $r)
+            {
+                $this->assertFalse($r->isConfidential());
+            }
+        }
+
+        public function testListEvidenceCategoryUnclassified(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-unclass.com', 'ev_unclass_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $uuid = $this->client->submitEvidence($entityUuid, 'Unclassified evidence', 'Note', 'unclass');
+            $this->createdEvidenceRecords[] = $uuid;
+
+            $records = $this->client->listEvidence(1, 100, true, 'UNCLASSIFIED');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertContains($uuid, $uuids);
+        }
+
+        public function testListEvidenceCategoryWithSort(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-sort.com', 'ev_cat_sort_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $uuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->submitEvidence($entityUuid, "Cat sort $i", "Note $i", 'cat_sort');
+                $this->createdEvidenceRecords[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $records = $this->client->listEvidence(1, 100, true, 'NOT_CONFIDENTIAL', 'created', 'ASC');
+            $filtered = array_values(array_filter($records, fn($r) => in_array($r->getUuid(), $uuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($uuids[0], $filtered[0]->getUuid());
+            $this->assertEquals($uuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($uuids[2], $filtered[2]->getUuid());
+        }
+
+        public function testListEvidenceCategoryInvalidFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-invalid.com', 'ev_cat_inv_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $uuid = $this->client->submitEvidence($entityUuid, 'Category invalid test', 'Note', 'cat_inv');
+            $this->createdEvidenceRecords[] = $uuid;
+
+            $resultDefault = $this->client->listEvidence(1, 10, true);
+            $resultInvalid = $this->client->listEvidence(1, 10, true, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($r) => $r->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($r) => $r->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListEvidenceCategoryCaseInsensitive(): void
+        {
+            $entityUuid = $this->client->pushEntity('ev-cat-ci.com', 'ev_ci_' . uniqid());
+            $this->createdEntityRecords[] = $entityUuid;
+
+            $uuid = $this->client->submitEvidence($entityUuid, 'CI category test', 'Note', 'ci');
+            $this->createdEvidenceRecords[] = $uuid;
+
+            $resultUpper = $this->client->listEvidence(1, 10, true, 'NOT_CONFIDENTIAL');
+            $resultLower = $this->client->listEvidence(1, 10, true, 'not_confidential');
+            $resultMixed = $this->client->listEvidence(1, 10, true, 'Not_Confidential');
+
+            $upperUuids = array_map(fn($r) => $r->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($r) => $r->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($r) => $r->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        public function testSecurityEvidenceSubmissionToNonExistentEntity(): void
+        {
+            $client = $this->createLimitedOperator('ev_nonexistent', client: true);
+
+            $this->expectRequestFailure(
+                fn() => $client->submitEvidence($this->randomUuid(), 'Evidence for non-existent entity', 'Note', 'ghost'),
+                [HttpResponseCode::NOT_FOUND->value],
+                'Submitting evidence for a non-existent entity should fail'
+            );
+        }
+
+        public function testSecurityEvidenceTagMalformedRejected(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $malformedTags = [
+                str_repeat('x', 33),
+                "tag\nwith\nnewlines",
+                "tag\twith\ttabs",
+                "tag\x00null",
+            ];
+
+            foreach ($malformedTags as $tag)
+            {
+                $this->expectRequestFailure(
+                    fn() => $this->client->updateEvidenceTag($evidenceUuid, $tag),
+                    [HttpResponseCode::BAD_REQUEST->value],
+                    "Malformed tag '$tag' should be rejected by the server"
+                );
+            }
+        }
+
     }

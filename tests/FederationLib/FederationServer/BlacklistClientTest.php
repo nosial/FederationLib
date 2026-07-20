@@ -7,12 +7,12 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use PHPUnit\Framework\TestCase;
 
     class BlacklistClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -339,6 +339,58 @@
             $this->expectException(\InvalidArgumentException::class);
             $this->expectExceptionMessage('Limit must be greater than 0');
             $this->client->listBlacklistRecords(1, 0);
+        }
+
+        public function testListBlacklistRecordsSortByCreatedAscending(): void
+        {
+            $entityUuid = $this->client->pushEntity('blacklist-sort-asc.com', 'bl_sort_asc_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Blacklist sort ASC evidence', 'Note', 'bl_sort_asc');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600 * ($i + 1));
+                $this->createdBlacklistRecords[] = $uuid;
+                $blacklistUuids[] = $uuid;
+            }
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, null, 'created', 'ASC');
+            $filtered = array_values(array_filter($records, fn($r) => in_array($r->getUuid(), $blacklistUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($blacklistUuids[0], $filtered[0]->getUuid());
+            $this->assertEquals($blacklistUuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($blacklistUuids[2], $filtered[2]->getUuid());
+        }
+
+        public function testListBlacklistRecordsSortByTypeDescending(): void
+        {
+            $entityUuid = $this->client->pushEntity('blacklist-sort-type.com', 'bl_sort_type_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Blacklist sort type evidence', 'Note', 'bl_sort_type');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $types = [IncidentType::SPAM, IncidentType::PHISHING, IncidentType::MALWARE];
+            $blacklistUuids = [];
+
+            foreach ($types as $type)
+            {
+                $uuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, $type, time() + 3600);
+                $this->createdBlacklistRecords[] = $uuid;
+                $blacklistUuids[] = $uuid;
+            }
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, null, 'type', 'DESC');
+            $filtered = array_values(array_filter($records, fn($r) => in_array($r->getUuid(), $blacklistUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals('PHISHING', $filtered[0]->getType()->value);
+            $this->assertEquals('MALWARE', $filtered[1]->getType()->value);
+            $this->assertEquals('SPAM', $filtered[2]->getType()->value);
         }
 
         public function testBlacklistEntityWithDifferentTypes(): void
@@ -831,6 +883,60 @@
             $this->assertGreaterThanOrEqual(3, count($entityBlacklist));
         }
 
+        public function testSecurityBlacklistRecordOwnerPreservedAfterLift(): void
+        {
+            $owner = $this->createLimitedOperator('bl_owner_preserve', management: true, client: true);
+            $ownerUuid = $owner->getSelf()->getUuid();
+
+            $entityUuid = $owner->pushEntity('bl-owner-preserve.com', 'bl_owner_preserve');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $owner->submitEvidence($entityUuid, 'Owner evidence', 'Note', 'bl_owner');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $owner->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            $owner->liftBlacklistRecord($blacklistUuid);
+
+            $record = $this->client->getBlacklistRecord($blacklistUuid);
+            $this->assertEquals($ownerUuid, $record->getOperatorUuid(), 'Blacklist record operator UUID should be preserved after lift');
+            $this->assertEquals($ownerUuid, $record->getLiftedBy(), 'Lifted-by UUID should match the operator who lifted');
+        }
+
+        public function testSecurityBlacklistRecordOwnerPreservedAfterExtend(): void
+        {
+            $owner = $this->createLimitedOperator('bl_owner_ext', management: true, client: true);
+            $ownerUuid = $owner->getSelf()->getUuid();
+
+            $entityUuid = $owner->pushEntity('bl-owner-ext.com', 'bl_owner_ext');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $owner->submitEvidence($entityUuid, 'Owner ext evidence', 'Note', 'bl_owner_ext');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blacklistUuid = $owner->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            $owner->extendBlacklistRecord($blacklistUuid, 3600);
+
+            $record = $this->client->getBlacklistRecord($blacklistUuid);
+            $this->assertEquals($ownerUuid, $record->getOperatorUuid(), 'Blacklist record operator UUID should be preserved after extend');
+        }
+
+        public function testSecurityBlacklistWithEvidenceFromDifferentEntity(): void
+        {
+            $entityA = $this->createSecurityEntity();
+            $entityB = $this->createSecurityEntity();
+            $evidenceForB = $this->createSecurityEvidence($entityB);
+
+            $this->expectRequestFailure(
+                fn() => $this->client->blacklistEntity($entityA, $evidenceForB, IncidentType::SPAM, time() + 3600),
+                [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
+                'Blacklisting entity A with evidence belonging to entity B should be rejected'
+            );
+        }
+
         public function testLiftedBlacklistNoLongerBlocksViaList(): void
         {
             $entityUuid = $this->createSecurityEntity();
@@ -1038,4 +1144,200 @@
             $entityUuids = array_map(fn($r) => $r->getUuid(), $entityRecords);
             $this->assertContains($blacklistUuid, $entityUuids);
         }
+
+        public function testListBlacklistCategoryActive(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-active.com', 'bl_active_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Active bl cat', 'Note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $activeUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $activeUuid;
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'ACTIVE');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertContains($activeUuid, $uuids);
+
+            foreach ($records as $r)
+            {
+                $this->assertFalse($r->isLifted());
+            }
+        }
+
+        public function testListBlacklistCategoryLifted(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-lifted.com', 'bl_lifted_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Lifted bl cat', 'Note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $liftedUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $liftedUuid;
+
+            $this->client->liftBlacklistRecord($liftedUuid);
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'LIFTED');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertContains($liftedUuid, $uuids);
+
+            foreach ($records as $r)
+            {
+                $this->assertTrue($r->isLifted());
+            }
+        }
+
+        public function testListBlacklistCategoryPermanent(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-perm.com', 'bl_perm_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Permanent bl cat', 'Note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $permUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, null);
+            $this->createdBlacklistRecords[] = $permUuid;
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'PERMANENT');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertContains($permUuid, $uuids);
+
+            foreach ($records as $r)
+            {
+                $this->assertNull($r->getExpires());
+                $this->assertFalse($r->isLifted());
+            }
+        }
+
+        public function testListBlacklistCategoryExpired(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-expired.com', 'bl_exp_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Expired bl cat', 'Note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $expiredUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 1);
+            $this->createdBlacklistRecords[] = $expiredUuid;
+
+            sleep(2);
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'EXPIRED');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertContains($expiredUuid, $uuids);
+
+            foreach ($records as $r)
+            {
+                $this->assertTrue($r->getExpires() < time());
+                $this->assertTrue($r->isLifted());
+            }
+        }
+
+        public function testListBlacklistCategoryWithSort(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-sort.com', 'bl_cat_sort_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'BL cat sort evidence', 'Note', 'bl_cat_sort');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $types = [IncidentType::MALWARE, IncidentType::SPAM, IncidentType::PHISHING];
+            $uuids = [];
+            foreach ($types as $type)
+            {
+                $uuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, $type, time() + 7200);
+                $this->createdBlacklistRecords[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'ACTIVE', 'type', 'DESC');
+            $filtered = array_values(array_filter($records, fn($r) => in_array($r->getUuid(), $uuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals('PHISHING', $filtered[0]->getType()->value);
+            $this->assertEquals('MALWARE', $filtered[1]->getType()->value);
+            $this->assertEquals('SPAM', $filtered[2]->getType()->value);
+        }
+
+        public function testListBlacklistCategoryInvalidFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-invalid.com', 'bl_cat_inv_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'BL cat invalid', 'Note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $uuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $uuid;
+
+            $resultDefault = $this->client->listBlacklistRecords(1, 10, true);
+            $resultInvalid = $this->client->listBlacklistRecords(1, 10, true, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($r) => $r->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($r) => $r->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListBlacklistCategoryCaseInsensitive(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-ci.com', 'bl_ci_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'BL CI test', 'Note', 'bl_ci');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $uuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $uuid;
+
+            $resultUpper = $this->client->listBlacklistRecords(1, 10, true, 'ACTIVE');
+            $resultLower = $this->client->listBlacklistRecords(1, 10, true, 'active');
+            $resultMixed = $this->client->listBlacklistRecords(1, 10, true, 'Active');
+
+            $upperUuids = array_map(fn($r) => $r->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($r) => $r->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($r) => $r->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        public function testListBlacklistCategoryActiveExcludesLifted(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-active-excl.com', 'bl_act_excl_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Active excl evidence', 'Note', 'bl_act_excl');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $activeUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $activeUuid;
+
+            $this->client->liftBlacklistRecord($activeUuid);
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'ACTIVE');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertNotContains($activeUuid, $uuids, 'Lifted blacklist should not appear in ACTIVE filter');
+        }
+
+        public function testListBlacklistCategoryLiftedExcludesActive(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-lifted-excl.com', 'bl_lift_excl_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Lifted excl evidence', 'Note', 'bl_lift_excl');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $activeUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $this->createdBlacklistRecords[] = $activeUuid;
+
+            $records = $this->client->listBlacklistRecords(1, 100, true, 'LIFTED');
+            $uuids = array_map(fn($r) => $r->getUuid(), $records);
+            $this->assertNotContains($activeUuid, $uuids, 'Active (non-lifted) blacklist should not appear in LIFTED filter');
+        }
+
     }

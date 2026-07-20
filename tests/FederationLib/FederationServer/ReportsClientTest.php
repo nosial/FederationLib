@@ -7,16 +7,16 @@
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\ClassificationTextGenerator;
+    use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class ReportsClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdReports = [];
         private array $createdEvidenceRecords = [];
@@ -127,7 +127,7 @@
             $entityUuid = $this->client->pushEntity('test-report.com', 'test_user');
             $this->createdEntities[] = $entityUuid;
 
-            $content = ClassificationTextGenerator::generate(ClassificationFlag::NORMAL);
+            $content = TextGenerator::generate(ClassificationFlag::NORMAL);
             $reportMessage = "Normal content";
             $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM, $reportMessage);
             $reportUuid = $submission->getReport()->getUuid();
@@ -250,7 +250,7 @@
             $entityUuid = $this->client->pushEntity('close-report.com', 'close_user');
             $this->createdEntities[] = $entityUuid;
 
-            $content = ClassificationTextGenerator::generate(ClassificationFlag::NORMAL);
+            $content = TextGenerator::generate(ClassificationFlag::NORMAL);
             $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
@@ -266,7 +266,7 @@
             $entityUuid = $this->client->pushEntity('close-classify.com', 'close_classify');
             $this->createdEntities[] = $entityUuid;
 
-            $content = ClassificationTextGenerator::generate(ClassificationFlag::MALICIOUS);
+            $content = TextGenerator::generate(ClassificationFlag::MALICIOUS);
             $submission = $this->client->submitReport($entityUuid, $content, IncidentType::OTHER);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
@@ -433,6 +433,64 @@
             }
         }
 
+        public function testListReportsSortByCreatedDescending(): void
+        {
+            $entityUuid = $this->client->pushEntity('reports-sort-desc.com', 'reports_desc_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $reportUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $submission = $this->client->submitReport($entityUuid, "Report sort DESC $i", IncidentType::OTHER);
+                $uuid = $submission->getReport()->getUuid();
+                $reportUuids[] = $uuid;
+                $this->createdReports[] = $uuid;
+                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            }
+
+            $reports = $this->client->listReports(1, 100, null, 'created', 'DESC');
+            $filtered = array_values(array_filter($reports, fn($r) => in_array($r->getUuid(), $reportUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($reportUuids[2], $filtered[0]->getUuid());
+            $this->assertEquals($reportUuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($reportUuids[0], $filtered[2]->getUuid());
+        }
+
+        public function testListReportsSortByIncidentTypeAscending(): void
+        {
+            $entityUuid = $this->client->pushEntity('reports-sort-type.com', 'reports_type_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $types = [IncidentType::MALWARE, IncidentType::PHISHING, IncidentType::SPAM];
+            $expectedOrder = ['SPAM', 'MALWARE', 'PHISHING'];
+            $reportUuids = [];
+
+            foreach ($types as $type)
+            {
+                $submission = $this->client->submitReport($entityUuid, "Report type $type->value", $type);
+                $uuid = $submission->getReport()->getUuid();
+                $reportUuids[] = $uuid;
+                $this->createdReports[] = $uuid;
+                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            }
+
+            $allFiltered = [];
+            $page = 1;
+            do {
+                $reports = $this->client->listReports($page, 100, null, 'incident_type', 'ASC');
+                if (empty($reports)) break;
+                $newFiltered = array_values(array_filter($reports, fn($r) => in_array($r->getUuid(), $reportUuids, true)));
+                $allFiltered = array_merge($allFiltered, $newFiltered);
+                $page++;
+            } while (count($allFiltered) < 3);
+
+            $this->assertCount(3, $allFiltered);
+            $this->assertEquals($expectedOrder[0], $allFiltered[0]->getIncidentType()->value);
+            $this->assertEquals($expectedOrder[1], $allFiltered[1]->getIncidentType()->value);
+            $this->assertEquals($expectedOrder[2], $allFiltered[2]->getIncidentType()->value);
+        }
+
         public function testBulkReportSubmissionConsistency(): void
         {
             $entityUuid = $this->client->pushEntity('bulk-report.com', 'bulk_user');
@@ -485,7 +543,7 @@
             $entityUuid = $this->client->pushEntity('consistency.com', 'consistency_user');
             $this->createdEntities[] = $entityUuid;
 
-            $content = ClassificationTextGenerator::generate(ClassificationFlag::SUSPICIOUS);
+            $content = TextGenerator::generate(ClassificationFlag::SUSPICIOUS);
             $submission = $this->client->submitReport($entityUuid, $content, IncidentType::OTHER);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
@@ -502,7 +560,7 @@
             $entityUuid = $this->client->pushEntity('batch-classify.com', 'batch_classify_user');
             $this->createdEntities[] = $entityUuid;
 
-            $samples = ClassificationTextGenerator::generateBatch(perClass: 5, minWords: 6, maxWords: 18);
+            $samples = TextGenerator::generateBatch(perClass: 5, minWords: 6, maxWords: 18);
 
             foreach ($samples as $sample)
             {
@@ -818,6 +876,121 @@
             $this->assertNotContains($reportBUuid, $entityAReportUuids);
         }
 
+        public function testListReportsCategoryOpened(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-open.com', 'rep_open_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport($entityUuid, 'Opened report', IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+
+            $reports = $this->client->listReports(1, 100, 'OPENED');
+            $foundUuids = array_map(fn($r) => $r->getUuid(), $reports);
+            $this->assertContains($reportUuid, $foundUuids);
+        }
+
+        public function testListReportsCategoryClosed(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-closed.com', 'rep_closed_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport($entityUuid, 'Closed report', IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+
+            $this->client->closeReport($reportUuid);
+
+            $reports = $this->client->listReports(1, 100, 'CLOSED');
+            $foundUuids = array_map(fn($r) => $r->getUuid(), $reports);
+            $this->assertContains($reportUuid, $foundUuids);
+        }
+
+        public function testListReportsCategoryAssigned(): void
+        {
+            $manager = $this->createLimitedOperator('rep_cat_asgn_mgr', management: true);
+            $entityUuid = $this->client->pushEntity('rep-cat-asgn.com', 'rep_asgn_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport($entityUuid, 'Assigned report', IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+
+            $manager->assignOperatorToReport($reportUuid, $manager->getSelf()->getUuid());
+
+            $reports = $this->client->listReports(1, 100, 'ASSIGNED');
+            $foundUuids = array_map(fn($r) => $r->getUuid(), $reports);
+            $this->assertContains($reportUuid, $foundUuids);
+        }
+
+        public function testListReportsCategoryWithSort(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-sort.com', 'rep_cat_sort_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $reportUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $submission = $this->client->submitReport($entityUuid, "Report cat sort $i", IncidentType::OTHER);
+                $uuid = $submission->getReport()->getUuid();
+                $reportUuids[] = $uuid;
+                $this->createdReports[] = $uuid;
+                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            }
+
+            $reports = $this->client->listReports(1, 100, 'OPENED', 'created', 'DESC');
+            $filtered = array_values(array_filter($reports, fn($r) => in_array($r->getUuid(), $reportUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($reportUuids[2], $filtered[0]->getUuid());
+            $this->assertEquals($reportUuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($reportUuids[0], $filtered[2]->getUuid());
+        }
+
+        public function testListReportsCategoryInvalidFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-inv.com', 'rep_cat_inv_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport($entityUuid, 'Cat invalid test', IncidentType::SPAM);
+            $this->createdReports[] = $submission->getReport()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+
+            $resultDefault = $this->client->listReports(1, 10);
+            $resultInvalid = $this->client->listReports(1, 10, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($r) => $r->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($r) => $r->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListReportsCategoryCaseInsensitive(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-ci.com', 'rep_ci_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport($entityUuid, 'CI category test', IncidentType::SPAM);
+            $this->createdReports[] = $submission->getReport()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+
+            $resultUpper = $this->client->listReports(1, 10, 'OPENED');
+            $resultLower = $this->client->listReports(1, 10, 'opened');
+            $resultMixed = $this->client->listReports(1, 10, 'Opened');
+
+            $upperUuids = array_map(fn($r) => $r->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($r) => $r->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($r) => $r->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
         public function testReportDeleteCascadesToLinkedEvidence(): void
         {
             $manager = $this->createLimitedOperator('delete_report_manager', management: true, operator: true);
@@ -845,5 +1018,4 @@
                 $this->assertContains($e->getCode(), [HttpResponseCode::NOT_FOUND->value, HttpResponseCode::FORBIDDEN->value]);
             }
         }
-
     }

@@ -7,13 +7,13 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use PHPUnit\Framework\TestCase;
     use Symfony\Component\Uid\Uuid;
 
     class OperatorsClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -392,6 +392,154 @@
             }
 
             $this->assertTrue($found, 'No created operators were found in the database');
+        }
+
+        public function testListOperatorsCategoryEnabled(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 2; $i++)
+            {
+                $uuid = $this->client->createOperator('op_cat_enabled_' . uniqid());
+                $this->createdOperators[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $operators = $this->client->listOperators(1, 100, 'ENABLED');
+            $foundUuids = array_map(fn($o) => $o->getUuid(), $operators);
+            foreach ($uuids as $uuid)
+            {
+                $this->assertContains($uuid, $foundUuids);
+            }
+            foreach ($operators as $o)
+            {
+                $this->assertFalse($o->isDisabled());
+            }
+        }
+
+        public function testListOperatorsCategoryDisabled(): void
+        {
+            $enabledUuid = $this->client->createOperator('op_cat_dis_ena_' . uniqid());
+            $this->createdOperators[] = $enabledUuid;
+
+            $disabledUuid = $this->client->createOperator('op_cat_dis_' . uniqid());
+            $this->createdOperators[] = $disabledUuid;
+            $this->client->disableOperator($disabledUuid);
+
+            $operators = $this->client->listOperators(1, 100, 'DISABLED');
+            $foundUuids = array_map(fn($o) => $o->getUuid(), $operators);
+
+            $this->assertContains($disabledUuid, $foundUuids);
+            $this->assertNotContains($enabledUuid, $foundUuids);
+            foreach ($operators as $o)
+            {
+                $this->assertTrue($o->isDisabled());
+            }
+        }
+
+        public function testListOperatorsCategoryWithSort(): void
+        {
+            $names = ['z-op-cat-sort', 'a-op-cat-sort'];
+            $uuids = [];
+            foreach ($names as $name)
+            {
+                $uuid = $this->client->createOperator($name . '_' . uniqid());
+                $this->createdOperators[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $operators = $this->client->listOperators(1, 100, 'ENABLED', 'name', 'ASC');
+            $filtered = array_values(array_filter($operators, fn($o) => in_array($o->getUuid(), $uuids, true)));
+
+            $this->assertCount(2, $filtered);
+            $this->assertStringStartsWith('a-op-cat-sort', $filtered[0]->getName());
+            $this->assertStringStartsWith('z-op-cat-sort', $filtered[1]->getName());
+        }
+
+        public function testListOperatorsCategoryInvalidFallsBack(): void
+        {
+            $uuid = $this->client->createOperator('op_cat_inv_' . uniqid());
+            $this->createdOperators[] = $uuid;
+
+            $resultDefault = $this->client->listOperators(1, 10);
+            $resultInvalid = $this->client->listOperators(1, 10, 'NONEXISTENT_CATEGORY');
+
+            $defaultUuids = array_map(fn($o) => $o->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($o) => $o->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListOperatorsCategoryCaseInsensitive(): void
+        {
+            $uuid = $this->client->createOperator('op_cat_ci_' . uniqid());
+            $this->createdOperators[] = $uuid;
+
+            $resultUpper = $this->client->listOperators(1, 10, 'ENABLED');
+            $resultLower = $this->client->listOperators(1, 10, 'enabled');
+            $resultMixed = $this->client->listOperators(1, 10, 'Enabled');
+
+            $upperUuids = array_map(fn($o) => $o->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($o) => $o->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($o) => $o->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        public function testListOperatorsSortByNameAscending(): void
+        {
+            $names = ['z-operator-sort', 'a-operator-sort', 'm-operator-sort'];
+            $created = [];
+            foreach ($names as $name)
+            {
+                $uuid = $this->client->createOperator($name . '_' . uniqid());
+                $this->createdOperators[] = $uuid;
+                $created[] = $uuid;
+            }
+
+            $operators = $this->client->listOperators(1, 100, null, 'name', 'ASC');
+            $filtered = array_values(array_filter($operators, fn($o) => in_array($o->getUuid(), $created, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertStringStartsWith('a-operator-sort', $filtered[0]->getName());
+            $this->assertStringStartsWith('m-operator-sort', $filtered[1]->getName());
+            $this->assertStringStartsWith('z-operator-sort', $filtered[2]->getName());
+        }
+
+        public function testListOperatorsSortByCreatedDescending(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->createOperator('op-srt-crt-' . uniqid());
+                $this->createdOperators[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $operators = $this->client->listOperators(1, 100, null, 'created', 'DESC');
+            $filtered = array_values(array_filter($operators, fn($o) => in_array($o->getUuid(), $uuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($uuids[2], $filtered[0]->getUuid());
+            $this->assertEquals($uuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($uuids[0], $filtered[2]->getUuid());
+        }
+
+        public function testListOperatorsSortInvalidByFallsBack(): void
+        {
+            $name = 'op-inv-by-' . uniqid();
+            $uuid = $this->client->createOperator($name);
+            $this->createdOperators[] = $uuid;
+
+            $resultDefault = $this->client->listOperators(1, 10);
+            $resultInvalid = $this->client->listOperators(1, 10, null, 'nonexistent_column');
+
+            $defaultUuids = array_map(fn($o) => $o->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($o) => $o->getUuid(), $resultInvalid);
+
+            $this->assertSame($defaultUuids, $invalidUuids);
         }
 
         public function testOperatorLifecycleIntegrity(): void
@@ -1522,5 +1670,30 @@
             $freshClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
             $operatorRecord = $freshClient->getOperator($operatorUuid);
             $this->assertEquals($newName, $operatorRecord->getName());
+        }
+
+        public function testSecurityDisabledOperatorDataIsolation(): void
+        {
+            $operatorUuid = $this->client->createOperator('disabled_isolation');
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $entityUuid = $operatorClient->pushEntity('disabled-isolation.com', 'di_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Disabled operator evidence', 'Note', 'di');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $this->client->disableOperator($operatorUuid);
+
+            $record = $this->client->getEntityRecord($entityUuid);
+            $this->assertNotNull($record, 'Entity created by now-disabled operator should still be readable by management');
+
+            $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
+            $this->assertNotNull($evidenceRecord, 'Evidence created by now-disabled operator should still be readable by management');
         }
     }

@@ -8,13 +8,13 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class AuditLogClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -232,6 +232,38 @@
             $this->client->listOperatorAuditLogs($operatorUuid, 1, -1);
         }
 
+        public function testListAuditLogsSortByTimestampDescending(): void
+        {
+            $operatorUuid = null;
+            $this->generateSampleAuditLogs($operatorUuid);
+
+            $logsAsc = $this->client->listOperatorAuditLogs($operatorUuid, 1, 100, null, 'timestamp', 'ASC');
+            $logsDesc = $this->client->listOperatorAuditLogs($operatorUuid, 1, 100, null, 'timestamp', 'DESC');
+
+            $this->assertNotEmpty($logsAsc);
+            $this->assertNotEmpty($logsDesc);
+
+            $uuidsAsc = array_map(fn($l) => $l->getUuid(), $logsAsc);
+            $uuidsDesc = array_map(fn($l) => $l->getUuid(), $logsDesc);
+
+            $this->assertSame(array_reverse($uuidsAsc), $uuidsDesc);
+        }
+
+        public function testListAuditLogsSortInvalidFieldFallsBack(): void
+        {
+            $operatorUuid = null;
+            $this->generateSampleAuditLogs($operatorUuid);
+
+            $resultDefault = $this->client->listOperatorAuditLogs($operatorUuid, 1, 10);
+            $resultInvalid = $this->client->listOperatorAuditLogs($operatorUuid, 1, 10, null, 'bogus_field');
+
+            $defaultUuids = array_map(fn($l) => $l->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($l) => $l->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
         public function testAuditLogAccessLimitedOperator(): void
         {
             $operatorUuid = $this->client->createOperator('limited-audit-access');
@@ -367,7 +399,7 @@
             }
         }
 
-        private function generateSampleAuditLogs(): void
+        private function generateSampleAuditLogs(bool &$operatorUuid=null): void
         {
             $operatorUuid = $this->client->createOperator('sample-audit-operator');
             $this->createdOperators[] = $operatorUuid;
@@ -528,6 +560,214 @@
                     $this->assertEquals($entityUuid, $retrieved->getEntityUuid());
                 }
             }
+        }
+
+        public function testListAuditLogsCategoryOperatorEvents(): void
+        {
+            $operatorUuid = $this->client->createOperator('aud_cat_op_' . uniqid());
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $entityUuid = $operatorClient->pushEntity('aud-cat-op.com', 'aud_cat_op_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logs = $this->client->listAuditLogs(1, 100, 'OPERATOR_EVENTS');
+            $this->assertIsArray($logs);
+            $this->assertNotEmpty($logs);
+
+            foreach ($logs as $log)
+            {
+                $this->assertContains($log->getType(), [
+                    AuditLogType::OPERATOR_CREATED,
+                    AuditLogType::OPERATOR_DELETED,
+                    AuditLogType::OPERATOR_DISABLED,
+                    AuditLogType::OPERATOR_ENABLED,
+                    AuditLogType::OPERATOR_PERMISSIONS_CHANGED,
+                    AuditLogType::OPERATOR_ACCESS_TOKEN_GENERATED,
+                    AuditLogType::OPERATOR_NAME_CHANGED,
+                ]);
+            }
+        }
+
+        public function testListAuditLogsCategoryEntityEvents(): void
+        {
+            $operatorUuid = $this->client->createOperator('aud_cat_ent_' . uniqid());
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $entityUuid = $operatorClient->pushEntity('aud-cat-ent.com', 'aud_cat_ent_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logs = $this->client->listAuditLogs(1, 100, 'ENTITY_EVENTS');
+            $this->assertIsArray($logs);
+            $this->assertNotEmpty($logs);
+
+            foreach ($logs as $log)
+            {
+                $this->assertContains($log->getType(), [
+                    AuditLogType::ENTITY_DELETED,
+                    AuditLogType::ENTITY_BLACKLISTED,
+                    AuditLogType::ENTITY_PUSHED,
+                    AuditLogType::ENTITY_REPUTATION_CLEARED,
+                ]);
+            }
+        }
+
+        public function testListAuditLogsCategoryWithSort(): void
+        {
+            $operatorUuid = $this->client->createOperator('aud_cat_sort_' . uniqid());
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            for ($i = 0; $i < 3; $i++)
+            {
+                $entityUuid = $operatorClient->pushEntity("aud-cat-sort-$i.com", "aud_cat_sort_user_$i");
+                $this->createdEntities[] = $entityUuid;
+            }
+
+            $logsAsc = $this->client->listOperatorAuditLogs($operatorUuid, 1, 100, 'ENTITY_EVENTS', 'timestamp', 'ASC');
+            $logsDesc = $this->client->listOperatorAuditLogs($operatorUuid, 1, 100, 'ENTITY_EVENTS', 'timestamp', 'DESC');
+
+            $this->assertNotEmpty($logsAsc);
+            $this->assertNotEmpty($logsDesc);
+
+            $uuidsAsc = array_map(fn($l) => $l->getUuid(), $logsAsc);
+            $uuidsDesc = array_map(fn($l) => $l->getUuid(), $logsDesc);
+            $this->assertSame(array_reverse($uuidsAsc), $uuidsDesc);
+        }
+
+        public function testListAuditLogsCategoryInvalidFallsBack(): void
+        {
+            $resultDefault = $this->client->listAuditLogs(1, 10);
+            $resultInvalid = $this->client->listAuditLogs(1, 10, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($l) => $l->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($l) => $l->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListAuditLogsCategoryCaseInsensitive(): void
+        {
+            $resultUpper = $this->client->listAuditLogs(1, 10, 'OPERATOR_EVENTS');
+            $resultLower = $this->client->listAuditLogs(1, 10, 'operator_events');
+            $resultMixed = $this->client->listAuditLogs(1, 10, 'Operator_Events');
+
+            $upperUuids = array_map(fn($l) => $l->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($l) => $l->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($l) => $l->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        public function testListEntityAuditLogsCategoryEntityEvents(): void
+        {
+            $entityUuid = $this->client->pushEntity('entity-cat-ent.com', 'entity_cat_ent_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logs = $this->client->listEntityAuditLogs($entityUuid, 1, 100, 'ENTITY_EVENTS');
+            $this->assertIsArray($logs);
+            $this->assertNotEmpty($logs);
+
+            foreach ($logs as $log)
+            {
+                $this->assertContains($log->getType(), [
+                    AuditLogType::ENTITY_DELETED,
+                    AuditLogType::ENTITY_BLACKLISTED,
+                    AuditLogType::ENTITY_PUSHED,
+                    AuditLogType::ENTITY_REPUTATION_CLEARED,
+                ]);
+            }
+        }
+
+        public function testListEntityAuditLogsCategoryEvidenceEvents(): void
+        {
+            $operatorUuid = $this->client->createOperator('ent_cat_ev_' . uniqid());
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
+            $this->client->setManagementPermissions($operatorUuid, true);
+
+            $operator = $this->client->getOperator($operatorUuid);
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+
+            $entityUuid = $operatorClient->pushEntity('ent-cat-ev.com', 'ent_cat_ev_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Category test evidence', 'Testing evidence category', 'ev_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $logs = $this->client->listEntityAuditLogs($entityUuid, 1, 100, 'EVIDENCE_EVENTS');
+            $this->assertIsArray($logs);
+            $this->assertNotEmpty($logs);
+
+            foreach ($logs as $log)
+            {
+                $this->assertContains($log->getType(), [
+                    AuditLogType::EVIDENCE_SUBMITTED,
+                    AuditLogType::EVIDENCE_UPDATED,
+                    AuditLogType::EVIDENCE_DELETED,
+                ]);
+            }
+        }
+
+        public function testListEntityAuditLogsCategoryInvalidFallsBack(): void
+        {
+            $entityUuid = $this->client->pushEntity('entity-cat-bogus.com', 'entity_cat_bogus_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $resultDefault = $this->client->listEntityAuditLogs($entityUuid, 1, 10);
+            $resultInvalid = $this->client->listEntityAuditLogs($entityUuid, 1, 10, 'BOGUS_CATEGORY');
+
+            $defaultUuids = array_map(fn($l) => $l->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($l) => $l->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListEntityAuditLogsCategoryWithSort(): void
+        {
+            $entityUuid = $this->client->pushEntity('entity-cat-sort.com', 'entity_cat_sort_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $logsAsc = $this->client->listEntityAuditLogs($entityUuid, 1, 100, null, 'timestamp', 'ASC');
+            $logsDesc = $this->client->listEntityAuditLogs($entityUuid, 1, 100, null, 'timestamp', 'DESC');
+
+            $this->assertNotEmpty($logsAsc);
+            $this->assertNotEmpty($logsDesc);
+
+            $uuidsAsc = array_map(fn($l) => $l->getUuid(), $logsAsc);
+            $uuidsDesc = array_map(fn($l) => $l->getUuid(), $logsDesc);
+            $this->assertSame(array_reverse($uuidsAsc), $uuidsDesc);
+        }
+
+        public function testListEntityAuditLogsCategoryCaseInsensitive(): void
+        {
+            $entityUuid = $this->client->pushEntity('entity-cat-ci.com', 'entity_cat_ci_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $resultUpper = $this->client->listEntityAuditLogs($entityUuid, 1, 10, 'ENTITY_EVENTS');
+            $resultLower = $this->client->listEntityAuditLogs($entityUuid, 1, 10, 'entity_events');
+            $resultMixed = $this->client->listEntityAuditLogs($entityUuid, 1, 10, 'Entity_Events');
+
+            $upperUuids = array_map(fn($l) => $l->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($l) => $l->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($l) => $l->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
         }
 
         public function testSecurityOperatorAuditLogsAreIsolated(): void

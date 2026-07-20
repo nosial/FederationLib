@@ -11,14 +11,14 @@
     use FederationLib\FederationClient;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
     use Symfony\Component\Uid\Uuid;
 
     class EntitiesClientTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -321,6 +321,67 @@
             {
                 $this->assertContains($pushedUuid, $fetchedUuids);
             }
+        }
+
+        public function testListEntitiesSortByHostAscending(): void
+        {
+            $suffix = uniqid();
+            $hosts = ['z-entity-sort-' . $suffix . '.com', 'a-entity-sort-' . $suffix . '.com', 'm-entity-sort-' . $suffix . '.com'];
+            $created = [];
+            foreach ($hosts as $host)
+            {
+                $uuid = $this->client->pushEntity($host, 'sort_entity_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $created[] = $uuid;
+            }
+
+            $allEntities = [];
+            $page = 1;
+            do
+            {
+                $entities = $this->client->listEntities($page, 100, null, 'host', 'ASC');
+                $allEntities = array_merge($allEntities, $entities);
+                $page++;
+            } while (count($entities) > 0);
+
+            $filtered = array_values(array_filter($allEntities, fn($e) => in_array($e->getUuid(), $created, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals('a-entity-sort-' . $suffix . '.com', $filtered[0]->getHost());
+            $this->assertEquals('m-entity-sort-' . $suffix . '.com', $filtered[1]->getHost());
+            $this->assertEquals('z-entity-sort-' . $suffix . '.com', $filtered[2]->getHost());
+        }
+
+        public function testListEntitiesSortInvalidByFallsBack(): void
+        {
+            $host = 'entity-invalid-by.com';
+            $uuid = $this->client->pushEntity($host, 'invalid_by_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $result = $this->client->listEntities(1, 10, 'bogus_field_xyz');
+            $this->assertIsArray($result);
+
+            $uuids = array_map(fn($e) => $e->getUuid(), $result);
+            $this->assertContains($uuid, $uuids);
+        }
+
+        public function testListEntitiesSortByCreatedDescending(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->pushEntity("created-sort-$i.com", 'created_user_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $entities = $this->client->listEntities(1, 100, null, 'created', 'DESC');
+            $filtered = array_values(array_filter($entities, fn($e) => in_array($e->getUuid(), $uuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals($uuids[2], $filtered[0]->getUuid());
+            $this->assertEquals($uuids[1], $filtered[1]->getUuid());
+            $this->assertEquals($uuids[0], $filtered[2]->getUuid());
         }
 
         public function testEntityCreationAndRetrievalConsistency(): void
@@ -957,6 +1018,188 @@
         public function testGetTopThreatsReturnsEmptyForNoEntities(): void
         {
             $this->assertIsArray($this->client->getTopThreats());
+        }
+
+        public function testListEntitiesCategoryWhitelisted(): void
+        {
+            $host = 'cat-whitelisted.com';
+            $uuid = $this->client->pushEntity($host, 'whitelist_cat_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $entities = $this->client->listEntities(1, 100, 'WHITELISTED');
+            $this->assertIsArray($entities);
+
+            foreach (array_filter($entities, fn($e) => $e->getUuid() === $uuid) as $e)
+            {
+                $this->assertTrue($e->isWhitelisted());
+            }
+        }
+
+        public function testListEntitiesCategoryNotWhitelisted(): void
+        {
+            $host = 'cat-not-whitelisted.com';
+            $uuid = $this->client->pushEntity($host, 'not_whitelist_cat_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $entities = $this->client->listEntities(1, 100, 'NOT_WHITELISTED');
+            $this->assertIsArray($entities);
+
+            foreach (array_filter($entities, fn($e) => $e->getUuid() === $uuid) as $e)
+            {
+                $this->assertFalse($e->isWhitelisted());
+            }
+        }
+
+        public function testListEntitiesCategoryWithRelationship(): void
+        {
+            $hostA = 'cat-rel-a.com';
+            $hostB = 'cat-rel-b.com';
+            $uuidA = $this->client->pushEntity($hostA, 'rel_a_' . uniqid());
+            $this->createdEntities[] = $uuidA;
+            $uuidB = $this->client->pushEntity($hostB, 'rel_b_' . uniqid());
+            $this->createdEntities[] = $uuidB;
+
+            $this->client->setEntityRelationship($uuidA, $uuidB, \FederationLib\Enums\EntityRelationshipType::PROXY);
+
+            $entities = $this->client->listEntities(1, 100, 'WITH_RELATIONSHIP');
+            $this->assertIsArray($entities);
+
+            $foundA = array_filter($entities, fn($e) => $e->getUuid() === $uuidA);
+            $this->assertNotEmpty($foundA, 'Entity A with relationship should appear in WITH_RELATIONSHIP filter');
+
+            $foundB = array_filter($entities, fn($e) => $e->getUuid() === $uuidB);
+            $this->assertEmpty($foundB, 'Entity B without relationship should NOT appear in WITH_RELATIONSHIP filter');
+        }
+
+        public function testListEntitiesCategoryWithoutRelationship(): void
+        {
+            $hostA = 'cat-no-rel-a.com';
+            $hostB = 'cat-no-rel-b.com';
+            $uuidA = $this->client->pushEntity($hostA, 'no_rel_a_' . uniqid());
+            $this->createdEntities[] = $uuidA;
+            $uuidB = $this->client->pushEntity($hostB, 'no_rel_b_' . uniqid());
+            $this->createdEntities[] = $uuidB;
+
+            $this->client->setEntityRelationship($uuidA, $uuidB, \FederationLib\Enums\EntityRelationshipType::PROXY);
+
+            $entities = $this->client->listEntities(1, 100, 'WITHOUT_RELATIONSHIP');
+            $this->assertIsArray($entities);
+
+            $foundA = array_filter($entities, fn($e) => $e->getUuid() === $uuidA);
+            $this->assertEmpty($foundA, 'Entity A with relationship should NOT appear in WITHOUT_RELATIONSHIP filter');
+
+            $foundB = array_filter($entities, fn($e) => $e->getUuid() === $uuidB);
+            $this->assertNotEmpty($foundB, 'Entity B without relationship should appear in WITHOUT_RELATIONSHIP filter');
+        }
+
+        public function testListEntitiesCategoryWithSort(): void
+        {
+            $suffix = uniqid();
+            $hosts = ['z-cat-sort-' . $suffix . '.com', 'a-cat-sort-' . $suffix . '.com'];
+            $uuids = [];
+            foreach ($hosts as $host)
+            {
+                $uuid = $this->client->pushEntity($host, 'cat_sort_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $allEntities = [];
+            $page = 1;
+            do
+            {
+                $entities = $this->client->listEntities($page, 100, 'NOT_WHITELISTED', 'host', 'ASC');
+                $allEntities = array_merge($allEntities, $entities);
+                $page++;
+            } while (count($entities) > 0);
+
+            $filtered = array_values(array_filter($allEntities, fn($e) => in_array($e->getUuid(), $uuids, true)));
+
+            $this->assertCount(2, $filtered);
+            $this->assertEquals('a-cat-sort-' . $suffix . '.com', $filtered[0]->getHost());
+            $this->assertEquals('z-cat-sort-' . $suffix . '.com', $filtered[1]->getHost());
+        }
+
+        public function testListEntitiesCategoryInvalidFallsBack(): void
+        {
+            $host = 'cat-invalid.com';
+            $uuid = $this->client->pushEntity($host, 'cat_invalid_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $resultDefault = $this->client->listEntities(1, 10);
+            $resultInvalid = $this->client->listEntities(1, 10, 'NONEXISTENT_CATEGORY');
+
+            $defaultUuids = array_map(fn($e) => $e->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($e) => $e->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testListEntitiesCategoryCaseInsensitive(): void
+        {
+            $host = 'cat-case.com';
+            $uuid = $this->client->pushEntity($host, 'cat_case_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $resultUpper = $this->client->listEntities(1, 10, 'NOT_WHITELISTED');
+            $resultLower = $this->client->listEntities(1, 10, 'not_whitelisted');
+            $resultMixed = $this->client->listEntities(1, 10, 'Not_Whitelisted');
+
+            $upperUuids = array_map(fn($e) => $e->getUuid(), $resultUpper);
+            $lowerUuids = array_map(fn($e) => $e->getUuid(), $resultLower);
+            $mixedUuids = array_map(fn($e) => $e->getUuid(), $resultMixed);
+
+            $this->assertNotEmpty($resultUpper);
+            $this->assertSame($upperUuids, $lowerUuids);
+            $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        public function testListEntitiesCategoryWithPagination(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 5; $i++)
+            {
+                $uuid = $this->client->pushEntity("cat-pagination-$i.com", 'cat_pag_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $allRetrieved = [];
+            $page = 1;
+            do
+            {
+                $entities = $this->client->listEntities($page, 2, 'NOT_WHITELISTED');
+                $this->assertIsArray($entities);
+                foreach ($entities as $e)
+                {
+                    $allRetrieved[] = $e->getUuid();
+                }
+                $page++;
+            } while (count($entities) > 0);
+
+            foreach ($uuids as $uuid)
+            {
+                $this->assertContains($uuid, $allRetrieved);
+            }
+        }
+
+        public function testSecurityEntityPushWithMaliciousMetadata(): void
+        {
+            $maliciousMetadataCases = [
+                ['source' => new \stdClass()],
+                ['' => 'empty_key'],
+                [str_repeat('k', 65) => 'overlong_key'],
+            ];
+
+            foreach ($maliciousMetadataCases as $metadata)
+            {
+                $this->expectRequestFailure(
+                    fn() => $this->client->pushEntity('malicious-meta.com', 'meta_user', $metadata),
+                    [HttpResponseCode::BAD_REQUEST->value],
+                    'Entity push with malformed metadata should be rejected'
+                );
+            }
         }
 
     }

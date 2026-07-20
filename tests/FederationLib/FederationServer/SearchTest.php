@@ -10,7 +10,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\SecurityTestHelpers;
+    use FederationLib\Helpers\TestHelpers;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
     use FederationLib\Objects\EntityRecord;
@@ -24,7 +24,7 @@
 
     class SearchTest extends TestCase
     {
-        use SecurityTestHelpers;
+        use TestHelpers;
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];

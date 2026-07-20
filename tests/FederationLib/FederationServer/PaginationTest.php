@@ -420,4 +420,257 @@
             $blacklist = $this->client->listBlacklistRecords(1, 10000, true);
             $this->assertIsArray($blacklist);
         }
+
+        public function testSortByHostAscending(): void
+        {
+            $suffix = uniqid();
+            $hosts = ['c-sort-' . $suffix . '.com', 'a-sort-' . $suffix . '.com', 'b-sort-' . $suffix . '.com'];
+            $created = [];
+            foreach ($hosts as $host)
+            {
+                $uuid = $this->client->pushEntity($host, 'sort_user_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $created[] = $uuid;
+            }
+
+            $allEntities = [];
+            $page = 1;
+            do
+            {
+                $entities = $this->client->listEntities($page, 100, null, 'host', 'ASC');
+                $allEntities = array_merge($allEntities, $entities);
+                $page++;
+            } while (count($entities) > 0);
+
+            $filtered = array_filter($allEntities, fn($e) => in_array($e->getUuid(), $created, true));
+            $filtered = array_values($filtered);
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals('a-sort-' . $suffix . '.com', $filtered[0]->getHost());
+            $this->assertEquals('b-sort-' . $suffix . '.com', $filtered[1]->getHost());
+            $this->assertEquals('c-sort-' . $suffix . '.com', $filtered[2]->getHost());
+        }
+
+        public function testSortByHostDescending(): void
+        {
+            $suffix = uniqid();
+            $hosts = ['a-sort-' . $suffix . '.com', 'b-sort-' . $suffix . '.com', 'c-sort-' . $suffix . '.com'];
+            $created = [];
+            foreach ($hosts as $host)
+            {
+                $uuid = $this->client->pushEntity($host, 'sort_desc_user_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $created[] = $uuid;
+            }
+
+            $allEntities = [];
+            $page = 1;
+            do
+            {
+                $entities = $this->client->listEntities($page, 100, null, 'host', 'DESC');
+                $allEntities = array_merge($allEntities, $entities);
+                $page++;
+            } while (count($entities) > 0);
+
+            $filtered = array_filter($allEntities, fn($e) => in_array($e->getUuid(), $created, true));
+            $filtered = array_values($filtered);
+
+            $this->assertCount(3, $filtered);
+            $this->assertEquals('c-sort-' . $suffix . '.com', $filtered[0]->getHost());
+            $this->assertEquals('b-sort-' . $suffix . '.com', $filtered[1]->getHost());
+            $this->assertEquals('a-sort-' . $suffix . '.com', $filtered[2]->getHost());
+        }
+
+        public function testSortOrderCaseInsensitive(): void
+        {
+            $host = 'case-insensitive-sort.com';
+            $uuid = $this->client->pushEntity($host, 'case_test_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $resultLower = $this->client->listEntities(1, 10, null, 'created', 'asc');
+            $resultUpper = $this->client->listEntities(1, 10, null, 'created', 'ASC');
+            $resultMixed = $this->client->listEntities(1, 10, null, 'created', 'Asc');
+
+            $uuidsLower = array_map(fn($e) => $e->getUuid(), $resultLower);
+            $uuidsUpper = array_map(fn($e) => $e->getUuid(), $resultUpper);
+            $uuidsMixed = array_map(fn($e) => $e->getUuid(), $resultMixed);
+
+            $this->assertSame($uuidsLower, $uuidsUpper);
+            $this->assertSame($uuidsLower, $uuidsMixed);
+        }
+
+        public function testSortByInvalidFieldFallsBackToDefault(): void
+        {
+            $host = 'invalid-field-sort.com';
+            $uuid = $this->client->pushEntity($host, 'invalid_field_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $resultDefault = $this->client->listEntities(1, 10);
+            $resultInvalid = $this->client->listEntities(1, 10, 'nonexistent_column_xyz');
+
+            $defaultUuids = array_map(fn($e) => $e->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($e) => $e->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testSortInvalidOrderFallsBackToDefault(): void
+        {
+            $host = 'invalid-order-sort.com';
+            $uuid = $this->client->pushEntity($host, 'invalid_order_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $resultDefault = $this->client->listEntities(1, 10);
+            $resultInvalid = $this->client->listEntities(1, 10, null, 'created', 'INVALID_ORDER');
+
+            $defaultUuids = array_map(fn($e) => $e->getUuid(), $resultDefault);
+            $invalidUuids = array_map(fn($e) => $e->getUuid(), $resultInvalid);
+
+            $this->assertNotEmpty($resultInvalid);
+            $this->assertSame($defaultUuids, $invalidUuids);
+        }
+
+        public function testSortSqlInjectionSafe(): void
+        {
+            $host = 'sql-injection-sort.com';
+            $uuid = $this->client->pushEntity($host, 'sql_injection_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $payloads = [
+                "' OR '1'='1",
+                "created; DROP TABLE entities",
+                "1 OR 1=1",
+                "uuid UNION SELECT * FROM operators",
+            ];
+
+            foreach ($payloads as $payload)
+            {
+                $result = $this->client->listEntities(1, 10, null, $payload, 'ASC');
+                $this->assertIsArray($result, "Malicious by value '$payload' should not cause errors");
+            }
+        }
+
+        public function testSortByReputationDescending(): void
+        {
+            $hostBase = 'reputation-sort-test';
+            $uuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->pushEntity("$hostBase-$i.com", 'rep_user_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $entities = $this->client->listEntities(1, 100, null, 'reputation', 'DESC');
+            $filtered = array_filter($entities, fn($e) => in_array($e->getUuid(), $uuids, true));
+
+            $this->assertCount(3, $filtered);
+        }
+
+        public function testEntitiesCategoryWithPagination(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 6; $i++)
+            {
+                $uuid = $this->client->pushEntity("cat-pag-$i.com", 'cat_pag_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $allFound = [];
+            $page = 1;
+            $pageSize = 2;
+            do
+            {
+                $entities = $this->client->listEntities($page, $pageSize, 'NOT_WHITELISTED');
+                $this->assertIsArray($entities);
+                $this->assertLessThanOrEqual($pageSize, count($entities));
+                foreach ($entities as $e)
+                {
+                    $allFound[] = $e->getUuid();
+                }
+                $page++;
+            } while (count($entities) === $pageSize && $page <= 10);
+
+            foreach ($uuids as $uuid)
+            {
+                $this->assertContains($uuid, $allFound);
+            }
+        }
+
+        public function testEvidenceCategoryWithPagination(): void
+        {
+            $entityUuid = $this->client->pushEntity('cat-ev-pag.com', 'cat_ev_pag_' . uniqid());
+            $this->createdEntities[] = $entityUuid;
+
+            $uuids = [];
+            for ($i = 0; $i < 5; $i++)
+            {
+                $uuid = $this->client->submitEvidence($entityUuid, "Cat ev pag $i", "Note $i", 'cat_pag');
+                $this->createdEvidenceRecords[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $allFound = [];
+            $page = 1;
+            $pageSize = 2;
+            do
+            {
+                $evidence = $this->client->listEvidence($page, $pageSize, true, 'NOT_CONFIDENTIAL');
+                $this->assertIsArray($evidence);
+                foreach ($evidence as $e)
+                {
+                    $allFound[] = $e->getUuid();
+                }
+                $page++;
+            } while (count($evidence) === $pageSize && $page <= 10);
+
+            foreach ($uuids as $uuid)
+            {
+                $this->assertContains($uuid, $allFound);
+            }
+        }
+
+        public function testCategorySqlInjectionSafe(): void
+        {
+            $host = 'cat-sqli.com';
+            $uuid = $this->client->pushEntity($host, 'cat_sqli_' . uniqid());
+            $this->createdEntities[] = $uuid;
+
+            $payloads = [
+                "' OR '1'='1",
+                "'; DROP TABLE entities; --",
+                "1 OR 1=1",
+                "NOT_WHITELISTED; DELETE FROM entities",
+            ];
+
+            foreach ($payloads as $payload)
+            {
+                $result = $this->client->listEntities(1, 10, $payload);
+                $this->assertIsArray($result, "Malicious category '$payload' should not cause errors");
+            }
+        }
+
+        public function testCategoryCombinedWithSortAndPagination(): void
+        {
+            $uuids = [];
+            for ($i = 0; $i < 4; $i++)
+            {
+                $uuid = $this->client->pushEntity("cat-combo-$i.com", 'cat_combo_' . uniqid());
+                $this->createdEntities[] = $uuid;
+                $uuids[] = $uuid;
+            }
+
+            $page1 = $this->client->listEntities(1, 2, 'NOT_WHITELISTED', 'created', 'ASC');
+            $page2 = $this->client->listEntities(2, 2, 'NOT_WHITELISTED', 'created', 'ASC');
+
+            $page1Uuids = array_map(fn($e) => $e->getUuid(), $page1);
+            $page2Uuids = array_map(fn($e) => $e->getUuid(), $page2);
+
+            $this->assertCount(2, $page1);
+            $this->assertCount(2, $page2);
+            $this->assertEmpty(array_intersect($page1Uuids, $page2Uuids), 'Pages should not overlap');
+        }
+
     }

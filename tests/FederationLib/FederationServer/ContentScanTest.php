@@ -9,7 +9,7 @@
     use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\ClassificationTextGenerator;
+    use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\Logger;
     use FederationLib\Objects\ScannedContent\ContentClassification;
     use InvalidArgumentException;
@@ -35,7 +35,7 @@
             self::$trainingClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
             self::$trainingEntityUuid = self::$trainingClient->pushEntity('scan-training.com', 'scan_training');
 
-            foreach (ClassificationTextGenerator::trainingSet() as $sample)
+            foreach (TextGenerator::trainingSet() as $sample)
             {
                 $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, $sample['text'], IncidentType::OTHER);
                 $reportUuid = $submission->getReport()->getUuid();
@@ -491,7 +491,7 @@
 
             $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::MALICIOUS);
+            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $this->assertNotNull($scanned);
@@ -604,7 +604,7 @@
 
         public function testScanContentBatch(): void
         {
-            $samples = ClassificationTextGenerator::batch(perClass: 3);
+            $samples = TextGenerator::batch(perClass: 3);
 
             foreach ($samples as $sample)
             {
@@ -621,7 +621,7 @@
             // Scan the held-out test samples. The model was trained once in setUpBeforeClass.
             foreach (ClassificationFlag::cases() as $flag)
             {
-                $text = ClassificationTextGenerator::testText($flag);
+                $text = TextGenerator::testText($flag);
                 $scanned = $this->client->scanContent($text);
 
                 $this->assertNotNull($scanned);
@@ -635,7 +635,7 @@
             $entityUuid = $this->client->pushEntity('scan-classify-normal.com', 'scan_classify_normal');
             $this->createdEntities[] = $entityUuid;
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::NORMAL);
+            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $this->assertNotNull($scanned);
@@ -659,7 +659,7 @@
             $entityUuid = $this->client->pushEntity('scan-classify-suspicious.com', 'scan_classify_suspicious');
             $this->createdEntities[] = $entityUuid;
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::SUSPICIOUS);
+            $text = TextGenerator::testText(ClassificationFlag::SUSPICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $this->assertNotNull($scanned);
@@ -685,7 +685,7 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::MALICIOUS);
+            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $this->assertNotNull($scanned);
@@ -717,8 +717,8 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $normalText = ClassificationTextGenerator::testText(ClassificationFlag::NORMAL);
-            $maliciousText = ClassificationTextGenerator::testText(ClassificationFlag::MALICIOUS);
+            $normalText = TextGenerator::testText(ClassificationFlag::NORMAL);
+            $maliciousText = TextGenerator::testText(ClassificationFlag::MALICIOUS);
 
             $normalScan = $this->client->scanContent($normalText, $entityUuid);
             $maliciousScan = $this->client->scanContent($maliciousText, $entityUuid);
@@ -755,7 +755,7 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::MALICIOUS);
+            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $scanResults = $scanned->getScanResults();
@@ -792,7 +792,7 @@
             $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, null);
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::NORMAL);
+            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $this->assertNotNull($scanned->getAuthorEntity());
@@ -808,7 +808,7 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::NORMAL);
+            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
             $scanned = $this->client->scanContent($text, $entityUuid, 2, 0.25);
 
             $this->assertNotNull($scanned);
@@ -827,7 +827,7 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::SUSPICIOUS);
+            $text = TextGenerator::testText(ClassificationFlag::SUSPICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $classification = $scanned->getClassification();
@@ -1174,7 +1174,7 @@
             $this->createdEntities[] = $entityUuid;
 
 
-            $text = ClassificationTextGenerator::testText(ClassificationFlag::NORMAL);
+            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
             $scanned = $this->client->scanContent($text, $entityUuid);
 
             $scanResults = $scanned->getScanResults();
