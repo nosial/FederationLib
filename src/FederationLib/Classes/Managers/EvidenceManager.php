@@ -932,7 +932,7 @@
          * @return EvidenceRecord[] An array of matching EvidenceRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchEvidence(string $likePattern, int $limit, int $page, bool $includeConfidential=false): array
+        public static function searchEvidence(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -945,7 +945,14 @@
                     $sql .= " AND confidential = 0";
                 }
 
-                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildEvidenceSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);

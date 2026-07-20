@@ -903,15 +903,24 @@
          * @return OperatorRecord[] An array of matching OperatorRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchOperators(string $likePattern, int $limit, int $page, bool $hideToken=true): array
+        public static function searchOperators(string $likePattern, int $limit, int $page, bool $hideToken=true, ?OperatorCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM operators WHERE uuid LIKE :q ESCAPE '\\\\' OR name LIKE :q ESCAPE '\\\\' ORDER BY created, uuid LIMIT :limit OFFSET :offset"
-                );
+                $sql = "SELECT * FROM operators WHERE (uuid LIKE :q ESCAPE '\\\\' OR name LIKE :q ESCAPE '\\\\')";
+
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildOperatorSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);

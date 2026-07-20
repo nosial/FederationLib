@@ -698,15 +698,24 @@
          * @return ReportRecord[] An array of matching ReportRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchReports(string $likePattern, int $limit, int $page): array
+        public static function searchReports(string $likePattern, int $limit, int $page, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports WHERE uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\' OR reporting_entity LIKE :q ESCAPE '\\\\' ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $sql = "SELECT * FROM reports WHERE (uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\' OR reporting_entity LIKE :q ESCAPE '\\\\')";
+
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildReportSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);

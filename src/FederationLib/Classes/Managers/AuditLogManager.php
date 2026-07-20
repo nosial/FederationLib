@@ -516,7 +516,7 @@
          * @return AuditLog[] An array of matching AuditLog objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchAuditLogs(string $likePattern, int $limit, int $page, bool $public=false): array
+        public static function searchAuditLogs(string $likePattern, int $limit, int $page, bool $public=false, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -538,7 +538,14 @@
                     }
                 }
 
-                $sql .= " ORDER BY timestamp DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                [$categoryCondition, $categoryParams] = $category?->toCondition() ?? ['', []];
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND $categoryCondition";
+                }
+
+                $sortClause = self::buildAuditLogSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
@@ -548,6 +555,14 @@
                 if (isset($placeholders))
                 {
                     foreach ($placeholders as $key => $value)
+                    {
+                        $stmt->bindValue($key, $value);
+                    }
+                }
+
+                if (isset($categoryParams))
+                {
+                    foreach ($categoryParams as $key => $value)
                     {
                         $stmt->bindValue($key, $value);
                     }

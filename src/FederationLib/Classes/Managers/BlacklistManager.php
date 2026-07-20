@@ -592,15 +592,24 @@
          * @return BlacklistRecord[] An array of matching BlacklistRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchBlacklist(string $likePattern, int $limit, int $page): array
+        public static function searchBlacklist(string $likePattern, int $limit, int $page, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE b.uuid LIKE :q ESCAPE '\\\\' OR b.entity LIKE :q ESCAPE '\\\\' OR e.host LIKE :q ESCAPE '\\\\' OR e.id LIKE :q ESCAPE '\\\\' ORDER BY b.created DESC, b.uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE (b.uuid LIKE :q ESCAPE '\\\\' OR b.entity LIKE :q ESCAPE '\\\\' OR e.host LIKE :q ESCAPE '\\\\' OR e.id LIKE :q ESCAPE '\\\\')";
+
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildBlacklistSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);

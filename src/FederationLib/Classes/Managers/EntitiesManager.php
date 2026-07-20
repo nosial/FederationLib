@@ -1107,15 +1107,24 @@
          * @return EntityRecord[] An array of matching EntityRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchEntities(string $likePattern, int $limit, int $page): array
+        public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM entities WHERE uuid LIKE :q ESCAPE '\\\\' OR host LIKE :q ESCAPE '\\\\' OR id LIKE :q ESCAPE '\\\\' ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset"
-                );
+                $sql = "SELECT * FROM entities WHERE (uuid LIKE :q ESCAPE '\\\\' OR host LIKE :q ESCAPE '\\\\' OR id LIKE :q ESCAPE '\\\\')";
+
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildEntitySortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
+
+                $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);

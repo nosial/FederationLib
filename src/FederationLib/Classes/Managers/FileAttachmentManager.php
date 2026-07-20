@@ -390,7 +390,7 @@
          * @return FileAttachmentRecord[] An array of matching FileAttachmentRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false): array
+        public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?AttachmentCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -410,7 +410,14 @@
                     $sql .= " AND (e.confidential IS NULL OR e.confidential = 0)";
                 }
 
-                $sql .= " ORDER BY fa.created DESC, fa.uuid DESC LIMIT :limit OFFSET :offset";
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $sql .= " AND ($categoryCondition)";
+                }
+
+                $sortClause = self::buildAttachmentSortClause($by, $order);
+                $sql .= " $sortClause LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindValue(':q', $likePattern);
