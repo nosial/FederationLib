@@ -6,7 +6,9 @@
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\AuditLogCategory;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\OrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -45,6 +47,11 @@
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? AuditLogCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListAuditLogsMaxItems())
             {
@@ -82,7 +89,7 @@
                 }
 
                 self::successResponse(array_map(fn($log) => $log->toArray(),
-                        AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries))
+                        AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries, $category, $by, $order))
                 );
             }
             catch (DatabaseOperationException $e)
