@@ -7,6 +7,9 @@
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
+    use FederationLib\Enums\Categories\AuditLogCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\AuditLogOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -70,6 +73,12 @@
                 $filteredEntries = null;
             }
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? AuditLogCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+
             try
             {
                 if(Utilities::isUuid($entityIdentifier))
@@ -96,7 +105,7 @@
                 }
 
                 self::successResponse(array_map(fn($log) => $log->toArray(),
-                    AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries))
+                    AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries, $category, $by, $order))
                 );
             }
             catch (DatabaseOperationException $e)
@@ -163,6 +172,33 @@
                     'description' => 'Page number for pagination',
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter audit log entries by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(AuditLogCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(AuditLogOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
