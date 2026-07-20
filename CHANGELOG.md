@@ -5,9 +5,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.11] - Ongoing
+## [0.0.11] - 2026-07-20
 
-This is an ongoing update
+This update introduces filtering, categorization and improvements to caching performance for related methods
+
+### Added
+ - Added `CategorizableDatabaseInterface` and `SortableDatabaseInterface` for standardized filtering and sorting
+ - Added enums `Categories` (`AttachmentCategory`, `AuditLogCategory`, `BlacklistCategory`, `EntityCategory`,
+   `EvidenceCategory`, `OperatorCategory`, `ReportCategory`) and `OrderTypes` (`AttachmentOrderType`,
+   `AuditLogOrderType`, `BlacklistOrderType`, `EntityOrderType`, `EvidenceOrderType`, `OperatorOrderType`,
+   `ReportOrderType`) with their respective classes, these enums are used for sorting/filtering records from
+   listing/search methods.
+ - Added `OrderType` enum (ASC/DESC) and `RecordType` enum for search result typing
+ - Added filtering parameters (`category`, `by`, `order`) to all listing methods: `ListAttachments`, `ListAuditLogs`,
+   `ListBlacklist`, `ListEntities`, `ListEvidence`, `ListOperators`, `ListReports`, and their operator/entity scoped
+   variants (`ListEntityAuditLogs`, `ListOperatorAuditLogs`, `ListEntityReports`, `ListOperatorReports`,
+   `ListAssignedOperatorReports`)
+ - Added sorting support to all manager classes (`buildReportSortClause`, `buildOperatorSortClause`,
+   `buildAttachmentsSortClause`, `buildEvidenceSortClause`, `buildEntitySortClause`)
+ - Updated `FederationClient` with filtering/sorting parameters for all listing methods
+ - Added `SearchConfiguration` with per-resource-type enable/disable, public search, and max limit settings
+ - Added global `/search` endpoint with `SearchManager`, `SearchResult` object, and per-resource search handlers
+   (`SearchAttachments`, `SearchAuditLogs`, `SearchBlacklist`, `SearchEntities`, `SearchEvidence`, `SearchOperators`,
+   `SearchReports`)
+ - Added `ExtendBlacklist` method (`/blacklist/{uuid}/extend`) for extending blacklist lift timestamps
+ - Added `UpdateOperatorName` method (`/operators/{uuid}/update-name`) for updating operator names
+ - Added `TopThreats` method (`/entities/top-threats`) for displaying top-threat entities by reputation
+ - Added `OPERATOR_NAME_CHANGED` and `BLACKLIST_EXTENDED` audit log types with `getCategory()` method
+ - Added condition to prevent blacklisting an entity not related to an evidence record
+ - Added metadata validation enforcement (empty key check in `Validate`)
+ - Added try/catch to `generateString` for `RandomException` error handling
+ - Added `AuditLogCategory::toCondition()` returning parameterized SQL conditions
+ - Added tests for parameter filtering and security related tests
+ - Added property to disable ncc's APCu usage for test units
+ - Added `.dockerignore`
+ - Added `tryFromCaseInsensitive()` to `OrderType`, `IncidentType`, `ClassificationFlag`, `RecordType`,
+   `EntityRelationshipType`, all `Categories` enums, and all `OrderTypes` enums for case-insensitive parameter parsing
+ - Added `RedisConnection` methods for search/listing result-set caching: `getSearchCacheKey()`, `cacheSearchResults()`,
+   `getCachedSearchResults()`, `clearSearchCache()`, `getResultCacheTtl()`
+ - Added result-set caching to all 7 listing methods (`getEntities`, `getEvidenceRecords`, `getEntries`,
+   `getReports`, `getOperators`, `getAttachmentRecords`, audit `getEntries`), gated on `isPreCacheEnabled()`
+ - Added result-set caching to all 7 search methods (`searchEntities`, `searchEvidence`, `searchBlacklist`,
+   `searchReports`, `searchOperators`, `searchAttachments`, `searchAuditLogs`), gated on `isPreCacheEnabled()`
+ - Added individual record pre-caching (`setRecords`) to all 7 search methods
+ - Added cache invalidation (`clearSearchCache`) to every mutation method across all 7 managers so listing/search
+   calls return fresh data after any create/update/delete/clean operation
+ - Added `searchCacheTtl` configuration property (`redis.search_cache_ttl`, `FEDERATION_SEARCH_CACHE_TTL`, default 60s)
+
+### Changed
+  - Updated all manager classes with filtering/sorting parameters and `build*SortClause` methods
+  - Updated `FederationClient` to include filtering parameters across all listing/search methods
+  - Updated `DeleteBlacklist` method
+  - Updated `CloseReport` to affect entity reputation based on `ClassificationFlag` (malicious: -1, normal: +1)
+  - Updated `SubmitReport` to use UUID v7 and fixed report message parameter
+  - Updated `ScanContent` to return standardized array via `toStandardArray()`
+  - Updated `Utilities::isUuid` to accept both UUID v4 and v7 formats
+  - Updated `Method` enum with new search/update/extend/top-threats routes and changed underscore paths to dashes
+  - Updated `AuditLogType` with new cases and `getCategory()` mapping
+  - Updated `UploadHandler`
+  - Updated SQL schemas for UUID v7 support
+  - Renamed `SecurityTestHelpers` trait to `TestHelpers`
+  - Renamed `ClassificationTextGenerator` class to `TextGenerator`
+  - Updated test bootstrap for helper file renames
+  - Updated Dockerfile to be more efficient in the build process
+  - Updated phpunit.xml to disable apcu caching for ncc during tests
+  - Updated all listing method handlers to accept any capitalisation of `category`, `by`, and `order` parameters
+  - Updated all manager classes to accept any capitalisation of the `by` sort parameter
+  - Updated `SubmitReport`, `CloseReport`, `BlacklistEntity` to accept any capitalisation of `incident_type`,
+    `classification_flag`, and `type` parameters
+  - Updated `SetRelationship` to accept any capitalisation of `relationship_type`
+  - Updated `Search` to accept any capitalisation of the `type` parameter
+  - Updated `FederationClient::search()` to normalise type values to uppercase before sending
+  - Restored `getValidTypeValues()` in `Search` (converted to dynamic from `RecordType::cases()`), used by `SpecificationGenerator` for OpenAPI schema generation
+  - Added `by`, `order`, and `category` filtering/sorting parameters to all per-resource search handlers
+    (`SearchAttachments`, `SearchAuditLogs`, `SearchBlacklist`, `SearchEntities`, `SearchEvidence`,
+    `SearchOperators`, `SearchReports`) matching the listing handlers pattern
+  - Updated all manager search methods (`searchAttachments`, `searchAuditLogs`, `searchBlacklist`,
+    `searchEntities`, `searchEvidence`, `searchOperators`, `searchReports`) to accept optional
+    `$category`, `$by`, and `$order` parameters with SQL sort clause and category filtering support
+  - Updated `FederationClient` per-resource search methods (`searchAttachments`, `searchAuditLogs`,
+    `searchBlacklist`, `searchEntities`, `searchEvidence`, `searchOperators`, `searchReports`) to accept
+    optional `$category`, `$by`, and `$order` parameters with `applySortParams` normalisation
+  - Added tests for search sorting and category filtering in `SearchTest`
+  - Changed all 7 listing methods and 7 search methods to read/write result-set caches via `getCachedSearchResults()` /
+    `cacheSearchResults()` when pre-caching is enabled
+  - Fixed env var typo `FEspiciousDERATION_EVIDENCE_CACHE_TTL` → `FEDERATION_EVIDENCE_CACHE_TTL`
+
+### Removed
+  - Removed `isBlacklisted()`, added category/sort support to `getEntries()` to BlacklistManager
+  - Removed unused `deleteEntity` variants from `EntitiesManager`
+
 
 
 ## [0.0.10] - 2026-07-16
