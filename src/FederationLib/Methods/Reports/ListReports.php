@@ -5,8 +5,10 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\ReportCategory;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Enums\ReportCategory;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\ReportOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -45,11 +47,14 @@
 
             $categoryInput = FederationServer::getParameter('category');
             $category = $categoryInput !== null ? ReportCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
 
             try
             {
                 self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReports($limit, $page, $category))
+                    ReportManager::getReports($limit, $page, $category, $by, $order))
                 );
             }
             catch (DatabaseOperationException $e)
@@ -113,9 +118,26 @@
                 [
                     'name' => 'category',
                     'in' => 'query',
-                    'description' => 'Filter by report category: OPENED, CLOSED, AUTOMATED, UNASSIGNED, ASSIGNED',
+                    'description' => 'Filter by report category',
                     'required' => false,
-                    'schema' => ['type' => 'string', 'enum' => ['OPENED', 'CLOSED', 'AUTOMATED', 'UNASSIGNED', 'ASSIGNED']],
+                    'schema' => ['type' => 'string', 'enum' => array_column(ReportCategory::cases(), 'value')],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(ReportOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
