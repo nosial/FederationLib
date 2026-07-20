@@ -92,6 +92,11 @@
                 throw new DatabaseOperationException("Failed to register entity: " . $e->getMessage(), $e->getCode(), $e);
             }
 
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
             return $uuid;
         }
 
@@ -150,6 +155,7 @@
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
                 $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
             return true;
@@ -202,6 +208,7 @@
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
                 $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
             return true;
@@ -242,6 +249,7 @@
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
                 $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
             return true;
@@ -665,6 +673,7 @@
                     // Handle cascading cache deletions for data that should be deleted with entity
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $uuid);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -686,6 +695,17 @@
             if($page < 1)
             {
                 $page = 1;
+            }
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new EntityRecord($data), $cached);
+                }
             }
 
             try
@@ -713,6 +733,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve entities: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if ($cacheKey !== null && !empty($entities))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EntityRecord $r) => $r->toArray(), $entities));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -781,6 +806,7 @@
             if(self::isCachingEnabled())
             {
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
         }
 
@@ -864,6 +890,7 @@
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
             $redis = self::getReputationRedis();
@@ -1094,6 +1121,7 @@
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
                     RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -1110,6 +1138,17 @@
         public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new EntityRecord($data), $cached);
+                }
+            }
 
             try
             {
@@ -1130,12 +1169,30 @@
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $entities = array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search entities: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($entities))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(EntityRecord $r) => $r->toArray(), $entities)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $entities, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    ttl: Configuration::getRedisConfiguration()->getEntitiesCacheTtl() ?? 0
+                );
+            }
+
+            return $entities;
         }
 
         /**

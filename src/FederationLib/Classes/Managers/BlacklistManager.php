@@ -89,6 +89,11 @@
                 throw new DatabaseOperationException("Failed to prepare SQL statement for blacklisting entity: " . $e->getMessage(), 0, $e);
             }
 
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
             return $uuid;
         }
 
@@ -213,6 +218,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
                 }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -258,6 +267,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
                 }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -297,6 +310,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
                 }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -314,6 +331,17 @@
             if($limit <= 0 || $page <= 0)
             {
                 throw new InvalidArgumentException("Limit and page must be greater than zero.");
+            }
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new BlacklistRecord($data), $cached);
+                }
             }
 
             $offset = ($page - 1) * $limit;
@@ -349,6 +377,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries: " . $e->getMessage(), 0, $e);
+            }
+
+            if ($cacheKey !== null && !empty($results))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(BlacklistRecord $r) => $r->toArray(), $results));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -559,6 +592,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -596,6 +630,17 @@
         {
             $offset = ($page - 1) * $limit;
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new BlacklistRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE (b.uuid LIKE :q ESCAPE '\\\\' OR b.entity LIKE :q ESCAPE '\\\\' OR e.host LIKE :q ESCAPE '\\\\' OR e.id LIKE :q ESCAPE '\\\\')";
@@ -615,12 +660,31 @@
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new BlacklistRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $results = array_map(fn($row) => new BlacklistRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search blacklist: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($results))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(BlacklistRecord $r) => $r->toArray(), $results)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                );
+            }
+
+            return $results;
         }
 
         /**

@@ -144,6 +144,11 @@
                 throw new DatabaseOperationException("Failed to add evidence: " . $e->getMessage(), $e->getCode(), $e);
             }
 
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
             return $uuid;
         }
 
@@ -184,6 +189,7 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'evidence', $uuid);
                     RedisConnection::deleteRecordsByField(FileAttachmentManager::CACHE_PREFIX, 'evidence', $uuid);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -264,6 +270,17 @@
                 throw new InvalidArgumentException('Page must be greater than 0');
             }
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new EvidenceRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -303,6 +320,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if ($cacheKey !== null && !empty($evidenceRecords))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EvidenceRecord $r) => $r->toArray(), $evidenceRecords));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -676,6 +698,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
                 }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -723,6 +749,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
                 }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
             }
         }
 
@@ -755,6 +785,10 @@
                 if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidence)))
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidence));
+                }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -813,6 +847,10 @@
                 if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                }
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -918,6 +956,7 @@
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearRecords(FileAttachmentManager::CACHE_PREFIX);
                     RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -935,6 +974,17 @@
         public static function searchEvidence(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new EvidenceRecord($data), $cached);
+                }
+            }
 
             try
             {
@@ -960,12 +1010,31 @@
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new EvidenceRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $evidenceRecords = array_map(fn($row) => new EvidenceRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search evidence: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($evidenceRecords))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(EvidenceRecord $r) => $r->toArray(), $evidenceRecords)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $evidenceRecords, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getEvidenceCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getEvidenceCacheTtl()
+                );
+            }
+
+            return $evidenceRecords;
         }
 
         /**

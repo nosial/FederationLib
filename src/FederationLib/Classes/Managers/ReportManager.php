@@ -77,6 +77,11 @@
                 throw new DatabaseOperationException("Failed to create report: " . $e->getMessage(), $e->getCode(), $e);
             }
 
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
             return $uuid;
         }
 
@@ -225,6 +230,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -268,6 +274,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -306,6 +313,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -329,6 +337,17 @@
             if($page <= 0)
             {
                 throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new ReportRecord($data), $cached);
+                }
             }
 
             try
@@ -356,6 +375,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve reports: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if ($cacheKey !== null && !empty($reportRecords))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(ReportRecord $r) => $r->toArray(), $reportRecords));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -685,6 +709,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -701,6 +726,17 @@
         public static function searchReports(string $likePattern, int $limit, int $page, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new ReportRecord($data), $cached);
+                }
+            }
 
             try
             {
@@ -721,12 +757,31 @@
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new ReportRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $reports = array_map(fn($row) => new ReportRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search reports: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($reports))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(ReportRecord $r) => $r->toArray(), $reports)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $reports, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getReportCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getReportCacheTtl()
+                );
+            }
+
+            return $reports;
         }
 
         /**

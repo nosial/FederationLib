@@ -58,6 +58,11 @@
             {
                 throw new DatabaseOperationException("Failed to create file attachment record: " . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
         }
 
         /**
@@ -194,6 +199,7 @@
             if(self::isCachingEnabled())
             {
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
         }
 
@@ -218,6 +224,17 @@
                 throw new InvalidArgumentException('Page must be greater than 0');
             }
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new FileAttachmentRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $offset = ($page - 1) * $limit;
@@ -239,6 +256,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if ($cacheKey !== null && !empty($results))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(FileAttachmentRecord $r) => $r->toArray(), $results));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -374,6 +396,7 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
 
@@ -393,6 +416,17 @@
         public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?AttachmentCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             $offset = ($page - 1) * $limit;
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new FileAttachmentRecord($data), $cached);
+                }
+            }
 
             try
             {
@@ -425,12 +459,31 @@
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new FileAttachmentRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $attachments = array_map(fn($row) => new FileAttachmentRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search attachments: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($attachments))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(FileAttachmentRecord $r) => $r->toArray(), $attachments)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $attachments, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl()
+                );
+            }
+
+            return $attachments;
         }
 
         /**

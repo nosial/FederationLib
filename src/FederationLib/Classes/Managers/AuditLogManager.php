@@ -105,6 +105,11 @@
             {
                 throw new DatabaseOperationException("Failed to prepare SQL statement for audit log entry: " . $e->getMessage(), 0, $e);
             }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
         }
 
         /**
@@ -178,6 +183,17 @@
                 throw new InvalidArgumentException("Limit and page must be greater than zero.");
             }
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new AuditLog($data), $cached);
+                }
+            }
+
             $offset = ($page - 1) * $limit;
 
             try
@@ -234,6 +250,14 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries: " . $e->getMessage(), 0, $e);
+            }
+
+            if ($cacheKey !== null && !empty($entries))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(AuditLog $r) => $r->toArray(), $entries)
+                );
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
@@ -467,6 +491,7 @@
                 if (self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -520,6 +545,17 @@
         {
             $offset = ($page - 1) * $limit;
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new AuditLog($data), $cached);
+                }
+            }
+
             try
             {
                 $sql = "SELECT * FROM audit_log WHERE (uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\')";
@@ -569,12 +605,31 @@
                 }
 
                 $stmt->execute();
-                return array_map(fn($row) => new AuditLog($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $results = array_map(fn($row) => new AuditLog($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search audit logs: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($results))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(AuditLog $r) => $r->toArray(), $results)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                RedisConnection::setRecords(
+                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getAuditLogCacheLimit() ?? 0,
+                    ttl: Configuration::getRedisConfiguration()->getAuditLogCacheTtl() ?? 0
+                );
+            }
+
+            return $results;
         }
 
         /**

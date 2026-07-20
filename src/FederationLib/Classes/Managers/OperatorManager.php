@@ -62,6 +62,11 @@
                 throw new DatabaseOperationException(sprintf("Failed to create operator '%s'", $name), 0, $e);
             }
 
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
             return $uuid;
         }
 
@@ -462,6 +467,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -504,6 +510,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -546,6 +553,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -604,6 +612,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
 
@@ -650,6 +659,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -694,6 +704,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -738,6 +749,7 @@
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -789,6 +801,7 @@
                         RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
                     }
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
         }
@@ -806,6 +819,17 @@
             if($limit < 1 || $page < 1)
             {
                 throw new InvalidArgumentException('Limit and page must be greater than 0.');
+            }
+
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    return array_map(fn($data) => new OperatorRecord($data), $cached);
+                }
             }
 
             $offset = ($page - 1) * $limit;
@@ -834,6 +858,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve operators', 0, $e);
+            }
+
+            if ($cacheKey !== null && !empty($operators))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(OperatorRecord $r) => $r->toArray(), $operators));
             }
 
             // Pre-cache operators if caching is enabled and pre-caching is enabled
@@ -907,6 +936,27 @@
         {
             $offset = ($page - 1) * $limit;
 
+            $cacheKey = null;
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if ($cached !== null)
+                {
+                    $results = [];
+                    foreach ($cached as $data)
+                    {
+                        $record = new OperatorRecord($data);
+                        if ($hideToken)
+                        {
+                            $record->clearAccessToken();
+                        }
+                        $results[] = $record;
+                    }
+                    return $results;
+                }
+            }
+
             try
             {
                 $sql = "SELECT * FROM operators WHERE (uuid LIKE :q ESCAPE '\\\\' OR name LIKE :q ESCAPE '\\\\')";
@@ -936,13 +986,43 @@
                     }
                     $results[] = $record;
                 }
-
-                return $results;
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to search operators: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if ($cacheKey !== null && !empty($results))
+            {
+                RedisConnection::cacheSearchResults(
+                    $cacheKey,
+                    array_map(fn(OperatorRecord $r) => $r->toArray(), $results)
+                );
+            }
+
+            if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                /** @var OperatorRecord $operator */
+                foreach ($results as $operator)
+                {
+                    if (!RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
+                    {
+                        RedisConnection::setRecord(
+                            record: $operator,
+                            cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
+                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                        );
+
+                        RedisConnection::getConnection()->setex(
+                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operator->getAccessToken())),
+                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                            value: $operator->getUuid()
+                        );
+                    }
+                }
+            }
+
+            return $results;
         }
 
         // Caching operations
