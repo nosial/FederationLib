@@ -1181,7 +1181,7 @@
 
             if ($by !== null)
             {
-                $filterType = EntityOrderType::tryFrom($by);
+                $filterType = EntityOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

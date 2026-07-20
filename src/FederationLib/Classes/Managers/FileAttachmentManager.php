@@ -450,7 +450,7 @@
 
             if ($by !== null)
             {
-                $filterType = AttachmentOrderType::tryFrom($by);
+                $filterType = AttachmentOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

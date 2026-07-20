@@ -962,7 +962,7 @@
 
             if ($by !== null)
             {
-                $filterType = OperatorOrderType::tryFrom($by);
+                $filterType = OperatorOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

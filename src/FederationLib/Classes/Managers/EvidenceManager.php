@@ -985,7 +985,7 @@
 
             if ($by !== null)
             {
-                $filterType = EvidenceOrderType::tryFrom($by);
+                $filterType = EvidenceOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

@@ -750,7 +750,7 @@
 
             if ($by !== null)
             {
-                $filterType = ReportOrderType::tryFrom($by);
+                $filterType = ReportOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

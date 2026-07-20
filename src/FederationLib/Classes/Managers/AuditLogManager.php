@@ -586,7 +586,7 @@
 
             if ($by !== null)
             {
-                $filterType = AuditLogOrderType::tryFrom($by);
+                $filterType = AuditLogOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();

@@ -638,7 +638,7 @@
 
             if ($by !== null)
             {
-                $filterType = BlacklistOrderType::tryFrom($by);
+                $filterType = BlacklistOrderType::tryFromCaseInsensitive($by);
                 if ($filterType !== null)
                 {
                     $column = $filterType->toColumn();
