@@ -2800,6 +2800,176 @@
             $this->assertContains($operatorUuid, $realUuids);
         }
 
+        public function testSearchEntitiesSortByHostAscending(): void
+        {
+            $host = 'sort-host-' . uniqid() . '.com';
+            $userIds = ['c_user', 'a_user', 'b_user'];
+            $createdUuids = [];
+            foreach ($userIds as $uid)
+            {
+                $uuid = $this->client->pushEntity($host, $uid);
+                $this->createdEntities[] = $uuid;
+                $createdUuids[] = $uuid;
+            }
+
+            $results = $this->client->searchEntities($host, 1, 100, null, 'id', 'ASC');
+            $filtered = array_values(array_filter($results, fn(EntityRecord $r) => in_array($r->getUuid(), $createdUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertStringEndsWith('a_user', $filtered[0]->getId());
+            $this->assertStringEndsWith('b_user', $filtered[1]->getId());
+            $this->assertStringEndsWith('c_user', $filtered[2]->getId());
+        }
+
+        public function testSearchEntitiesSortByReputationDescending(): void
+        {
+            $host = 'sort-rep-' . uniqid() . '.com';
+            $createdUuids = [];
+
+            $e1 = $this->client->pushEntity($host, 'rep_low');
+            $this->createdEntities[] = $e1;
+            $createdUuids[] = $e1;
+
+            $e2 = $this->client->pushEntity($host, 'rep_high');
+            $this->createdEntities[] = $e2;
+            $createdUuids[] = $e2;
+
+            $results = $this->client->searchEntities($host, 1, 100, null, 'reputation', 'DESC');
+            $filtered = array_values(array_filter($results, fn(EntityRecord $r) => in_array($r->getUuid(), $createdUuids, true)));
+
+            $this->assertCount(2, $filtered);
+            $this->assertEquals(0, $filtered[0]->getReputation());
+            $this->assertEquals(0, $filtered[1]->getReputation());
+        }
+
+        public function testSearchEntitiesSortInvalidOrderFallsBack(): void
+        {
+            $host = 'sort-fallback-' . uniqid() . '.com';
+            $uuid = $this->client->pushEntity($host, 'fallback_user');
+            $this->createdEntities[] = $uuid;
+
+            $resultDefault = $this->client->searchEntities($host, 1, 10, null, 'created', 'DESC');
+            $resultInvalid = $this->client->searchEntities($host, 1, 10, null, 'created', 'NONEXISTENT');
+            $resultNoOrder = $this->client->searchEntities($host, 1, 10);
+
+            $this->assertNotEmpty($resultDefault);
+            $this->assertSame(
+                array_map(fn(EntityRecord $r) => $r->getUuid(), $resultDefault),
+                array_map(fn(EntityRecord $r) => $r->getUuid(), $resultInvalid),
+                'Invalid order should fall back to DESC'
+            );
+            $this->assertSame(
+                array_map(fn(EntityRecord $r) => $r->getUuid(), $resultDefault),
+                array_map(fn(EntityRecord $r) => $r->getUuid(), $resultNoOrder),
+                'Null order should default to DESC'
+            );
+        }
+
+        public function testSearchEntitiesCategoryFilter(): void
+        {
+            $host = 'cat-entity-' . uniqid() . '.com';
+            $e1 = $this->client->pushEntity($host, 'cat_user_1');
+            $this->createdEntities[] = $e1;
+
+            $results = $this->client->searchEntities($host, 1, 100, 'NOT_WHITELISTED');
+            $resultUuids = array_map(fn(EntityRecord $r) => $r->getUuid(), $results);
+            $this->assertContains($e1, $resultUuids);
+        }
+
+        public function testSearchEvidenceSortByCreatedAscending(): void
+        {
+            $host = 'ev-sort-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host, 'ev_sort_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $keyword = 'ev-sort-content-' . uniqid();
+            $createdUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $evUuid = $this->client->submitEvidence($entityUuid, $keyword . " $i", 'ev note ' . $i, 'ev_sort');
+                $this->createdEvidenceRecords[] = $evUuid;
+                $createdUuids[] = $evUuid;
+            }
+
+            $results = $this->client->searchEvidence($keyword, 1, 100, null, 'created', 'ASC');
+            $filtered = array_values(array_filter($results, fn(EvidenceRecord $r) => in_array($r->getUuid(), $createdUuids, true)));
+
+            $this->assertCount(3, $filtered);
+            $this->assertLessThanOrEqual($filtered[2]->getCreated(), $filtered[0]->getCreated(),
+                'ASC order should have oldest or equal first');
+        }
+
+        public function testSearchEvidenceCategoryFilter(): void
+        {
+            $host = 'ev-cat-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host, 'ev_cat_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $keyword = 'ev-cat-' . uniqid();
+            $evUuid = $this->client->submitEvidence($entityUuid, $keyword, 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evUuid;
+
+            $results = $this->client->searchEvidence($keyword, 1, 100, 'NOT_CONFIDENTIAL');
+            $resultUuids = array_map(fn(EvidenceRecord $r) => $r->getUuid(), $results);
+            $this->assertContains($evUuid, $resultUuids);
+        }
+
+        public function testSearchReportsCategoryFilter(): void
+        {
+            $entityUuid = $this->client->pushEntity('rep-cat-' . uniqid() . '.com', 'rep_cat_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $keyword = 'rep-cat-msg-' . uniqid();
+            $submission = $this->client->submitReport($entityUuid, 'report content', IncidentType::SPAM, $keyword);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+
+            $results = $this->client->searchReports($keyword, 1, 100, 'OPENED');
+            $resultUuids = array_map(fn(ReportRecord $r) => $r->getUuid(), $results);
+            $this->assertContains($reportUuid, $resultUuids);
+        }
+
+        public function testSearchBlacklistCategoryFilter(): void
+        {
+            $entityUuid = $this->client->pushEntity('bl-cat-' . uniqid() . '.com', 'bl_cat_user');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'bl cat evidence', 'note', 'bl_cat');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $blUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
+            $this->createdBlacklistRecords[] = $blUuid;
+
+            $results = $this->client->searchBlacklist($entityUuid, 1, 100, 'PERMANENT');
+            $resultUuids = array_map(fn(BlacklistRecord $r) => $r->getUuid(), $results);
+            $this->assertContains($blUuid, $resultUuids);
+        }
+
+        public function testSearchByOrderCaseInsensitive(): void
+        {
+            $host = 'ci-sort-' . uniqid() . '.com';
+            $createdUuids = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $uuid = $this->client->pushEntity($host, 'ci_user_' . $i);
+                $this->createdEntities[] = $uuid;
+                $createdUuids[] = $uuid;
+            }
+
+            $lowerBy = $this->client->searchEntities($host, 1, 100, null, 'id', 'asc');
+            $upperBy = $this->client->searchEntities($host, 1, 100, null, 'id', 'ASC');
+            $mixedBy = $this->client->searchEntities($host, 1, 100, null, 'ID', 'Asc');
+
+            $lowerUuids = array_map(fn(EntityRecord $r) => $r->getUuid(), $lowerBy);
+            $upperUuids = array_map(fn(EntityRecord $r) => $r->getUuid(), $upperBy);
+            $mixedUuids = array_map(fn(EntityRecord $r) => $r->getUuid(), $mixedBy);
+
+            $this->assertSame($lowerUuids, $upperUuids,
+                'Lowercase and uppercase order should produce identical results');
+            $this->assertSame($lowerUuids, $mixedUuids,
+                'Mixed case by/order should produce identical results');
+        }
+
         public function testMultiSearchTypeFilterIdentifiesOnlyRequestedTypes(): void
         {
             $keyword = 'filter-id-' . uniqid();
