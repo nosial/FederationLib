@@ -6,7 +6,10 @@
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\Categories\OperatorCategory;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\OrderType;
+    use FederationLib\Enums\OrderTypes\OperatorOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -44,9 +47,15 @@
                 $page = 1;
             }
 
+            $categoryInput = FederationServer::getParameter('category');
+            $category = $categoryInput !== null ? OperatorCategory::tryFrom(strtoupper($categoryInput)) : null;
+            $by = FederationServer::getParameter('by');
+            $orderInput = FederationServer::getParameter('order');
+            $order = $orderInput !== null ? OrderType::tryFrom(strtoupper($orderInput)) : null;
+
             try
             {
-                $operators = OperatorManager::getOperators($limit, $page);
+                $operators = OperatorManager::getOperators($limit, $page, $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -116,6 +125,33 @@
                     'description' => 'Page number for pagination',
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1],
+                ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter operators by category',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(OperatorCategory::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Field to sort by',
+                    'required' => false,
+                    'schema' => [
+                        'type' => 'string',
+                        'enum' => array_column(OperatorOrderType::cases(), 'value'),
+                    ],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort direction',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => array_column(OrderType::cases(), 'value')],
                 ],
             ];
         }
