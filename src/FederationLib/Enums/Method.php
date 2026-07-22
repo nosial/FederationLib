@@ -33,6 +33,7 @@
     use FederationLib\Methods\Entities\PushEntity;
     use FederationLib\Methods\Entities\SearchEntities;
     use FederationLib\Methods\Entities\SetRelationship;
+    use FederationLib\Methods\Entities\SetWhitelist;
     use FederationLib\Methods\Entities\TopThreats;
     use FederationLib\Methods\Entities\UpdateEntity;
     use FederationLib\Methods\Evidence\DeleteEvidence;
@@ -113,6 +114,7 @@
         case CLEAR_REPUTATION;
         case SET_ENTITY_RELATIONSHIP;
         case CLEAR_ENTITY_RELATIONSHIP;
+        case SET_ENTITY_WHITELIST;
         case SEARCH_ENTITIES;
         case TOP_THREATS;
         case UPDATE_ENTITY;
@@ -191,6 +193,7 @@
                 self::DELETE_ENTITY => ['/entities/{identifier}', 'delete', DeleteEntity::class],
                 self::SET_ENTITY_RELATIONSHIP => ['/entities/{identifier}/relationship', 'patch', SetRelationship::class],
                 self::CLEAR_ENTITY_RELATIONSHIP => ['/entities/{identifier}/relationship', 'delete', ClearRelationship::class],
+                self::SET_ENTITY_WHITELIST => ['/entities/{identifier}/whitelist', 'patch', SetWhitelist::class],
                 self::LIST_ENTITY_EVIDENCE => ['/entities/{identifier}/evidence', 'get', ListEntityEvidence::class],
                 self::LIST_ENTITY_AUDIT_LOGS => ['/entities/{identifier}/audit', 'get', ListEntityAuditLogs::class],
                 self::LIST_ENTITY_BLACKLIST_RECORDS => ['/entities/{identifier}/blacklist', 'get', ListEntityBlacklistRecords::class],
@@ -298,6 +301,7 @@
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/clear-reputation$#', $path) && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36})/whitelist$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
                 // SHA-256 entity routing
                 preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
@@ -307,6 +311,7 @@
                 preg_match('#^/entities/([a-f0-9\-]{64})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-f0-9\-]{64})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
                 preg_match('#^/entities/([a-f0-9\-]{64})/clear-reputation$#', $path) && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
+                preg_match('#^/entities/([a-f0-9\-]{64})/whitelist$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
                 preg_match('#^/entities/([a-f0-9\-]{64})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
                 // Entity address routing
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
@@ -316,6 +321,7 @@
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/clear-reputation$#', $path) && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
+                preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/whitelist$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
 
                 // Blcaklist Methods
