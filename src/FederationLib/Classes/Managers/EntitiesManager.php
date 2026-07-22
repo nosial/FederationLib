@@ -66,18 +66,19 @@
 
             try
             {
+                $now = date('Y-m-d H:i:s');
                 if($metadata !== null)
                 {
                     $metadataJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                     $stmt = DatabaseConnection::getConnection()->prepare(
-                        "INSERT INTO entities (uuid, hash, id, host, metadata) VALUES (:uuid, :hash, :id, :host, :metadata)"
+                        "INSERT INTO entities (uuid, hash, id, host, metadata, updated) VALUES (:uuid, :hash, :id, :host, :metadata, :updated)"
                     );
                     $stmt->bindParam(':metadata', $metadataJson);
                 }
                 else
                 {
                     $stmt = DatabaseConnection::getConnection()->prepare(
-                        "INSERT INTO entities (uuid, hash, id, host) VALUES (:uuid, :hash, :id, :host)"
+                        "INSERT INTO entities (uuid, hash, id, host, updated) VALUES (:uuid, :hash, :id, :host, :updated)"
                     );
                 }
 
@@ -85,6 +86,7 @@
                 $stmt->bindParam(':hash', $hash);
                 $stmt->bindParam(':id', $id);
                 $stmt->bindParam(':host', $host);
+                $stmt->bindParam(':updated', $now);
                 $stmt->execute();
             }
             catch (PDOException $e)
