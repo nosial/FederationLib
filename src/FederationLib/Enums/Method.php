@@ -34,6 +34,7 @@
     use FederationLib\Methods\Entities\SearchEntities;
     use FederationLib\Methods\Entities\SetRelationship;
     use FederationLib\Methods\Entities\TopThreats;
+    use FederationLib\Methods\Entities\UpdateEntity;
     use FederationLib\Methods\Evidence\DeleteEvidence;
     use FederationLib\Methods\Evidence\GetEvidenceAttachments;
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
@@ -114,6 +115,7 @@
         case CLEAR_ENTITY_RELATIONSHIP;
         case SEARCH_ENTITIES;
         case TOP_THREATS;
+        case UPDATE_ENTITY;
 
         case LIST_EVIDENCE;
         case SUBMIT_EVIDENCE;
@@ -197,6 +199,7 @@
                 self::TOP_THREATS => ['/entities/top-threats', 'get', TopThreats::class],
                 self::LIST_ENTITIES => ['/entities', 'get', ListEntities::class],
                 self::PUSH_ENTITY => ['/entities', 'post', PushEntity::class],
+                self::UPDATE_ENTITY => ['/entities/{identifier}', 'patch', UpdateEntity::class],
                 self::LIST_BLACKLIST => ['/blacklist', 'get', ListBlacklist::class],
                 self::BLACKLIST_ENTITY => ['/blacklist', 'post', BlacklistEntity::class],
                 self::GET_BLACKLIST_RECORD => ['/blacklist/{uuid}', 'get', GetBlacklistRecord::class],
@@ -286,6 +289,7 @@
                 // UUID entity routing
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_ENTITY,
                 $path === '/entities/search' && $requestMethod === 'GET' => Method::SEARCH_ENTITIES,
                 $path === '/entities/top-threats' && $requestMethod === 'GET' => Method::TOP_THREATS,
                 preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
@@ -298,6 +302,7 @@
                 // SHA-256 entity routing
                 preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
+                preg_match('#^/entities/([a-f0-9\-]{64})$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_ENTITY,
                 preg_match('#^/entities/([a-f0-9\-]{64})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
                 preg_match('#^/entities/([a-f0-9\-]{64})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-f0-9\-]{64})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
@@ -306,6 +311,7 @@
                 // Entity address routing
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
+                preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_ENTITY,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,

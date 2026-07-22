@@ -1107,6 +1107,31 @@
         }
 
         /**
+         * Updates the metadata of an existing entity.
+         *
+         * @param string $entityIdentifier The entity UUID, SHA-256 hash, or entity address (email) to update
+         * @param array $metadata The metadata to merge with the existing entity metadata
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty or metadata is empty
+         */
+        public function updateEntity(string $entityIdentifier, array $metadata): void
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            if(empty($metadata))
+            {
+                throw new InvalidArgumentException('Metadata cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier, ['metadata' => $metadata], [HttpResponseCode::OK],
+                sprintf('Failed to update entity %s', $entityIdentifier)
+            );
+        }
+
+        /**
          * Clears the reputation of the given entity.
          *
          * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose reputation to clear
