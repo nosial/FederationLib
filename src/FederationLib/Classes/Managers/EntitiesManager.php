@@ -187,22 +187,39 @@
                 throw new InvalidArgumentException('Entity not found');
             }
 
-            $existingMetadata = $entity->getMetadata() ?? [];
-            $newJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $existingJson = json_encode($existingMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $clear = empty($metadata);
+            $existingMetadata = $entity->getMetadata();
 
-            if($newJson === $existingJson)
+            if($clear)
             {
-                return false;
+                if($existingMetadata === null)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                $newJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $existingJson = json_encode($existingMetadata ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                if($newJson === $existingJson)
+                {
+                    return false;
+                }
             }
 
             try
             {
                 $now = date('Y-m-d H:i:s');
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "UPDATE entities SET metadata=:metadata, updated=:updated WHERE uuid=:uuid"
-                );
-                $stmt->bindParam(':metadata', $newJson);
+                if($clear)
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("UPDATE entities SET metadata=NULL, updated=:updated WHERE uuid=:uuid");
+                }
+                else
+                {
+                    $stmt = DatabaseConnection::getConnection()->prepare("UPDATE entities SET metadata=:metadata, updated=:updated WHERE uuid=:uuid");
+                    $stmt->bindParam(':metadata', $newJson);
+                }
                 $stmt->bindParam(':updated', $now);
                 $stmt->bindParam(':uuid', $entityUuid);
                 $stmt->execute();
