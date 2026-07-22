@@ -41,7 +41,7 @@
             {
                 if(is_string($data['relationship_type']))
                 {
-                    $this->relationshipType = EntityRelationshipType::tryFrom($data['relationship_type']);
+                    $this->relationshipType = EntityRelationshipType::tryFrom(strtolower($data['relationship_type']));
                 }
                 elseif($data['relationship_type'] instanceof EntityRelationshipType)
                 {
@@ -297,7 +297,7 @@
                 'hash' => $this->getHash(),
                 'host' => $this->host,
                 'id' => $this->id,
-                'metadata' => $this->metadata,
+                'metadata' => $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'whitelisted' => $this->whitelisted,
                 'reputation' => $this->reputation,
                 'reputation_last_updated' => $this->reputationLastUpdated,
@@ -318,7 +318,7 @@
                 'hash' => $this->getHash(),
                 'host' => $this->host,
                 'id' => $this->id,
-                'metadata' => $this->metadata,
+                'metadata' => $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
                 'reputation' => $this->reputation,
                 'relationship_entity' => $this->relationshipEntity,
                 'relationship_type' => $this->relationshipType?->value ?? null,
