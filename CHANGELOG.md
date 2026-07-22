@@ -6,9 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.0.12] - Ongoing
+## [0.0.12] - 2026-07-22
 
-This is an ongoing update
+This update introduces a new request handler and a few bug fixes
+
+### Added 
+ - Added request handler for `/entities/{identifier}` to update an existing entities metadata directly
+
+### Changed
+ - Refactored the entire test suite so that the codebase is more maintainable and organized, no tests were
+   removed during this change.
+
+### Fixed
+ - Fixed entity metadata logic, when using `pushEntity` the metadata is merged, when updating an existing entity the
+   metadata is instead replaced entirely.
 
 
 
