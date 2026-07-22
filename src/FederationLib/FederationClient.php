@@ -1121,9 +1121,9 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            if(empty($metadata))
+            if(!is_array($metadata))
             {
-                throw new InvalidArgumentException('Metadata cannot be empty');
+                throw new InvalidArgumentException('Metadata must be an array');
             }
 
             $this->makeRequest('PATCH', 'entities/' . $entityIdentifier, ['metadata' => $metadata], [HttpResponseCode::OK],
