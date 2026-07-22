@@ -164,6 +164,66 @@
         }
 
         /**
+         * Replaces the metadata of an existing entity entirely, removing any keys not present
+         * in the provided metadata. This is a full replace, not a merge. Intended for use
+         * by the PATCH endpoint (updateEntity).
+         *
+         * @param string $entityUuid The UUID of the entity to update
+         * @param array $metadata The new metadata to set on the entity (replaces entirely)
+         * @return bool True if changes were applied, False if no changes were needed
+         * @throws InvalidArgumentException If the metadata is invalid or entity is not found
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function replaceEntityMetadata(string $entityUuid, array $metadata): bool
+        {
+            if(!Validate::entityMetadata($metadata))
+            {
+                throw new InvalidArgumentException('Invalid entity metadata provided');
+            }
+
+            $entity = self::getEntityByUuid($entityUuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            $existingMetadata = $entity->getMetadata() ?? [];
+            $newJson = json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $existingJson = json_encode($existingMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if($newJson === $existingJson)
+            {
+                return false;
+            }
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET metadata=:metadata, updated=:updated WHERE uuid=:uuid"
+                );
+                $stmt->bindParam(':metadata', $newJson);
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to replace entity metadata: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            return true;
+        }
+
+        /**
          * Updates the entity's relationship
          *
          * @param string $entityUuid The entity to update
