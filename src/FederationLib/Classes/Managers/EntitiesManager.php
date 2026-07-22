@@ -1303,6 +1303,56 @@
         }
 
         /**
+         * Sets the whitelist state of an entity.
+         *
+         * @param string $entityUuid The UUID of the entity to update
+         * @param bool $whitelisted The new whitelist state
+         * @return bool True if the whitelist state was changed, False if it was already set to the given value
+         * @throws InvalidArgumentException If the entity is not found
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement
+         */
+        public static function setEntityWhitelist(string $entityUuid, bool $whitelisted): bool
+        {
+            $entity = self::getEntityByUuid($entityUuid);
+            if($entity === null)
+            {
+                throw new InvalidArgumentException('Entity not found');
+            }
+
+            if($entity->isWhitelisted() === $whitelisted)
+            {
+                return false;
+            }
+
+            try
+            {
+                $now = date('Y-m-d H:i:s');
+                $whitelistedInt = $whitelisted ? 1 : 0;
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "UPDATE entities SET whitelisted=:whitelisted, updated=:updated WHERE uuid=:uuid"
+                );
+                $stmt->bindParam(':whitelisted', $whitelistedInt, PDO::PARAM_INT);
+                $stmt->bindParam(':updated', $now);
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update entity whitelist state: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
+                $hash = Utilities::hashEntity($entity->getHost(), $entity->getId());
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            return true;
+        }
+
+        /**
          * Returns True if caching & entity caching is enabled for this class
          *
          * @return bool True if caching & caching for entities is enabled, False otherwise
