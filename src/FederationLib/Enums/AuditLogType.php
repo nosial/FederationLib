@@ -32,6 +32,7 @@
         case ENTITY_PUSHED = 'ENTITY_PUSHED';
         case ENTITY_UPDATED = 'ENTITY_UPDATED';
         case ENTITY_REPUTATION_CLEARED = 'ENTITY_REPUTATION_CLEARED';
+        case ENTITY_WHITELIST_CHANGED = 'ENTITY_WHITELIST_CHANGED';
 
         case BLACKLIST_RECORD_DELETED = 'BLACKLIST_DELETED';
         case BLACKLIST_LIFTED = 'BLACKLIST_LIFTED';
@@ -94,7 +95,8 @@
                 self::ENTITY_DELETED,
                 self::ENTITY_BLACKLISTED,
                 self::ENTITY_PUSHED,
-                self::ENTITY_REPUTATION_CLEARED => AuditLogCategory::ENTITY_EVENTS,
+                self::ENTITY_REPUTATION_CLEARED,
+                self::ENTITY_WHITELIST_CHANGED => AuditLogCategory::ENTITY_EVENTS,
 
                 self::BLACKLIST_RECORD_DELETED,
                 self::BLACKLIST_LIFTED,
