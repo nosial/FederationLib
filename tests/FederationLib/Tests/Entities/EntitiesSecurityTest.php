@@ -8,6 +8,7 @@
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
     use FederationLib\Helpers\TestHelpers;
+    use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
     class EntitiesSecurityTest extends TestCase
@@ -231,6 +232,126 @@
                     'Entity push with malformed metadata should be rejected'
                 );
             }
+        }
+
+        public function testSecuritySetWhitelistRequiresManagementPermissions(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $clientOnly = $this->createLimitedOperator('whitelist_client', client: true);
+            $operatorOnly = $this->createLimitedOperator('whitelist_operator', operator: true);
+
+            $this->expectRequestFailure(
+                fn() => $clientOnly->setEntityWhitelist($entityUuid, true),
+                [HttpResponseCode::FORBIDDEN->value],
+                'Client-only operator should not set whitelist state'
+            );
+
+            $this->expectRequestFailure(
+                fn() => $operatorOnly->setEntityWhitelist($entityUuid, true),
+                [HttpResponseCode::FORBIDDEN->value],
+                'Operator-only operator should not set whitelist state'
+            );
+        }
+
+        public function testSecuritySetWhitelistAnonymousClient(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+
+            try
+            {
+                $anonymousClient->setEntityWhitelist($entityUuid, true);
+                $this->fail('Expected RequestException for anonymous setWhitelist');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertContains($e->getCode(), [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
+                    'Anonymous request should be rejected');
+            }
+        }
+
+        public function testSecuritySetWhitelistNonExistentEntity(): void
+        {
+            $this->expectRequestFailure(
+                fn() => $this->client->setEntityWhitelist($this->randomUuid(), true),
+                [HttpResponseCode::NOT_FOUND->value],
+                'Setting whitelist on non-existent entity should fail'
+            );
+        }
+
+        public function testSecuritySetWhitelistInvalidIdentifier(): void
+        {
+            $invalidIdentifiers = [
+                '',
+                'not-a-valid-identifier',
+                'short',
+                '12345',
+            ];
+
+            foreach ($invalidIdentifiers as $identifier)
+            {
+                try
+                {
+                    $this->client->setEntityWhitelist($identifier, true);
+                    $this->fail("Expected RequestException for invalid identifier: $identifier");
+                }
+                catch (InvalidArgumentException)
+                {
+                    // Client-side validation rejected it — acceptable.
+                }
+                catch (RequestException $e)
+                {
+                    $this->assertContains($e->getCode(), [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
+                        "Invalid identifier '$identifier' should trigger 400 or 404, got {$e->getCode()}");
+                }
+            }
+        }
+
+        public function testSecuritySetWhitelistMissingParameter(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+
+            [$code, $body] = $this->rawRequest('PATCH', 'entities/' . $entityUuid . '/whitelist',
+                getenv('SERVER_ACCESS_TOKEN'),
+                json_encode([])
+            );
+
+            $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $code,
+                'Missing whitelisted parameter should return 400');
+        }
+
+        public function testSecuritySetWhitelistInvalidParameterType(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+
+            $invalidParams = [
+                'yes',
+                'no',
+                'not_a_boolean',
+                ['nested' => 'object'],
+                1.5,
+            ];
+
+            foreach ($invalidParams as $value)
+            {
+                [$code, $body] = $this->rawRequest('PATCH', 'entities/' . $entityUuid . '/whitelist',
+                    getenv('SERVER_ACCESS_TOKEN'),
+                    json_encode(['whitelisted' => $value])
+                );
+
+                $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $code,
+                    "Invalid whitelisted value '" . (is_scalar($value) ? (string)$value : gettype($value)) . "' should return 400");
+            }
+        }
+
+        public function testSecuritySetWhitelistManagementOperatorSucceeds(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $managementOnly = $this->createLimitedOperator('whitelist_mgmt', management: true);
+
+            $managementOnly->setEntityWhitelist($entityUuid, true);
+            $record = $this->client->getEntityRecord($entityUuid);
+            $this->assertTrue($record->isWhitelisted());
         }
 
         public function testGetEntityAsAnonymousClient(): void

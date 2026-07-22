@@ -494,6 +494,91 @@
             $this->assertEquals($uuids[0], $filtered[2]->getUuid());
         }
 
+        public function testSetWhitelistToTrue(): void
+        {
+            $uuid = $this->createSecurityEntity();
+
+            $this->client->setEntityWhitelist($uuid, true);
+
+            $record = $this->client->getEntityRecord($uuid);
+            $this->assertTrue($record->isWhitelisted());
+        }
+
+        public function testSetWhitelistToFalse(): void
+        {
+            $uuid = $this->createSecurityEntity();
+
+            $this->client->setEntityWhitelist($uuid, true);
+            $record = $this->client->getEntityRecord($uuid);
+            $this->assertTrue($record->isWhitelisted());
+
+            $this->client->setEntityWhitelist($uuid, false);
+            $record = $this->client->getEntityRecord($uuid);
+            $this->assertFalse($record->isWhitelisted());
+        }
+
+        public function testSetWhitelistToggleMultipleTimes(): void
+        {
+            $uuid = $this->createSecurityEntity();
+
+            $states = [true, false, true, false, true];
+            foreach ($states as $state)
+            {
+                $this->client->setEntityWhitelist($uuid, $state);
+                $record = $this->client->getEntityRecord($uuid);
+                $this->assertSame($state, $record->isWhitelisted());
+            }
+        }
+
+        public function testSetWhitelistByIdentifierTypes(): void
+        {
+            $host = 'whitelist-identifier-test.com';
+            $id = 'wli_user';
+            $uuid = $this->client->pushEntity($host, $id);
+            $this->createdEntities[] = $uuid;
+
+            $hash = Utilities::hashEntity($host, $id);
+            $this->client->setEntityWhitelist($hash, true);
+            $this->assertTrue($this->client->getEntityRecord($uuid)->isWhitelisted());
+
+            $address = "$id@$host";
+            $this->client->setEntityWhitelist($address, false);
+            $this->assertFalse($this->client->getEntityRecord($uuid)->isWhitelisted());
+
+            $this->client->setEntityWhitelist($uuid, true);
+            $this->assertTrue($this->client->getEntityRecord($uuid)->isWhitelisted());
+        }
+
+        public function testSetWhitelistIdempotent(): void
+        {
+            $uuid = $this->createSecurityEntity();
+
+            $this->client->setEntityWhitelist($uuid, true);
+            $this->assertTrue($this->client->getEntityRecord($uuid)->isWhitelisted());
+
+            $this->client->setEntityWhitelist($uuid, true);
+            $this->assertTrue($this->client->getEntityRecord($uuid)->isWhitelisted());
+        }
+
+        public function testSetWhitelistAdvancesUpdatedTimestamp(): void
+        {
+            $uuid = $this->createSecurityEntity();
+
+            $record = $this->client->getEntityRecord($uuid);
+            $before = $record->getUpdated();
+            $this->assertIsInt($before);
+
+            $this->client->setEntityWhitelist($uuid, true);
+            $record = $this->client->getEntityRecord($uuid);
+            $this->assertIsInt($record->getUpdated());
+            $this->assertGreaterThanOrEqual($before, $record->getUpdated());
+
+            $before = $record->getUpdated();
+            $this->client->setEntityWhitelist($uuid, false);
+            $record = $this->client->getEntityRecord($uuid);
+            $this->assertGreaterThanOrEqual($before, $record->getUpdated());
+        }
+
         public function testListEntitiesCategoryWhitelisted(): void
         {
             $host = 'cat-whitelisted.com';
