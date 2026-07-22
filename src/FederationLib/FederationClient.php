@@ -1197,6 +1197,26 @@
         }
 
         /**
+         * Sets the whitelist state of an entity.
+         *
+         * @param string $entityIdentifier The entity UUID, hash, or address
+         * @param bool $whitelisted The new whitelist state
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the entity identifier is empty
+         */
+        public function setEntityWhitelist(string $entityIdentifier, bool $whitelisted): void
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/whitelist', ['whitelisted' => $whitelisted], [HttpResponseCode::OK],
+                sprintf('Failed to set whitelist state for entity %s', $entityIdentifier)
+            );
+        }
+
+        /**
          * Searches entities by a query string.
          *
          * @param string $query The search query (minimum 2 characters)
