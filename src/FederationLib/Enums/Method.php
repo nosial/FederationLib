@@ -68,6 +68,7 @@
     use FederationLib\Methods\Reports\CloseReport;
     use FederationLib\Methods\Reports\DeleteReport;
     use FederationLib\Methods\Reports\GetReport;
+    use FederationLib\Methods\Reports\ListOpenedReports;
     use FederationLib\Methods\Reports\ListReports;
     use FederationLib\Methods\Reports\AssignOperator;
     use FederationLib\Methods\Reports\SearchReports;
@@ -138,6 +139,7 @@
 
         case SUBMIT_REPORT;
         case LIST_REPORTS;
+        case LIST_OPENED_REPORTS;
         case LIST_OPERATOR_REPORTS;
         case LIST_ENTITY_REPORTS;
         case LIST_ASSIGNED_OPERATOR_REPORTS;
@@ -220,6 +222,7 @@
                 self::SEARCH_EVIDENCE => ['/evidence/search', 'get', SearchEvidence::class],
                 self::SUBMIT_REPORT => ['/reports', 'post', SubmitReport::class],
                 self::LIST_REPORTS => ['/reports', 'get', ListReports::class],
+                self::LIST_OPENED_REPORTS => ['/reports/opened', 'get', ListOpenedReports::class],
                 self::GET_REPORT => ['/reports/{uuid}', 'get', GetReport::class],
                 self::CLOSE_REPORT => ['/reports/{uuid}/close', 'patch', CloseReport::class],
                 self::DELETE_REPORT => ['/reports/{uuid}', 'delete', DeleteReport::class],
@@ -366,6 +369,7 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_REPORTS,
 
                 // Reports methods
+                $path === '/reports/opened' && $requestMethod === 'GET' => Method::LIST_OPENED_REPORTS,
                 $path === '/reports' && $requestMethod === 'GET' => Method::LIST_REPORTS,
                 $path === '/reports' && $requestMethod === 'POST' => Method::SUBMIT_REPORT,
                 $path === '/reports/search' && $requestMethod === 'GET' => Method::SEARCH_REPORTS,
