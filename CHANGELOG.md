@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.14] - Ongoing
+## [0.0.14] - 2026-07-30
 
-This is an ongoing update
+This update introduces a new request handler for listing opened reports and sorting support for assigned operator reports
+
+### Added
+ - Added `ListOpenedReports` request handler for `GET /reports/opened` with optional `by` and `order` sorting parameters
+ - Added `listOpenedReports` method to `FederationClient` with pagination and sorting parameters
+ - Added `by` and `order` filtering parameters to `ReportManager::getReportsByAssignedOperator` using `buildReportSortClause`
+ - Added test units for the new assigned opened reports listing method
+
+### Changed
+ - Updated `FederationClient::submitReport` to allow multiple file attachments to be uploaded when submitting a report
+   via `localFilePaths` and `remoteUrls` array parameters
 
 
 
