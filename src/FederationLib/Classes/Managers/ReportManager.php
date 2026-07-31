@@ -548,7 +548,7 @@
          * @throws InvalidArgumentException If the operator UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsByAssignedOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
+        public static function getReportsByAssignedOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($operatorUuid) < 1)
             {
@@ -579,7 +579,7 @@
                 {
                     $sql .= " AND $categoryCondition";
                 }
-                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $sql .= " " . self::buildReportSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
