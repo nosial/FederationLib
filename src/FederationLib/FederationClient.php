@@ -1542,18 +1542,20 @@
         }
 
         /**
-         * Submits a new report.
+         * Submits a new report with optional file attachments.
          *
          * @param string $reportingEntity The UUID, SHA-256 hash, or entity address of the entity being reported
          * @param string $content The content/message of the report
          * @param IncidentType $incidentType The type of incident being reported
          * @param string|null $reportMessage Optional message for the report
          * @param string|null $evidenceTag Optional tag for the evidence
-         * @return ReportSubmission The created report submission
+         * @param array|null $localFilePaths Optional array of local file paths to attach to the report
+         * @param array|null $remoteUrls Optional array of remote URLs to download and attach to the report
+         * @return ReportSubmission The created report submission with optional attachments
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If required parameters are invalid
          */
-        public function submitReport(string $reportingEntity, string $content, IncidentType $incidentType, ?string $reportMessage = null, ?string $evidenceTag = null): ReportSubmission
+        public function submitReport(string $reportingEntity, string $content, IncidentType $incidentType, ?string $reportMessage=null, ?string $evidenceTag=null, ?array $localFilePaths=null, ?array $remoteUrls=null): ReportSubmission
         {
             if(empty($reportingEntity))
             {
@@ -1563,6 +1565,28 @@
             if(empty($content))
             {
                 throw new InvalidArgumentException('Content cannot be empty');
+            }
+
+            if($localFilePaths !== null)
+            {
+                foreach($localFilePaths as $path)
+                {
+                    if(!is_string($path))
+                    {
+                        throw new InvalidArgumentException('Each local file path must be a string');
+                    }
+                }
+            }
+
+            if($remoteUrls !== null)
+            {
+                foreach($remoteUrls as $url)
+                {
+                    if(!is_string($url))
+                    {
+                        throw new InvalidArgumentException('Each remote URL must be a string');
+                    }
+                }
             }
 
             $params = [
@@ -1581,9 +1605,39 @@
                 $params['evidence_tag'] = $evidenceTag;
             }
 
-            return ReportSubmission::fromArray($this->makeRequest('POST', 'reports', $params, [HttpResponseCode::OK],
+            $submission = ReportSubmission::fromArray($this->makeRequest('POST', 'reports', $params, [HttpResponseCode::OK],
                 'Failed to submit report'
             ));
+
+            $attachments = [];
+            $evidenceUuid = $submission->getEvidence()->getUuid();Added new filtering parameters to getReportsByAssignedOperator
+
+            if($localFilePaths !== null)
+            {
+                foreach($localFilePaths as $localFilePath)
+                {
+                    $attachments[] = $this->uploadFileAttachment($evidenceUuid, $localFilePath);
+                }
+            }
+
+            if($remoteUrls !== null)
+            {
+                foreach($remoteUrls as $remoteUrl)
+                {
+                    $attachments[] = $this->uploadFileAttachmentFromUrl($evidenceUuid, $remoteUrl);
+                }
+            }
+
+            if(!empty($attachments))
+            {
+                return new ReportSubmission(
+                    $submission->getReport(),
+                    $submission->getEvidence(),
+                    $attachments
+                );
+            }
+
+            return $submission;
         }
 
         /**
@@ -1619,6 +1673,40 @@
                 fn($item) => ReportRecord::fromArray($item),
                 $this->makeRequest('GET', 'reports', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list reports, page: %d, limit: %d', $page, $limit)
+                )
+            );
+        }
+
+        /**
+         * Lists opened reports assigned to the currently authenticated operator with pagination support.
+         *
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of reports per page (default is 100)
+         * @param string|null $by The field to sort by
+         * @param string|null $order The sort direction (ASC or DESC)
+         * @return ReportRecord[] An array of ReportRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If page or limit are invalid
+         */
+        public function listOpenedReports(int $page = 1, int $limit = 100, ?string $by = null, ?string $order = null): array
+        {
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            $params = ['page' => $page, 'limit' => $limit];
+            self::applySortParams($params, $by, $order);
+
+            return array_map(
+                fn($item) => ReportRecord::fromArray($item),
+                $this->makeRequest('GET', 'reports/opened', $params, [HttpResponseCode::OK],
+                    sprintf('Failed to list opened reports, page: %d, limit: %d', $page, $limit)
                 )
             );
         }
