@@ -1610,7 +1610,7 @@
             ));
 
             $attachments = [];
-            $evidenceUuid = $submission->getEvidence()->getUuid();Added new filtering parameters to getReportsByAssignedOperator
+            $evidenceUuid = $submission->getEvidence()->getUuid();
 
             if($localFilePaths !== null)
             {
