@@ -2,7 +2,6 @@
 
     namespace FederationLib\Classes;
 
-    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -131,6 +130,7 @@
          * Respond with a success message and data.
          *
          * @param mixed $data Data to include in the response.
+         * @param int|HttpResponseCode $responseCode Optional. The response code of the success response
          * @return void
          */
         protected static function successResponse(mixed $data = null, int|HttpResponseCode $responseCode = 200): void
@@ -150,7 +150,7 @@
 
             if($data === null)
             {
-                print(json_encode((new SuccessResponse())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+                print(json_encode(new SuccessResponse()->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
             }
             else
             {
@@ -169,7 +169,7 @@
         {
             http_response_code($code);
             self::returnHeaders();
-            print(json_encode((new ErrorResponse($code, $message))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            print(json_encode(new ErrorResponse($code, $message)->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         /**
@@ -185,7 +185,7 @@
         {
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
-            print(json_encode((new ErrorResponse($e->getCode() ?: 500, $e->getMessage()))->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         }
 
         /**
