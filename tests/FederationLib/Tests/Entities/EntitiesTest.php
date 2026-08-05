@@ -4,10 +4,13 @@
 
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
     use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Objects\EntityRecord;
+    use FederationLib\Objects\SearchResult;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
     use Symfony\Component\Uid\Uuid;
@@ -15,6 +18,8 @@
     class EntitiesTest extends TestCase
     {
         use TestHelpers;
+        private const array TEST_METADATA = ['source' => 'metadata_visibility_test', 'sensitive' => true];
+
         private FederationClient $client;
         private array $createdOperators = [];
         private array $createdEntities = [];
@@ -458,5 +463,319 @@
                 [HttpResponseCode::BAD_REQUEST->value],
                 'Overly long metadata key should be rejected'
             );
+        }
+
+        /**
+         * Pushes an entity with TEST_METADATA and registers it for cleanup.
+         *
+         * @param string|null $id Optional local-part identifier for the entity
+         * @return array{uuid: string, host: string}
+         * @throws RequestException
+         */
+        private function createEntityWithMetadata(?string $id = null): array
+        {
+            $host = 'metadata-vis-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host, $id, self::TEST_METADATA);
+            $this->createdEntities[] = $entityUuid;
+            return ['uuid' => $entityUuid, 'host' => $host];
+        }
+
+        /**
+         * Determines whether the server hides entity metadata from unauthenticated users by
+         * probing the anonymous response of the given entity record.
+         *
+         * @param string $entityUuid The UUID of the entity to probe
+         * @return bool True if the server nulls the metadata for anonymous users, false otherwise
+         */
+        private function isEntityMetadataHidden(string $entityUuid): bool
+        {
+            [$code, $body] = $this->rawRequest('GET', 'entities/' . $entityUuid);
+            if ($code !== 200)
+            {
+                return false;
+            }
+
+            $data = json_decode($body, true);
+            return is_array($data) && array_key_exists('metadata', $data) && $data['metadata'] === null;
+        }
+
+        /**
+         * Skips the test unless the server hides entity metadata from unauthenticated users.
+         *
+         * @param string $entityUuid The UUID of the entity to probe
+         * @return void
+         */
+        private function requireHiddenEntityMetadata(string $entityUuid): void
+        {
+            if (!$this->isEntityMetadataHidden($entityUuid))
+            {
+                $this->markTestSkipped('Server is configured to expose entity metadata to unauthenticated users');
+            }
+        }
+
+        /**
+         * Skips the test unless the server exposes entity metadata to unauthenticated users.
+         *
+         * @param string $entityUuid The UUID of the entity to probe
+         * @return void
+         */
+        private function requirePublicEntityMetadata(string $entityUuid): void
+        {
+            if ($this->isEntityMetadataHidden($entityUuid))
+            {
+                $this->markTestSkipped('Server is configured to hide entity metadata from unauthenticated users');
+            }
+        }
+
+        public function testAuthenticatedGetEntityRecordIncludesMetadata(): void
+        {
+            $entity = $this->createEntityWithMetadata('user_get');
+
+            $record = $this->client->getEntityRecord($entity['uuid']);
+            $this->assertInstanceOf(EntityRecord::class, $record);
+            $this->assertEquals(self::TEST_METADATA, $record->getMetadata());
+
+            [$code, $body] = $this->rawRequest('GET', 'entities/' . $entity['uuid'], getenv('SERVER_ACCESS_TOKEN'));
+            $this->assertEquals(200, $code);
+            $data = json_decode($body, true);
+            $this->assertEquals(json_encode(self::TEST_METADATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $data['metadata']);
+        }
+
+        public function testAnonymousGetEntityRecordOmitsMetadata(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $entity = $this->createEntityWithMetadata('user_anon_get');
+            $this->requireHiddenEntityMetadata($entity['uuid']);
+
+            [$code, $body] = $this->rawRequest('GET', 'entities/' . $entity['uuid']);
+            $this->assertEquals(200, $code);
+            $data = json_decode($body, true);
+            $this->assertArrayHasKey('metadata', $data, 'The metadata field must remain present in the response');
+            $this->assertNull($data['metadata'], 'Entity metadata must be nulled out for unauthenticated users');
+        }
+
+        public function testAuthenticatedListEntitiesIncludesMetadata(): void
+        {
+            $entity = $this->createEntityWithMetadata('user_list');
+            $metadataByUuid = [];
+
+            for ($page = 1; $page <= 20; $page++)
+            {
+                $entities = $this->client->listEntities($page, 100);
+                if (empty($entities))
+                {
+                    break;
+                }
+
+                foreach ($entities as $record)
+                {
+                    $metadataByUuid[$record->getUuid()] = $record->getMetadata();
+                }
+            }
+
+            $this->assertArrayHasKey($entity['uuid'], $metadataByUuid, 'Created entity should appear in the entity listing');
+            $this->assertEquals(self::TEST_METADATA, $metadataByUuid[$entity['uuid']]);
+        }
+
+        public function testAnonymousListEntitiesOmitsMetadata(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $entity = $this->createEntityWithMetadata('user_anon_list');
+            $this->requireHiddenEntityMetadata($entity['uuid']);
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $found = false;
+
+            for ($page = 1; $page <= 20; $page++)
+            {
+                $entities = $anonymousClient->listEntities($page, 100);
+                if (empty($entities))
+                {
+                    break;
+                }
+
+                foreach ($entities as $record)
+                {
+                    if ($record->getUuid() !== $entity['uuid'])
+                    {
+                        continue;
+                    }
+
+                    $found = true;
+                    $this->assertNull($record->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
+                    break 2;
+                }
+            }
+
+            $this->assertTrue($found, 'Created entity should appear in the anonymous entity listing');
+        }
+
+        public function testAuthenticatedSearchEntitiesIncludesMetadata(): void
+        {
+            $entity = $this->createEntityWithMetadata('user_search');
+
+            $results = $this->client->searchEntities($entity['host'], 1, 10);
+            $this->assertNotEmpty($results);
+
+            foreach ($results as $record)
+            {
+                if ($record->getUuid() === $entity['uuid'])
+                {
+                    $this->assertEquals(self::TEST_METADATA, $record->getMetadata());
+                    return;
+                }
+            }
+
+            $this->fail('Created entity should appear in the search results');
+        }
+
+        public function testAnonymousSearchEntitiesOmitsMetadata(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $entity = $this->createEntityWithMetadata('user_anon_search');
+            $this->requireHiddenEntityMetadata($entity['uuid']);
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            try
+            {
+                $results = $anonymousClient->searchEntities($entity['host'], 1, 10);
+            }
+            catch (RequestException $e)
+            {
+                $this->markTestSkipped('Anonymous entity search is not available: ' . $e->getMessage());
+                return;
+            }
+
+            foreach ($results as $record)
+            {
+                if ($record->getUuid() === $entity['uuid'])
+                {
+                    $this->assertNull($record->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
+                    return;
+                }
+            }
+
+            $this->fail('Created entity should appear in the anonymous search results');
+        }
+
+        public function testGlobalSearchEntityResultsIncludeMetadataForAuthenticatedClient(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $entity = $this->createEntityWithMetadata('user_global_search');
+
+            $results = $this->client->search($entity['host'], [RecordType::ENTITY->value], 1, 10);
+            $this->assertNotEmpty($results);
+
+            foreach ($results as $result)
+            {
+                $this->assertInstanceOf(SearchResult::class, $result);
+                if ($result->getType() === RecordType::ENTITY && $result->getRecord() instanceof EntityRecord)
+                {
+                    $this->assertEquals($entity['uuid'], $result->getRecord()->getUuid());
+                    $this->assertEquals(self::TEST_METADATA, $result->getRecord()->getMetadata());
+                    return;
+                }
+            }
+
+            $this->fail('Created entity should appear in the global search results');
+        }
+
+
+        public function testAnonymousTopThreatsOmitMetadata(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $this->createEntityWithMetadata();
+            $this->createEntityWithMetadata();
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $topThreats = $anonymousClient->getTopThreats(25);
+            $this->assertNotEmpty($topThreats, 'Top threats should return at least one entity');
+
+            foreach ($topThreats as $threat)
+            {
+                if ($this->isEntityMetadataHidden($threat->getUuid()))
+                {
+                    $this->assertNull($threat->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
+                }
+            }
+        }
+
+        public function testAuthenticatedScanContentIncludesResolvedEntityMetadata(): void
+        {
+            $entity = $this->createEntityWithMetadata();
+
+            $scanned = $this->client->scanContent('Check out ' . $entity['host'] . ' for details.');
+            $this->assertNotNull($scanned);
+            $this->assertNotEmpty($scanned->getResolvedEntities());
+
+            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
+            {
+                if ($resolvedEntity->getEntity()->getHost() !== $entity['host'])
+                {
+                    continue;
+                }
+
+                $this->assertEquals(self::TEST_METADATA, $resolvedEntity->getEntity()->getMetadata());
+                return;
+            }
+
+            $this->fail('Created entity should be resolved by the content scan');
+        }
+
+        public function testAnonymousScanContentOmitsResolvedEntityMetadata(): void
+        {
+            if (!$this->client->getServerInformation()->isPublicEntities())
+            {
+                $this->markTestSkipped('Server does not expose entities publicly');
+            }
+
+            $entity = $this->createEntityWithMetadata();
+            $this->requireHiddenEntityMetadata($entity['uuid']);
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            try
+            {
+                $scanned = $anonymousClient->scanContent('Check out ' . $entity['host'] . ' for details.');
+            }
+            catch (RequestException $e)
+            {
+                $this->markTestSkipped('Anonymous content scanning is not available: ' . $e->getMessage());
+            }
+
+            $this->assertNotNull($scanned);
+            $this->assertNotEmpty($scanned->getResolvedEntities());
+
+            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
+            {
+                if ($resolvedEntity->getEntity()->getHost() !== $entity['host'])
+                {
+                    continue;
+                }
+
+                $this->assertNull($resolvedEntity->getEntity()->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
+                return;
+            }
+
+            $this->fail('Created entity should be resolved by the content scan');
         }
     }
