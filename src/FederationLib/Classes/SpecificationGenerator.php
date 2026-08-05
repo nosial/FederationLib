@@ -58,7 +58,7 @@
                 'title' => $serverConfig->getName(),
                 'summary' => 'Federation API for cross-server entity and report management',
                 'description' => 'Federation API server for managing entities, evidence, blacklists, reports, and operators.',
-                'version' => '2025.01',
+                'version' => '1.0',
             ];
         }
 
