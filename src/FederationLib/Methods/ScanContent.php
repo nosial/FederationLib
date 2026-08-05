@@ -163,7 +163,13 @@
                 }
             }
 
-            self::successResponse($scannedContent->toStandardArray());
+            $response = $scannedContent->toStandardArray();
+            if (self::shouldOmitEntityMetadata())
+            {
+                $response = self::omitEmbeddedEntityMetadata($response);
+            }
+
+            self::successResponse($response);
         }
 
         /**

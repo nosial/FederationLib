@@ -46,6 +46,7 @@
             self::$configuration->setDefault('server.public_evidence', true, 'FEDERATION_PUBLIC_EVIDENCE');
             self::$configuration->setDefault('server.public_blacklist', true, 'FEDERATION_PUBLIC_BLACKLIST');
             self::$configuration->setDefault('server.public_entities', true, 'FEDERATION_PUBLIC_ENTITIES');
+            self::$configuration->setDefault('server.public_entity_metadata', false, 'FEDERATION_PUBLIC_ENTITY_METADATA');
             self::$configuration->setDefault('server.public_reports', true, 'FEDERATION_PUBLIC_REPORTS');
             self::$configuration->setDefault('server.public_scan_content', true, 'FEDERATION_PUBLIC_SCAN_CONTENT');
             self::$configuration->setDefault('server.top_threats_limit', 25, 'FEDERATION_TOP_THREATS_LIMIT');

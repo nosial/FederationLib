@@ -77,7 +77,7 @@
                 throw new RequestException(self::ERROR_NOT_FOUND, 404);
             }
 
-            self::successResponse($entityRecord->toArray());
+            self::successResponse(self::entityToArray($entityRecord));
         }
 
         /**

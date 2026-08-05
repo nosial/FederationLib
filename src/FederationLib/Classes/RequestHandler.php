@@ -4,12 +4,15 @@
 
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\SearchResult;
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
     use Throwable;
@@ -303,6 +306,75 @@
             }
 
             return $operator;
+        }
+
+        /**
+         * Checks whether entity metadata should be omitted from the response for unauthenticated users.
+         *
+         * @return bool True if entity metadata should be hidden from unauthenticated users, false otherwise.
+         */
+        protected static function shouldOmitEntityMetadata(): bool
+        {
+            return !Configuration::getServerConfiguration()->isEntityMetadataPublic() && self::getAuthenticatedOperator() === null;
+        }
+
+        /**
+         * Serializes an entity record, omitting its metadata for unauthenticated users unless
+         * entity metadata is configured to be public.
+         *
+         * @param EntityRecord $entity The entity record to serialize
+         * @return array The serialized entity record
+         */
+        protected static function entityToArray(EntityRecord $entity): array
+        {
+            $data = $entity->toArray();
+            if (self::shouldOmitEntityMetadata())
+            {
+                $data['metadata'] = null;
+            }
+
+            return $data;
+        }
+
+        /**
+         * Serializes a search result, omitting entity metadata for unauthenticated users.
+         *
+         * @param SearchResult $result The search result to serialize
+         * @return array The serialized search result
+         */
+        protected static function searchResultToArray(SearchResult $result): array
+        {
+            $data = $result->toArray();
+            if ($result->getType() === RecordType::ENTITY && $result->getRecord() instanceof EntityRecord)
+            {
+                $data['record'] = self::entityToArray($result->getRecord());
+            }
+
+            return $data;
+        }
+
+        /**
+         * Recursively nulls the metadata of any entity records embedded in a serialized response.
+         *
+         * @param array $data The serialized response data
+         * @return array The response data with entity metadata omitted
+         */
+        protected static function omitEmbeddedEntityMetadata(array $data): array
+        {
+            foreach ($data as $key => $value)
+            {
+                if ($key === 'entity' && is_array($value))
+                {
+                    $value['metadata'] = null;
+                    $data['entity'] = $value;
+                }
+                elseif (is_array($value))
+                {
+                    $data[$key] = self::omitEmbeddedEntityMetadata($value);
+                }
+            }
+
+            return $data;
         }
     }
 

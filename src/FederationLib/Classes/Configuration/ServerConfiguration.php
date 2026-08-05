@@ -26,6 +26,7 @@
         private bool $publicEvidence;
         private bool $publicBlacklist;
         private bool $publicEntities;
+        private bool $publicEntityMetadata;
         private bool $publicReports;
         private bool $publicScanContent;
         private int $minBlacklistTime;
@@ -55,6 +56,7 @@
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
             $this->publicReports = $config['public_reports'] ?? true;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
@@ -229,6 +231,16 @@
         public function isEntitiesPublic(): bool
         {
             return $this->publicEntities;
+        }
+
+        /**
+         * Checks if entity metadata is publicly accessible to unauthenticated users
+         *
+         * @return bool True if entity metadata is public, false otherwise
+         */
+        public function isEntityMetadataPublic(): bool
+        {
+            return $this->publicEntityMetadata;
         }
 
         /**

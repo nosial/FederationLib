@@ -44,7 +44,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, 500, $e);
             }
 
-            self::successResponse(array_map(fn($entity) => $entity->toArray(), $entities));
+            self::successResponse(array_map(fn($entity) => self::entityToArray($entity), $entities));
         }
 
         /**
