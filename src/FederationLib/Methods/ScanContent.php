@@ -385,7 +385,7 @@
          * @param ScannedContent $scannedContent The scanned content results
          * @param string $content The text input content
          * @param array|null $metadata Optional metadata to associate with the evidence record
-         * @throws DatabaseOperationException Thrown if there was a databsae operation error
+         * @throws DatabaseOperationException Thrown if there was a database operation error
          * @throws RequestException Thrown if the file upload validation fails
          */
         private static function generateReport(ScannedContent $scannedContent, string $content, ?array $metadata=null): void

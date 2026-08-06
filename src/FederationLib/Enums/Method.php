@@ -151,6 +151,7 @@
         case SEARCH_REPORTS;
 
         case UPLOAD_ATTACHMENT;
+        case UPLOAD_ATTACHMENT_PUT;
         case DOWNLOAD_ATTACHMENT;
         case GET_ATTACHMENT_INFO;
         case DELETE_ATTACHMENT;
@@ -190,6 +191,7 @@
                 self::GET_ATTACHMENT_INFO => ['/attachments/{uuid}/info', 'get', GetAttachmentInfo::class],
                 self::LIST_ATTACHMENTS => ['/attachments', 'get', ListAttachments::class],
                 self::UPLOAD_ATTACHMENT => ['/attachments', 'post', UploadAttachment::class],
+                self::UPLOAD_ATTACHMENT_PUT => ['/attachments', 'put', UploadAttachment::class],
                 self::SEARCH_ATTACHMENTS => ['/attachments/search', 'get', SearchAttachments::class],
                 self::GET_ENTITY_RECORD => ['/entities/{identifier}', 'get', GetEntityRecord::class],
                 self::DELETE_ENTITY => ['/entities/{identifier}', 'delete', DeleteEntity::class],
@@ -235,7 +237,7 @@
                 self::LIST_OPERATORS => ['/operators', 'get', ListOperators::class],
                 self::CREATE_OPERATOR => ['/operators', 'post', CreateOperator::class],
                 self::GET_SELF_OPERATOR => ['/operators/self', 'get', GetSelfOperator::class],
-                self::GENERATE_OPERATOR_ACCESS_TOKEN => ['/operators/refresh', 'post', GenerateOperatorAccessToken::class],
+                self::GENERATE_OPERATOR_ACCESS_TOKEN => ['/operators/{uuid}/refresh', 'post', GenerateOperatorAccessToken::class],
                 self::GET_OPERATOR => ['/operators/{uuid}', 'get', GetOperator::class],
                 self::DELETE_OPERATOR => ['/operators/{uuid}', 'delete', DeleteOperator::class],
                 self::ENABLE_OPERATOR => ['/operators/{uuid}/enable', 'patch', EnableOperator::class],
@@ -280,7 +282,8 @@
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) && $requestMethod === 'GET' => Method::GET_ATTACHMENT_INFO,
                 $path === '/attachments/search' && $requestMethod === 'GET' => Method::SEARCH_ATTACHMENTS,
                 $path === '/attachments' && $requestMethod === 'GET' => Method::LIST_ATTACHMENTS,
-                $path === '/attachments' && ($requestMethod === 'POST' || $requestMethod === 'PUT')  => Method::UPLOAD_ATTACHMENT,
+                $path === '/attachments' && $requestMethod === 'POST' => Method::UPLOAD_ATTACHMENT,
+                $path === '/attachments' && $requestMethod === 'PUT' => Method::UPLOAD_ATTACHMENT_PUT,
 
                 // Entities methods
                 // UUID entity relationship routing

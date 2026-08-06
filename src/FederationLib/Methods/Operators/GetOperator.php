@@ -137,6 +137,14 @@
                         ],
                     ],
                 ],
+                '401' => [
+                    'description' => 'Authentication required',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
                 '404' => [
                     'description' => self::ERROR_NOT_FOUND,
                     'content' => [

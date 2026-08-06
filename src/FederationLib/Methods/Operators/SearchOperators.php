@@ -21,7 +21,7 @@
         private const string ERROR_QUERY_REQUIRED = 'Search query is required';
         private const string ERROR_QUERY_TOO_SHORT = 'Search query must be at least 2 characters';
         private const string ERROR_AUTH_REQUIRED = 'Authentication is required to search operators';
-        private const string ERROR_UNABLE_TO_SEARCH = 'There was an internal server error while preforming the search operation';
+        private const string ERROR_UNABLE_TO_SEARCH = 'There was an internal server error while performing the search operation';
 
         /**
          * @inheritDoc

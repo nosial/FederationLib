@@ -5,6 +5,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestSpecificationInterface;
+    use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
 
     class GetSelfOperator extends RequestHandler implements RequestSpecificationInterface
@@ -76,6 +77,14 @@
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => OperatorRecord::getReference()],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => 'Authentication required',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
                         ],
                     ],
                 ],

@@ -166,6 +166,14 @@
                         ],
                     ],
                 ],
+                '401' => [
+                    'description' => 'Authentication required',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
                 '403' => [
                     'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
                     'content' => [

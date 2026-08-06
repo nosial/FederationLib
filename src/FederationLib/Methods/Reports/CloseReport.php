@@ -263,11 +263,13 @@
                                     'type' => 'string',
                                     'description' => 'Optional classification flag for the report',
                                     'nullable' => true,
+                                    'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS'],
                                 ],
                                 'blacklist_incident_type' => [
                                     'type' => 'string',
                                     'description' => 'Optional blacklist incident type',
                                     'nullable' => true,
+                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
                                 ],
                                 'blacklist_expires' => [
                                     'type' => 'integer',
@@ -297,7 +299,15 @@
                     ],
                 ],
                 '400' => [
-                    'description' => self::ERROR_INVALID_UUID,
+                    'description' => self::ERROR_INVALID_UUID . ', ' . self::ERROR_NOT_ASSIGNED . ', ' . self::ERROR_ALREADY_CLOSED . ', invalid classification, invalid blacklist type, or blacklist expiration in the past',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => 'Authentication required',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
@@ -306,6 +316,14 @@
                 ],
                 '403' => [
                     'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '404' => [
+                    'description' => 'Report not found',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

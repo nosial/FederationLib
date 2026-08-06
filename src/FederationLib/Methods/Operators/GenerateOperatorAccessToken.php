@@ -97,7 +97,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Generates a new access token for an operator (or the authenticated operator if no UUID is provided). Cannot generate a builtin (root/system) operator\'s token. Requires operator management permissions to generate another operator\'s token.';
+            return 'Generates a new access token for an operator. Use the authenticated operator\'s UUID or the special `/operators/refresh` path to refresh the token of the authenticated operator. Cannot generate a builtin (root/system) operator\'s token. Requires operator management permissions to generate another operator\'s token.';
         }
 
         /**
@@ -117,8 +117,8 @@
                 [
                     'name' => 'uuid',
                     'in' => 'path',
-                    'description' => 'Operator UUID (optional, defaults to authenticated operator)',
-                    'required' => false,
+                    'description' => 'Operator UUID to refresh. Use `/operators/refresh` to refresh the authenticated operator\'s token.',
+                    'required' => true,
                     'schema' => ['type' => 'string', 'format' => 'uuid'],
                 ],
             ];
@@ -143,6 +143,14 @@
                     'content' => [
                         'application/json' => [
                             'schema' => ['type' => 'string', 'description' => 'The new access token'],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => 'Authentication required',
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
                         ],
                     ],
                 ],

@@ -85,7 +85,7 @@
          */
         public static function getHelp(): string
         {
-            return "Usage: federationserver init";
+            return "Usage: federationlib init";
         }
 
         /**

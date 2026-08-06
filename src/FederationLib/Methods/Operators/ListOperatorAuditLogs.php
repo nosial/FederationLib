@@ -19,6 +19,7 @@
     class ListOperatorAuditLogs extends RequestHandler implements RequestSpecificationInterface
     {
         private const string ERROR_AUDIT_LOGS_NOT_AVAILABLE = 'Public audit logs are disabled and no operator is authenticated';
+        private const string ERROR_PERMISSION_DENIED = 'Insufficient permissions to view audit logs for this operator';
         private const string ERROR_UUID_REQUIRED = 'Operator UUID is required';
         private const string ERROR_NOT_FOUND = 'Operator with the specified UUID does not exist';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve audit logs';
@@ -74,7 +75,7 @@
                 // unless they have operator management permissions.
                 if ($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->hasOperatorPermissions())
                 {
-                    throw new RequestException('Insufficient permissions to view audit logs for this operator', HttpResponseCode::FORBIDDEN);
+                    throw new RequestException(self::ERROR_PERMISSION_DENIED, HttpResponseCode::FORBIDDEN);
                 }
 
                 // If an operator is authenticated, we can retrieve all entries
@@ -157,6 +158,27 @@
                     'required' => false,
                     'schema' => ['type' => 'integer', 'minimum' => 1],
                 ],
+                [
+                    'name' => 'category',
+                    'in' => 'query',
+                    'description' => 'Filter by audit log category',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => ['OPERATOR_EVENTS', 'ATTACHMENT_EVENTS', 'EVIDENCE_EVENTS', 'REPORT_EVENTS', 'ENTITY_EVENTS', 'BLACKLIST_EVENTS', 'OTHER']],
+                ],
+                [
+                    'name' => 'by',
+                    'in' => 'query',
+                    'description' => 'Filter by operator UUID that performed the action',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'format' => 'uuid'],
+                ],
+                [
+                    'name' => 'order',
+                    'in' => 'query',
+                    'description' => 'Sort order for results',
+                    'required' => false,
+                    'schema' => ['type' => 'string', 'enum' => ['ASC', 'DESC']],
+                ],
             ];
         }
 
@@ -193,8 +215,16 @@
                         ],
                     ],
                 ],
-                '403' => [
+                '401' => [
                     'description' => self::ERROR_AUDIT_LOGS_NOT_AVAILABLE,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '403' => [
+                    'description' => self::ERROR_PERMISSION_DENIED,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

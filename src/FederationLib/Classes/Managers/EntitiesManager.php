@@ -298,7 +298,7 @@
          *
          * @param string $entityUuid The entity UUID to clear relationship data from
          * @return bool True if the operation was successful, False otherwise.
-         * @throws DatabaseOperationException Thrown if there was an databsae operation error.
+         * @throws DatabaseOperationException Thrown if there was a database operation error.
          */
         public static function clearEntityRelationship(string $entityUuid): bool
         {

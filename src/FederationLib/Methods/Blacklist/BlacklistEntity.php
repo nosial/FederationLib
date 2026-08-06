@@ -190,7 +190,8 @@
                                 ],
                                 'type' => [
                                     'type' => 'string',
-                                    'description' => 'The type of incident (e.g. spam, scam, malware)',
+                                    'description' => 'The type of incident',
+                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
                                 ],
                                 'evidence_uuid' => [
                                     'type' => 'string',
@@ -227,6 +228,14 @@
                 ],
                 '400' => [
                     'description' => self::ERROR_INVALID_IDENTIFIER,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => 'Authentication required',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

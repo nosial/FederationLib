@@ -396,37 +396,56 @@
          */
         public static function getRequestBody(): ?array
         {
+            $schema = [
+                'type' => 'object',
+                'properties' => [
+                    'reporting_entity' => [
+                        'type' => 'string',
+                        'description' => 'UUID, SHA-256 hash, or entity address of the entity being reported',
+                    ],
+                    'content' => [
+                        'type' => 'string',
+                        'description' => 'The content/message of the report',
+                    ],
+                                'incident_type' => [
+                                    'type' => 'string',
+                                    'description' => 'The type of incident being reported',
+                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
+                                ],
+                    'report_message' => [
+                        'type' => 'string',
+                        'description' => 'Optional message for the report',
+                        'nullable' => true,
+                    ],
+                    'evidence_tag' => [
+                        'type' => 'string',
+                        'description' => 'Optional tag for the evidence',
+                        'nullable' => true,
+                    ],
+                ],
+                'required' => ['reporting_entity', 'content', 'incident_type'],
+            ];
+
             return [
                 'required' => true,
                 'content' => [
                     'application/json' => [
+                        'schema' => $schema,
+                    ],
+                    'multipart/form-data' => [
                         'schema' => [
                             'type' => 'object',
-                            'properties' => [
-                                'reporting_entity' => [
-                                    'type' => 'string',
-                                    'description' => 'UUID, SHA-256 hash, or entity address of the entity being reported',
-                                ],
-                                'content' => [
-                                    'type' => 'string',
-                                    'description' => 'The content/message of the report',
-                                ],
-                                'incident_type' => [
-                                    'type' => 'string',
-                                    'description' => 'The type of incident being reported',
-                                ],
-                                'report_message' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional message for the report',
-                                    'nullable' => true,
-                                ],
-                                'evidence_tag' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional tag for the evidence',
-                                    'nullable' => true,
-                                ],
-                            ],
-                            'required' => ['reporting_entity', 'content', 'incident_type'],
+                            'properties' => array_merge(
+                                $schema['properties'],
+                                [
+                                    'file' => [
+                                        'type' => 'string',
+                                        'format' => 'binary',
+                                        'description' => 'Optional file attachment to associate with the report evidence',
+                                    ],
+                                ]
+                            ),
+                            'required' => $schema['required'],
                         ],
                     ],
                 ],
@@ -449,6 +468,14 @@
                 ],
                 '400' => [
                     'description' => self::ERROR_ENTITY_IDENTIFIER_REQUIRED,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '401' => [
+                    'description' => 'Authentication required',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

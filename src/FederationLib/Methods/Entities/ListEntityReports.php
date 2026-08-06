@@ -19,7 +19,7 @@
 
     class ListEntityReports extends RequestHandler implements RequestSpecificationInterface
     {
-        private const string ERROR_AUTHENTICATION_REQUIRED = 'Public reports are disabled and no entity is authenticated';
+        private const string ERROR_AUTHENTICATION_REQUIRED = 'Public reports are disabled and no operator is authenticated';
         private const string ERROR_IDENTIFIER_REQUIRED = 'Entity identifier UUID/SHA-256 is required';
         private const string ERROR_NOT_FOUND = 'Entity not found';
         private const string ERROR_FAILED_TO_GET_ENTITY = 'Failed to get entity';

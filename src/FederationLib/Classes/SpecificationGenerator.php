@@ -113,6 +113,7 @@
                 ['name' => 'Server', 'description' => 'Server information and metadata'],
                 ['name' => 'Specification', 'description' => 'OpenAPI specification endpoint'],
                 ['name' => 'Scan', 'description' => 'Content scanning operations'],
+                ['name' => 'Search', 'description' => 'Cross-resource search'],
             ];
         }
 

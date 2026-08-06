@@ -16,7 +16,7 @@
          * @param string $query The search query to use
          * @param int $limit The limit of the search results
          * @param int $page The current page of the search results
-         * @param OperatorRecord|null $operator Optional. The authenticated operator preforming the search
+         * @param OperatorRecord|null $operator Optional. The authenticated operator performing the search
          * @param array|null $types Optional. The types to filter by
          * @return SearchResult[] Returns an array of SearchResult objects
          * @throws DatabaseOperationException Thrown if there was a database operation error
