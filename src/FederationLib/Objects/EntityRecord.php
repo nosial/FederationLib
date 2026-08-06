@@ -6,9 +6,9 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
-    use FederationLib\Interfaces\StandardObjectInterface;
+    use FederationLib\Interfaces\SerializableInterface;
 
-    class EntityRecord implements StandardObjectInterface, ObjectSpecificationInterface
+    class EntityRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private string $host;
@@ -290,36 +290,17 @@
         /**
          * @inheritDoc
          */
-        public function toArray(): array
+        public function toArray(bool $includeMetadata=false): array
         {
             return [
                 'uuid' => $this->uuid,
                 'hash' => $this->getHash(),
                 'host' => $this->host,
                 'id' => $this->id,
-                'metadata' => $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                'metadata' => $includeMetadata ? $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null : null,
                 'whitelisted' => $this->whitelisted,
                 'reputation' => $this->reputation,
                 'reputation_last_updated' => $this->reputationLastUpdated,
-                'relationship_entity' => $this->relationshipEntity,
-                'relationship_type' => $this->relationshipType?->value ?? null,
-                'created' => $this->created,
-                'updated' => $this->updated
-            ];
-        }
-
-        /**
-         * @inheritDoc
-         */
-        public function toStandardArray(): array
-        {
-            return [
-                'uuid' => $this->uuid,
-                'hash' => $this->getHash(),
-                'host' => $this->host,
-                'id' => $this->id,
-                'metadata' => $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
-                'reputation' => $this->reputation,
                 'relationship_entity' => $this->relationshipEntity,
                 'relationship_type' => $this->relationshipType?->value ?? null,
                 'created' => $this->created,
