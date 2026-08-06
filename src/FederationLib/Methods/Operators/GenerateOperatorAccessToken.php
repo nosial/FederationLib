@@ -26,18 +26,16 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', FederationServer::getPath(), $matches))
+            if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', FederationServer::getPath(), $matches))
             {
-                $operatorUuid = $matches[1];
-                // Ensure the authenticated operator has permission to generate other operators' Access Tokens.
-                if($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->hasOperatorPermissions())
-                {
-                    throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
-                }
+                throw new RequestException('Invalid request path', HttpResponseCode::BAD_REQUEST);
             }
-            else
+
+            $operatorUuid = $matches[1];
+            // Ensure the authenticated operator has permission to generate other operators' Access Tokens.
+            if($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->hasOperatorPermissions())
             {
-                $operatorUuid = $authenticatedOperator->getUuid();
+                throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
             try
@@ -97,7 +95,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Generates a new access token for an operator. Use the authenticated operator\'s UUID or the special `/operators/refresh` path to refresh the token of the authenticated operator. Cannot generate a builtin (root/system) operator\'s token. Requires operator management permissions to generate another operator\'s token.';
+            return 'Generates a new access token for an operator. An operator can always refresh their own token; requires operator management permissions to generate another operator\'s token. Use the dedicated `/operators/refresh` endpoint to refresh the token of the authenticated operator. Cannot generate a builtin (root/system) operator\'s token.';
         }
 
         /**
@@ -117,7 +115,7 @@
                 [
                     'name' => 'uuid',
                     'in' => 'path',
-                    'description' => 'Operator UUID to refresh. Use `/operators/refresh` to refresh the authenticated operator\'s token.',
+                    'description' => 'Operator UUID to refresh. Use the dedicated `/operators/refresh` endpoint to refresh the authenticated operator\'s token.',
                     'required' => true,
                     'schema' => ['type' => 'string', 'format' => 'uuid'],
                 ],
