@@ -9,7 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 First stable release of FederationLib
 
-### 
+### Added
+ - Added `server.public_entity_metadata` configuration option (`FEDERATION_PUBLIC_ENTITY_METADATA`, default `false`)
+   to control whether entity metadata is exposed to unauthenticated users
+ - Added entity metadata visibility helpers to `RequestHandler` (`shouldOmitEntityMetadata`, `entityToArray`,
+   `searchResultToArray`, `omitEmbeddedEntityMetadata`) and applied them to `GetEntityRecord`, `ListEntities`,
+   `SearchEntities`, `TopThreats`, `ScanContent` and the global `Search` endpoint
+ - Added test units covering entity metadata visibility in `EntitiesTest`
+ - Added `UPLOAD_ATTACHMENT_PUT` method and `PUT /attachments` route for uploading attachments
+ - Added a `Search` tag group to the OpenAPI specification generator
+ - Added missing `401`, `403`, `404` and `409` response definitions, `enum` constraints (`IncidentType`,
+   `ClassificationFlag`, relationship types, audit log categories, sort order) and parameters to the handler
+   specifications
+ - Added a `multipart/form-data` request body schema to `SubmitReport`
+
+### Changed
+ - Changed specification version from `2025.01` to `1.0`
+ - Operator Access Tokens are now stored securely: the database only persists the SHA-256 hash of each token
+   (`operators.access_token` widened to `varchar(64)`, with the `none` sentinel kept literal), and the raw token is only
+   returned when it is generated or refreshed via `GenerateOperatorAccessToken`
+ - Changed the token refresh route from `/operators/refresh` to `/operators/{uuid}/refresh`, making the operator UUID a
+   required path parameter
+ - Updated `GenerateOperatorAccessToken` (plus `CloseReport`, `BlacklistEntity`, `SetRelationship`
+   `ListOperatorAuditLogs`, `CreateOperator`, `GetSelfOperator`, `SubmitReport` and other handlers) to finalize OpenAPI
+   request/response specifications
+ - Updated `docker-entrypoint.sh` to print an ASCII banner and enable CLI logging during the initialization step
+ - Cleaned up `RequestHandler` (unused import removal, documentation, syntax cleanup)
 
 
 
