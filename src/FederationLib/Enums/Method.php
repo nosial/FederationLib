@@ -61,6 +61,7 @@
     use FederationLib\Methods\Operators\ManageClientPermissions;
     use FederationLib\Methods\Operators\ManageManagementPermissions;
     use FederationLib\Methods\Operators\ManageOperatorPermissions;
+    use FederationLib\Methods\Operators\GenerateAccessToken;
     use FederationLib\Methods\Operators\GenerateOperatorAccessToken;
     use FederationLib\Methods\Operators\SearchOperators;
     use FederationLib\Methods\Operators\UpdateOperatorName;
@@ -96,6 +97,7 @@
         case DISABLE_OPERATOR;
         case GET_OPERATOR;
         case GENERATE_OPERATOR_ACCESS_TOKEN;
+        case GENERATE_ACCESS_TOKEN;
         case MANAGE_OPERATOR_PERMISSIONS;
         case MANAGE_MANAGEMENT_PERMISSIONS;
         case MANAGE_CLIENT_PERMISSIONS;
@@ -237,6 +239,7 @@
                 self::LIST_OPERATORS => ['/operators', 'get', ListOperators::class],
                 self::CREATE_OPERATOR => ['/operators', 'post', CreateOperator::class],
                 self::GET_SELF_OPERATOR => ['/operators/self', 'get', GetSelfOperator::class],
+                self::GENERATE_ACCESS_TOKEN => ['/operators/refresh', 'post', GenerateAccessToken::class],
                 self::GENERATE_OPERATOR_ACCESS_TOKEN => ['/operators/{uuid}/refresh', 'post', GenerateOperatorAccessToken::class],
                 self::GET_OPERATOR => ['/operators/{uuid}', 'get', GetOperator::class],
                 self::DELETE_OPERATOR => ['/operators/{uuid}', 'delete', DeleteOperator::class],
@@ -354,7 +357,7 @@
                 $path === '/operators' && $requestMethod === 'POST' => Method::CREATE_OPERATOR,
                 $path === '/operators/search' && $requestMethod === 'GET' => Method::SEARCH_OPERATORS,
                 $path === '/operators/self' && $requestMethod === 'GET' => Method::GET_SELF_OPERATOR,
-                $path === '/operators/refresh' && $requestMethod === 'POST' => Method::GENERATE_OPERATOR_ACCESS_TOKEN,
+                $path === '/operators/refresh' && $requestMethod === 'POST' => Method::GENERATE_ACCESS_TOKEN,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/enable$#', $path) && $requestMethod === 'PATCH' => Method::ENABLE_OPERATOR,
