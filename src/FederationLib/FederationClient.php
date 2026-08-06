@@ -16,6 +16,7 @@
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
+    use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
@@ -420,20 +421,21 @@
          * is not required to be unique.
          *
          * @param string $operatorName The name of the operator to create
-         * @return string The UUID of the created operator
+         * @return OperatorCreated The created operator containing its UUID and raw Access Token. The raw token is
+         *                         only returned here (and by the refresh endpoints); it is never exposed on OperatorRecord.
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator name is empty
          */
-        public function createOperator(string $operatorName): string
+        public function createOperator(string $operatorName): OperatorCreated
         {
             if(empty($operatorName))
             {
                 throw new InvalidArgumentException('Operator name cannot be empty');
             }
 
-            return $this->makeRequest('POST', 'operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
+            return OperatorCreated::fromArray($this->makeRequest('POST', 'operators', ['name' => $operatorName], [HttpResponseCode::CREATED],
                 sprintf('Failed to create operator with name %s', $operatorName)
-            );
+            ));
         }
 
         /**
