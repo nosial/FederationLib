@@ -11,6 +11,7 @@
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
+    use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
@@ -144,6 +145,7 @@
                 'ErrorResponse' => ErrorResponse::class,
                 'EvidenceRecord' => EvidenceRecord::class,
                 'FileAttachmentRecord' => FileAttachmentRecord::class,
+                'OperatorCreated' => OperatorCreated::class,
                 'OperatorRecord' => OperatorRecord::class,
                 'ReportRecord' => ReportRecord::class,
                 'ReportSubmission' => ReportSubmission::class,
