@@ -10,6 +10,7 @@
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\OperatorOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
     use PDO;
@@ -47,13 +48,14 @@
          * Create a new operator with a unique access token.
          *
          * Only the SHA-256 hash of the generated Access Token is stored in the
-         * database; the raw token itself is returned by newAccessToken().
+         * database; the raw token itself is returned so it can be handed to the
+         * operator, but it is never persisted in plaintext.
          *
          * @param string $name The name of the operator.
-         * @return string The generated UUID for the operator.
+         * @return OperatorCreated The OperatorCreated object with the generated UUID and raw Access Token.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function createOperator(string $name): string
+        public static function createOperator(string $name): OperatorCreated
         {
             if(empty($name))
             {
@@ -92,7 +94,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
-            return $uuid;
+            return new OperatorCreated($uuid, $accessToken);
         }
 
         /**
