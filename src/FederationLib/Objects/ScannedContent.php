@@ -346,11 +346,11 @@
         /**
          * @inheritDoc
          */
-        public function toArray(): array
+        public function toArray(bool $includeMetadata=false): array
         {
             return [
-                'author_entity' => $this->authorEntity?->toArray() ?? null,
-                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray(), $this->resolvedEntities),
+                'author_entity' => $this->authorEntity?->toArray($includeMetadata) ?? null,
+                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata), $this->resolvedEntities),
                 'classification' => $this->classification?->toArray() ?? null
             ];
         }
@@ -358,11 +358,11 @@
         /**
          * @inheritDoc
          */
-        public function toStandardArray(): array
+        public function toStandardArray(bool $includeMetadata=false): array
         {
             return [
-                'author_entity' => $this->authorEntity?->toArray() ?? null,
-                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray(), $this->resolvedEntities),
+                'author_entity' => $this->authorEntity?->toArray($includeMetadata) ?? null,
+                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata), $this->resolvedEntities),
                 'suggested_action' => $this->getSuggestedAction()?->value ?? null,
                 'suggested_lift_timestamp' => $this->getSuggestedLiftTimestamp(),
                 'classification' => $this->classification?->toArray() ?? null,
