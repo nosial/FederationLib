@@ -9,6 +9,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Interfaces\StandardObjectInterface;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
@@ -143,7 +144,11 @@
                 $responseCode = $responseCode->value;
             }
 
-            if($data instanceof SerializableInterface)
+            if($data instanceof StandardObjectInterface)
+            {
+                $data = $data->toStandardArray();
+            }
+            elseif($data instanceof SerializableInterface)
             {
                 $data = $data->toArray();
             }
