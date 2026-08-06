@@ -4,9 +4,9 @@
     
     use DateTime;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
-    use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Interfaces\StandardObjectInterface;
 
-    class OperatorRecord implements SerializableInterface, ObjectSpecificationInterface
+    class OperatorRecord implements StandardObjectInterface, ObjectSpecificationInterface
     {
         private string $uuid;
         private ?string $accessToken;
@@ -175,6 +175,23 @@
             return [
                 'uuid' => $this->uuid,
                 'access_token' => $this->accessToken,
+                'name' => $this->name,
+                'disabled' => $this->disabled,
+                'client_permissions' => $this->clientPermissions,
+                'management_permissions' => $this->managementPermissions,
+                'operator_permissions' => $this->operatorPermissions,
+                'created' => $this->created,
+                'updated' => $this->updated
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public function toStandardArray(): array
+        {
+            return [
+                'uuid' => $this->uuid,
                 'name' => $this->name,
                 'disabled' => $this->disabled,
                 'client_permissions' => $this->clientPermissions,
