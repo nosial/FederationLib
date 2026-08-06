@@ -290,7 +290,7 @@
         /**
          * @inheritDoc
          */
-        public function toArray(bool $includeMetadata=false): array
+        public function toArray(bool $includeMetadata=true): array
         {
             return [
                 'uuid' => $this->uuid,
