@@ -76,26 +76,26 @@
         /**
          * @inheritDoc
          */
-        public function toArray(): array
+        public function toArray(bool $includeMetadata=false): array
         {
             return [
-                'entity' => $this->entity->toArray(),
+                'entity' => $this->entity->toArray($includeMetadata),
                 'entity_position' => $this->entityPosition?->toArray(),
                 'active_blacklists' => array_map(fn($activeBlacklist) => $activeBlacklist->toArray(), $this->activeBlacklists),
-                'parent_entity' => $this->parentEntity?->toArray()
+                'parent_entity' => $this->parentEntity?->toArray($includeMetadata)
             ];
         }
 
         /**
          * @inheritDoc
          */
-        public function toStandardArray(): array
+        public function toStandardArray(bool $includeMetadata=false): array
         {
             return [
-                'entity' => $this->entity->toStandardArray(),
+                'entity' => $this->entity->toArray($includeMetadata),
                 'entity_position' => $this->entityPosition?->toArray(),
                 'active_blacklists' => array_map(fn($activeBlacklist) => $activeBlacklist->toArray(), $this->activeBlacklists),
-                'parent_entity' => $this->parentEntity?->toStandardArray()
+                'parent_entity' => $this->parentEntity?->toStandardArray($includeMetadata)
             ];
         }
 
