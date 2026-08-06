@@ -20,9 +20,34 @@
     {
         public const string CACHE_PREFIX = 'operator:';
         public const string ACCESS_TOKEN_POINTER_PREFIX = 'operator_access_token:';
+        private const string SYSTEM_ACCESS_TOKEN_SENTINEL = 'none';
+
+        /**
+         * Convert a raw Access Token into its securely stored representation.
+         *
+         * Real Access Tokens are stored exclusively as their SHA-256 hash so the
+         * plaintext token is never persisted in the database. The special literal
+         * 'none' is the non-usable sentinel used by the built-in system operator
+         * and is not a real token, so it is preserved as-is.
+         *
+         * @param string $accessToken The raw Access Token to store or look up.
+         * @return string The value to persist or query in the database.
+         */
+        private static function secureAccessToken(string $accessToken): string
+        {
+            if($accessToken === self::SYSTEM_ACCESS_TOKEN_SENTINEL)
+            {
+                return self::SYSTEM_ACCESS_TOKEN_SENTINEL;
+            }
+
+            return hash('sha256', $accessToken);
+        }
 
         /**
          * Create a new operator with a unique access token.
+         *
+         * Only the SHA-256 hash of the generated Access Token is stored in the
+         * database; the raw token itself is returned by newAccessToken().
          *
          * @param string $name The name of the operator.
          * @return string The generated UUID for the operator.
@@ -52,7 +77,7 @@
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name) VALUES (:uuid, :access_token, :name)");
                 $stmt->bindParam(':uuid', $uuid);
-                $stmt->bindParam(':access_token', $accessToken);
+                $stmt->bindValue(':access_token', self::secureAccessToken($accessToken));
                 $stmt->bindParam(':name', $name);
 
                 $stmt->execute();
@@ -82,8 +107,9 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, operator_permissions, management_permissions, client_permissions) VALUES (:uuid, 'none', 'system', 1, 1, 1)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, operator_permissions, management_permissions, client_permissions) VALUES (:uuid, :access_token, 'system', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
+                $stmt->bindValue(':access_token', self::SYSTEM_ACCESS_TOKEN_SENTINEL);
                 $stmt->execute();
             }
             catch (PDOException $e)
@@ -96,6 +122,9 @@
 
         /**
          * Creates the root operator with a predefined Access Token.
+         *
+         * Only the SHA-256 hash of the Access Token is persisted; the raw token
+         * remains known only from the server configuration.
          *
          * @param string $accessToken The Access Token for the root operator.
          * @return string The UUID of the created root operator.
@@ -121,7 +150,7 @@
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO operators (uuid, access_token, name, operator_permissions, management_permissions, client_permissions) VALUES (:uuid, :access_token, 'root', 1, 1, 1)");
                 $stmt->bindParam(':uuid', $uuid);
-                $stmt->bindParam(':access_token', $accessToken);
+                $stmt->bindValue(':access_token', self::secureAccessToken($accessToken));
 
                 $stmt->execute();
             }
@@ -277,7 +306,7 @@
 
                 // Create Access Token pointer for quick lookups
                 RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())),
+                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()),
                     expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                     value: $uuid
                 );
@@ -357,6 +386,9 @@
         /**
          * Retrieve an operator by their Access Token.
          *
+         * Access Tokens are stored as their SHA-256 hash, so the given raw token
+         * is hashed before querying the database or the cache pointers.
+         *
          * @param string $accessToken The Access Token of the operator.
          * @return OperatorRecord|null The operator record if found, null otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
@@ -368,10 +400,12 @@
                 throw new InvalidArgumentException('Access Token cannot be empty.');
             }
 
+            $storedAccessToken = self::secureAccessToken($accessToken);
+
             // Try cache with Access Token pointer first
             if(self::isCachingEnabled())
             {
-                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)));
+                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken));
                 if($cachedUuid !== false && strlen($cachedUuid) > 0)
                 {
                     $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
@@ -383,7 +417,7 @@
                     {
                         // Access Token pointer exists but operator record is missing from cache
                         // Remove the stale Access Token pointer to prevent future inconsistencies
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken));
                     }
                 }
             }
@@ -391,7 +425,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM operators WHERE access_token=:access_token");
-                $stmt->bindParam(':access_token', $accessToken);
+                $stmt->bindParam(':access_token', $storedAccessToken);
                 $stmt->execute();
 
                 $data = $stmt->fetch();
@@ -420,7 +454,7 @@
                 // Create a pointer from Access Token to UUID for quick lookups
                 // Only set the Access Token pointer if the operator record was successfully cached
                 RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $accessToken)),
+                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken),
                     expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                     value: $operatorRecord->getUuid()
                 );
@@ -463,7 +497,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -506,7 +540,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -549,7 +583,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -560,6 +594,9 @@
 
         /**
          * Refresh the access token for an operator.
+         *
+         * Only the SHA-256 hash of the token is persisted; the raw Access Token
+         * is returned to the caller so it can be distributed to the operator.
          *
          * @param string $uuid The UUID of the operator.
          * @param string|null $accessToken Optional. The access token to set to the operator
@@ -592,7 +629,7 @@
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET access_token=:access_token WHERE uuid=:uuid");
-                $stmt->bindParam(':access_token', $accessToken);
+                $stmt->bindValue(':access_token', self::secureAccessToken($accessToken));
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
             }
@@ -608,7 +645,7 @@
                     // Remove old access token pointer if we have the old operator data
                     if($oldOperator !== null)
                     {
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $oldOperator->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $oldOperator->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -655,7 +692,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -700,7 +737,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -745,7 +782,7 @@
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
                         // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     // Remove main cache entry
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -798,7 +835,7 @@
                     if($cachedOperator !== null)
                     {
                         $operatorRecord = new OperatorRecord($cachedOperator);
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operatorRecord->getAccessToken())));
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
                     }
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
@@ -881,7 +918,7 @@
 
                         // Create access token pointer for quick lookups
                         RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operator->getAccessToken())),
+                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
                             expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                             value: $operator->getUuid()
                         );
@@ -1014,7 +1051,7 @@
                         );
 
                         RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, hash('sha256', $operator->getAccessToken())),
+                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
                             expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
                             value: $operator->getUuid()
                         );

@@ -3,7 +3,7 @@ create table operators
     uuid                   varchar(36)                             not null comment 'The Unique Primary Index for the operator UUID'
         primary key,
     name                   varchar(32)                             not null comment 'The public name of the operator',
-    access_token           varchar(32)                             not null comment 'The current Access Token of the operator',
+    access_token           varchar(64)                             not null comment 'The securely stored representation of the operator Access Token. Real tokens are never stored in plaintext, only their SHA-256 hash, so the raw token can only be returned when it is generated or refreshed. The special literal "none" is used solely as the non-usable sentinel Access Token of the built-in system operator',
     client_permissions     tinyint(1)  default 0                   not null comment 'Default: 0, 1=This operator has basic client permissions enabling evidence submission, entity pushing, attachment uploads, lookups, report submission, and content scanning. 0=No such permissions are allowed',
     management_permissions tinyint(1)  default 0                   not null comment 'Default: 0, 1=This operator has management permissions, inheriting all client permissions plus record deletion, confidential evidence access, and blacklist management. 0=No such permissions are allowed',
     operator_permissions   tinyint(1)  default 0                   not null comment 'Default: 0, 1=This operator has operator management permissions, allowing creation, deletion, and management of other operators. 0=No such permissions are allowed',
