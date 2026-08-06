@@ -83,13 +83,13 @@
 
         private function generateSampleAuditLogs(bool &$operatorUuid=null): void
         {
-            $operatorUuid = $this->client->createOperator('sample-audit-operator');
+            $createdOperator = $this->client->createOperator('sample-audit-operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('sample-audit.com', 'sample_user');
             $this->createdEntities[] = $entityUuid;
@@ -97,12 +97,12 @@
 
         public function testListOperatorAuditLogs(): void
         {
-            $operatorUuid = $this->client->createOperator('operator-audit-test');
+            $createdOperator = $this->client->createOperator('operator-audit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('operator-audit-test.com', 'audit_user');
             $this->createdEntities[] = $entityUuid;
@@ -119,13 +119,13 @@
 
         public function testListOperatorAuditLogsWithPagination(): void
         {
-            $operatorUuid = $this->client->createOperator('paginated-audit-test');
+            $createdOperator = $this->client->createOperator('paginated-audit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             for ($i = 1; $i <= 3; $i++)
             {
@@ -183,12 +183,12 @@
 
         public function testAuditLogAccessLimitedOperator(): void
         {
-            $operatorUuid = $this->client->createOperator('limited-audit-access');
+            $createdOperator = $this->client->createOperator('limited-audit-access');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $limitedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $operatorAuditLogs = $limitedClient->listOperatorAuditLogs($operatorUuid);
             $this->assertIsArray($operatorAuditLogs);
@@ -196,12 +196,12 @@
 
         public function testAuditLogContentForEntityOperations(): void
         {
-            $operatorUuid = $this->client->createOperator('entity-audit-test');
+            $createdOperator = $this->client->createOperator('entity-audit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
@@ -228,13 +228,13 @@
 
         public function testAuditLogContentForBlacklistOperations(): void
         {
-            $operatorUuid = $this->client->createOperator('blacklist-audit-test');
+            $createdOperator = $this->client->createOperator('blacklist-audit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('blacklist-audit-test.com', 'blacklist_audit_user');
             $this->createdEntities[] = $entityUuid;
@@ -278,7 +278,8 @@
 
         public function testAuditLogConsistencyOverTime(): void
         {
-            $operatorUuid = $this->client->createOperator('consistency-test');
+            $createdOperator = $this->client->createOperator('consistency-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $immediateAuditLogs = $this->client->listAuditLogs(1, 10);
@@ -299,7 +300,8 @@
         {
             for ($i = 1; $i <= 5; $i++)
             {
-                $operatorUuid = $this->client->createOperator("high-volume-test-$i");
+                $createdOperator = $this->client->createOperator("high-volume-test-$i");
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
             }
 
@@ -318,12 +320,12 @@
 
         public function testAuditLogRecordsOperatorActorForEntityCreation(): void
         {
-            $operatorUuid = $this->client->createOperator('actor-entity-test');
+            $createdOperator = $this->client->createOperator('actor-entity-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $beforeLogs = $this->client->listOperatorAuditLogs($operatorUuid);
             $beforeCount = count($beforeLogs);
@@ -348,13 +350,13 @@
 
         public function testAuditLogRecordsEvidenceAndBlacklistActor(): void
         {
-            $operatorUuid = $this->client->createOperator('actor-evidence-test');
+            $createdOperator = $this->client->createOperator('actor-evidence-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('actor-evidence.com', 'actor_evidence_user');
             $this->createdEntities[] = $entityUuid;
@@ -388,12 +390,12 @@
 
         public function testAuditLogFiltersByType(): void
         {
-            $operatorUuid = $this->client->createOperator('type-filter-test');
+            $createdOperator = $this->client->createOperator('type-filter-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('type-filter.com', 'type_filter_user');
             $this->createdEntities[] = $entityUuid;
@@ -431,12 +433,12 @@
 
         public function testListAuditLogsCategoryOperatorEvents(): void
         {
-            $operatorUuid = $this->client->createOperator('aud_cat_op_' . uniqid());
+            $createdOperator = $this->client->createOperator('aud_cat_op_' . uniqid());
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
             $entityUuid = $operatorClient->pushEntity('aud-cat-op.com', 'aud_cat_op_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -460,12 +462,12 @@
 
         public function testListAuditLogsCategoryEntityEvents(): void
         {
-            $operatorUuid = $this->client->createOperator('aud_cat_ent_' . uniqid());
+            $createdOperator = $this->client->createOperator('aud_cat_ent_' . uniqid());
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
             $entityUuid = $operatorClient->pushEntity('aud-cat-ent.com', 'aud_cat_ent_user');
             $this->createdEntities[] = $entityUuid;
 
@@ -486,13 +488,13 @@
 
         public function testListAuditLogsCategoryWithSort(): void
         {
-            $operatorUuid = $this->client->createOperator('aud_cat_sort_' . uniqid());
+            $createdOperator = $this->client->createOperator('aud_cat_sort_' . uniqid());
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             for ($i = 0; $i < 3; $i++)
             {
@@ -560,13 +562,13 @@
 
         public function testListEntityAuditLogsCategoryEvidenceEvents(): void
         {
-            $operatorUuid = $this->client->createOperator('ent_cat_ev_' . uniqid());
+            $createdOperator = $this->client->createOperator('ent_cat_ev_' . uniqid());
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('ent-cat-ev.com', 'ent_cat_ev_user');
             $this->createdEntities[] = $entityUuid;

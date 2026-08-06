@@ -107,7 +107,8 @@
 
         public function testUpdateOperatorName(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('rename_test_'));
+            $createdOperator = $this->client->createOperator(uniqid('rename_test_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $newName = uniqid('renamed_operator_');
@@ -119,7 +120,8 @@
 
         public function testUpdateOperatorNameEmptyName(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('empty_name_test_'));
+            $createdOperator = $this->client->createOperator(uniqid('empty_name_test_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->expectException(InvalidArgumentException::class);
@@ -128,7 +130,8 @@
 
         public function testUpdateOperatorNameTooLongName(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('long_name_test_'));
+            $createdOperator = $this->client->createOperator(uniqid('long_name_test_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $longName = str_repeat('a', 33);
@@ -155,9 +158,11 @@
         {
             $nameA = uniqid('dup_name_a_');
             $nameB = uniqid('dup_name_b_');
-            $operatorAUuid = $this->client->createOperator($nameA);
+            $createdOperatorA = $this->client->createOperator($nameA);
+            $operatorAUuid = $createdOperatorA->getUuid();
             $this->createdOperators[] = $operatorAUuid;
-            $operatorBUuid = $this->client->createOperator($nameB);
+            $createdOperatorB = $this->client->createOperator($nameB);
+            $operatorBUuid = $createdOperatorB->getUuid();
             $this->createdOperators[] = $operatorBUuid;
 
             $this->expectException(RequestException::class);
@@ -168,7 +173,8 @@
         public function testUpdateOperatorNameRequiresOperatorPermission(): void
         {
             $clientOnly = $this->createLimitedOperator('update_name_client', client: true);
-            $targetUuid = $this->client->createOperator(uniqid('update_name_target_'));
+            $createdOperator = $this->client->createOperator(uniqid('update_name_target_'));
+            $targetUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $targetUuid;
 
             $this->expectRequestFailure(
@@ -203,11 +209,12 @@
 
         public function testUpdateOperatorNameDisabledOperatorCannotUpdateName(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('dis_upd_name_'));
+            $createdOperator = $this->client->createOperator(uniqid('dis_upd_name_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setOperatorPermissions($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $this->client->getOperator($operatorUuid)->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
             $this->client->disableOperator($operatorUuid);
 
             $this->expectRequestFailure(
@@ -232,7 +239,8 @@
         public function testUpdateOperatorNameCrossOperatorModification(): void
         {
             $manager = $this->createLimitedOperator('cross_rename', operator: true);
-            $targetUuid = $this->client->createOperator(uniqid('cross_tgt_'));
+            $createdOperator = $this->client->createOperator(uniqid('cross_tgt_'));
+            $targetUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $targetUuid;
 
             $newName = uniqid('cross_renamed_');
@@ -258,9 +266,11 @@
         {
             $nameA = uniqid('unique_name_a_');
             $nameB = uniqid('unique_name_b_');
-            $operatorAUuid = $this->client->createOperator($nameA);
+            $createdOperatorA = $this->client->createOperator($nameA);
+            $operatorAUuid = $createdOperatorA->getUuid();
             $this->createdOperators[] = $operatorAUuid;
-            $operatorBUuid = $this->client->createOperator($nameB);
+            $createdOperatorB = $this->client->createOperator($nameB);
+            $operatorBUuid = $createdOperatorB->getUuid();
             $this->createdOperators[] = $operatorBUuid;
 
             $this->expectException(RequestException::class);
@@ -272,9 +282,11 @@
         {
             $nameA = uniqid('preserve_name_a_');
             $nameB = uniqid('preserve_name_b_');
-            $operatorAUuid = $this->client->createOperator($nameA);
+            $createdOperatorA = $this->client->createOperator($nameA);
+            $operatorAUuid = $createdOperatorA->getUuid();
             $this->createdOperators[] = $operatorAUuid;
-            $operatorBUuid = $this->client->createOperator($nameB);
+            $createdOperatorB = $this->client->createOperator($nameB);
+            $operatorBUuid = $createdOperatorB->getUuid();
             $this->createdOperators[] = $operatorBUuid;
 
             try
@@ -291,7 +303,8 @@
 
         public function testUpdateOperatorNameMalformedTokenRejected(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('mal_tok_ren_'));
+            $createdOperator = $this->client->createOperator(uniqid('mal_tok_ren_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             [$code] = $this->rawRequest(
@@ -311,7 +324,8 @@
         public function testUpdateOperatorNameNameChangeReflectedInList(): void
         {
             $originalName = uniqid('list_orig_');
-            $operatorUuid = $this->client->createOperator($originalName);
+            $createdOperator = $this->client->createOperator($originalName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $newName = uniqid('list_renamed_');
@@ -333,7 +347,8 @@
 
         public function testUpdateOperatorNameNameChangePersistsAcrossSessions(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('persist_rename_'));
+            $createdOperator = $this->client->createOperator(uniqid('persist_rename_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $newName = uniqid('persist_renamed_');
@@ -347,7 +362,8 @@
         public function testUpdateOperatorNameManagementOnlyCannotUpdateName(): void
         {
             $managementOnly = $this->createLimitedOperator('mgmt_only_rename', management: true);
-            $targetUuid = $this->client->createOperator(uniqid('mgmt_rename_target_'));
+            $createdOperator = $this->client->createOperator(uniqid('mgmt_rename_target_'));
+            $targetUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $targetUuid;
 
             $this->expectRequestFailure(
@@ -359,7 +375,8 @@
 
         public function testUpdateOperatorNameNameChangeUpdatesTimestamp(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('timestamp_rename_'));
+            $createdOperator = $this->client->createOperator(uniqid('timestamp_rename_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $before = $this->client->getOperator($operatorUuid);
@@ -376,7 +393,8 @@
 
         public function testUpdateOperatorNameNameChangeDoesNotAffectPermissions(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('perm_preserve_'));
+            $createdOperator = $this->client->createOperator(uniqid('perm_preserve_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setOperatorPermissions($operatorUuid, true);
@@ -397,7 +415,8 @@
 
         public function testUpdateOperatorNameNameChangeInvalidatesCache(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('cache_inval_'));
+            $createdOperator = $this->client->createOperator(uniqid('cache_inval_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->getOperator($operatorUuid);

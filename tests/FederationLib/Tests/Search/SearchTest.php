@@ -335,7 +335,8 @@
         public function testSearchOperatorsByName(): void
         {
             $name = 'search_op_' . uniqid();
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $results = $this->client->searchOperators($name);
@@ -493,7 +494,8 @@
         public function testSearchAuditLogsByMessage(): void
         {
             $operatorName = 'audit_search_op_' . uniqid();
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->deleteOperator($operatorUuid);

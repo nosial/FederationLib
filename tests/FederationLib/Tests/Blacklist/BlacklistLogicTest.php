@@ -476,13 +476,13 @@
 
         public function testBlacklistCreatedByDeletedOperatorSurvives(): void
         {
-            $operatorUuid = $this->client->createOperator('blacklist_owner');
+            $createdOperator = $this->client->createOperator('blacklist_owner');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('bl-owner-delete.com', 'bl_owner_user');
             $this->createdEntities[] = $entityUuid;

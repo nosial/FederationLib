@@ -356,7 +356,8 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $operatorName = 'mf_op_' . uniqid();
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $results = $this->client->search($searchKeyword, [RecordType::ENTITY->value, RecordType::EVIDENCE->value], 1, 100);
@@ -435,7 +436,8 @@
             $this->createdEntities[] = $entityUuid;
 
             $opName = 'opx_name_' . uniqid();
-            $operatorUuid = $this->client->createOperator($opName);
+            $createdOperator = $this->client->createOperator($opName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $entityResults = $this->client->searchEntities($opName);
@@ -1044,7 +1046,8 @@
         public function testSearchOperatorNameWithUnderscore(): void
         {
             $name = 'moderator_' . uniqid() . '_team';
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $results = $this->client->searchOperators($name);
@@ -1064,7 +1067,8 @@
         public function testSearchOperatorNameLong(): void
         {
             $name = substr('op_' . uniqid() . str_repeat('x', 80), 0, 32);
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $prefix = substr($name, 0, 15);
@@ -1235,7 +1239,8 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'op file content', 'op file note', 'of_tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $operatorUuid = $this->client->createOperator($keyword . '_operator');
+            $createdOperator = $this->client->createOperator($keyword . '_operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $fileName = $keyword . '_attachment.txt';
@@ -1553,7 +1558,8 @@
         public function testSearchDeletedOperatorDoesNotAppear(): void
         {
             $name = 'del_op_search_' . uniqid();
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->deleteOperator($operatorUuid);
@@ -1676,7 +1682,8 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $operatorName = $tag . '_operator';
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $fileName = $tag . '_attachment.txt';
@@ -1745,7 +1752,8 @@
             $this->createdAttachments[] = $uploadResult->getUuid();
 
             $operatorName = $keyword . '_operator';
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $auditResults = $this->client->searchAuditLogs($operatorName);
@@ -1853,7 +1861,8 @@
                 $blacklistUuids[] = $blacklistUuid;
 
                 $operatorName = $keyword . '_op_' . $i;
-                $operatorUuid = $this->client->createOperator($operatorName);
+                $createdOperator = $this->client->createOperator($operatorName);
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $operatorUuids[] = $operatorUuid;
             }
@@ -1944,10 +1953,12 @@
             $blA = $this->client->blacklistEntity($entityA, $evA, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blA;
 
-            $opA = $this->client->createOperator($keywordA . '_op');
+            $createdOperatorA = $this->client->createOperator($keywordA . '_op');
+            $opA = $createdOperatorA->getUuid();
             $this->createdOperators[] = $opA;
 
-            $opB = $this->client->createOperator($keywordB . '_op');
+            $createdOperatorB = $this->client->createOperator($keywordB . '_op');
+            $opB = $createdOperatorB->getUuid();
             $this->createdOperators[] = $opB;
 
             $resultsA = $this->client->search($keywordA, null, 1, 100);
@@ -1998,7 +2009,8 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $operatorName = $keyword . '_op';
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $realResults = $this->client->search($keyword, null, 1, 100);
@@ -2202,7 +2214,8 @@
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $operatorName = $keyword . '_op';
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $onlyEntity = $this->client->search($keyword, [RecordType::ENTITY->value], 1, 100);

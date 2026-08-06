@@ -27,7 +27,8 @@
         private function createLimitedOperator(string $namePrefix, bool $management = false, bool $operator = false, bool $client = false): FederationClient
         {
             $operatorName = substr(uniqid($namePrefix . '_'), 0, 32);
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             if ($management)
@@ -45,8 +46,7 @@
                 $this->client->setClientPermissions($operatorUuid, true);
             }
 
-            $record = $this->client->getOperator($operatorUuid);
-            return new FederationClient(getenv('SERVER_ENDPOINT'), $record->getAccessToken());
+            return new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
         }
 
         /**

@@ -138,15 +138,15 @@
 
         public function testUploadAttachmentUnauthorized(): void
         {
-            $operatorUuid = $this->client->createOperator('no-blacklist-operator');
+            $createdOperator = $this->client->createOperator('no-blacklist-operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, false);
             $this->client->setClientPermissions($operatorUuid, false);
             $this->client->setOperatorPermissions($operatorUuid, false);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $this->client->pushEntity('unauthorized-upload-test.com', 'unauthorized_user');
             $this->createdEntityRecords[] = $entityUuid;
@@ -212,14 +212,14 @@
 
         public function testListAttachmentsForbidden(): void
         {
-            $operatorUuid = $this->client->createOperator('no-blacklist-list-operator');
+            $createdOperator = $this->client->createOperator('no-blacklist-list-operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, false);
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);

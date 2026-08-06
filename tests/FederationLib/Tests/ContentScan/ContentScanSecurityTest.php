@@ -170,15 +170,15 @@
 
         public function testScanContentUnauthorizedOperator(): void
         {
-            $operatorUuid = $this->client->createOperator('scan-no-client-perm');
+            $createdOperator = $this->client->createOperator('scan-no-client-perm');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, false);
             $this->client->setOperatorPermissions($operatorUuid, false);
             $this->client->setClientPermissions($operatorUuid, false);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(403);

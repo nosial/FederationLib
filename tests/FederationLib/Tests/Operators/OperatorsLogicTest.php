@@ -107,14 +107,15 @@
 
         public function testOperatorClientPermissionAuthorized(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertTrue($operatorRecord->hasClientPermissions());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('example.com', uniqid('john_doe_'));
             $this->assertNotEmpty($entityUuid);
@@ -137,13 +138,14 @@
 
         public function testOperatorClientPermissionUnauthorized(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertFalse($operatorRecord->hasClientPermissions());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
@@ -152,17 +154,19 @@
 
         public function testOperatorManageOperatorsPermissionAuthorized(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setOperatorPermissions($operatorUuid, true);
 
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertTrue($operatorRecord->hasOperatorPermissions());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $managedOperatorName = uniqid('managed operator');
-            $managedOperatorUuid = $operatorClient->createOperator($managedOperatorName);
+            $createdOperator = $operatorClient->createOperator($managedOperatorName);
+            $managedOperatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $managedOperatorUuid;
 
             $this->assertNotEmpty($managedOperatorUuid);
@@ -174,13 +178,14 @@
 
         public function testOperatorManageOperatorPermissionUnauthorized(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertFalse($operatorRecord->hasOperatorPermissions());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
@@ -189,7 +194,8 @@
 
         public function testDisabledOperator(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->disableOperator($operatorUuid);
@@ -197,7 +203,7 @@
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertTrue($operatorRecord->isDisabled());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
@@ -206,7 +212,8 @@
 
         public function testEnableDisabledOperator(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('test operator'));
+            $createdOperator = $this->client->createOperator(uniqid('test operator'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->disableOperator($operatorUuid);
@@ -214,7 +221,7 @@
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertTrue($operatorRecord->isDisabled());
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operatorRecord->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             try
             {
@@ -238,7 +245,8 @@
             $uuids = [];
             for ($i = 0; $i < 2; $i++)
             {
-                $uuid = $this->client->createOperator('op_cat_enabled_' . uniqid());
+                $createdOperator = $this->client->createOperator('op_cat_enabled_' . uniqid());
+                $uuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $uuid;
                 $uuids[] = $uuid;
             }
@@ -257,10 +265,12 @@
 
         public function testListOperatorsCategoryDisabled(): void
         {
-            $enabledUuid = $this->client->createOperator('op_cat_dis_ena_' . uniqid());
+            $createdOperator = $this->client->createOperator('op_cat_dis_ena_' . uniqid());
+            $enabledUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $enabledUuid;
 
-            $disabledUuid = $this->client->createOperator('op_cat_dis_' . uniqid());
+            $createdDisabledOperator = $this->client->createOperator('op_cat_dis_' . uniqid());
+            $disabledUuid = $createdDisabledOperator->getUuid();
             $this->createdOperators[] = $disabledUuid;
             $this->client->disableOperator($disabledUuid);
 
@@ -281,7 +291,8 @@
             $uuids = [];
             foreach ($names as $name)
             {
-                $uuid = $this->client->createOperator($name . '_' . uniqid());
+                $createdOperator = $this->client->createOperator($name . '_' . uniqid());
+                $uuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $uuid;
                 $uuids[] = $uuid;
             }
@@ -296,7 +307,8 @@
 
         public function testListOperatorsCategoryInvalidFallsBack(): void
         {
-            $uuid = $this->client->createOperator('op_cat_inv_' . uniqid());
+            $createdOperator = $this->client->createOperator('op_cat_inv_' . uniqid());
+            $uuid = $createdOperator->getUuid();
             $this->createdOperators[] = $uuid;
 
             $resultDefault = $this->client->listOperators(1, 10);
@@ -311,7 +323,8 @@
 
         public function testListOperatorsCategoryCaseInsensitive(): void
         {
-            $uuid = $this->client->createOperator('op_cat_ci_' . uniqid());
+            $createdOperator = $this->client->createOperator('op_cat_ci_' . uniqid());
+            $uuid = $createdOperator->getUuid();
             $this->createdOperators[] = $uuid;
 
             $resultUpper = $this->client->listOperators(1, 10, 'ENABLED');
@@ -333,7 +346,8 @@
             $created = [];
             foreach ($names as $name)
             {
-                $uuid = $this->client->createOperator($name . '_' . uniqid());
+                $createdOperator = $this->client->createOperator($name . '_' . uniqid());
+                $uuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $uuid;
                 $created[] = $uuid;
             }
@@ -352,7 +366,8 @@
             $uuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $uuid = $this->client->createOperator('op-srt-crt-' . uniqid());
+                $createdOperator = $this->client->createOperator('op-srt-crt-' . uniqid());
+                $uuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $uuid;
                 $uuids[] = $uuid;
             }
@@ -369,7 +384,8 @@
         public function testListOperatorsSortInvalidByFallsBack(): void
         {
             $name = 'op-inv-by-' . uniqid();
-            $uuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $uuid = $createdOperator->getUuid();
             $this->createdOperators[] = $uuid;
 
             $resultDefault = $this->client->listOperators(1, 10);
@@ -384,7 +400,8 @@
         public function testOperatorLifecycleIntegrity(): void
         {
             $operatorName = uniqid('lifecycle_operator_');
-            $operatorUuid = $this->client->createOperator($operatorName);
+            $createdOperator = $this->client->createOperator($operatorName);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $operator = $this->client->getOperator($operatorUuid);
@@ -415,12 +432,18 @@
             $this->assertTrue($enabledOperator->hasOperatorPermissions());
             $this->assertTrue($enabledOperator->hasClientPermissions());
 
-            $originalAccessToken = $enabledOperator->getAccessToken();
+            $originalAccessToken = $createdOperator->getAccessToken();
             $newAccessToken = $this->client->generateOperatorAccessToken($operatorUuid);
             $this->assertNotEquals($originalAccessToken, $newAccessToken);
 
-            $refreshedOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($newAccessToken, $refreshedOperator->getAccessToken());
+            $newOperatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $newAccessToken);
+            $this->assertEquals($operatorUuid, $newOperatorClient->getSelf()->getUuid());
+
+            $this->expectRequestFailure(
+                fn() => (new FederationClient(getenv('SERVER_ENDPOINT'), $originalAccessToken))->getSelf(),
+                [HttpResponseCode::UNAUTHORIZED->value],
+                'Old access token should be invalid after rotation'
+            );
 
             $this->client->deleteOperator($operatorUuid);
 
@@ -439,7 +462,8 @@
 
         public function testOperatorPermissionConsistency(): void
         {
-            $operatorUuid = $this->client->createOperator(uniqid('prm_test_operator_'));
+            $createdOperator = $this->client->createOperator(uniqid('prm_test_operator_'));
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, true);
@@ -482,7 +506,8 @@
             for ($i = 0; $i < $batchSize; $i++)
             {
                 $operatorName = "batch_operator_$i";
-                $operatorUuid = $this->client->createOperator($operatorName);
+                $createdOperator = $this->client->createOperator($operatorName);
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $operatorUuids[] = $operatorUuid;
 
@@ -526,11 +551,11 @@
 
         public function testOperatorAccessTokenIntegrity(): void
         {
-            $operatorUuid = $this->client->createOperator('access_token_test_operator');
+            $createdOperator = $this->client->createOperator('access_token_test_operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $originalAccessToken = $operator->getAccessToken();
+            $originalAccessToken = $createdOperator->getAccessToken();
             $this->assertNotEmpty($originalAccessToken);
 
             $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalAccessToken);
@@ -562,13 +587,14 @@
                 $previousKey = $newAccessToken;
             }
 
-            $finalOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($previousKey, $finalOperator->getAccessToken());
+            $finalOperatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $previousKey);
+            $this->assertEquals($operatorUuid, $finalOperatorClient->getSelf()->getUuid());
         }
 
         public function testOperatorStateTransitionIntegrity(): void
         {
-            $operatorUuid = $this->client->createOperator('state_test_operator');
+            $createdOperator = $this->client->createOperator('state_test_operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $operator = $this->client->getOperator($operatorUuid);
@@ -602,15 +628,16 @@
 
         public function testOperatorCascadingOperations(): void
         {
-            $parentOperatorUuid = $this->client->createOperator('parent_operator');
+            $createdOperator = $this->client->createOperator('parent_operator');
+            $parentOperatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $parentOperatorUuid;
 
             $this->client->setOperatorPermissions($parentOperatorUuid, true);
-            $parentOperator = $this->client->getOperator($parentOperatorUuid);
 
-            $parentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $parentOperator->getAccessToken());
+            $parentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
-            $childOperatorUuid = $parentClient->createOperator('child_operator');
+            $childCreatedOperator = $parentClient->createOperator('child_operator');
+            $childOperatorUuid = $childCreatedOperator->getUuid();
             $this->createdOperators[] = $childOperatorUuid;
 
             $childOperator = $this->client->getOperator($childOperatorUuid);
@@ -643,31 +670,35 @@
             array_splice($this->createdOperators, array_search($childOperatorUuid, $this->createdOperators), 1);
         }
 
-        public function testAccessTokenRedactedForNonManagers(): void
+        public function testAccessTokenNeverExposedInOperatorRecords(): void
         {
-            $operatorUuid = $this->client->createOperator('token_redaction_test');
+            $createdOperator = $this->client->createOperator('token_redaction_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $manager = $this->createLimitedOperator('token_viewer_manager', management: true, operator: true);
             $clientOnly = $this->createLimitedOperator('token_no_viewer', client: true);
 
             $fullRecord = $this->client->getOperator($operatorUuid);
-            $this->assertNotEmpty($fullRecord->getAccessToken());
+            $this->assertEmpty($fullRecord->getAccessToken());
 
             $managerRecord = $manager->getOperator($operatorUuid);
-            $this->assertNotEmpty($managerRecord->getAccessToken());
+            $this->assertEmpty($managerRecord->getAccessToken());
 
             $clientRecord = $clientOnly->getOperator($operatorUuid);
             $this->assertEmpty($clientRecord->getAccessToken());
+
+            $this->assertNotEmpty($createdOperator->getAccessToken());
         }
 
         public function testTokenRotationInvalidatesOldTokenImmediately(): void
         {
-            $operatorUuid = $this->client->createOperator('rotation_invalidation_test');
+            $createdOperator = $this->client->createOperator('rotation_invalidation_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $originalToken = $this->client->getOperator($operatorUuid)->getAccessToken();
+            $originalToken = $createdOperator->getAccessToken();
             $originalClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalToken);
             $this->assertEquals($operatorUuid, $originalClient->getSelf()->getUuid());
 
@@ -687,7 +718,8 @@
 
         public function testConcurrentPermissionModificationsAreConsistent(): void
         {
-            $operatorUuid = $this->client->createOperator('concurrent_perm_test');
+            $createdOperator = $this->client->createOperator('concurrent_perm_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $managerA = $this->createLimitedOperator('concurrent_manager_a', management: true, operator: true);
@@ -705,13 +737,13 @@
 
         public function testOperatorDeleteDoesNotPreventReadingRelatedRecords(): void
         {
-            $operatorUuid = $this->client->createOperator('delete_related_test');
+            $createdOperator = $this->client->createOperator('delete_related_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('operator-delete-related.com', 'related_user');
             $this->createdEntities[] = $entityUuid;
@@ -752,11 +784,12 @@
 
         public function testPermissionChangeIsEffectiveAcrossMultipleClients(): void
         {
-            $operatorUuid = $this->client->createOperator('cross_client_perm_test');
+            $createdOperator = $this->client->createOperator('cross_client_perm_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $token = $this->client->getOperator($operatorUuid)->getAccessToken();
+            $token = $createdOperator->getAccessToken();
             $clientA = new FederationClient(getenv('SERVER_ENDPOINT'), $token);
             $clientB = new FederationClient(getenv('SERVER_ENDPOINT'), $token);
 

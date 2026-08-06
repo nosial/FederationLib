@@ -164,7 +164,8 @@
 
         public function testOperatorResponseStructure(): void
         {
-            $operatorUuid = $this->client->createOperator('Response Test Operator');
+            $createdOperator = $this->client->createOperator('Response Test Operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->assertIsString($operatorUuid);
@@ -183,7 +184,7 @@
             $this->assertIsBool($operator->isDisabled());
             $this->assertEquals($operatorUuid, $operator->getUuid());
             $this->assertEquals('Response Test Operator', $operator->getName());
-            $this->assertNotEmpty($operator->getAccessToken());
+            $this->assertEmpty($operator->getAccessToken());
             $this->assertGreaterThan(0, $operator->getCreated());
             $this->assertFalse($operator->isDisabled());
         }
@@ -207,7 +208,8 @@
         {
             for ($i = 0; $i < 3; $i++)
             {
-                $operatorUuid = $this->client->createOperator("List Test Operator $i");
+                $createdOperator = $this->client->createOperator("List Test Operator $i");
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
             }
 
@@ -366,7 +368,8 @@
 
         public function testAuditLogResponseStructure(): void
         {
-            $operatorUuid = $this->client->createOperator('Audit Log Test Operator');
+            $createdOperator = $this->client->createOperator('Audit Log Test Operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->client->deleteOperator($operatorUuid);
 
             $auditLogs = $this->client->listAuditLogs(1, 10);

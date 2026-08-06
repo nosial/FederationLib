@@ -135,7 +135,8 @@ class EvidenceSecurityTest extends TestCase
 
     public function testSubmitEvidenceUnauthorized(): void
     {
-        $basicOperatorUuid = $this->client->createOperator('Basic Operator');
+        $createdOperator = $this->client->createOperator('Basic Operator');
+        $basicOperatorUuid = $createdOperator->getUuid();
         $this->createdOperatorRecords[] = $basicOperatorUuid;
 
         $this->client->setManagementPermissions($basicOperatorUuid, false);
@@ -147,7 +148,7 @@ class EvidenceSecurityTest extends TestCase
         $this->assertFalse($basicOperator->hasOperatorPermissions());
         $this->assertFalse($basicOperator->hasClientPermissions());
 
-        $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getAccessToken());
+        $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
         $entityUuid = $this->client->pushEntity('example.com', 'alice123');
         $this->createdEntityRecords[] = $entityUuid;
@@ -252,12 +253,12 @@ class EvidenceSecurityTest extends TestCase
 
     public function testEvidenceSubmittedByDeletedOperatorRemainsReadable(): void
     {
-        $operatorUuid = $this->client->createOperator('evidence_owner');
+        $createdOperator = $this->client->createOperator('evidence_owner');
+        $operatorUuid = $createdOperator->getUuid();
         $this->createdOperators[] = $operatorUuid;
         $this->client->setClientPermissions($operatorUuid, true);
 
-        $operator = $this->client->getOperator($operatorUuid);
-        $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+        $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
         $entityUuid = $operatorClient->pushEntity('evidence-owner-delete.com', 'owner_user');
         $this->createdEntities[] = $entityUuid;

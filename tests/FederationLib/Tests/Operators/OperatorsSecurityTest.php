@@ -304,11 +304,12 @@
 
         public function testSecurityDisabledOperatorCannotAuthenticate(): void
         {
-            $operatorUuid = $this->client->createOperator('disabled_auth_test');
+            $createdOperator = $this->client->createOperator('disabled_auth_test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $this->client->getOperator($operatorUuid)->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
             $this->assertNotEmpty($operatorClient->getSelf()->getUuid());
 
             $this->client->disableOperator($operatorUuid);
@@ -366,13 +367,14 @@
 
         public function testDisabledOperatorTokenRejectedAcrossAllEndpoints(): void
         {
-            $operatorUuid = $this->client->createOperator('disabled_all_endpoints');
+            $createdOperator = $this->client->createOperator('disabled_all_endpoints');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setOperatorPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $this->client->getOperator($operatorUuid)->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
             $this->assertNotEmpty($operatorClient->getSelf()->getUuid());
 
             $this->client->disableOperator($operatorUuid);
@@ -432,13 +434,13 @@
 
         public function testSecurityDisabledOperatorDataIsolation(): void
         {
-            $operatorUuid = $this->client->createOperator('disabled_isolation');
+            $createdOperator = $this->client->createOperator('disabled_isolation');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('disabled-isolation.com', 'di_user');
             $this->createdEntities[] = $entityUuid;

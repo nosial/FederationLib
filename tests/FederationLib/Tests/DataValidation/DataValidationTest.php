@@ -193,7 +193,8 @@
             {
                 try
                 {
-                    $operatorUuid = $this->client->createOperator($invalidName);
+                    $createdOperator = $this->client->createOperator($invalidName);
+                    $operatorUuid = $createdOperator->getUuid();
                     if ($operatorUuid)
                     {
                         $this->createdOperators[] = $operatorUuid;
@@ -229,7 +230,8 @@
 
             foreach ($validNames as $name)
             {
-                $operatorUuid = $this->client->createOperator($name);
+                $createdOperator = $this->client->createOperator($name);
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $this->assertNotEmpty($operatorUuid);
 

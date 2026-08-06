@@ -105,7 +105,8 @@
         public function testCreateOperatorNoPermissions(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->assertNotEmpty($operatorUuid);
@@ -115,13 +116,14 @@
             $this->assertFalse($operatorRecord->hasManagementPermissions());
             $this->assertFalse($operatorRecord->hasOperatorPermissions());
             $this->assertFalse($operatorRecord->hasClientPermissions());
-            $this->assertNotEmpty($operatorRecord->getAccessToken());
+            $this->assertEmpty($operatorRecord->getAccessToken());
         }
 
         public function testCreateOperatorWithManagementPermission(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, true);
@@ -135,7 +137,8 @@
         public function testCreateOperatorWithOperatorPermission(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setOperatorPermissions($operatorUuid, true);
@@ -149,7 +152,8 @@
         public function testCreateOperatorWithClientPermission(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setClientPermissions($operatorUuid, true);
@@ -163,7 +167,8 @@
         public function testCreateOperatorWithAllPermissions(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setManagementPermissions($operatorUuid, true);
@@ -179,7 +184,8 @@
         public function testDeleteOperator(): void
         {
             $name = uniqid('test operator');
-            $operatorUuid = $this->client->createOperator($name);
+            $createdOperator = $this->client->createOperator($name);
+            $operatorUuid = $createdOperator->getUuid();
             $this->assertNotEmpty($operatorUuid);
 
             $operatorRecord = $this->client->getOperator($operatorUuid);
@@ -223,7 +229,8 @@
             for ($i = 0; $i < 10; $i++)
             {
                 $name = uniqid('test operator');
-                $operatorUuid = $this->client->createOperator($name);
+                $createdOperator = $this->client->createOperator($name);
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $createdOperators[] = $operatorUuid;
             }

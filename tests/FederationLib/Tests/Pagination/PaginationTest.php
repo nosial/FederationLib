@@ -163,7 +163,8 @@
 
             for ($i = 0; $i < $operatorCount; $i++)
             {
-                $operatorUuid = $this->client->createOperator("pagination_operator_$i");
+                $createdOperator = $this->client->createOperator("pagination_operator_$i");
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $operatorUuids[] = $operatorUuid;
             }
@@ -344,7 +345,8 @@
         {
             for ($i = 0; $i < 5; $i++)
             {
-                $operatorUuid = $this->client->createOperator("audit_pagination_operator_$i");
+                $createdOperator = $this->client->createOperator("audit_pagination_operator_$i");
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $this->client->deleteOperator($operatorUuid);
                 array_pop($this->createdOperators);

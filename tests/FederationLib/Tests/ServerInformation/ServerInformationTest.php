@@ -145,7 +145,8 @@
             $before = $authenticatedClient->getServerInformation();
             $this->assertIsInt($before->getOperators());
 
-            $operatorUuid = $authenticatedClient->createOperator(uniqid('count_accuracy_'));
+            $createdOperator = $authenticatedClient->createOperator(uniqid('count_accuracy_'));
+            $operatorUuid = $createdOperator->getUuid();
             $afterCreate = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getOperators() + 1, $afterCreate->getOperators());
 

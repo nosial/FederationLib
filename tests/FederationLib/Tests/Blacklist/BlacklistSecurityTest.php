@@ -106,15 +106,15 @@
 
         public function testBlacklistEntityUnauthorized(): void
         {
-            $basicOperatorUuid = $this->client->createOperator(uniqid('test_operator_'));
+            $createdOperator = $this->client->createOperator(uniqid('test_operator_'));
+            $basicOperatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $basicOperatorUuid;
 
             $this->client->setManagementPermissions($basicOperatorUuid, false);
             $this->client->setOperatorPermissions($basicOperatorUuid, false);
             $this->client->setClientPermissions($basicOperatorUuid, false);
 
-            $basicOperator = $this->client->getOperator($basicOperatorUuid);
-            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $basicOperator->getAccessToken());
+            $basicClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $this->client->pushEntity('unauthorized-test.com', 'unauthorized_user');
             $this->createdEntities[] = $entityUuid;

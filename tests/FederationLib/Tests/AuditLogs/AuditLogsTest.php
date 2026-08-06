@@ -80,13 +80,13 @@
 
         private function generateSampleAuditLogs(bool &$operatorUuid=null): void
         {
-            $operatorUuid = $this->client->createOperator('sample-audit-operator');
+            $createdOperator = $this->client->createOperator('sample-audit-operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('sample-audit.com', 'sample_user');
             $this->createdEntities[] = $entityUuid;
@@ -172,7 +172,8 @@
 
         public function testListOperatorAuditLogsInvalidPage(): void
         {
-            $operatorUuid = $this->client->createOperator('invalid-page-test');
+            $createdOperator = $this->client->createOperator('invalid-page-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->expectException(InvalidArgumentException::class);
@@ -181,7 +182,8 @@
 
         public function testListOperatorAuditLogsInvalidLimit(): void
         {
-            $operatorUuid = $this->client->createOperator('invalid-limit-test');
+            $createdOperator = $this->client->createOperator('invalid-limit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
             $this->expectException(InvalidArgumentException::class);
@@ -190,12 +192,12 @@
 
         public function testAuditLogEntryRetrievableByUuid(): void
         {
-            $operatorUuid = $this->client->createOperator('uuid-audit-test');
+            $createdOperator = $this->client->createOperator('uuid-audit-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $operatorClient->pushEntity('uuid-audit.com', 'uuid_audit_user');
             $this->createdEntities[] = $entityUuid;

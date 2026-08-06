@@ -82,11 +82,11 @@
 
         public function testOperatorAccessTokenRefresh(): void
         {
-            $operatorUuid = $this->client->createOperator('access-token-refresh-test');
+            $createdOperator = $this->client->createOperator('access-token-refresh-test');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $originalAccessToken = $operator->getAccessToken();
+            $originalAccessToken = $createdOperator->getAccessToken();
             $this->assertNotEmpty($originalAccessToken);
 
             $testClient = new FederationClient(getenv('SERVER_ENDPOINT'), $originalAccessToken);
@@ -110,9 +110,6 @@
             {
                 $this->assertContains($e->getCode(), [401, 403], 'Expected 401/403 for revoked Access Token');
             }
-
-            $updatedOperator = $this->client->getOperator($operatorUuid);
-            $this->assertEquals($newAccessToken, $updatedOperator->getAccessToken());
         }
 
         public function testSelfAccessTokenRefresh(): void
@@ -292,7 +289,8 @@
 
             for ($i = 1; $i <= 5; $i++)
             {
-                $operatorUuid = $this->client->createOperator("bulk-test-operator-$i");
+                $createdOperator = $this->client->createOperator("bulk-test-operator-$i");
+                $operatorUuid = $createdOperator->getUuid();
                 $this->createdOperators[] = $operatorUuid;
                 $this->client->setClientPermissions($operatorUuid, true);
             }
@@ -319,13 +317,13 @@
 
         public function testConcurrentClientOperations(): void
         {
-            $operatorUuid = $this->client->createOperator('concurrent-test-operator');
+            $createdOperator = $this->client->createOperator('concurrent-test-operator');
+            $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
             $this->client->setClientPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
 
-            $operator = $this->client->getOperator($operatorUuid);
-            $concurrentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $operator->getAccessToken());
+            $concurrentClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
             $entityUuid = $this->client->pushEntity('concurrent-test.com', 'concurrent_user');
             $this->createdEntities[] = $entityUuid;
