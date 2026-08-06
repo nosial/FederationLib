@@ -159,7 +159,7 @@
             $this->assertSame(Method::LIST_OPERATORS, Method::matchHandle('GET', '/operators'));
             $this->assertSame(Method::CREATE_OPERATOR, Method::matchHandle('POST', '/operators'));
             $this->assertSame(Method::GET_SELF_OPERATOR, Method::matchHandle('GET', '/operators/self'));
-            $this->assertSame(Method::GENERATE_OPERATOR_ACCESS_TOKEN, Method::matchHandle('POST', '/operators/refresh'));
+            $this->assertSame(Method::GENERATE_ACCESS_TOKEN, Method::matchHandle('POST', '/operators/refresh'));
             $this->assertSame(Method::GENERATE_OPERATOR_ACCESS_TOKEN, Method::matchHandle('POST', "/operators/$uuid/refresh"));
             $this->assertSame(Method::GET_OPERATOR, Method::matchHandle('GET', "/operators/$uuid"));
             $this->assertSame(Method::DELETE_OPERATOR, Method::matchHandle('DELETE', "/operators/$uuid"));
