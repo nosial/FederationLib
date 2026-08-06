@@ -71,7 +71,7 @@
                 }
             });
 
-            self::successResponse(array_map(fn($op) => $op->toArray(), $operators));
+            self::successResponse($operators);
         }
 
         /**

@@ -104,9 +104,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                self::successResponse(array_map(fn($log) => $log->toArray(),
-                    AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries, $category, $by, $order))
-                );
+                self::successResponse(AuditLogManager::getEntriesByEntity($entityRecord->getUuid(), $limit, $page, $filteredEntries, $category, $by, $order));
             }
             catch (DatabaseOperationException $e)
             {

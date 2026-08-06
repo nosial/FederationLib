@@ -25,7 +25,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
+            FederationServer::requireAuthenticatedOperator();
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
@@ -50,13 +50,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_GET, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            if(!$authenticatedOperator?->hasOperatorPermissions())
-            {
-                // Clear Access Token if the authenticated operator does not have permission to manage operators
-                $existingOperator->clearAccessToken();
-            }
-
-            self::successResponse($existingOperator->toArray());
+            self::successResponse($existingOperator);
         }
 
         /**

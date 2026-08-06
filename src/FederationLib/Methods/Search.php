@@ -98,7 +98,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_SEARCH, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse(array_map(fn(SearchResult $r) => self::searchResultToArray($r), $searchResults));
+            self::successResponse(array_map(fn(SearchResult $r) => $r->toArray(!self::omitEntityMetadata()), $searchResults));
         }
 
         /**

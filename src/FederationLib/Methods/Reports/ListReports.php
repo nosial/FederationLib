@@ -53,9 +53,7 @@
 
             try
             {
-                self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReports($limit, $page, $category, $by, $order))
-                );
+                self::successResponse(ReportManager::getReports($limit, $page, $category, $by, $order));
             }
             catch (DatabaseOperationException $e)
             {

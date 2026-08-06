@@ -57,7 +57,7 @@
                 throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
             }
 
-            self::successResponse($reportRecord->toArray());
+            self::successResponse($reportRecord);
         }
 
         /**

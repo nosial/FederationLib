@@ -15,7 +15,7 @@
          */
         public static function handleRequest(): void
         {
-            self::successResponse(FederationServer::requireAuthenticatedOperator()->toArray());
+            self::successResponse(FederationServer::requireAuthenticatedOperator());
         }
 
         /**

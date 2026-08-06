@@ -56,7 +56,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, 500, $e);
             }
 
-            self::successResponse($blacklistRecord->toArray());
+            self::successResponse($blacklistRecord);
         }
 
         /**

@@ -82,9 +82,7 @@
 
             try
             {
-                self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReportsBySubmittingOperator($operator, $limit, $page, $category))
-                );
+                self::successResponse(ReportManager::getReportsBySubmittingOperator($operator, $limit, $page, $category));
             }
             catch (DatabaseOperationException $e)
             {

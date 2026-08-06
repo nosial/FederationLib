@@ -105,9 +105,7 @@
 
             try
             {
-                self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReportsByReportingEntity($entityUuid, $limit, $page, $category))
-                );
+                self::successResponse(ReportManager::getReportsByReportingEntity($entityUuid, $limit, $page, $category));
             }
             catch (DatabaseOperationException $e)
             {

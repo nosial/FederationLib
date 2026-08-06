@@ -66,7 +66,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse(array_map(fn($attachment) => $attachment->toArray(), $attachmentRecords));
+            self::successResponse($attachmentRecords);
         }
 
         /**

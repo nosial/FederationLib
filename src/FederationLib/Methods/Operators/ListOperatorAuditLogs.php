@@ -89,9 +89,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                self::successResponse(array_map(fn($log) => $log->toArray(),
-                        AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries, $category, $by, $order))
-                );
+                self::successResponse(AuditLogManager::getEntriesByOperator($operatorUuid, $limit, $page, $filteredEntries, $category, $by, $order));
             }
             catch (DatabaseOperationException $e)
             {

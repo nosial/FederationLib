@@ -61,7 +61,7 @@
                     }
                 }
 
-                self::successResponse($logRecord->toArray());
+                self::successResponse($logRecord);
             }
             catch (DatabaseOperationException $e)
             {

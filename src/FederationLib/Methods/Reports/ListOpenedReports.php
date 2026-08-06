@@ -51,16 +51,14 @@
 
             try
             {
-                self::successResponse(array_map(fn($report) => $report->toArray(),
-                    ReportManager::getReportsByAssignedOperator(
-                        operatorUuid: $authenticatedOperator->getUuid(),
-                        limit: $limit,
-                        page: $page,
-                        category: ReportCategory::OPENED,
-                        by: $by,
-                        order: $order
-                    ))
-                );
+                self::successResponse(ReportManager::getReportsByAssignedOperator(
+                    operatorUuid: $authenticatedOperator->getUuid(),
+                    limit: $limit,
+                    page: $page,
+                    category: ReportCategory::OPENED,
+                    by: $by,
+                    order: $order
+                ));
             }
             catch (DatabaseOperationException $e)
             {

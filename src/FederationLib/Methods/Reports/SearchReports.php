@@ -87,7 +87,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_SEARCH, 500, $e);
             }
 
-            self::successResponse(array_map(fn(ReportRecord $r) => $r->toArray(), $results));
+            self::successResponse($results);
         }
 
         /**
