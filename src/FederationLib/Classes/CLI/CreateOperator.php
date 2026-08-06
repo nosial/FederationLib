@@ -38,8 +38,10 @@
             try
             {
                 print(sprintf("Creating operator %s\n", $name));
-                $operatorUuid = OperatorManager::createOperator($name);
+                $operatorCreated = OperatorManager::createOperator($name);
+                $operatorUuid = $operatorCreated->getUuid();
                 print(sprintf("Operator %s created successfully\n", $operatorUuid));
+                print(sprintf("Access Token: %s\n", $operatorCreated->getAccessToken()));
 
                 if($operatorPermissions)
                 {

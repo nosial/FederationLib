@@ -11,6 +11,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Objects\ErrorResponse;
+    use FederationLib\Objects\OperatorCreated;
     use InvalidArgumentException;
     use FederationLib\Interfaces\RequestSpecificationInterface;
 
@@ -53,10 +54,10 @@
 
             try
             {
-                $operatorUuid = OperatorManager::createOperator($name);
+                $operatorCreated = OperatorManager::createOperator($name);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf('Operator %s (%s) created by %s',
                     FederationServer::getParameter('name'),
-                    $operatorUuid,
+                    $operatorCreated->getUuid(),
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
@@ -69,8 +70,10 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_CREATE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            // Respond with the UUID of the newly created operator.
-            self::successResponse($operatorUuid, HttpResponseCode::CREATED);
+            // Respond with the operator's UUID and raw Access Token.
+            // The raw token is only ever returned here (and by the refresh endpoint),
+            // never after the operator has been persisted.
+            self::successResponse($operatorCreated, HttpResponseCode::CREATED);
         }
 
         /**
@@ -94,7 +97,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Creates a new operator with the given name. Requires operator management permissions.';
+            return 'Creates a new operator with the given name. The response contains the new operator\'s UUID and its raw Access Token; the token is only returned here and by the refresh endpoint, and is stored server-side as its SHA-256 hash so it can never be retrieved again. Requires operator management permissions.';
         }
 
         /**
@@ -147,7 +150,7 @@
                     'description' => 'Operator created successfully',
                     'content' => [
                         'application/json' => [
-                            'schema' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the newly created operator'],
+                            'schema' => ['$ref' => OperatorCreated::getReference()],
                         ],
                     ],
                 ],
