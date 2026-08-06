@@ -22,6 +22,8 @@ First stable release of FederationLib
    `ClassificationFlag`, relationship types, audit log categories, sort order) and parameters to the handler
    specifications
  - Added a `multipart/form-data` request body schema to `SubmitReport`
+ - Added a new method `GenerateAccessToken` that allows **ANY** authenticated operator to generate their own access
+   token for their own operator access.
 
 ### Changed
  - Changed specification version from `2025.01` to `1.0`
@@ -35,6 +37,12 @@ First stable release of FederationLib
    request/response specifications
  - Updated `docker-entrypoint.sh` to print an ASCII banner and enable CLI logging during the initialization step
  - Cleaned up `RequestHandler` (unused import removal, documentation, syntax cleanup)
+ - `CreateOperator` now returns a new `CreatedOperator` object that contains the properties `uuid` and `access_token`
+   instead of just returning the newly created operator's UUID
+
+### Removed
+ - Removed all references to `access_token` in the operator record result returned in the HTTP interface, the `access_token`
+   property is not part of the `Operator` object as per the specification.
 
 
 
