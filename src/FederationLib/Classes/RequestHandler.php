@@ -14,6 +14,7 @@
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
     use Throwable;
+    use Traversable;
 
     abstract class RequestHandler implements RequestHandlerInterface
     {
@@ -134,20 +135,16 @@
          * @param int|HttpResponseCode $responseCode Optional. The response code of the success response
          * @return void
          */
-        protected static function successResponse(mixed $data = null, int|HttpResponseCode $responseCode = 200): void
+        protected static function successResponse(mixed $data = null, int|HttpResponseCode $responseCode=200): void
         {
             if($responseCode instanceof HttpResponseCode)
             {
                 $responseCode = $responseCode->value;
             }
 
-            if($data instanceof StandardObjectInterface)
+            if($data !== null)
             {
-                $data = $data->toStandardArray();
-            }
-            elseif($data instanceof SerializableInterface)
-            {
-                $data = $data->toArray();
+                $data = self::normalizeData($data);
             }
 
             http_response_code($responseCode);
@@ -161,6 +158,40 @@
             {
                 print(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
             }
+        }
+
+        /**
+         * Recursively normalize response data, preferring the standardized representation
+         * (toStandardArray) when available and falling back to the full serialization
+         * (toArray) otherwise. Applied to every object in the response so RequestHandlers
+         * cannot bypass the standardized output (e.g. leaking the operator access_token).
+         *
+         * @param mixed $data Data to normalize.
+         * @return mixed Normalized data.
+         */
+        private static function normalizeData(mixed $data): mixed
+        {
+            if($data instanceof StandardObjectInterface)
+            {
+                return $data->toStandardArray();
+            }
+
+            if($data instanceof SerializableInterface)
+            {
+                return $data->toArray();
+            }
+
+            if(is_array($data))
+            {
+                return array_map([self::class, 'normalizeData'], $data);
+            }
+
+            if($data instanceof Traversable)
+            {
+                return array_map([self::class, 'normalizeData'], iterator_to_array($data));
+            }
+
+            return $data;
         }
 
         /**
