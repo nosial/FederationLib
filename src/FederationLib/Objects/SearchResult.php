@@ -45,11 +45,11 @@
         /**
          * @inheritDoc
          */
-        public function toArray(): array
+        public function toArray(bool $includeMetadata=false): array
         {
             return [
                 'type' => $this->type->value,
-                'record' => $this->record->toArray()
+                'record' => $this->record instanceof EntityRecord ? $this->record->toArray($includeMetadata) : $this->record->toArray()
             ];
         }
 
