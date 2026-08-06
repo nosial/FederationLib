@@ -282,8 +282,7 @@
                 preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) && $requestMethod === 'GET' => Method::GET_ATTACHMENT_INFO,
                 $path === '/attachments/search' && $requestMethod === 'GET' => Method::SEARCH_ATTACHMENTS,
                 $path === '/attachments' && $requestMethod === 'GET' => Method::LIST_ATTACHMENTS,
-                $path === '/attachments' && $requestMethod === 'POST' => Method::UPLOAD_ATTACHMENT,
-                $path === '/attachments' && $requestMethod === 'PUT' => Method::UPLOAD_ATTACHMENT_PUT,
+                $path === '/attachments' && $requestMethod === 'POST', $path === '/attachments' && $requestMethod === 'PUT' => Method::UPLOAD_ATTACHMENT,
 
                 // Entities methods
                 // UUID entity relationship routing
