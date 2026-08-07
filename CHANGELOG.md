@@ -39,6 +39,7 @@ First stable release of FederationLib
  - Cleaned up `RequestHandler` (unused import removal, documentation, syntax cleanup)
  - `CreateOperator` now returns a new `CreatedOperator` object that contains the properties `uuid` and `access_token`
    instead of just returning the newly created operator's UUID
+ - Updated `EntityRelationshipType` value to uppercase
 
 ### Removed
  - Removed all references to `access_token` in the operator record result returned in the HTTP interface, the `access_token`

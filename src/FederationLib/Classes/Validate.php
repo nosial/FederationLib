@@ -146,7 +146,7 @@
          * @param array $input
          * @return bool
          */
-        public static function entityMetadata(array $input): bool
+        public static function metadata(array $input): bool
         {
 
             foreach($input as $key => $value)

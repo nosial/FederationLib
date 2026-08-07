@@ -56,7 +56,7 @@
                 throw new InvalidArgumentException("Host cannot exceed 255 characters.");
             }
 
-            if($metadata !== null && !Validate::entityMetadata($metadata))
+            if($metadata !== null && !Validate::metadata($metadata))
             {
                 throw new InvalidArgumentException('Invalid entity metadata provided');
             }
@@ -115,7 +115,7 @@
          */
         public static function updateEntityMetadata(string $entityUuid, array $metadata): bool
         {
-            if(!Validate::entityMetadata($metadata))
+            if(!Validate::metadata($metadata))
             {
                 throw new InvalidArgumentException('Invalid entity metadata provided');
             }
@@ -176,7 +176,7 @@
          */
         public static function replaceEntityMetadata(string $entityUuid, array $metadata): bool
         {
-            if(!Validate::entityMetadata($metadata))
+            if(!Validate::metadata($metadata))
             {
                 throw new InvalidArgumentException('Invalid entity metadata provided');
             }

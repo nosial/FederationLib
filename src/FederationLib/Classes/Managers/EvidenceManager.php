@@ -102,7 +102,7 @@
 
             if($metadata !== null)
             {
-                if(!Validate::entityMetadata($metadata))
+                if(!Validate::metadata($metadata))
                 {
                     throw new InvalidArgumentException('Invalid evidence metadata provided');
                 }

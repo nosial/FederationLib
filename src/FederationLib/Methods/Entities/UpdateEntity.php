@@ -53,7 +53,7 @@
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
             }
 
-            if(!Validate::entityMetadata($metadata))
+            if(!Validate::metadata($metadata))
             {
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
             }

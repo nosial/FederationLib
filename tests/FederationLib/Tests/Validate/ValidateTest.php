@@ -166,57 +166,57 @@
 
         public function testEntityMetadataValid(): void
         {
-            $this->assertTrue(Validate::entityMetadata(['key' => 'value']));
-            $this->assertTrue(Validate::entityMetadata(['count' => 42]));
-            $this->assertTrue(Validate::entityMetadata(['flag' => true]));
-            $this->assertTrue(Validate::entityMetadata(['nullable' => null]));
-            $this->assertTrue(Validate::entityMetadata(['a' => 'b', 'c' => 1, 'd' => null]));
+            $this->assertTrue(Validate::metadata(['key' => 'value']));
+            $this->assertTrue(Validate::metadata(['count' => 42]));
+            $this->assertTrue(Validate::metadata(['flag' => true]));
+            $this->assertTrue(Validate::metadata(['nullable' => null]));
+            $this->assertTrue(Validate::metadata(['a' => 'b', 'c' => 1, 'd' => null]));
         }
 
         public function testEntityMetadataNullValue(): void
         {
-            $this->assertTrue(Validate::entityMetadata(['key' => null]));
+            $this->assertTrue(Validate::metadata(['key' => null]));
         }
 
         public function testEntityMetadataEmpty(): void
         {
-            $this->assertTrue(Validate::entityMetadata([]));
+            $this->assertTrue(Validate::metadata([]));
         }
 
         public function testEntityMetadataKeyTooLong(): void
         {
             $key = str_repeat('a', 65);
-            $this->assertFalse(Validate::entityMetadata([$key => 'value']));
+            $this->assertFalse(Validate::metadata([$key => 'value']));
         }
 
         public function testEntityMetadataKeyAtMaxLength(): void
         {
             $key = str_repeat('a', 64);
-            $this->assertTrue(Validate::entityMetadata([$key => 'value']));
+            $this->assertTrue(Validate::metadata([$key => 'value']));
         }
 
         public function testEntityMetadataEmptyStringValue(): void
         {
-            $this->assertFalse(Validate::entityMetadata(['key' => '']));
+            $this->assertFalse(Validate::metadata(['key' => '']));
         }
 
         public function testEntityMetadataStringValueTooLong(): void
         {
             $value = str_repeat('a', 1001);
-            $this->assertFalse(Validate::entityMetadata(['key' => $value]));
+            $this->assertFalse(Validate::metadata(['key' => $value]));
         }
 
         public function testEntityMetadataStringValueAtMaxLength(): void
         {
             $value = str_repeat('a', 1000);
-            $this->assertTrue(Validate::entityMetadata(['key' => $value]));
+            $this->assertTrue(Validate::metadata(['key' => $value]));
         }
 
         public function testEntityMetadataDisallowedValueType(): void
         {
-            $this->assertFalse(Validate::entityMetadata(['key' => 3.14]));
-            $this->assertFalse(Validate::entityMetadata(['key' => [1, 2, 3]]));
-            $this->assertFalse(Validate::entityMetadata(['key' => new \stdClass()]));
+            $this->assertFalse(Validate::metadata(['key' => 3.14]));
+            $this->assertFalse(Validate::metadata(['key' => [1, 2, 3]]));
+            $this->assertFalse(Validate::metadata(['key' => new \stdClass()]));
         }
 
         public function testEntityMetadataSizeLimit(): void
@@ -227,19 +227,19 @@
             {
                 $metadata["key_$i"] = $largeValue;
             }
-            $this->assertFalse(Validate::entityMetadata($metadata));
+            $this->assertFalse(Validate::metadata($metadata));
         }
 
         public function testEntityMetadataIntegerValue(): void
         {
-            $this->assertTrue(Validate::entityMetadata(['count' => 0]));
-            $this->assertTrue(Validate::entityMetadata(['count' => -1]));
-            $this->assertTrue(Validate::entityMetadata(['count' => PHP_INT_MAX]));
+            $this->assertTrue(Validate::metadata(['count' => 0]));
+            $this->assertTrue(Validate::metadata(['count' => -1]));
+            $this->assertTrue(Validate::metadata(['count' => PHP_INT_MAX]));
         }
 
         public function testEntityMetadataBooleanValue(): void
         {
-            $this->assertTrue(Validate::entityMetadata(['flag' => true]));
-            $this->assertTrue(Validate::entityMetadata(['flag' => false]));
+            $this->assertTrue(Validate::metadata(['flag' => true]));
+            $this->assertTrue(Validate::metadata(['flag' => false]));
         }
     }

@@ -39,7 +39,7 @@
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
             }
 
-            if($metadata !== null && (!is_array($metadata) || !Validate::entityMetadata($metadata)))
+            if($metadata !== null && (!is_array($metadata) || !Validate::metadata($metadata)))
             {
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
             }
