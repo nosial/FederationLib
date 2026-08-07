@@ -214,7 +214,6 @@
 
         public function testEntityMetadataDisallowedValueType(): void
         {
-            $this->assertFalse(Validate::metadata(['key' => 3.14]));
             $this->assertFalse(Validate::metadata(['key' => [1, 2, 3]]));
             $this->assertFalse(Validate::metadata(['key' => new \stdClass()]));
         }
@@ -235,6 +234,14 @@
             $this->assertTrue(Validate::metadata(['count' => 0]));
             $this->assertTrue(Validate::metadata(['count' => -1]));
             $this->assertTrue(Validate::metadata(['count' => PHP_INT_MAX]));
+        }
+
+        public function testEntityMetadataFloatValue(): void
+        {
+            $this->assertTrue(Validate::metadata(['score' => 3.14]));
+            $this->assertTrue(Validate::metadata(['score' => 0.0]));
+            $this->assertTrue(Validate::metadata(['score' => -2.5]));
+            $this->assertTrue(Validate::metadata(['score' => PHP_FLOAT_MAX]));
         }
 
         public function testEntityMetadataBooleanValue(): void
