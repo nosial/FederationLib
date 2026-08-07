@@ -165,17 +165,18 @@
 
                 switch(gettype($value))
                 {
+                    // string value cannot be empty or greater than 64 characters
                     case 'string':
-                        // string value cannot be empty or greater than 64 characters
                         if(strlen($value) > 1000 || $value === '')
                         {
                             return false;
                         }
                         break;
 
-                        // integer and boolean is allowed
+                    // integer, double and boolean is allowed
                     case 'integer':
                     case 'boolean':
+                    case 'double':
                         break;
 
                         // disallow anything else
