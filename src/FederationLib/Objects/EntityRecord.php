@@ -41,7 +41,7 @@
             {
                 if(is_string($data['relationship_type']))
                 {
-                    $this->relationshipType = EntityRelationshipType::tryFrom(strtolower($data['relationship_type']));
+                    $this->relationshipType = EntityRelationshipType::tryFrom(strtoupper($data['relationship_type']));
                 }
                 elseif($data['relationship_type'] instanceof EntityRelationshipType)
                 {

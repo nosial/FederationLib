@@ -12,7 +12,7 @@
          *
          * Unlike `PROXY` this relationship may/may not be intentionally hidden, aka not entirely confirmed.
          */
-        case ALTERNATIVE = 'alternative';
+        case ALTERNATIVE = 'ALTERNATIVE';
 
         /**
          * Indicates the entity acts as a proxy for the target entity. eg; johndoe321@example.com communicates as
@@ -20,19 +20,19 @@
          *
          * Unlike `ALTERNATIVE` this relationship is known, aka confirmed to be true.
          */
-        case PROXY = 'proxy';
+        case PROXY = 'PROXY';
 
         /**
          * Indicates the entity acts as a dependent entity for the target entity. eg; the target peer created a bot as
          * a dependent entity
          */
-        case CHILD = 'child';
+        case CHILD = 'CHILD';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?EntityRelationshipType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
     }

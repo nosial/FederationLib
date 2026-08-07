@@ -23,7 +23,7 @@
         private const string ERROR_IDENTIFIER_REQUIRED = 'Entity identifier is required';
         private const string ERROR_INVALID_TARGET_UUID = 'A valid target entity UUID is required';
         private const string ERROR_RELATIONSHIP_TYPE_REQUIRED = 'Relationship type is required';
-        private const string ERROR_INVALID_RELATIONSHIP_TYPE = 'Relationship type must be one of: alternative, proxy, child';
+        private const string ERROR_INVALID_RELATIONSHIP_TYPE = 'Relationship type must be one of: ALTERNATIVE, PROXY, CHILD';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_NOT_FOUND = 'Entity not found';
         private const string ERROR_UNABLE_TO_SET = 'Unable to set entity relationship';
