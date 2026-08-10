@@ -15,6 +15,7 @@
         private bool $clientPermissions;
         private bool $managementPermissions;
         private bool $operatorPermissions;
+        private bool $autoAssign;
         private int $created;
         private int $updated;
 
@@ -32,6 +33,7 @@
             $this->clientPermissions = (bool)($data['client_permissions'] ?? false);
             $this->managementPermissions = (bool)($data['management_permissions'] ?? false);
             $this->operatorPermissions = (bool)($data['operator_permissions'] ?? false);
+            $this->autoAssign = (bool)($data['auto_assign'] ?? false);
 
             // Parse SQL datetime string to timestamp if necessary for created
             if (isset($data['created']) && is_string($data['created']))
@@ -148,6 +150,16 @@
         }
 
         /**
+         * Check if the operator can receive reports automatically
+         *
+         * @return bool
+         */
+        public function isAutoAssigned(): bool
+        {
+            return $this->autoAssign;
+        }
+
+        /**
          * Get the creation timestamp.
          *
          * @return int
@@ -180,6 +192,7 @@
                 'client_permissions' => $this->clientPermissions,
                 'management_permissions' => $this->managementPermissions,
                 'operator_permissions' => $this->operatorPermissions,
+                'auto_assign' => $this->autoAssign,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];
@@ -197,6 +210,7 @@
                 'client_permissions' => $this->clientPermissions,
                 'management_permissions' => $this->managementPermissions,
                 'operator_permissions' => $this->operatorPermissions,
+                'auto_assign' => $this->autoAssign,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];
@@ -256,6 +270,7 @@
                 'client_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has client-level permissions'],
                 'management_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has management-level permissions'],
                 'operator_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has operator-level permissions'],
+                'auto_assign' => ['type' => 'boolean', 'description' => 'Whether the operator can automatically receive reports'],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was created'],
                 'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was last updated'],
             ];
@@ -266,7 +281,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['uuid', 'name', 'disabled', 'client_permissions', 'management_permissions', 'operator_permissions', 'created', 'updated'];
+            return ['uuid', 'name', 'disabled', 'client_permissions', 'management_permissions', 'operator_permissions',  'auto_assign', 'created', 'updated'];
         }
 
         /**
