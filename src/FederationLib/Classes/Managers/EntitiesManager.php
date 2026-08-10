@@ -32,10 +32,15 @@
         /**
          * Registers a new entity with the given ID and domain.
          *
+         * If an entity with the same host/ID already exists (e.g. due to a concurrent request),
+         * the duplicate-key failure is handled internally: the provided metadata is merged into
+         * the existing record and the existing entity UUID is returned, making the operation
+         * idempotent.
+         *
          * @param string $host The host of the entity
          * @param string|null $id Optional. The ID of the entity if it belongs to the specific domain
          * @param array|null $metadata Optional. Metadata to associate with the entity
-         * @return string The UUID of the registered entity
+         * @return string The UUID of the registered or existing entity
          * @throws InvalidArgumentException If the ID exceeds 255 characters or if the domain is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
@@ -91,6 +96,22 @@
             }
             catch (PDOException $e)
             {
+                if($e->getCode() == 23000)
+                {
+                    $existingEntity = self::getEntity($host, $id);
+                    if($existingEntity === null)
+                    {
+                        throw new DatabaseOperationException("Failed to register entity: " . $e->getMessage(), $e->getCode(), $e);
+                    }
+
+                    if($metadata !== null)
+                    {
+                        self::updateEntityMetadata($existingEntity->getUuid(), $metadata);
+                    }
+
+                    return $existingEntity->getUuid();
+                }
+
                 throw new DatabaseOperationException("Failed to register entity: " . $e->getMessage(), $e->getCode(), $e);
             }
 
