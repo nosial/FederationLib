@@ -5,9 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - Ongoing
+## [1.0.1] - 2026-08-10
 
-This is an ongoing update
+This update introduces operator auto-assignment support and the ability to retrieve evidence records
+associated with a report.
+
+### Added
+ - Added `auto_assign` flag to operator records (`operators.auto_assign` column, `OperatorRecord` property,
+   and OpenAPI schema) so operators can opt-in to automatic report assignment
+ - Added `ManageAutoAssign` request handler for `PATCH /operators/{uuid}/auto-assign` to enable or disable
+   automatic report assignment; requires operator management permissions and is blocked for built-in operators
+ - Added `OPERATOR_AUTO_ASSIGN_CHANGED` audit log type for auto-assignment changes
+ - Added `OperatorManager::setAutoAssign()` and `OperatorManager::getRandomAutoAssignOperator()` for managing
+   and selecting auto-assignable operators
+ - Added `FederationClient::setAutoAssign()` client method for toggling an operator's auto-assign status
+ - Added `GetReportEvidenceRecords` request handler for `GET /reports/{uuid}/evidence` to list paginated
+   evidence records linked to a report, with optional `include_confidential`, `category`, `by`, and `order`
+   parameters
+ - Added `EvidenceManager::getEvidenceByReport()` for paginated evidence retrieval by report UUID with
+   confidentiality, category, and sorting support
+ - Added `FederationClient::listReportEvidenceRecords()` client method for fetching a report's evidence records
+ - Added `ReportsEvidenceTest` and `AutoAssignTest` test suites, and updated existing tests for the new features
+
+### Changed
+ - Updated `ScanContent` to automatically assign generated reports to a randomly selected operator with
+   `auto_assign` enabled and management permissions; skips report creation when no eligible operator exists
+ - Updated the default `scanning.auto_report_threshold` from `30.0` to `80.0` (and aligned the
+   `ScanningConfiguration` fallback default to `80.00`) to reduce unintended auto-reporting
 
 
 
