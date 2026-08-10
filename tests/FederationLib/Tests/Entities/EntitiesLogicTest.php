@@ -184,6 +184,52 @@
             $this->assertEquals(['stage' => 2, 'extra' => 'value'], $record->getMetadata());
         }
 
+        public function testConcurrentDuplicateEntityPushIsIdempotent(): void
+        {
+            $host = 'concurrent-duplicate-test.com';
+            $id = 'concurrent_duplicate_user';
+            $path = 'entities';
+            $body = json_encode([
+                'host' => $host,
+                'id' => $id,
+                'metadata' => ['source' => 'concurrent_push'],
+            ]);
+            $token = getenv('SERVER_ACCESS_TOKEN');
+
+            $requests = [];
+            for ($i = 0; $i < 10; $i++)
+            {
+                $requests[] = [
+                    'method' => 'POST',
+                    'path' => $path,
+                    'token' => $token,
+                    'body' => $body,
+                ];
+            }
+
+            $results = $this->concurrentRawRequests($requests);
+            $uuids = [];
+            foreach ($results as $index => [$code, $response])
+            {
+                $this->assertEquals(200, $code, "Concurrent push $index failed: $response");
+                $decoded = json_decode($response, true);
+                $this->assertIsString($decoded, "Concurrent push $index did not return a UUID string");
+                $uuids[] = $decoded;
+            }
+
+            $uniqueUuids = array_unique($uuids);
+            $this->assertCount(1, $uniqueUuids, 'All concurrent pushes should return the same entity UUID');
+
+            $entityUuid = reset($uniqueUuids);
+            $this->createdEntities[] = $entityUuid;
+
+            $record = $this->client->getEntityRecord($entityUuid);
+            $this->assertNotNull($record);
+            $this->assertEquals($host, $record->getHost());
+            $this->assertEquals($id, $record->getId());
+            $this->assertEquals(['source' => 'concurrent_push'], $record->getMetadata());
+        }
+
         public function testEntityRelationshipTargetDeletionConsistency(): void
         {
             $entityA = $this->createSecurityEntity();
