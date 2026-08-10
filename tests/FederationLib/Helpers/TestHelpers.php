@@ -176,6 +176,75 @@
         }
 
         /**
+         * Performs multiple raw HTTP requests against the test server concurrently.
+         *
+         * @param array<int, array{method: string, path: string, token?: string|null, body?: string|null, headers?: array<string>}> $requests
+         * @return array<int, array{0: int, 1: string}>
+         */
+        private function concurrentRawRequests(array $requests): array
+        {
+            $baseUrl = rtrim(getenv('SERVER_ENDPOINT'), '/');
+            $handles = [];
+            $multiHandle = curl_multi_init();
+
+            foreach ($requests as $index => $request)
+            {
+                $url = $baseUrl . '/' . ltrim($request['path'], '/');
+                $ch = curl_init($url);
+
+                $headers = ['Accept: application/json'];
+                if (isset($request['body']) && $request['body'] !== null)
+                {
+                    $headers[] = 'Content-Type: application/json';
+                }
+
+                $token = $request['token'] ?? null;
+                if ($token !== null)
+                {
+                    $headers[] = 'Authorization: Bearer ' . $token;
+                }
+
+                if (isset($request['headers']))
+                {
+                    $headers = array_merge($headers, $request['headers']);
+                }
+
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_CUSTOMREQUEST => strtoupper($request['method']),
+                    CURLOPT_HTTPHEADER => $headers,
+                ]);
+
+                if (isset($request['body']) && $request['body'] !== null)
+                {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, $request['body']);
+                }
+
+                curl_multi_add_handle($multiHandle, $ch);
+                $handles[$index] = $ch;
+            }
+
+            $running = null;
+            do
+            {
+                curl_multi_exec($multiHandle, $running);
+                curl_multi_select($multiHandle);
+            }
+            while ($running > 0);
+
+            $results = [];
+            foreach ($handles as $index => $ch)
+            {
+                $results[$index] = [(int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE), (string)curl_multi_getcontent($ch)];
+                curl_multi_remove_handle($multiHandle, $ch);
+                curl_close($ch);
+            }
+
+            curl_multi_close($multiHandle);
+            return $results;
+        }
+
+        /**
          * Removes a UUID from a cleanup collection.
          */
         private function removeFromCleanup(array &$collection, string $uuid): void
