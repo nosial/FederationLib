@@ -396,6 +396,13 @@
                 return;
             }
 
+            // Do not generate the report if there is no operator eligible to be automatically assigned it
+            $assignedOperator = OperatorManager::getRandomAutoAssignOperator();
+            if($assignedOperator === null)
+            {
+                return;
+            }
+
             // Generate the report message
             $reportMessage = "Automated Report\n";
             if(count($scannedContent->getScanResults()) > 0)
@@ -435,6 +442,9 @@
                 message: $reportMessage,
                 automated: true
             );
+
+            // Assign the report to the randomly selected auto assign operator
+            ReportManager::assignOperator($reportUuid, $assignedOperator->getUuid());
 
             // Create the evidence
             $evidenceUuid = EvidenceManager::addEvidence(
