@@ -83,7 +83,7 @@
             $this->classificationSuspicious = (float)($configuration['classification_suspicious'] ?? ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier());
             $this->classificationMalicious = (float)($configuration['classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
             $this->autoReport = (bool)($configuration['auto_report'] ?? false);
-            $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 40.00);
+            $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
             $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 300);
             $this->reputationMaxDelta = (int)($configuration['reputation_max_delta'] ?? 10);
             $this->reputationMinDelta = (int)($configuration['reputation_min_delta'] ?? -10);

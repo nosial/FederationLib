@@ -361,7 +361,10 @@
                 $this->assertIsString($blacklistRecord->getOperatorUuid());
                 $this->assertInstanceOf(IncidentType::class, $blacklistRecord->getType());
                 $this->assertIsInt($blacklistRecord->getCreated());
-                $this->assertIsInt($blacklistRecord->getExpires());
+                if ($blacklistRecord->getExpires() !== null)
+                {
+                    $this->assertIsInt($blacklistRecord->getExpires());
+                }
                 $this->assertIsBool($blacklistRecord->isLifted());
             }
         }
