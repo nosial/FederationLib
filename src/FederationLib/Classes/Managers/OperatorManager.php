@@ -794,6 +794,81 @@
         }
 
         /**
+         * Set the auto assign flag for an operator.
+         *
+         * @param string $uuid The UUID of the operator.
+         * @param bool $autoAssign True if the operator should automatically receive assigned reports, false otherwise.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function setAutoAssign(string $uuid, bool $autoAssign): void
+        {
+            if(empty($uuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty.');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET auto_assign=:auto_assign, updated=NOW() WHERE uuid=:uuid");
+                $stmt->bindParam(':auto_assign', $autoAssign, PDO::PARAM_BOOL);
+                $stmt->bindParam(':uuid', $uuid);
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException(sprintf("Failed to set auto assign for operator with UUID '%s'", $uuid), 0, $e);
+            }
+            finally
+            {
+                // Invalidate cache entries for this operator
+                if(self::isCachingEnabled())
+                {
+                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($cachedOperator !== null)
+                    {
+                        $operatorRecord = new OperatorRecord($cachedOperator);
+                        // Remove access token pointer
+                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
+                    }
+                    // Remove main cache entry
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
+            }
+        }
+
+        /**
+         * Retrieve a random operator that has auto assign enabled and management permissions.
+         *
+         * @return OperatorRecord|null The randomly selected operator record, null if no eligible operators exist.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function getRandomAutoAssignOperator(): ?OperatorRecord
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM operators WHERE auto_assign=1 AND management_permissions=1 ORDER BY RAND() LIMIT 1"
+                );
+                $stmt->execute();
+
+                $data = $stmt->fetch();
+
+                if($data === false)
+                {
+                    return null; // No operator is eligible for automatic assignment
+                }
+
+                return new OperatorRecord($data);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve random auto assign operator', 0, $e);
+            }
+        }
+
+        /**
          * Update the name of an operator.
          *
          * @param string $uuid The UUID of the operator.
