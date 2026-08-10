@@ -555,10 +555,13 @@
          * @param int $limit The maximum number of records to return
          * @param int $page The page to view
          * @param bool $includeConfidential True to include confidential evidence records, False otherwise
+         * @param EvidenceCategory|null $category Optional. Filter evidence by category
+         * @param string|null $by Optional. Field to sort by
+         * @param OrderType|null $order Optional. Sort direction
          * @return EvidenceRecord[] An array of EvidenceRecord objcts
          * @throws DatabaseOperationException Thrown if there was a database operation error
          */
-        public static function getEvidenceByReport(string $report, int $limit=100, int $page=1, bool $includeConfidential=false): array
+        public static function getEvidenceByReport(string $report, int $limit=100, int $page=1, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($report) < 1)
             {
@@ -593,7 +596,14 @@
                 {
                     $query .= " AND confidential = 0";
                 }
-                $query .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+
+                $categoryCondition = $category?->toCondition() ?? '';
+                if ($categoryCondition !== '')
+                {
+                    $query .= " AND ($categoryCondition)";
+                }
+
+                $query .= " " . self::buildEvidenceSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
 
                 $stmt = DatabaseConnection::getConnection()->prepare($query);
                 $stmt->bindParam(':report', $report);
