@@ -655,7 +655,6 @@
             catch (RequestException $e)
             {
                 $this->markTestSkipped('Anonymous entity search is not available: ' . $e->getMessage());
-                return;
             }
 
             foreach ($results as $record)

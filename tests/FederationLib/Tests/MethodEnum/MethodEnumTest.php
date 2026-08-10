@@ -168,6 +168,7 @@
             $this->assertSame(Method::MANAGE_OPERATOR_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/operator-permissions"));
             $this->assertSame(Method::MANAGE_MANAGEMENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/management-permissions"));
             $this->assertSame(Method::MANAGE_CLIENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/client-permissions"));
+            $this->assertSame(Method::MANAGE_AUTO_ASSIGN, Method::matchHandle('PATCH', "/operators/$uuid/auto-assign"));
             $this->assertSame(Method::LIST_OPERATOR_EVIDENCE, Method::matchHandle('GET', "/operators/$uuid/evidence"));
             $this->assertSame(Method::LIST_OPERATOR_AUDIT_LOGS, Method::matchHandle('GET', "/operators/$uuid/audit"));
             $this->assertSame(Method::LIST_OPERATOR_BLACKLIST, Method::matchHandle('GET', "/operators/$uuid/blacklist"));
@@ -181,6 +182,7 @@
             $this->assertSame(Method::LIST_REPORTS, Method::matchHandle('GET', '/reports'));
             $this->assertSame(Method::SUBMIT_REPORT, Method::matchHandle('POST', '/reports'));
             $this->assertSame(Method::GET_REPORT, Method::matchHandle('GET', "/reports/$uuid"));
+            $this->assertSame(Method::GET_REPORT_EVIDENCE_RECORDS, Method::matchHandle('GET', "/reports/$uuid/evidence"));
             $this->assertSame(Method::DELETE_REPORT, Method::matchHandle('DELETE', "/reports/$uuid"));
             $this->assertSame(Method::CLOSE_REPORT, Method::matchHandle('PATCH', "/reports/$uuid/close"));
             $this->assertSame(Method::ASSIGN_OPERATOR_TO_REPORT, Method::matchHandle('PATCH', "/reports/$uuid/assign"));

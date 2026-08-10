@@ -9,6 +9,7 @@
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
     use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Objects\AuditLog;
     use PHPUnit\Framework\TestCase;
 
     class AuditLogsLogicTest extends TestCase
@@ -456,6 +457,7 @@
                     AuditLogType::OPERATOR_PERMISSIONS_CHANGED,
                     AuditLogType::OPERATOR_ACCESS_TOKEN_GENERATED,
                     AuditLogType::OPERATOR_NAME_CHANGED,
+                    AuditLogType::OPERATOR_AUTO_ASSIGN_CHANGED
                 ]);
             }
         }

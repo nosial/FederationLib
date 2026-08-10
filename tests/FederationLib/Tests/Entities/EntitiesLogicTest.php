@@ -1,5 +1,7 @@
 <?php
 
+    /** @noinspection PhpUnhandledExceptionInspection */
+
     namespace FederationLib\Tests\Entities;
 
     use FederationLib\Classes\Utilities;
@@ -756,7 +758,7 @@
                 $entityUuids[] = $entityUuid;
             }
 
-            $this->assertEquals($batchSize, count($entityUuids));
+            $this->assertCount($batchSize, $entityUuids);
 
             $allEntities = [];
             $page = 1;

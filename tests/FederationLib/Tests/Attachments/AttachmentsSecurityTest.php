@@ -138,7 +138,7 @@
 
         public function testUploadAttachmentUnauthorized(): void
         {
-            $createdOperator = $this->client->createOperator('no-blacklist-operator');
+            $createdOperator = $this->client->createOperator(substr('no-blacklist-operator_' . uniqid(), 0, 32));
             $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 
@@ -212,7 +212,7 @@
 
         public function testListAttachmentsForbidden(): void
         {
-            $createdOperator = $this->client->createOperator('no-blacklist-list-operator');
+            $createdOperator = $this->client->createOperator(substr('no-blacklist-list-operator_' . uniqid(), 0, 32));
             $operatorUuid = $createdOperator->getUuid();
             $this->createdOperators[] = $operatorUuid;
 

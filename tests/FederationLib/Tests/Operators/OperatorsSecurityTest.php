@@ -117,6 +117,7 @@
                 'setOperatorPermissions' => fn() => $unauthenticatedClient->setOperatorPermissions($fakeUuid, true),
                 'setManagementPermissions' => fn() => $unauthenticatedClient->setManagementPermissions($fakeUuid, true),
                 'setClientPermissions' => fn() => $unauthenticatedClient->setClientPermissions($fakeUuid, true),
+                'setAutoAssign' => fn() => $unauthenticatedClient->setAutoAssign($fakeUuid, true),
                 'generateOperatorAccessToken' => fn() => $unauthenticatedClient->generateOperatorAccessToken($fakeUuid),
                 'listOperators' => fn() => $unauthenticatedClient->listOperators(),
             ];
@@ -255,6 +256,7 @@
                 'setOperatorPermissions' => fn() => $attacker->setOperatorPermissions($root->getUuid(), false),
                 'setManagementPermissions' => fn() => $attacker->setManagementPermissions($root->getUuid(), false),
                 'setClientPermissions' => fn() => $attacker->setClientPermissions($root->getUuid(), false),
+                'setAutoAssign' => fn() => $attacker->setAutoAssign($root->getUuid(), true),
                 'generateOperatorAccessToken' => fn() => $attacker->generateOperatorAccessToken($root->getUuid()),
             ];
 
