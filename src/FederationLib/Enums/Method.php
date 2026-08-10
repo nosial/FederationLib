@@ -61,6 +61,7 @@
     use FederationLib\Methods\Operators\ManageClientPermissions;
     use FederationLib\Methods\Operators\ManageManagementPermissions;
     use FederationLib\Methods\Operators\ManageOperatorPermissions;
+    use FederationLib\Methods\Operators\ManageAutoAssign;
     use FederationLib\Methods\Operators\GenerateAccessToken;
     use FederationLib\Methods\Operators\GenerateOperatorAccessToken;
     use FederationLib\Methods\Operators\SearchOperators;
@@ -69,6 +70,7 @@
     use FederationLib\Methods\Reports\CloseReport;
     use FederationLib\Methods\Reports\DeleteReport;
     use FederationLib\Methods\Reports\GetReport;
+    use FederationLib\Methods\Reports\GetReportEvidenceRecords;
     use FederationLib\Methods\Reports\ListOpenedReports;
     use FederationLib\Methods\Reports\ListReports;
     use FederationLib\Methods\Reports\AssignOperator;
@@ -101,6 +103,7 @@
         case MANAGE_OPERATOR_PERMISSIONS;
         case MANAGE_MANAGEMENT_PERMISSIONS;
         case MANAGE_CLIENT_PERMISSIONS;
+        case MANAGE_AUTO_ASSIGN;
         case LIST_OPERATOR_EVIDENCE;
         case LIST_OPERATOR_AUDIT_LOGS;
         case LIST_OPERATOR_BLACKLIST;
@@ -146,6 +149,7 @@
         case LIST_ENTITY_REPORTS;
         case LIST_ASSIGNED_OPERATOR_REPORTS;
         case GET_REPORT;
+        case GET_REPORT_EVIDENCE_RECORDS;
         case CLOSE_REPORT;
         case DELETE_REPORT;
         case ASSIGN_OPERATOR_TO_REPORT;
@@ -228,6 +232,7 @@
                 self::LIST_REPORTS => ['/reports', 'get', ListReports::class],
                 self::LIST_OPENED_REPORTS => ['/reports/opened', 'get', ListOpenedReports::class],
                 self::GET_REPORT => ['/reports/{uuid}', 'get', GetReport::class],
+                self::GET_REPORT_EVIDENCE_RECORDS => ['/reports/{uuid}/evidence', 'get', GetReportEvidenceRecords::class],
                 self::CLOSE_REPORT => ['/reports/{uuid}/close', 'patch', CloseReport::class],
                 self::DELETE_REPORT => ['/reports/{uuid}', 'delete', DeleteReport::class],
                 self::SEARCH_REPORTS => ['/reports/search', 'get', SearchReports::class],
@@ -248,6 +253,7 @@
                 self::MANAGE_OPERATOR_PERMISSIONS => ['/operators/{uuid}/operator-permissions', 'patch', ManageOperatorPermissions::class],
                 self::MANAGE_MANAGEMENT_PERMISSIONS => ['/operators/{uuid}/management-permissions', 'patch', ManageManagementPermissions::class],
                 self::MANAGE_CLIENT_PERMISSIONS => ['/operators/{uuid}/client-permissions', 'patch', ManageClientPermissions::class],
+                self::MANAGE_AUTO_ASSIGN => ['/operators/{uuid}/auto-assign', 'patch', ManageAutoAssign::class],
                 self::LIST_OPERATOR_EVIDENCE => ['/operators/{uuid}/evidence', 'get', ListOperatorEvidence::class],
                 self::LIST_OPERATOR_AUDIT_LOGS => ['/operators/{uuid}/audit', 'get', ListOperatorAuditLogs::class],
                 self::LIST_OPERATOR_BLACKLIST => ['/operators/{uuid}/blacklist', 'get', ListOperatorBlacklist::class],
@@ -366,6 +372,7 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/operator-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_OPERATOR_PERMISSIONS,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/management-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_MANAGEMENT_PERMISSIONS,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/client-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_CLIENT_PERMISSIONS,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36})/auto-assign$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_AUTO_ASSIGN,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_EVIDENCE,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_AUDIT_LOGS,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_BLACKLIST,
@@ -379,6 +386,7 @@
                 $path === '/reports' && $requestMethod === 'POST' => Method::SUBMIT_REPORT,
                 $path === '/reports/search' && $requestMethod === 'GET' => Method::SEARCH_REPORTS,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})/close$#', $path) && $requestMethod === 'PATCH' => Method::CLOSE_REPORT,
+                preg_match('#^/reports/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::GET_REPORT_EVIDENCE_RECORDS,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})/assign$#', $path) && $requestMethod === 'PATCH' => Method::ASSIGN_OPERATOR_TO_REPORT,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_REPORT,
                 preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_REPORT,
