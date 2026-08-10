@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This is an ongoing update
 
+### Fixed
+ - Fixed a race condition in `EntitiesManager::registerEntity()` that caused concurrent `POST /entities` requests
+   for the same entity to fail with a 500 `Unable to register entity` error (duplicate key violation on
+   `entities_hash_uindex`). The manager now handles the duplicate-key failure internally, merges the provided
+   metadata into the existing record, and returns the existing entity UUID, making entity registration idempotent
+
 
 
 ## [1.0.1] - 2026-08-10
