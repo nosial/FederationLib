@@ -746,6 +746,26 @@
         }
 
         /**
+         * Sets the auto assign flag for an operator.
+         *
+         * @param string $operatorUuid The UUID of the operator whose auto assign flag is to be set
+         * @param bool $autoAssign True to enable auto assign, false to disable it
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
+        public function setAutoAssign(string $operatorUuid, bool $autoAssign): void
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/auto-assign', ['enabled' => $autoAssign], [HttpResponseCode::OK],
+                sprintf('Failed to %s the operator\'s auto assign', ($autoAssign ? 'enable' : 'disable'))
+            );
+        }
+
+        /**
          * Generates a new authentication token for the current operator.
          *
          * @param bool $update If true, updates the client's token with the new token (default is true)
@@ -962,7 +982,7 @@
          * @param string $entityIdentifier The entity UUID, entity hash, or entity address (email) whose evidence records are to be retrieved
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
-         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @return AuditLog[] An array of AuditLog objects related to the entity
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */
@@ -1521,6 +1541,52 @@
 
             $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/link-report', ['report_uuid' => $reportUuid], [HttpResponseCode::OK],
                 sprintf('Failed to link evidence %s to report %s', $evidenceUuid, $reportUuid)
+            );
+        }
+
+        /**
+         * Lists evidence records associated with a specific report with pagination support.
+         *
+         * @param string $reportUuid The UUID of the report whose evidence records are to be retrieved
+         * @param int $page The page number to retrieve (default is 1)
+         * @param int $limit The number of evidence records per page (default is 100)
+         * @param bool $includeConfidential Optional. If True, confidential records will be included in the results
+         * @param string|null $category Optional. Filter evidence by category
+         * @param string|null $by Optional. Field to sort by
+         * @param string|null $order Optional. Sort direction
+         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the report UUID is empty or if the page or limit parameters are invalid
+         */
+        public function listReportEvidenceRecords(string $reportUuid, int $page=1, int $limit=100, bool $includeConfidential=false, ?string $category=null, ?string $by=null, ?string $order=null): array
+        {
+            if(empty($reportUuid))
+            {
+                throw new InvalidArgumentException('Report UUID cannot be empty');
+            }
+
+            if($page < 1)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            if($limit < 1)
+            {
+                throw new InvalidArgumentException('Limit must be greater than 0');
+            }
+
+            $params = ['page' => $page, 'limit' => $limit, 'include_confidential' => $includeConfidential];
+            if($category !== null)
+            {
+                $params['category'] = $category;
+            }
+            self::applySortParams($params, $by, $order);
+
+            return array_map(
+                fn($item) => EvidenceRecord::fromArray($item),
+                $this->makeRequest('GET', 'reports/' . $reportUuid . '/evidence', $params, [HttpResponseCode::OK],
+                    sprintf('Failed to list evidence records for report %s, page: %d, limit: %d', $reportUuid, $page, $limit)
+                )
             );
         }
 
