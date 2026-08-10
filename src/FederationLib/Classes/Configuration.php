@@ -56,8 +56,8 @@
             self::$configuration->setDefault('scanning.default_rosl_score', 0.0, 'FEDERATION_SCORING_RISK_DEFAULT');
             self::$configuration->setDefault('scanning.risk_score_steepness', 0.25, 'FEDERATION_SCANNING_RISK_AUTHOR_WHITELISTEDSCORE_STEEPNESS');
             self::$configuration->setDefault('scanning.reputation_update_interval', 900, 'FEDERATION_SCANNING_REPUTATION_UPDATE_INTERVAL');
-            self::$configuration->setDefault('scanning.good_reputation_threshold', 50, 'FEDERATION_SCANNING_GOOD_REPUTATION_THRESHOLD');
-            self::$configuration->setDefault('scanning.bad_reputation_threshold', -50, 'FEDERATION_SCANNING_BAD_REPUTATION_THRESHOLD');
+            self::$configuration->setDefault('scanning.good_reputation_threshold', 0, 'FEDERATION_SCANNING_GOOD_REPUTATION_THRESHOLD');
+            self::$configuration->setDefault('scanning.bad_reputation_threshold', 0, 'FEDERATION_SCANNING_BAD_REPUTATION_THRESHOLD');
             self::$configuration->setDefault('scanning.author_blacklisted', ScanningRules::AUTHOR_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_BLACKLISTED');
             self::$configuration->setDefault('scanning.author_permanently_blacklisted', ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_PERMANENTLY_BLACKLISTED');
             self::$configuration->setDefault('scanning.author_whitelisted', ScanningRules::AUTHOR_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_WHITELISTED');

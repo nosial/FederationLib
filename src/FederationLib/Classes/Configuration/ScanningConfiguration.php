@@ -57,8 +57,8 @@
             $this->defaultScore = (float)($configuration['default_score'] ?? 0.0);
             $this->trustScoreSteepness = (float)($configuration['trust_score_steepness'] ?? 0.25);
             $this->reputationUpdateInterval = (int)($configuration['reputation_update_interval'] ?? 900);
-            $this->goodReputationThreshold = (int)($configuration['good_reputation_threshold'] ?? 50);
-            $this->badReputationThreshold = (int)($configuration['bad_reputation_threshold'] ?? -50);
+            $this->goodReputationThreshold = (int)($configuration['good_reputation_threshold'] ?? 0);
+            $this->badReputationThreshold = (int)($configuration['bad_reputation_threshold'] ?? 0);
             $this->authorBlacklisted = (float)($configuration['author_blacklisted'] ?? ScanningRules::AUTHOR_BLACKLISTED->getModifier());
             $this->authorPermanentlyBlacklisted = (float)($configuration['author_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier());
             $this->authorWhitelisted = (float)($configuration['author_whitelisted'] ?? ScanningRules::AUTHOR_WHITELISTED->getModifier());

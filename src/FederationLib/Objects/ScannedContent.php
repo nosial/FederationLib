@@ -299,15 +299,34 @@
             }
 
             $reputation = $entity->getEntity()->getReputation();
+            if($reputation === 0)
+            {
+                return;
+            }
+
             $config = Configuration::getScanningConfiguration();
 
-            if($reputation >= $config->getGoodReputationThreshold())
+            if($reputation > 0)
             {
-                $scanningRules[$goodReputationRule->name] += $goodReputationPoints;
+                $maxBound = $config->getReputationMaxBound();
+                if($maxBound <= 0)
+                {
+                    return;
+                }
+
+                $factor = pow(min($reputation, $maxBound) / $maxBound, 1.0 / 3.0);
+                $scanningRules[$goodReputationRule->name] += $goodReputationPoints * $factor;
             }
-            elseif($reputation <= -$config->getBadReputationThreshold())
+            else
             {
-                $scanningRules[$badReputationRule->name] += $badReputationPoints;
+                $minBound = $config->getReputationMinBound();
+                if($minBound >= 0)
+                {
+                    return;
+                }
+
+                $factor = pow(min(abs($reputation), abs($minBound)) / abs($minBound), 1.0 / 3.0);
+                $scanningRules[$badReputationRule->name] += $badReputationPoints * $factor;
             }
         }
 
