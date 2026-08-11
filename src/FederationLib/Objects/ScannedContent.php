@@ -85,14 +85,15 @@
             }
 
             $riskScore = $this->getRiskScore();
+            $scanningConfiguration = Configuration::getScanningConfiguration();
 
             // If the risk score is high (80+), it's malicious; block content
-            if($riskScore >= 80.0) // TODO: These two values should be configurable
+            if($riskScore >= $scanningConfiguration->getActionBlockThreshold())
             {
                 return SuggestedActionType::BLOCK_CONTENT;
             }
             // If the risk score indicates caution is needed (60-90)
-            elseif($riskScore >= 60.0)
+            elseif($riskScore >= $scanningConfiguration->getActionCautionThreshold())
             {
                 return SuggestedActionType::CAUTION;
             }

@@ -36,6 +36,8 @@
         private float $classificationMalicious;
         private bool $autoReport;
         private float $autoReportThreshold;
+        private float $actionBlockThreshold;
+        private float $actionCautionThreshold;
         private int $reputationWindowDuration;
         private int $reputationMaxDelta;
         private int $reputationMinDelta;
@@ -84,6 +86,8 @@
             $this->classificationMalicious = (float)($configuration['classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
             $this->autoReport = (bool)($configuration['auto_report'] ?? false);
             $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
+            $this->actionBlockThreshold = (float)($configuration['action_block_threshold'] ?? 80.00);
+            $this->actionCautionThreshold = (float)($configuration['action_caution_threshold'] ?? 60.00);
             $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 300);
             $this->reputationMaxDelta = (int)($configuration['reputation_max_delta'] ?? 10);
             $this->reputationMinDelta = (int)($configuration['reputation_min_delta'] ?? -10);
@@ -394,6 +398,26 @@
         public function getAutoReportThreshold(): float
         {
             return $this->autoReportThreshold;
+        }
+
+        /**
+         * Returns the risk score threshold at which content should be blocked
+         *
+         * @return float Action block threshold
+         */
+        public function getActionBlockThreshold(): float
+        {
+            return $this->actionBlockThreshold;
+        }
+
+        /**
+         * Returns the risk score threshold at which caution should be advised
+         *
+         * @return float Action caution threshold
+         */
+        public function getActionCautionThreshold(): float
+        {
+            return $this->actionCautionThreshold;
         }
 
         /**
