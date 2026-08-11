@@ -6,7 +6,6 @@
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
-    use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -14,18 +13,19 @@
     use FederationLib\FederationServer;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\SuccessResponse;
-    use InvalidArgumentException;
     use FederationLib\Interfaces\RequestSpecificationInterface;
 
     class SetRelationship extends RequestHandler implements RequestSpecificationInterface
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to manage entities';
         private const string ERROR_IDENTIFIER_REQUIRED = 'Entity identifier is required';
-        private const string ERROR_INVALID_TARGET_UUID = 'A valid target entity UUID is required';
+        private const string ERROR_TARGET_IDENTIFIER_REQUIRED = 'Target entity identifier is required';
+        private const string ERROR_INVALID_TARGET_IDENTIFIER = 'A valid target entity identifier is required';
         private const string ERROR_RELATIONSHIP_TYPE_REQUIRED = 'Relationship type is required';
         private const string ERROR_INVALID_RELATIONSHIP_TYPE = 'Relationship type must be one of: ALTERNATIVE, PROXY, CHILD';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_NOT_FOUND = 'Entity not found';
+        private const string ERROR_TARGET_NOT_FOUND = 'Target entity not found';
         private const string ERROR_UNABLE_TO_SET = 'Unable to set entity relationship';
 
         /**
@@ -56,10 +56,10 @@
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
             }
 
-            $targetEntityUuid = FederationServer::getParameter('target_entity_uuid');
-            if($targetEntityUuid === null || !Validate::uuid($targetEntityUuid))
+            $targetEntityIdentifier = FederationServer::getParameter('target_identifier');
+            if($targetEntityIdentifier === null)
             {
-                throw new RequestException(self::ERROR_INVALID_TARGET_UUID, 400);
+                throw new RequestException(self::ERROR_TARGET_IDENTIFIER_REQUIRED, 400);
             }
 
             $relationshipType = FederationServer::getParameter('relationship_type');
@@ -99,17 +99,36 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                EntitiesManager::assignEntityRelationship($entityRecord->getUuid(), $targetEntityUuid, $type);
+                if(Utilities::isUuid($targetEntityIdentifier))
+                {
+                    $targetEntityRecord = EntitiesManager::getEntityByUuid($targetEntityIdentifier);
+                }
+                elseif(Utilities::isSha256($targetEntityIdentifier))
+                {
+                    $targetEntityRecord = EntitiesManager::getEntityByHash($targetEntityIdentifier);
+                }
+                elseif(Utilities::isEntityAddress($targetEntityIdentifier))
+                {
+                    $targetParsedAddress = Utilities::parseEntityAddress($targetEntityIdentifier);
+                    $targetEntityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($targetParsedAddress['host'], $targetParsedAddress['id']));
+                }
+                else
+                {
+                    throw new RequestException(self::ERROR_INVALID_TARGET_IDENTIFIER, 400);
+                }
+
+                if($targetEntityRecord === null)
+                {
+                    throw new RequestException(self::ERROR_TARGET_NOT_FOUND, 404);
+                }
+
+                EntitiesManager::assignEntityRelationship($entityRecord->getUuid(), $targetEntityRecord->getUuid(), $type);
                 AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                     'Relationship set for entity %s to %s by %s',
                     $entityRecord->getAddress(),
-                    $targetEntityUuid,
+                    $targetEntityRecord->getAddress(),
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
-            }
-            catch(InvalidArgumentException $e)
-            {
-                throw new RequestException($e->getMessage(), 400, $e);
             }
             catch (DatabaseOperationException $e)
             {
@@ -179,10 +198,9 @@
                         'schema' => [
                             'type' => 'object',
                             'properties' => [
-                                'target_entity_uuid' => [
+                                'target_identifier' => [
                                     'type' => 'string',
-                                    'format' => 'uuid',
-                                    'description' => 'UUID of the target entity',
+                                    'description' => 'UUID, SHA-256 hash, or entity address of the target entity',
                                 ],
                                 'relationship_type' => [
                                     'type' => 'string',
@@ -190,7 +208,7 @@
                                     'enum' => ['alternative', 'proxy', 'child'],
                                 ],
                             ],
-                            'required' => ['target_entity_uuid', 'relationship_type'],
+                            'required' => ['target_identifier', 'relationship_type'],
                         ],
                     ],
                 ],
@@ -212,7 +230,7 @@
                     ],
                 ],
                 '400' => [
-                    'description' => self::ERROR_INVALID_TARGET_UUID,
+                    'description' => self::ERROR_INVALID_TARGET_IDENTIFIER,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

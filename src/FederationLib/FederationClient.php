@@ -1176,25 +1176,25 @@
          * Sets a relationship between an entity and a target entity.
          *
          * @param string $entityIdentifier The entity UUID, hash, or address to set the relationship for
-         * @param string $targetEntityUuid The UUID of the target entity (the parent entity in the relationship)
+         * @param string $targetIdentifier The UUID, SHA-256 hash, or entity address of the target entity (the parent entity in the relationship)
          * @param EntityRelationshipType $relationshipType The type of relationship to set
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function setEntityRelationship(string $entityIdentifier, string $targetEntityUuid, EntityRelationshipType $relationshipType): void
+        public function setEntityRelationship(string $entityIdentifier, string $targetIdentifier, EntityRelationshipType $relationshipType): void
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            if(empty($targetEntityUuid))
+            if(empty($targetIdentifier))
             {
-                throw new InvalidArgumentException('Target entity UUID cannot be empty');
+                throw new InvalidArgumentException('Target entity identifier cannot be empty');
             }
 
             $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/relationship',
-                ['target_entity_uuid' => $targetEntityUuid, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
+                ['target_identifier' => $targetIdentifier, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
                 sprintf('Failed to set relationship for entity %s', $entityIdentifier)
             );
         }

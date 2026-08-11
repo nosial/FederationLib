@@ -535,7 +535,7 @@ namespace FederationLib\Tests\ErrorHandling;
                 'entities/' . $entityA . '/relationship',
                 $token,
                 json_encode([
-                    'target_entity_uuid' => $entityB,
+                    'target_identifier' => $entityB,
                     'relationship_type' => 'INVALID_RELATIONSHIP',
                 ])
             );
