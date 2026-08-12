@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\ReportCategory;
@@ -57,6 +58,7 @@
 
             $uuid = Uuid::v7()->toRfc4122();
             $incidentType = $type->value;
+            $assignedOperator = OperatorManager::getRandomAutoAssignOperator();
 
             try
             {
@@ -80,6 +82,11 @@
             if(self::isCachingEnabled())
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            if($assignedOperator !== null)
+            {
+                self::assignOperator($uuid, $assignedOperator->getUuid());
             }
 
             return $uuid;
