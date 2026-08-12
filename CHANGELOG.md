@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.2] - 2026-08-12
 
-This is an ongoing update
+This update introduces new features and changes
 
 ### Added
  - Added `ContentInput` object (text content, note, tag, confidential, metadata) to be used as input for
