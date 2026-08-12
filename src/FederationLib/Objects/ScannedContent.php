@@ -18,20 +18,36 @@
          */
         private array $resolvedEntities;
         private ?ResolvedEntity $authorEntity;
-        private ?ContentClassification $classification;
+
+        /**
+         * @var ContentClassification[]
+         */
+        private array $classifications;
 
         /**
          * ScannedContent Public Constructor
          *
          * @param ResolvedEntity[] $resolvedEntities An array of resolved entities from the text content
          * @param ResolvedEntity|null $authorEntity Optional. The author entity of the submitted content
-         * @param ContentClassification|null $classification Optional. The classification information about the submitted content
+         * @param ContentClassification|ContentClassification[]|null $classification Optional. The classification information about the submitted content
          */
-        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ?ContentClassification $classification=null)
+        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ContentClassification|array|null $classification=null)
         {
             $this->resolvedEntities = $resolvedEntities;
             $this->authorEntity = $authorEntity;
-            $this->classification = $classification;
+
+            if($classification === null)
+            {
+                $this->classifications = [];
+            }
+            elseif($classification instanceof ContentClassification)
+            {
+                $this->classifications = [$classification];
+            }
+            else
+            {
+                $this->classifications = array_values(array_filter($classification, fn($c) => $c instanceof ContentClassification));
+            }
         }
 
         /**
@@ -55,13 +71,65 @@
         }
 
         /**
-         * Returns the content classification result
+         * Returns all content classification results
+         *
+         * @return ContentClassification[]
+         */
+        public function getClassifications(): array
+        {
+            return $this->classifications;
+        }
+
+        /**
+         * Returns the aggregate content classification result.
+         * If multiple classifications are present, the worst flag is returned with the average confidence.
          *
          * @return ContentClassification|null The content classification result
          */
         public function getClassification(): ?ContentClassification
         {
-            return $this->classification;
+            if(empty($this->classifications))
+            {
+                return null;
+            }
+
+            if(count($this->classifications) === 1)
+            {
+                return $this->classifications[0];
+            }
+
+            $hasMalicious = false;
+            $hasSuspicious = false;
+            $totalConfidence = 0.0;
+            $count = 0;
+            $languageCode = null;
+
+            foreach($this->classifications as $classification)
+            {
+                switch($classification->getClassificationFlag())
+                {
+                    case ClassificationFlag::MALICIOUS:
+                        $hasMalicious = true;
+                        break;
+
+                    case ClassificationFlag::SUSPICIOUS:
+                        $hasSuspicious = true;
+                        break;
+                }
+
+                $totalConfidence += $classification->getConfidence();
+                $count++;
+
+                if($languageCode === null)
+                {
+                    $languageCode = $classification->getDetectedLanguage();
+                }
+            }
+
+            $flag = $hasMalicious ? ClassificationFlag::MALICIOUS : ($hasSuspicious ? ClassificationFlag::SUSPICIOUS : ClassificationFlag::NORMAL);
+            $confidence = $count > 0 ? $totalConfidence / $count : 0.0;
+
+            return new ContentClassification($flag, $confidence, $languageCode);
         }
 
         /**
@@ -213,7 +281,10 @@
                 }
             }
 
-            self::applyClassificationRules($scanningRules, $this->getClassification());
+            foreach($this->classifications as $classification)
+            {
+                self::applyClassificationRules($scanningRules, $classification);
+            }
 
             return $scanningRules;
         }
@@ -371,7 +442,7 @@
             return [
                 'author_entity' => $this->authorEntity?->toArray($includeMetadata) ?? null,
                 'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata), $this->resolvedEntities),
-                'classification' => $this->classification?->toArray() ?? null
+                'classification' => $this->getClassification()?->toArray() ?? null
             ];
         }
 
@@ -385,7 +456,7 @@
                 'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata), $this->resolvedEntities),
                 'suggested_action' => $this->getSuggestedAction()?->value ?? null,
                 'suggested_lift_timestamp' => $this->getSuggestedLiftTimestamp(),
-                'classification' => $this->classification?->toArray() ?? null,
+                'classification' => $this->getClassification()?->toArray() ?? null,
                 'scan_results' => (object) $this->getScanResults(),
                 'risk_score' => $this->getRiskScore()
             ];
@@ -397,13 +468,13 @@
         public static function fromArray(array $array): ScannedContent
         {
             $classification = null;
-            if(!is_null($array['classification']))
+            if(isset($array['classification']) && !is_null($array['classification']))
             {
                $classification = ContentClassification::fromArray($array['classification']);
             }
 
             $authorEntity = null;
-            if($array['author_entity'] !== null)
+            if(isset($array['author_entity']) && $array['author_entity'] !== null)
             {
                 $authorEntity = ResolvedEntity::fromArray($array['author_entity']);
             }
