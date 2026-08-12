@@ -18,6 +18,7 @@
     use FederationLib\Objects\FileAttachmentRecord;
     use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
     use FederationLib\Objects\SearchResult;
@@ -202,25 +203,82 @@
         }
 
         /**
-         * Scans the given text content and attempts to identify entities within the text content such as URLs
+         * Scans one or more content messages and attempts to identify entities within the text content such as URLs,
          * email addresses, ip addresses, etc.
          *
-         * @param string $content The text content to scan
+         * @param ContentInput|array|string $evidence A single content input, a raw evidence parameters array, or an array of content inputs/arrays
          * @param string|null $author Optional author identifier (UUID, SHA-256, or entity address)
          * @param int|null $topK Optional. Number of top classifications to return
          * @param float|null $threshold Optional. Confidence threshold for classification
-         * @param array|null $metadata Optional. Metadata to associate with the evidence record
          * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(string $content, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $metadata = null): ScannedContent
+        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null): ScannedContent
         {
-            if(empty($content))
+            if(is_string($evidence))
             {
-                throw new InvalidArgumentException('Content cannot be empty');
+                $items = [new ContentInput($evidence)];
+            }
+            elseif($evidence instanceof ContentInput)
+            {
+                $items = [$evidence];
+            }
+            elseif(array_is_list($evidence))
+            {
+                $items = $evidence;
+            }
+            else
+            {
+                $items = [$evidence];
             }
 
-            $params = ['content' => $content];
+            if(empty($items))
+            {
+                throw new InvalidArgumentException('Evidence cannot be empty');
+            }
+
+            $hasContent = false;
+            $evidenceArrays = [];
+            foreach($items as $index => $item)
+            {
+                if($item instanceof ContentInput)
+                {
+                    $array = $item->toArray();
+                    if(!empty($array['text_content']))
+                    {
+                        $hasContent = true;
+                    }
+                    $evidenceArrays[] = $array;
+                    continue;
+                }
+
+                if(!is_array($item))
+                {
+                    throw new InvalidArgumentException('Each evidence entry must be an array or ContentInput at index ' . $index);
+                }
+
+                foreach(array_keys($item) as $key)
+                {
+                    if(!in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true))
+                    {
+                        throw new InvalidArgumentException("Unknown evidence field '$key'");
+                    }
+                }
+
+                if(isset($item['text_content']) && is_string($item['text_content']) && strlen($item['text_content']) > 0)
+                {
+                    $hasContent = true;
+                }
+
+                $evidenceArrays[] = $item;
+            }
+
+            if(!$hasContent)
+            {
+                throw new InvalidArgumentException('At least one evidence record must contain text content');
+            }
+
+            $params = ['evidence' => count($evidenceArrays) === 1 ? $evidenceArrays[0] : $evidenceArrays];
             if($author !== null)
             {
                 $params['author'] = $author;
@@ -234,11 +292,6 @@
             if($threshold !== null)
             {
                 $params['threshold'] = $threshold;
-            }
-
-            if($metadata !== null)
-            {
-                $params['metadata'] = $metadata;
             }
 
             return ScannedContent::fromArray($this->makeRequest('POST', 'scan', $params, [HttpResponseCode::OK],
@@ -1610,56 +1663,75 @@
         }
 
         /**
-         * Submits a new report with optional file attachments.
+         * Submits a new report with one or more evidence records.
          *
          * @param string $reportingEntity The UUID, SHA-256 hash, or entity address of the entity being reported
-         * @param string $content The content/message of the report
+         * @param ContentInput|array $evidence A single evidence input, a raw evidence parameters array, or an array of evidence inputs/arrays
          * @param IncidentType $incidentType The type of incident being reported
          * @param string|null $reportMessage Optional message for the report
-         * @param string|null $evidenceTag Optional tag for the evidence
-         * @param array|null $localFilePaths Optional array of local file paths to attach to the report
-         * @param array|null $remoteUrls Optional array of remote URLs to download and attach to the report
-         * @return ReportSubmission The created report submission with optional attachments
+         * @return ReportSubmission The created report submission with evidence records
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If required parameters are invalid
          */
-        public function submitReport(string $reportingEntity, string $content, IncidentType $incidentType, ?string $reportMessage=null, ?string $evidenceTag=null, ?array $localFilePaths=null, ?array $remoteUrls=null): ReportSubmission
+        public function submitReport(string $reportingEntity, ContentInput|array $evidence, IncidentType $incidentType, ?string $reportMessage=null): ReportSubmission
         {
             if(empty($reportingEntity))
             {
                 throw new InvalidArgumentException('Reporting entity identifier cannot be empty');
             }
 
-            if(empty($content))
+            if(is_array($evidence) && empty($evidence))
             {
-                throw new InvalidArgumentException('Content cannot be empty');
+                throw new InvalidArgumentException('Evidence cannot be empty');
             }
 
-            if($localFilePaths !== null)
+            $items = [];
+            if($evidence instanceof ContentInput)
             {
-                foreach($localFilePaths as $path)
-                {
-                    if(!is_string($path))
-                    {
-                        throw new InvalidArgumentException('Each local file path must be a string');
-                    }
-                }
+                $items = [$evidence];
+            }
+            elseif(array_is_list($evidence))
+            {
+                $items = $evidence;
+            }
+            else
+            {
+                $items = [$evidence];
             }
 
-            if($remoteUrls !== null)
+            if(empty($items))
             {
-                foreach($remoteUrls as $url)
+                throw new InvalidArgumentException('Evidence cannot be empty');
+            }
+
+            $evidenceArrays = [];
+            foreach($items as $index => $item)
+            {
+                if($item instanceof ContentInput)
                 {
-                    if(!is_string($url))
+                    $evidenceArrays[] = $item->toArray();
+                    continue;
+                }
+
+                if(!is_array($item))
+                {
+                    throw new InvalidArgumentException('Each evidence entry must be an array or ContentInput at index ' . $index);
+                }
+
+                foreach(array_keys($item) as $key)
+                {
+                    if(!in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true))
                     {
-                        throw new InvalidArgumentException('Each remote URL must be a string');
+                        throw new InvalidArgumentException("Unknown evidence field '$key'");
                     }
                 }
+
+                $evidenceArrays[] = $item;
             }
 
             $params = [
                 'reporting_entity' => $reportingEntity,
-                'content' => $content,
+                'evidence' => count($evidenceArrays) === 1 ? $evidenceArrays[0] : $evidenceArrays,
                 'incident_type' => $incidentType->value,
             ];
 
@@ -1668,44 +1740,9 @@
                 $params['report_message'] = $reportMessage;
             }
 
-            if($evidenceTag !== null)
-            {
-                $params['evidence_tag'] = $evidenceTag;
-            }
-
-            $submission = ReportSubmission::fromArray($this->makeRequest('POST', 'reports', $params, [HttpResponseCode::OK],
+            return ReportSubmission::fromArray($this->makeRequest('POST', 'reports', $params, [HttpResponseCode::OK],
                 'Failed to submit report'
             ));
-
-            $attachments = [];
-            $evidenceUuid = $submission->getEvidence()->getUuid();
-
-            if($localFilePaths !== null)
-            {
-                foreach($localFilePaths as $localFilePath)
-                {
-                    $attachments[] = $this->uploadFileAttachment($evidenceUuid, $localFilePath);
-                }
-            }
-
-            if($remoteUrls !== null)
-            {
-                foreach($remoteUrls as $remoteUrl)
-                {
-                    $attachments[] = $this->uploadFileAttachmentFromUrl($evidenceUuid, $remoteUrl);
-                }
-            }
-
-            if(!empty($attachments))
-            {
-                return new ReportSubmission(
-                    $submission->getReport(),
-                    $submission->getEvidence(),
-                    $attachments
-                );
-            }
-
-            return $submission;
         }
 
         /**
