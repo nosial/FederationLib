@@ -2,24 +2,21 @@
 
     namespace FederationLib\Methods\Reports;
 
-    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
-    use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\AuditLogType;
-    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\ReportSubmission;
-    use FederationLib\Objects\UploadResult;
-    use Symfony\Component\Uid\Uuid;
+    use InvalidArgumentException;
     use Throwable;
     use FederationLib\Interfaces\RequestSpecificationInterface;
 
@@ -27,23 +24,14 @@
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'You do not have permission to create reports';
         private const string ERROR_ENTITY_IDENTIFIER_REQUIRED = 'Reporting entity identifier is required';
-        private const string ERROR_CONTENT_EMPTY = 'Content cannot be empty';
+        private const string ERROR_EVIDENCE_REQUIRED = 'Evidence is required';
+        private const string ERROR_EVIDENCE_INVALID = 'Evidence must be a single evidence object or an array of evidence objects';
+        private const string ERROR_EVIDENCE_ITEM_INVALID = 'Each evidence entry must be an object';
         private const string ERROR_INVALID_TYPE = 'Invalid incident type';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_FAILED_RETRIEVE_ENTITY = 'Failed to retrieve entity record';
         private const string ERROR_ENTITY_NOT_FOUND = 'Reporting entity not found';
-        private const string ERROR_FILE_SIZE = 'File exceeds maximum allowed size (%d bytes)';
-        private const string ERROR_FILE_UPLOAD = 'Invalid file upload or multiple files detected';
-        private const string ERROR_FILE_SIZE_INVALID = 'Invalid file size';
-        private const string ERROR_FILE_NOT_ACCESSIBLE = 'Uploaded file is not accessible';
-        private const string ERROR_SYMLINK_DETECTED = 'Invalid file upload (symbolic link detected)';
-        private const string ERROR_PATH_TRAVERSAL = 'Path traversal attempt detected';
-        private const string ERROR_STORAGE_CREATE = 'Storage directory could not be created';
-        private const string ERROR_STORAGE_NOT_WRITABLE = 'Storage directory is not writable';
-        private const string ERROR_MOVE_FAILED = 'Failed to move uploaded file';
-        private const string ERROR_RENAME_FAILED = 'Failed to finalize file upload';
         private const string ERROR_FAILED_SUBMISSION = 'Failed to create report submission';
-        private const string ERROR_FAILED_UPLOAD = 'Unable to upload file attachment to server';
         private const string ERROR_FAILED_GET_REPORT = 'Failed to get report information';
 
         /**
@@ -63,10 +51,24 @@
                 throw new RequestException(self::ERROR_ENTITY_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }
 
-            $content = FederationServer::getParameter('content');
-            if(!is_string($content) || strlen($content) === 0)
+            $evidenceInput = FederationServer::getParameter('evidence');
+            if(!is_array($evidenceInput) || empty($evidenceInput))
             {
-                throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
+                throw new RequestException(self::ERROR_EVIDENCE_REQUIRED, HttpResponseCode::BAD_REQUEST);
+            }
+
+            $evidenceItems = self::normalizeEvidence($evidenceInput);
+            if($evidenceItems === null)
+            {
+                throw new RequestException(self::ERROR_EVIDENCE_INVALID, HttpResponseCode::BAD_REQUEST);
+            }
+
+            foreach($evidenceItems as $index => $item)
+            {
+                if(!self::validateEvidenceItem($item))
+                {
+                    throw new RequestException(self::ERROR_EVIDENCE_ITEM_INVALID . ' at index ' . $index, HttpResponseCode::BAD_REQUEST);
+                }
             }
 
             $incidentType = FederationServer::getParameter('incident_type');
@@ -84,12 +86,6 @@
             if(empty((string)$reportMessage))
             {
                 $reportMessage = null;
-            }
-
-            $evidenceTag = FederationServer::getParameter('evidence_tag');
-            if(empty((string)$evidenceTag))
-            {
-                $evidenceTag = null;
             }
 
             try
@@ -122,83 +118,6 @@
                 throw new RequestException(self::ERROR_ENTITY_NOT_FOUND, HttpResponseCode::NOT_FOUND);
             }
 
-            // File upload handling (optional)
-            $uploadResults = [];
-            $fileAttachmentUuid = null;
-            $destinationPath = null;
-            $tempDestination = null;
-            $file = null;
-
-            if(isset($_FILES['file']) && $_FILES['file']['error'] !== UPLOAD_ERR_NO_FILE)
-            {
-                $file = $_FILES['file'];
-                if (!is_array($file) || empty($file['tmp_name']) || is_array($file['tmp_name']))
-                {
-                    throw new RequestException(self::ERROR_FILE_UPLOAD, HttpResponseCode::BAD_REQUEST);
-                }
-
-                if (!isset($file['size']) || $file['size'] <= 0)
-                {
-                    throw new RequestException(self::ERROR_FILE_SIZE_INVALID, HttpResponseCode::BAD_REQUEST);
-                }
-
-                if ($file['size'] > Configuration::getServerConfiguration()->getMaxUploadSize())
-                {
-                    throw new RequestException(sprintf(self::ERROR_FILE_SIZE, Configuration::getServerConfiguration()->getMaxUploadSize()), HttpResponseCode::BAD_REQUEST);
-                }
-
-                if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK)
-                {
-                    throw new RequestException(self::getUploadErrorMessage($file['error'] ?? -1), HttpResponseCode::BAD_REQUEST);
-                }
-
-                if (!is_file($file['tmp_name']) || !is_readable($file['tmp_name']))
-                {
-                    throw new RequestException(self::ERROR_FILE_NOT_ACCESSIBLE, HttpResponseCode::BAD_REQUEST);
-                }
-
-                $detectedMimeType = self::detectMimeType($file['tmp_name']);
-                $originalName = self::getSafeFileName($file['name'] ?? '');
-                if (empty($originalName) || $originalName === 'unnamed')
-                {
-                    $originalName = Uuid::v7()->toRfc4122();
-                }
-
-                if (is_link($file['tmp_name']))
-                {
-                    throw new RequestException(self::ERROR_SYMLINK_DETECTED, HttpResponseCode::BAD_REQUEST);
-                }
-
-                $realpath = realpath($file['tmp_name']);
-                if ($realpath === false || !str_starts_with($realpath, sys_get_temp_dir()))
-                {
-                    throw new RequestException(self::ERROR_PATH_TRAVERSAL, HttpResponseCode::BAD_REQUEST);
-                }
-
-                $storagePath = rtrim(Configuration::getServerConfiguration()->getStoragePath(), DIRECTORY_SEPARATOR);
-                if (!is_dir($storagePath))
-                {
-                    if (!mkdir($storagePath, 0750, true))
-                    {
-                        throw new RequestException(self::ERROR_STORAGE_CREATE, HttpResponseCode::INTERNAL_SERVER_ERROR);
-                    }
-                }
-
-                if (!is_writable($storagePath))
-                {
-                    throw new RequestException(self::ERROR_STORAGE_NOT_WRITABLE, HttpResponseCode::INTERNAL_SERVER_ERROR);
-                }
-
-                $fileAttachmentUuid = Uuid::v7()->toRfc4122();
-                $destinationPath = $storagePath . DIRECTORY_SEPARATOR . $fileAttachmentUuid;
-                $tempDestination = $storagePath . DIRECTORY_SEPARATOR . uniqid('tmp_', true);
-
-                if (!move_uploaded_file($file['tmp_name'], $tempDestination))
-                {
-                    throw new RequestException(self::ERROR_MOVE_FAILED, HttpResponseCode::INTERNAL_SERVER_ERROR);
-                }
-            }
-
             try
             {
                 // Submit the report
@@ -211,144 +130,129 @@
 
                 ReportManager::assignOperator($reportUuid, $authenticatedOperator->getUuid());
 
-                // Create the evidence
-                $evidenceUuid = EvidenceManager::addEvidence(
-                    entity: $entityRecord->getUuid(),
-                    operator: $authenticatedOperator->getUuid(),
-                    textContent: $content,
-                    note: $reportMessage,
-                    tag: $evidenceTag,
-                    report: $reportUuid
-                );
-
-                // Finalize file attachment if uploaded
-                if($file !== null)
+                // Create the evidence records
+                $evidenceRecords = [];
+                foreach($evidenceItems as $item)
                 {
-                    chmod($tempDestination, 0640);
+                    $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null;
+                    $note = isset($item['note']) && is_string($item['note']) ? $item['note'] : null;
+                    $tag = isset($item['tag']) && is_string($item['tag']) ? $item['tag'] : null;
+                    $confidential = isset($item['confidential'])
+                        ? filter_var($item['confidential'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false
+                        : false;
+                    $metadata = isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null;
 
-                    if (!rename($tempDestination, $destinationPath))
+                    $evidenceUuid = EvidenceManager::addEvidence(
+                        entity: $entityRecord->getUuid(),
+                        operator: $authenticatedOperator->getUuid(),
+                        textContent: $textContent,
+                        note: $note,
+                        tag: $tag,
+                        confidential: $confidential,
+                        report: $reportUuid,
+                        metadata: $metadata
+                    );
+
+                    $evidenceRecord = EvidenceManager::getEvidence($evidenceUuid);
+                    if($evidenceRecord !== null)
                     {
-                        throw new RequestException(self::ERROR_RENAME_FAILED, HttpResponseCode::INTERNAL_SERVER_ERROR);
+                        $evidenceRecords[] = $evidenceRecord;
                     }
-
-                    FileAttachmentManager::createRecord($fileAttachmentUuid, $evidenceUuid, $detectedMimeType, $originalName, $file['size']);
-                    $uploadResults[] = new UploadResult($fileAttachmentUuid, Configuration::getServerConfiguration()->getBaseUrl() . '/attachments/' . $fileAttachmentUuid);
                 }
 
-                // Create a audit log entry
-                AuditLogManager::createEntry(
-                    type: AuditLogType::REPORT_SUBMITTED,
-                    message: $reportMessage ?? 'No message provided',
-                    operatorUuid: $authenticatedOperator->getUuid(),
-                    entityUuid: $entityRecord->getUuid(),
-                    evidenceUuid: $evidenceUuid,
-                    fileAttachmentUuid: $fileAttachmentUuid
-                );
-            }
-            catch (DatabaseOperationException $e)
-            {
-                if($destinationPath !== null && file_exists($destinationPath))
+                if(!empty($evidenceRecords))
                 {
-                    @unlink($destinationPath);
+                    AuditLogManager::createEntry(
+                        type: AuditLogType::REPORT_SUBMITTED,
+                        message: $reportMessage ?? 'No message provided',
+                        operatorUuid: $authenticatedOperator->getUuid(),
+                        entityUuid: $entityRecord->getUuid(),
+                        evidenceUuid: $evidenceRecords[0]->getUuid()
+                    );
                 }
+            }
+            catch(InvalidArgumentException $e)
+            {
+                throw new RequestException($e->getMessage(), HttpResponseCode::BAD_REQUEST, $e);
+            }
+            catch(Throwable $e)
+            {
                 throw new RequestException(self::ERROR_FAILED_SUBMISSION, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-            }
-            catch (Throwable $e)
-            {
-                if($destinationPath !== null && file_exists($destinationPath))
-                {
-                    @unlink($destinationPath);
-                }
-                throw new RequestException(self::ERROR_FAILED_UPLOAD, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-            }
-            finally
-            {
-                if($tempDestination !== null && file_exists($tempDestination))
-                {
-                    @unlink($tempDestination);
-                }
-
-                if(isset($file['tmp_name']) && file_exists($file['tmp_name']))
-                {
-                    @unlink($file['tmp_name']);
-                }
             }
 
             try
             {
                 self::successResponse(new ReportSubmission(
                     ReportManager::getReport($reportUuid),
-                    EvidenceManager::getEvidence($evidenceUuid),
-                    !empty($uploadResults) ? $uploadResults : null
+                    $evidenceRecords
                 ));
             }
-            catch (DatabaseOperationException $e)
+            catch(DatabaseOperationException $e)
             {
                 throw new RequestException(self::ERROR_FAILED_GET_REPORT, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
         }
 
         /**
-         * Get human-readable error message for PHP upload error codes
+         * Normalizes the evidence input into a list of evidence parameter arrays.
+         *
+         * @param array $evidenceInput The raw evidence parameter from the request
+         * @return array<int, array>|null A list of evidence arrays, or null if invalid
          */
-        private static function getUploadErrorMessage(int $errorCode): string
+        private static function normalizeEvidence(array $evidenceInput): ?array
         {
-            return match ($errorCode)
+            if(array_is_list($evidenceInput))
             {
-                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'The uploaded file exceeds the maximum allowed size',
-                UPLOAD_ERR_PARTIAL => 'The file was only partially uploaded',
-                UPLOAD_ERR_NO_FILE => 'No file was uploaded',
-                UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
-                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
-                UPLOAD_ERR_EXTENSION => 'File upload stopped by extension',
-                default => 'Unknown upload error',
-            };
+                if (array_any($evidenceInput, fn($item) => !is_array($item)))
+                {
+                    return null;
+                }
+
+                return $evidenceInput;
+            }
+
+            return [$evidenceInput];
         }
 
         /**
-         * Safely detect the MIME type of a file
+         * Validates that an evidence item contains only expected fields with valid types.
+         *
+         * @param array $item The evidence item to validate
+         * @return bool True if valid, false otherwise
          */
-        private static function detectMimeType(string $filePath): string
+        private static function validateEvidenceItem(array $item): bool
         {
-            if (function_exists('finfo_open'))
+            if (array_any(array_keys($item), fn($key) => !in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true)))
             {
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                $mimeType = finfo_file($finfo, $filePath);
-                if ($mimeType)
-                {
-                    return $mimeType;
-                }
+                return false;
             }
 
-            if (function_exists('mime_content_type'))
+            if(isset($item['text_content']) && !is_string($item['text_content']))
             {
-                $mimeType = mime_content_type($filePath);
-                if ($mimeType)
-                {
-                    return $mimeType;
-                }
+                return false;
             }
 
-            return 'application/octet-stream';
-        }
-
-        /**
-         * Get a safe filename by removing potentially unsafe characters
-         */
-        private static function getSafeFileName(string $filename): string
-        {
-            $filename = basename($filename);
-            $filename = preg_replace('/[\x00-\x1F\x7F]/u', '', $filename);
-            $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename);
-
-            if (strlen($filename) > 255)
+            if(isset($item['note']) && !is_string($item['note']))
             {
-                $extension = pathinfo($filename, PATHINFO_EXTENSION);
-                $baseFilename = pathinfo($filename, PATHINFO_FILENAME);
-                $filename = substr($baseFilename, 0, 245) . '.' . $extension;
+                return false;
             }
 
-            return $filename;
+            if(isset($item['tag']) && !is_string($item['tag']))
+            {
+                return false;
+            }
+
+            if(isset($item['confidential']) && !is_bool($item['confidential']) && !is_string($item['confidential']) && !is_int($item['confidential']))
+            {
+                return false;
+            }
+
+            if(isset($item['metadata']) && !is_array($item['metadata']))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         /**
@@ -372,7 +276,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Creates a new report with optional evidence and file attachments. Requires client permissions.';
+            return 'Creates a new report with one or more evidence records. File attachments can be added to the created evidence records afterwards. Requires client permissions.';
         }
 
         /**
@@ -396,56 +300,74 @@
          */
         public static function getRequestBody(): ?array
         {
-            $schema = [
+            $evidenceSchema = [
                 'type' => 'object',
                 'properties' => [
-                    'reporting_entity' => [
+                    'text_content' => [
                         'type' => 'string',
-                        'description' => 'UUID, SHA-256 hash, or entity address of the entity being reported',
-                    ],
-                    'content' => [
-                        'type' => 'string',
-                        'description' => 'The content/message of the report',
-                    ],
-                                'incident_type' => [
-                                    'type' => 'string',
-                                    'description' => 'The type of incident being reported',
-                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
-                                ],
-                    'report_message' => [
-                        'type' => 'string',
-                        'description' => 'Optional message for the report',
+                        'description' => 'Text content of the evidence',
                         'nullable' => true,
                     ],
-                    'evidence_tag' => [
+                    'note' => [
                         'type' => 'string',
-                        'description' => 'Optional tag for the evidence',
+                        'description' => 'Optional note by the operator',
+                        'nullable' => true,
+                    ],
+                    'tag' => [
+                        'type' => 'string',
+                        'description' => 'Optional tag name for the evidence',
+                        'nullable' => true,
+                    ],
+                    'confidential' => [
+                        'type' => 'boolean',
+                        'description' => 'Whether the evidence is confidential',
+                        'default' => false,
+                    ],
+                    'metadata' => [
+                        'type' => 'object',
+                        'description' => 'Arbitrary JSON-encoded metadata',
                         'nullable' => true,
                     ],
                 ],
-                'required' => ['reporting_entity', 'content', 'incident_type'],
             ];
 
             return [
                 'required' => true,
                 'content' => [
                     'application/json' => [
-                        'schema' => $schema,
-                    ],
-                    'multipart/form-data' => [
                         'schema' => [
                             'type' => 'object',
-                            'properties' => array_merge(
-                                $schema['properties'],
-                                [
-                                    'file' => [
-                                        'type' => 'string',
-                                        'format' => 'binary',
-                                        'description' => 'Optional file attachment to associate with the report evidence',
+                            'properties' => [
+                                'reporting_entity' => [
+                                    'type' => 'string',
+                                    'description' => 'UUID, SHA-256 hash, or entity address of the entity being reported',
+                                ],
+                                'evidence' => [
+                                    'oneOf' => [
+                                        [
+                                            'type' => 'object',
+                                            'description' => 'Single evidence record to create with the report',
+                                            'properties' => $evidenceSchema['properties'],
+                                        ],
+                                        [
+                                            'type' => 'array',
+                                            'description' => 'Multiple evidence records to create with the report',
+                                            'items' => $evidenceSchema,
+                                        ],
                                     ],
-                                ]
-                            ),
-                            'required' => $schema['required'],
+                                ],
+                                'incident_type' => [
+                                    'type' => 'string',
+                                    'description' => 'The type of incident being reported',
+                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
+                                ],
+                                'report_message' => [
+                                    'type' => 'string',
+                                    'description' => 'Optional message for the report',
+                                    'nullable' => true,
+                                ],
+                            ],
+                            'required' => ['reporting_entity', 'evidence', 'incident_type'],
                         ],
                     ],
                 ],
