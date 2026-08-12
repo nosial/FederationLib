@@ -8,21 +8,18 @@
     class ReportSubmission implements SerializableInterface, ObjectSpecificationInterface
     {
         private ReportRecord $report;
-        private EvidenceRecord $evidence;
-        private ?array $attachments;
+        private array $evidence;
 
         /**
          * Public Constructor
          *
          * @param ReportRecord $report The report record object
-         * @param EvidenceRecord $evidence The evidence record object
-         * @param array|null $attachments Optional array of UploadResult objects
+         * @param EvidenceRecord[] $evidence The evidence record objects created with the report
          */
-        public function __construct(ReportRecord $report, EvidenceRecord $evidence, ?array $attachments=null)
+        public function __construct(ReportRecord $report, array $evidence)
         {
             $this->report = $report;
             $this->evidence = $evidence;
-            $this->attachments = $attachments;
         }
 
         /**
@@ -36,23 +33,13 @@
         }
 
         /**
-         * Returns the evidence record that was created with the report submission
+         * Returns the evidence records that were created with the report submission
          *
-         * @return EvidenceRecord The evidence record created with the report submission
+         * @return EvidenceRecord[] The evidence records created with the report submission
          */
-        public function getEvidence(): EvidenceRecord
+        public function getEvidence(): array
         {
             return $this->evidence;
-        }
-
-        /**
-         * Returns the attachments that were uploaded with the report submission
-         *
-         * @return array|null Array of UploadResult objects or null if none
-         */
-        public function getAttachments(): ?array
-        {
-            return $this->attachments;
         }
 
         /**
@@ -60,17 +47,10 @@
          */
         public function toArray(): array
         {
-            $result = [
+            return [
                 'report' => $this->report->toArray(),
-                'evidence' => $this->evidence->toArray()
+                'evidence' => array_map(fn($evidence) => $evidence->toArray(), $this->evidence),
             ];
-
-            if($this->attachments !== null)
-            {
-                $result['attachments'] = array_map(fn($attachment) => $attachment->toArray(), $this->attachments);
-            }
-
-            return $result;
         }
 
         /**
@@ -78,16 +58,15 @@
          */
         public static function fromArray(array $array): ReportSubmission
         {
-            $attachments = null;
-            if(isset($array['attachments']) && is_array($array['attachments']))
+            $evidence = [];
+            if(isset($array['evidence']) && is_array($array['evidence']))
             {
-                $attachments = array_map(fn($item) => UploadResult::fromArray($item), $array['attachments']);
+                $evidence = array_map(fn($item) => EvidenceRecord::fromArray($item), $array['evidence']);
             }
 
             return new self(
                 ReportRecord::fromArray($array['report']),
-                EvidenceRecord::fromArray($array['evidence']),
-                $attachments
+                $evidence
             );
         }
 
@@ -106,12 +85,10 @@
         {
             return [
                 'report' => ['$ref' => ReportRecord::getReference(), 'description' => 'The created report record'],
-                'evidence' => ['$ref' => EvidenceRecord::getReference(), 'description' => 'The submitted evidence record'],
-                'attachments' => [
+                'evidence' => [
                     'type' => 'array',
-                    'items' => ['$ref' => UploadResult::getReference()],
-                    'description' => 'Uploaded file attachments associated with the report',
-                    'nullable' => true,
+                    'items' => ['$ref' => EvidenceRecord::getReference()],
+                    'description' => 'Evidence records created with the report submission',
                 ],
             ];
         }
