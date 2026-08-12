@@ -5,6 +5,7 @@
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
+    use FederationLib\Objects\ContentInput;
     use Symfony\Component\Uid\Uuid;
 
     /**
@@ -92,10 +93,10 @@
         {
             $client ??= $this->client;
             $entityUuid = $this->createSecurityEntity($client);
-            $submission = $client->submitReport($entityUuid, 'Security test report', IncidentType::SPAM);
+            $submission = $client->submitReport($entityUuid, new ContentInput('Security test report'), IncidentType::SPAM);
 
             $reportUuid = $submission->getReport()->getUuid();
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
 
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
