@@ -130,10 +130,10 @@
             $submissions = [];
             for ($i = 0; $i < 5; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "Bulk report $i", IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "Bulk report $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
                 $submissions[] = $submission;
             }
 
@@ -153,11 +153,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 10; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "High volume report $i", IncidentType::SPAM);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "High volume report $i"], IncidentType::SPAM);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $this->assertCount(10, $reportUuids);
@@ -175,10 +175,10 @@
             $this->createdEntities[] = $entityUuid;
 
             $content = TextGenerator::generate(ClassificationFlag::SUSPICIOUS);
-            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::OTHER);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $content], IncidentType::OTHER);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->closeReport($reportUuid, ClassificationFlag::SUSPICIOUS);
 
@@ -195,10 +195,10 @@
 
             foreach ($samples as $sample)
             {
-                $submission = $this->client->submitReport($entityUuid, $sample['text'], IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
                 $reportUuid = $submission->getReport()->getUuid();
                 $this->createdReports[] = $reportUuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
                 $this->client->closeReport($reportUuid, $sample['flag']);
 
@@ -214,9 +214,9 @@
             $managerUuid = $manager->getSelf()->getUuid();
 
             $entityUuid = $this->createSecurityEntity($submitter);
-            $submission = $submitter->submitReport($entityUuid, 'Full lifecycle report', IncidentType::SPAM);
+            $submission = $submitter->submitReport($entityUuid, ['text_content' => 'Full lifecycle report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
 

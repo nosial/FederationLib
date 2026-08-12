@@ -181,7 +181,7 @@
             $clientActions = [
                 'pushEntity' => fn() => $operatorOnly->pushEntity('example.com', 'user'),
                 'submitEvidence' => fn() => $operatorOnly->submitEvidence($entityUuid, 'text', 'note', 'tag'),
-                'submitReport' => fn() => $operatorOnly->submitReport($entityUuid, 'content', IncidentType::SPAM),
+                'submitReport' => fn() => $operatorOnly->submitReport($entityUuid, ['text_content' => 'content'], IncidentType::SPAM),
                 'uploadNoteAttachment' => fn() => $operatorOnly->uploadNoteAttachment('00000000-0000-0000-0000-000000000000', 'note.txt', 'content'),
             ];
 

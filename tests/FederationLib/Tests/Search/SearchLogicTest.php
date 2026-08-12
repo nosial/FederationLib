@@ -999,9 +999,9 @@
             $this->createdEntities[] = $entityUuid;
 
             $longMsg = 'RPT_MSG_' . uniqid() . ' ' . str_repeat('long report message content ', 50);
-            $submission = $this->client->submitReport($entityUuid, 'report content', IncidentType::SPAM, $longMsg);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'report content'], IncidentType::SPAM, $longMsg);
             $reportUuid = $submission->getReport()->getUuid();
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
@@ -1024,9 +1024,9 @@
             $this->createdEntities[] = $entityUuid;
 
             $msg = 'REPORT: [urgent] {ticket#123} "user complaint" <review> $50 refund?';
-            $submission = $this->client->submitReport($entityUuid, 'report content', IncidentType::SPAM, $msg);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'report content'], IncidentType::SPAM, $msg);
             $reportUuid = $submission->getReport()->getUuid();
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
@@ -1199,9 +1199,9 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'tag msg content', 'tm note', $keyword);
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'report content', IncidentType::SPAM, $keyword);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'report content'], IncidentType::SPAM, $keyword);
             $reportUuid = $submission->getReport()->getUuid();
-            $reportEvidenceUuid = $submission->getEvidence()->getUuid();
+            $reportEvidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $reportEvidenceUuid;
 
@@ -1619,9 +1619,9 @@
             $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'mi report content', IncidentType::SPAM, 'mi report message');
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'mi report content'], IncidentType::SPAM, 'mi report message');
             $reportUuid = $submission->getReport()->getUuid();
-            $reportEvidenceUuid = $submission->getEvidence()->getUuid();
+            $reportEvidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $reportEvidenceUuid;
 
@@ -1739,9 +1739,9 @@
             $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
-            $submission = $this->client->submitReport($entityUuid, $keyword . ' report content', IncidentType::SPAM, $keyword . '_report_msg');
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $keyword . ' report content'], IncidentType::SPAM, $keyword . '_report_msg');
             $reportUuid = $submission->getReport()->getUuid();
-            $reportEvidenceUuid = $submission->getEvidence()->getUuid();
+            $reportEvidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $reportEvidenceUuid;
 
@@ -2153,7 +2153,7 @@
             $this->createdEntities[] = $entityUuid;
 
             $keyword = 'rep-cat-msg-' . uniqid();
-            $submission = $this->client->submitReport($entityUuid, 'report content', IncidentType::SPAM, $keyword);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'report content'], IncidentType::SPAM, $keyword);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
 

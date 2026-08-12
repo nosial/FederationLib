@@ -11,6 +11,7 @@
     use FederationLib\FederationClient;
     use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ScannedContent\ContentClassification;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
@@ -37,10 +38,10 @@
 
             foreach (TextGenerator::trainingSet() as $sample)
             {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, $sample['text'], IncidentType::OTHER);
+                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
                 $reportUuid = $submission->getReport()->getUuid();
                 self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()->getUuid();
+                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
                 self::$trainingClient->closeReport($reportUuid, $sample['flag']);
             }
 
@@ -167,8 +168,15 @@
         public function testScanContentEmptyContent(): void
         {
             $this->expectException(InvalidArgumentException::class);
-            $this->expectExceptionMessage('Content cannot be empty');
+            $this->expectExceptionMessage('At least one evidence record must contain text content');
             $this->client->scanContent('');
+        }
+
+        public function testScanContentEmptyEvidenceArray(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('Evidence cannot be empty');
+            $this->client->scanContent([]);
         }
 
         public function testScanContentWithAuthorByUuid(): void
@@ -427,10 +435,46 @@
         {
             $metadata = ['source' => 'ContentScanTest', 'batch_id' => uniqid('scan_')];
 
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, null, null, null, $metadata);
+            $scanned = $this->client->scanContent(
+                new ContentInput(self::BENIGN_SAMPLE_TEXT, null, null, false, $metadata)
+            );
 
             $this->assertNotNull($scanned);
             $this->assertIsArray($scanned->getResolvedEntities());
+        }
+
+        public function testScanContentWithSingleContentInput(): void
+        {
+            $scanned = $this->client->scanContent(new ContentInput(self::BENIGN_SAMPLE_TEXT));
+
+            $this->assertNotNull($scanned);
+            $this->assertIsArray($scanned->getResolvedEntities());
+            $this->assertIsFloat($scanned->getRiskScore());
+        }
+
+        public function testScanContentWithMultipleEvidence(): void
+        {
+            $evidence = [
+                new ContentInput(self::BENIGN_SAMPLE_TEXT),
+                new ContentInput('Another benign message for scanning.'),
+                new ContentInput('A third message that is also benign.'),
+            ];
+
+            $scanned = $this->client->scanContent($evidence);
+
+            $this->assertNotNull($scanned);
+            $this->assertIsArray($scanned->getResolvedEntities());
+            $this->assertIsFloat($scanned->getRiskScore());
+
+            $classification = $scanned->getClassification();
+            if ($classification !== null)
+            {
+                $this->assertInstanceOf(ContentClassification::class, $classification);
+            }
+            else
+            {
+                $this->addToAssertionCount(1);
+            }
         }
 
         public function testScanContentDoesNotResolveUnknownEntities(): void

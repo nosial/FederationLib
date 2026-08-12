@@ -37,10 +37,10 @@
 
             foreach (TextGenerator::trainingSet() as $sample)
             {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, $sample['text'], IncidentType::OTHER);
+                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
                 $reportUuid = $submission->getReport()->getUuid();
                 self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()->getUuid();
+                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
                 self::$trainingClient->closeReport($reportUuid, $sample['flag']);
             }
 

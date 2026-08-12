@@ -10,8 +10,8 @@
     use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\Logger;
     use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ReportRecord;
-    use FederationLib\Objects\UploadResult;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
@@ -130,10 +130,10 @@
 
             $content = TextGenerator::generate(ClassificationFlag::NORMAL);
             $reportMessage = "Normal content";
-            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM, $reportMessage);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $content], IncidentType::SPAM, $reportMessage);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->assertNotNull($submission->getReport());
             $this->assertNotNull($submission->getEvidence());
@@ -142,20 +142,20 @@
             $this->assertNotEmpty($submission->getReport()->getUuid());
         }
 
-        public function testSubmitReportInvalidContent(): void
+        public function testSubmitReportInvalidEvidence(): void
         {
-            $entityUuid = $this->client->pushEntity('invalid-content.com', 'invalid_user');
+            $entityUuid = $this->client->pushEntity('invalid-evidence.com', 'invalid_evidence');
             $this->createdEntities[] = $entityUuid;
 
             $this->expectException(InvalidArgumentException::class);
-            $this->expectExceptionMessage('Content cannot be empty');
-            $this->client->submitReport($entityUuid, '', IncidentType::SPAM);
+            $this->expectExceptionMessage('Evidence cannot be empty');
+            $this->client->submitReport($entityUuid, [], IncidentType::SPAM);
         }
 
         public function testSubmitReportInvalidEntity(): void
         {
             $this->expectException(InvalidArgumentException::class);
-            $this->client->submitReport('', 'content', IncidentType::OTHER);
+            $this->client->submitReport('', ['text_content' => 'content'], IncidentType::OTHER);
         }
 
         public function testSubmitReportWithEvidenceTag(): void
@@ -163,13 +163,13 @@
             $entityUuid = $this->client->pushEntity('evidence-tag-report.com', 'tag_user');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report with evidence tag', IncidentType::SPAM, null, 'initial-tag');
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report with evidence tag', 'tag' => 'initial-tag'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->assertNotNull($submission->getEvidence()->getTag());
-            $this->assertEquals('initial-tag', $submission->getEvidence()->getTag());
+            $this->assertNotNull($submission->getEvidence()[0]->getTag());
+            $this->assertEquals('initial-tag', $submission->getEvidence()[0]->getTag());
         }
 
         public function testListReports(): void
@@ -180,11 +180,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "List report $i", IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "List report $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $reports = $this->client->listReports(1, 10);
@@ -227,10 +227,10 @@
             $this->createdEntities[] = $entityUuid;
 
             $reportMessage = 'Get Report';
-            $submission = $this->client->submitReport($entityUuid, 'Report to get', IncidentType::SPAM, $reportMessage);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report to get'], IncidentType::SPAM, $reportMessage);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $report = $this->client->getReport($reportUuid);
             $this->assertNotNull($report);
@@ -252,10 +252,10 @@
             $this->createdEntities[] = $entityUuid;
 
             $content = TextGenerator::generate(ClassificationFlag::NORMAL);
-            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $content], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->closeReport($reportUuid);
             $report = $this->client->getReport($reportUuid);
@@ -268,10 +268,10 @@
             $this->createdEntities[] = $entityUuid;
 
             $content = TextGenerator::generate(ClassificationFlag::MALICIOUS);
-            $submission = $this->client->submitReport($entityUuid, $content, IncidentType::OTHER);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $content], IncidentType::OTHER);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
             $report = $this->client->getReport($reportUuid);
@@ -290,10 +290,10 @@
             $entityUuid = $this->client->pushEntity('delete-report.com', 'delete_user');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report to delete', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report to delete'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->deleteReport($reportUuid);
 
@@ -326,10 +326,10 @@
             $entityUuid = $this->client->pushEntity('list-op-reports.com', 'list_op_user');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Operator report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Operator report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $reports = $this->client->listOperatorReports($submission->getReport()->getSubmittingOperator(), 1, 10);
             $this->assertIsArray($reports);
@@ -357,10 +357,10 @@
             $entityUuid = $this->client->pushEntity('list-entity-reports.com', 'list_entity');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Entity report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Entity report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $reports = $this->client->listEntityReports($entityUuid, 1, 10);
             $this->assertIsArray($reports);
@@ -389,131 +389,86 @@
             $entityUuid = $this->client->pushEntity('full-params.com', 'full_params');
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Full params report', IncidentType::SPAM, 'Report message', 'evidence-tag');
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Full params report', 'tag' => 'evidence-tag'], IncidentType::SPAM, 'Report message');
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->assertNotNull($submission->getReport());
             $this->assertNotNull($submission->getEvidence());
-            $this->assertEquals('evidence-tag', $submission->getEvidence()->getTag());
+            $this->assertEquals('evidence-tag', $submission->getEvidence()[0]->getTag());
         }
 
-        public function testSubmitReportWithSingleFileAttachment(): void
+        public function testSubmitReportWithSingleEvidence(): void
         {
-            $entityUuid = $this->client->pushEntity('submit-single-attach.com', 'single_attach');
+            $entityUuid = $this->client->pushEntity('submit-single-evidence.com', 'single_evidence');
             $this->createdEntities[] = $entityUuid;
-
-            $testFilePath = tempnam(sys_get_temp_dir(), 'submit_single_') . '.txt';
-            file_put_contents($testFilePath, 'Single attachment content');
-            $this->tempFiles[] = $testFilePath;
-
-            $submission = $this->client->submitReport($entityUuid, 'Report with single attachment', IncidentType::SPAM, null, null, [$testFilePath]);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
-
-            $this->assertNotNull($submission->getAttachments());
-            $this->assertCount(1, $submission->getAttachments());
-            $this->assertInstanceOf(UploadResult::class, $submission->getAttachments()[0]);
-            $this->assertNotEmpty($submission->getAttachments()[0]->getUuid());
-            $this->assertNotEmpty($submission->getAttachments()[0]->getUrl());
-
-            $this->createdAttachments[] = $submission->getAttachments()[0]->getUuid();
-        }
-
-        public function testSubmitReportWithMultipleFileAttachments(): void
-        {
-            $entityUuid = $this->client->pushEntity('submit-multi-attach.com', 'multi_attach');
-            $this->createdEntities[] = $entityUuid;
-
-            $filePaths = [];
-            for ($i = 0; $i < 3; $i++)
-            {
-                $testFilePath = tempnam(sys_get_temp_dir(), "submit_multi_{$i}_") . '.txt';
-                file_put_contents($testFilePath, "Multiple attachment content $i");
-                $this->tempFiles[] = $testFilePath;
-                $filePaths[] = $testFilePath;
-            }
-
-            $submission = $this->client->submitReport($entityUuid, 'Report with multiple attachments', IncidentType::SPAM, null, null, $filePaths);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
-
-            $this->assertNotNull($submission->getAttachments());
-            $this->assertCount(3, $submission->getAttachments());
-
-            foreach ($submission->getAttachments() as $attachment)
-            {
-                $this->assertInstanceOf(UploadResult::class, $attachment);
-                $this->assertNotEmpty($attachment->getUuid());
-                $this->assertNotEmpty($attachment->getUrl());
-                $this->createdAttachments[] = $attachment->getUuid();
-            }
-        }
-
-        public function testSubmitReportWithFileAttachmentFromUrl(): void
-        {
-            $entityUuid = $this->client->pushEntity('submit-url-attach.com', 'url_attach');
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, 'Report with URL attachment', IncidentType::SPAM, null, null, null, ['https://file-examples.com/wp-content/storage/2017/02/zip_5MB.zip']);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
-
-            $this->assertNotNull($submission->getAttachments());
-            $this->assertCount(1, $submission->getAttachments());
-            $this->assertInstanceOf(UploadResult::class, $submission->getAttachments()[0]);
-            $this->assertNotEmpty($submission->getAttachments()[0]->getUuid());
-
-            $this->createdAttachments[] = $submission->getAttachments()[0]->getUuid();
-        }
-
-        public function testSubmitReportWithBothLocalAndRemoteFiles(): void
-        {
-            $entityUuid = $this->client->pushEntity('submit-mixed-attach.com', 'mixed_attach');
-            $this->createdEntities[] = $entityUuid;
-
-            $testFilePath = tempnam(sys_get_temp_dir(), 'submit_mixed_') . '.txt';
-            file_put_contents($testFilePath, 'Mixed attachment content');
-            $this->tempFiles[] = $testFilePath;
 
             $submission = $this->client->submitReport(
                 $entityUuid,
-                'Report with mixed attachments',
-                IncidentType::SPAM,
-                null,
-                null,
-                [$testFilePath],
-                ['https://file-examples.com/wp-content/storage/2017/02/zip_5MB.zip']
+                new ContentInput('Report with single evidence'),
+                IncidentType::SPAM
             );
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->assertNotNull($submission->getAttachments());
-            $this->assertCount(2, $submission->getAttachments());
+            $this->assertCount(1, $submission->getEvidence());
+            $this->assertEquals('Report with single evidence', $submission->getEvidence()[0]->getTextContent());
+        }
 
-            foreach ($submission->getAttachments() as $attachment)
+        public function testSubmitReportWithMultipleEvidence(): void
+        {
+            $entityUuid = $this->client->pushEntity('submit-multi-evidence.com', 'multi_evidence');
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceItems = [
+                new ContentInput('First evidence record', null, 'first'),
+                new ContentInput('Second evidence record', null, 'second'),
+                new ContentInput('Third evidence record', null, 'third'),
+            ];
+
+            $submission = $this->client->submitReport($entityUuid, $evidenceItems, IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+
+            $this->assertCount(3, $submission->getEvidence());
+            foreach ($submission->getEvidence() as $index => $evidence)
             {
-                $this->assertInstanceOf(UploadResult::class, $attachment);
-                $this->assertNotEmpty($attachment->getUuid());
-                $this->createdAttachments[] = $attachment->getUuid();
+                $this->assertEquals($evidenceItems[$index]->getTextContent(), $evidence->getTextContent());
+                $this->assertEquals($evidenceItems[$index]->getTag(), $evidence->getTag());
+                $this->createdEvidenceRecords[] = $evidence->getUuid();
             }
         }
 
-        public function testSubmitReportWithNonStringLocalFilePath(): void
+        public function testSubmitReportEvidenceIsAlwaysArray(): void
         {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->submitReport('test-entity', 'content', IncidentType::SPAM, null, null, [123]);
+            $entityUuid = $this->client->pushEntity('submit-evidence-array.com', 'evidence_array');
+            $this->createdEntities[] = $entityUuid;
+
+            $submission = $this->client->submitReport(
+                $entityUuid,
+                new ContentInput('Single evidence as object'),
+                IncidentType::SPAM
+            );
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+            $this->assertIsArray($submission->getEvidence());
+            $this->assertCount(1, $submission->getEvidence());
         }
 
-        public function testSubmitReportWithNonStringRemoteUrl(): void
+        public function testSubmitReportWithEmptyEvidence(): void
         {
             $this->expectException(InvalidArgumentException::class);
-            $this->client->submitReport('test-entity', 'content', IncidentType::SPAM, null, null, null, [true]);
+            $this->client->submitReport('test-entity', [], IncidentType::SPAM);
+        }
+
+        public function testSubmitReportWithInvalidEvidenceField(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->submitReport('test-entity', ['invalid_field' => 'value'], IncidentType::SPAM);
         }
 
         public function testListReportsPageExhaustion(): void
@@ -524,11 +479,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 5; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "Page exhaust report $i", IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "Page exhaust report $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $allReportUuids = [];
@@ -559,11 +514,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "Report sort DESC $i", IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "Report sort DESC $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $reports = $this->client->listReports(1, 100, null, 'created', 'DESC');
@@ -586,11 +541,11 @@
 
             foreach ($types as $type)
             {
-                $submission = $this->client->submitReport($entityUuid, "Report type $type->value", $type);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "Report type $type->value"], $type);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $allFiltered = [];
@@ -618,9 +573,9 @@
             file_put_contents($testFilePath, 'Report attachment content');
             $this->tempFiles[] = $testFilePath;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report with attachment', IncidentType::SPAM, null, 'report_attach');
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report with attachment', 'tag' => 'report_attach'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
@@ -637,15 +592,15 @@
             $entityA = $this->createSecurityEntity();
             $entityB = $this->createSecurityEntity();
 
-            $submissionA = $this->client->submitReport($entityA, 'Report for entity A', IncidentType::SPAM);
+            $submissionA = $this->client->submitReport($entityA, ['text_content' => 'Report for entity A'], IncidentType::SPAM);
             $reportAUuid = $submissionA->getReport()->getUuid();
             $this->createdReports[] = $reportAUuid;
-            $this->createdEvidenceRecords[] = $submissionA->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submissionA->getEvidence()[0]->getUuid();
 
-            $submissionB = $this->client->submitReport($entityB, 'Report for entity B', IncidentType::SCAM);
+            $submissionB = $this->client->submitReport($entityB, ['text_content' => 'Report for entity B'], IncidentType::SCAM);
             $reportBUuid = $submissionB->getReport()->getUuid();
             $this->createdReports[] = $reportBUuid;
-            $this->createdEvidenceRecords[] = $submissionB->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submissionB->getEvidence()[0]->getUuid();
 
             $entityAReports = $this->client->listEntityReports($entityA);
             $entityAReportUuids = array_map(fn($r) => $r->getUuid(), $entityAReports);
@@ -658,10 +613,10 @@
             $entityUuid = $this->client->pushEntity('rep-cat-open.com', 'rep_open_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Opened report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Opened report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $reports = $this->client->listReports(1, 100, 'OPENED');
             $foundUuids = array_map(fn($r) => $r->getUuid(), $reports);
@@ -673,10 +628,10 @@
             $entityUuid = $this->client->pushEntity('rep-cat-closed.com', 'rep_closed_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Closed report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Closed report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->closeReport($reportUuid);
 
@@ -691,10 +646,10 @@
             $entityUuid = $this->client->pushEntity('rep-cat-asgn.com', 'rep_asgn_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Assigned report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Assigned report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager->assignOperatorToReport($reportUuid, $manager->getSelf()->getUuid());
 
@@ -711,11 +666,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $submission = $this->client->submitReport($entityUuid, "Report cat sort $i", IncidentType::OTHER);
+                $submission = $this->client->submitReport($entityUuid, ['text_content' => "Report cat sort $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             }
 
             $reports = $this->client->listReports(1, 100, 'OPENED', 'created', 'DESC');
@@ -732,9 +687,9 @@
             $entityUuid = $this->client->pushEntity('rep-cat-inv.com', 'rep_cat_inv_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Cat invalid test', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Cat invalid test'], IncidentType::SPAM);
             $this->createdReports[] = $submission->getReport()->getUuid();
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $resultDefault = $this->client->listReports(1, 10);
             $resultInvalid = $this->client->listReports(1, 10, 'BOGUS_CATEGORY');
@@ -751,9 +706,9 @@
             $entityUuid = $this->client->pushEntity('rep-cat-ci.com', 'rep_ci_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'CI category test', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'CI category test'], IncidentType::SPAM);
             $this->createdReports[] = $submission->getReport()->getUuid();
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $resultUpper = $this->client->listReports(1, 10, 'OPENED');
             $resultLower = $this->client->listReports(1, 10, 'opened');
@@ -784,10 +739,10 @@
             $assignedUuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $submission = $manager->submitReport($entityUuid, "List opened report $i", IncidentType::SPAM);
+                $submission = $manager->submitReport($entityUuid, ['text_content' => "List opened report $i"], IncidentType::SPAM);
                 $reportUuid = $submission->getReport()->getUuid();
                 $this->createdReports[] = $reportUuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
                 $manager->assignOperatorToReport($reportUuid, $selfUuid);
                 $assignedUuids[] = $reportUuid;
             }
@@ -815,16 +770,16 @@
             $this->createdEntities[] = $entityUuid;
             $selfUuid = $manager->getSelf()->getUuid();
 
-            $openedSubmission = $manager->submitReport($entityUuid, 'Opened assigned report', IncidentType::SPAM);
+            $openedSubmission = $manager->submitReport($entityUuid, ['text_content' => 'Opened assigned report'], IncidentType::SPAM);
             $openedUuid = $openedSubmission->getReport()->getUuid();
             $this->createdReports[] = $openedUuid;
-            $this->createdEvidenceRecords[] = $openedSubmission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $openedSubmission->getEvidence()[0]->getUuid();
             $manager->assignOperatorToReport($openedUuid, $selfUuid);
 
-            $closedSubmission = $manager->submitReport($entityUuid, 'Closed assigned report', IncidentType::SPAM);
+            $closedSubmission = $manager->submitReport($entityUuid, ['text_content' => 'Closed assigned report'], IncidentType::SPAM);
             $closedUuid = $closedSubmission->getReport()->getUuid();
             $this->createdReports[] = $closedUuid;
-            $this->createdEvidenceRecords[] = $closedSubmission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $closedSubmission->getEvidence()[0]->getUuid();
             $manager->assignOperatorToReport($closedUuid, $selfUuid);
             $manager->closeReport($closedUuid);
 
@@ -842,16 +797,16 @@
             $this->createdEntities[] = $entityUuid;
             $selfUuid = $manager->getSelf()->getUuid();
 
-            $assignedSubmission = $manager->submitReport($entityUuid, 'Assigned to self', IncidentType::SPAM);
+            $assignedSubmission = $manager->submitReport($entityUuid, ['text_content' => 'Assigned to self'], IncidentType::SPAM);
             $assignedUuid = $assignedSubmission->getReport()->getUuid();
             $this->createdReports[] = $assignedUuid;
-            $this->createdEvidenceRecords[] = $assignedSubmission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $assignedSubmission->getEvidence()[0]->getUuid();
             $manager->assignOperatorToReport($assignedUuid, $selfUuid);
 
-            $unassignedSubmission = $this->client->submitReport($entityUuid, 'Not assigned', IncidentType::SPAM);
+            $unassignedSubmission = $this->client->submitReport($entityUuid, ['text_content' => 'Not assigned'], IncidentType::SPAM);
             $unassignedUuid = $unassignedSubmission->getReport()->getUuid();
             $this->createdReports[] = $unassignedUuid;
-            $this->createdEvidenceRecords[] = $unassignedSubmission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $unassignedSubmission->getEvidence()[0]->getUuid();
 
             $reports = $manager->listOpenedReports(1, 100);
             $foundUuids = array_map(fn($r) => $r->getUuid(), $reports);
@@ -882,11 +837,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 5; $i++)
             {
-                $submission = $manager->submitReport($entityUuid, "Opened paginated report $i", IncidentType::OTHER);
+                $submission = $manager->submitReport($entityUuid, ['text_content' => "Opened paginated report $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
                 $manager->assignOperatorToReport($uuid, $selfUuid);
             }
 
@@ -920,11 +875,11 @@
             $reportUuids = [];
             for ($i = 0; $i < 3; $i++)
             {
-                $submission = $manager->submitReport($entityUuid, "Sorted opened report $i", IncidentType::OTHER);
+                $submission = $manager->submitReport($entityUuid, ['text_content' => "Sorted opened report $i"], IncidentType::OTHER);
                 $uuid = $submission->getReport()->getUuid();
                 $reportUuids[] = $uuid;
                 $this->createdReports[] = $uuid;
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
                 $manager->assignOperatorToReport($uuid, $selfUuid);
             }
 
@@ -946,16 +901,16 @@
             $entityUuid = $this->client->pushEntity('list-opened-own.com', 'list_own_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submissionA = $managerA->submitReport($entityUuid, 'Report for manager A', IncidentType::SPAM);
+            $submissionA = $managerA->submitReport($entityUuid, ['text_content' => 'Report for manager A'], IncidentType::SPAM);
             $uuidA = $submissionA->getReport()->getUuid();
             $this->createdReports[] = $uuidA;
-            $this->createdEvidenceRecords[] = $submissionA->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submissionA->getEvidence()[0]->getUuid();
             $managerA->assignOperatorToReport($uuidA, $selfA);
 
-            $submissionB = $managerA->submitReport($entityUuid, 'Report for manager B', IncidentType::SPAM);
+            $submissionB = $managerA->submitReport($entityUuid, ['text_content' => 'Report for manager B'], IncidentType::SPAM);
             $uuidB = $submissionB->getReport()->getUuid();
             $this->createdReports[] = $uuidB;
-            $this->createdEvidenceRecords[] = $submissionB->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submissionB->getEvidence()[0]->getUuid();
             $managerA->assignOperatorToReport($uuidB, $managerB->getSelf()->getUuid());
 
             $reportsA = $managerA->listOpenedReports(1, 100);

@@ -350,14 +350,14 @@
             $this->assertIsInt($before->getReports());
 
             $entityUuid = $authenticatedClient->pushEntity('report-count-test.com', 'report_count_user');
-            $submission = $authenticatedClient->submitReport($entityUuid, 'Report count test', \FederationLib\Enums\IncidentType::SPAM);
+            $submission = $authenticatedClient->submitReport($entityUuid, ['text_content' => 'Report count test'], \FederationLib\Enums\IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
 
             $afterCreate = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getReports() + 1, $afterCreate->getReports());
 
             $authenticatedClient->deleteReport($reportUuid);
-            $authenticatedClient->deleteEvidence($submission->getEvidence()->getUuid());
+            $authenticatedClient->deleteEvidence($submission->getEvidence()[0]->getUuid());
             $authenticatedClient->deleteEntity($entityUuid);
 
             $afterDelete = $authenticatedClient->getServerInformation();
@@ -383,7 +383,7 @@
             $serverInfo = $authenticatedClient->getServerInformation();
 
             $entityUuid = $authenticatedClient->pushEntity('public-report-flag-test.com', 'public_report_user');
-            $submission = $authenticatedClient->submitReport($entityUuid, 'Public report flag test', \FederationLib\Enums\IncidentType::SPAM);
+            $submission = $authenticatedClient->submitReport($entityUuid, ['text_content' => 'Public report flag test'], \FederationLib\Enums\IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
 
             if ($serverInfo->isPublicReports())
@@ -397,7 +397,7 @@
             }
 
             $authenticatedClient->deleteReport($reportUuid);
-            $authenticatedClient->deleteEvidence($submission->getEvidence()->getUuid());
+            $authenticatedClient->deleteEvidence($submission->getEvidence()[0]->getUuid());
             $authenticatedClient->deleteEntity($entityUuid);
         }
 

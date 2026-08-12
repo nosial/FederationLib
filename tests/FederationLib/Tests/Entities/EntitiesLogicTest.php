@@ -318,10 +318,10 @@
             $initialReputation = $before->getReputation();
 
             // Submit a report and close it maliciously.
-            $submission = $this->client->submitReport($entityUuid, 'malicious activity report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'malicious activity report'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
 
@@ -439,16 +439,16 @@
             // Submit and close 2 reports for entity[0] to lower reputation further
             for ($j = 0; $j < 2; $j++)
             {
-                $submission = $this->client->submitReport($entityUuids[0], "Order threat report $j", IncidentType::SPAM);
+                $submission = $this->client->submitReport($entityUuids[0], ['text_content' => "Order threat report $j"], IncidentType::SPAM);
                 $this->createdReports[] = $submission->getReport()->getUuid();
-                $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
                 $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
             }
 
             // Submit and close 1 report for entity[1]
-            $submission = $this->client->submitReport($entityUuids[1], 'Order threat report', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuids[1], ['text_content' => 'Order threat report'], IncidentType::SPAM);
             $this->createdReports[] = $submission->getReport()->getUuid();
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
             $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
 
             // entity[2] has no reports, reputation = 0

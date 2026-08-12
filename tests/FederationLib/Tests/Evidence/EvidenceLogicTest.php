@@ -379,10 +379,10 @@ class EvidenceLogicTest extends TestCase
         $entityUuid = $this->client->pushEntity('evidence-report-link.com', 'link_user');
         $this->createdEntityRecords[] = $entityUuid;
 
-        $submission = $this->client->submitReport($entityUuid, 'Report for evidence linking', IncidentType::SPAM);
+        $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report for evidence linking'], IncidentType::SPAM);
         $reportUuid = $submission->getReport()->getUuid();
         $this->createdReports[] = $reportUuid;
-        $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+        $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
         $standaloneEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Standalone evidence', 'Note', 'standalone');
         $this->createdEvidenceRecords[] = $standaloneEvidenceUuid;
@@ -445,15 +445,15 @@ class EvidenceLogicTest extends TestCase
         $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Shared evidence', 'Note', 'shared');
         $this->createdEvidenceRecords[] = $evidenceUuid;
 
-        $reportA = $this->client->submitReport($entityUuid, 'Report A', IncidentType::SPAM);
+        $reportA = $this->client->submitReport($entityUuid, ['text_content' => 'Report A'], IncidentType::SPAM);
         $reportAUuid = $reportA->getReport()->getUuid();
         $this->createdReports[] = $reportAUuid;
-        $this->createdEvidenceRecords[] = $reportA->getEvidence()->getUuid();
+        $this->createdEvidenceRecords[] = $reportA->getEvidence()[0]->getUuid();
 
-        $reportB = $this->client->submitReport($entityUuid, 'Report B', IncidentType::SCAM);
+        $reportB = $this->client->submitReport($entityUuid, ['text_content' => 'Report B'], IncidentType::SCAM);
         $reportBUuid = $reportB->getReport()->getUuid();
         $this->createdReports[] = $reportBUuid;
-        $this->createdEvidenceRecords[] = $reportB->getEvidence()->getUuid();
+        $this->createdEvidenceRecords[] = $reportB->getEvidence()[0]->getUuid();
 
         $this->client->addEvidenceToReport($evidenceUuid, $reportAUuid);
         $evidenceAfterA = $this->client->getEvidenceRecord($evidenceUuid);

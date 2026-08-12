@@ -125,10 +125,10 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-list.com', 'rep_ev_list_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence list', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence list'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager = $this->createLimitedOperator('rep_ev_mgr', management: true);
             $extraEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Extra linked evidence', 'Note', 'rep_ev_extra');
@@ -139,7 +139,7 @@
             $this->assertNotEmpty($records);
 
             $foundUuids = array_map(fn($r) => $r->getUuid(), $records);
-            $this->assertContains($submission->getEvidence()->getUuid(), $foundUuids);
+            $this->assertContains($submission->getEvidence()[0]->getUuid(), $foundUuids);
             $this->assertContains($extraEvidenceUuid, $foundUuids);
 
             foreach ($records as $record)
@@ -154,10 +154,10 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-exclude.com', 'rep_ev_excl_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence exclude', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence exclude'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $unlinkedEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Unlinked evidence', 'Note', 'rep_ev_unlinked');
             $this->createdEvidenceRecords[] = $unlinkedEvidenceUuid;
@@ -172,10 +172,10 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-empty.com', 'rep_ev_empty_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence empty', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence empty'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $evidenceUuid = $submission->getEvidence()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
             $this->client->deleteEvidence($evidenceUuid);
@@ -191,13 +191,13 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-page.com', 'rep_ev_pg_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence pagination', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence pagination'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager = $this->createLimitedOperator('rep_ev_pg_mgr', management: true);
-            $evidenceUuids = [$submission->getEvidence()->getUuid()];
+            $evidenceUuids = [$submission->getEvidence()[0]->getUuid()];
             for ($i = 0; $i < 4; $i++)
             {
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Report evidence page $i", 'Note', 'rep_ev_page');
@@ -251,10 +251,10 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-conf.com', 'rep_ev_conf_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence confidential', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence confidential'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager = $this->createLimitedOperator('rep_ev_conf_mgr', management: true);
             $confidentialUuid = $this->client->submitEvidence($entityUuid, 'Confidential report evidence', 'Note', 'rep_ev_conf', true);
@@ -283,10 +283,10 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-cat.com', 'rep_ev_cat_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence category', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence category'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager = $this->createLimitedOperator('rep_ev_cat_mgr', management: true);
             $confidentialUuid = $this->client->submitEvidence($entityUuid, 'Confidential category evidence', 'Note', 'rep_ev_cat_conf', true);
@@ -296,12 +296,12 @@
             $nonConfidentialRecords = $this->client->listReportEvidenceRecords($reportUuid, 1, 100, false, 'NOT_CONFIDENTIAL');
             $nonConfidentialUuids = array_map(fn($r) => $r->getUuid(), $nonConfidentialRecords);
             $this->assertNotContains($confidentialUuid, $nonConfidentialUuids);
-            $this->assertContains($submission->getEvidence()->getUuid(), $nonConfidentialUuids);
+            $this->assertContains($submission->getEvidence()[0]->getUuid(), $nonConfidentialUuids);
 
             $confidentialRecords = $manager->listReportEvidenceRecords($reportUuid, 1, 100, true, 'CONFIDENTIAL');
             $confidentialUuids = array_map(fn($r) => $r->getUuid(), $confidentialRecords);
             $this->assertContains($confidentialUuid, $confidentialUuids);
-            $this->assertNotContains($submission->getEvidence()->getUuid(), $confidentialUuids);
+            $this->assertNotContains($submission->getEvidence()[0]->getUuid(), $confidentialUuids);
         }
 
         public function testGetReportEvidenceRecordsSortByCreatedAscending(): void
@@ -309,13 +309,13 @@
             $entityUuid = $this->client->pushEntity('rep-evidence-sort.com', 'rep_ev_sort_' . uniqid());
             $this->createdEntities[] = $entityUuid;
 
-            $submission = $this->client->submitReport($entityUuid, 'Report evidence sort', IncidentType::SPAM);
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence sort'], IncidentType::SPAM);
             $reportUuid = $submission->getReport()->getUuid();
             $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $manager = $this->createLimitedOperator('rep_ev_sort_mgr', management: true);
-            $evidenceUuids = [$submission->getEvidence()->getUuid()];
+            $evidenceUuids = [$submission->getEvidence()[0]->getUuid()];
             for ($i = 0; $i < 2; $i++)
             {
                 $evidenceUuid = $this->client->submitEvidence($entityUuid, "Report evidence sort $i", 'Note', 'rep_ev_sort');

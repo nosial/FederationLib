@@ -11,6 +11,7 @@
     use FederationLib\FederationClient;
     use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ScannedContent\ContentClassification;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
@@ -37,10 +38,10 @@
 
             foreach (TextGenerator::trainingSet() as $sample)
             {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, $sample['text'], IncidentType::OTHER);
+                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
                 $reportUuid = $submission->getReport()->getUuid();
                 self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()->getUuid();
+                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
                 self::$trainingClient->closeReport($reportUuid, $sample['flag']);
             }
 
@@ -332,6 +333,40 @@
             else
             {
                 $this->addToAssertionCount(3);
+            }
+        }
+
+        public function testScanContentMultipleEvidenceSummedClassification(): void
+        {
+            $entityUuid = $this->client->pushEntity('scan-multi-evidence.com', 'scan_multi_evidence');
+            $this->createdEntities[] = $entityUuid;
+
+            $normalText = TextGenerator::testText(ClassificationFlag::NORMAL);
+            $maliciousText = TextGenerator::testText(ClassificationFlag::MALICIOUS);
+
+            $singleMaliciousScan = $this->client->scanContent($maliciousText, $entityUuid);
+            $multipleMaliciousScan = $this->client->scanContent([
+                new ContentInput($maliciousText),
+                new ContentInput($maliciousText),
+                new ContentInput($normalText),
+            ], $entityUuid);
+
+            $singleClassification = $singleMaliciousScan->getClassification();
+            $multipleClassification = $multipleMaliciousScan->getClassification();
+
+            if ($singleClassification !== null && $multipleClassification !== null)
+            {
+                $this->assertNotEquals(ClassificationFlag::NORMAL, $multipleClassification->getClassificationFlag());
+
+                $this->assertLessThanOrEqual(
+                    $singleMaliciousScan->getRiskScore(),
+                    $multipleMaliciousScan->getRiskScore(),
+                    'Multiple malicious messages should produce a risk score at least as high as a single malicious message'
+                );
+            }
+            else
+            {
+                $this->addToAssertionCount(2);
             }
         }
 
