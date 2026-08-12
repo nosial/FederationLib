@@ -5,9 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.2] - Ongoing
+## [1.0.2] - 2026-08-12
 
 This is an ongoing update
+
+### Added
+ - Added `ContentInput` object (text content, note, tag, confidential, metadata) to be used as input for
+   content-based evidence in report submission and scanning
+ - Added `scanning.action_block_threshold` and `scanning.action_caution_threshold` configuration values
+   (`FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`, default `80.00`, and `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`,
+   default `60.00`) which replace the hardcoded risk score thresholds in `ScannedContent::getSuggestedAction()`
+
+### Changed
+ - Updated `SubmitReport` and `ScanContent` to remove file attachment handling and accept evidence via
+   `ContentInput` (or a raw array) instead; `FederationClient::submitReport()` and
+   `FederationClient::scanContent()` signatures were updated accordingly (`localFilePaths`/`remoteUrls`
+   parameters removed)
+ - Updated `ReportSubmission` to remove the `attachments` property and make `evidence` an array of
+   `EvidenceRecord` objects as per specification
+ - Updated `ScannedContent` to support multiple `ContentClassification` results: `getClassifications()` returns
+   all classification results while `getClassification()` returns an aggregate (worst classification flag with
+   average confidence)
+ - Updated `ReportManager::createReport()` to automatically assign a randomly selected operator with
+   `auto_assign` enabled when one is available
+ - Updated `SetRelationship` to accept any entity identifier for the target entity (UUID, SHA-256 hash, or
+   entity address) via the `target_identifier` parameter; `FederationClient::setEntityRelationship()` parameter
+   renamed from `targetEntityUuid` to `targetIdentifier`
+ - Altered the risk score calculation (experimental): adjusted `ScanningRules` point values (for example
+   `AUTHOR_GOOD_REPUTATION` from `1.5` to `20.0` and `CLASSIFICATION_MALICIOUS` from `-0.4` to `-25.0`) and
+   scaled reputation contributions by a factor based on the configured reputation bounds
+ - Updated `TestHelpers` and existing test suites for the `ContentInput` based submissions and
+   multi-classification support
 
 ### Fixed
  - Fixed a race condition in `EntitiesManager::registerEntity()` that caused concurrent `POST /entities` requests
