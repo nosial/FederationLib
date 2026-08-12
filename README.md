@@ -85,11 +85,18 @@ use FederationLib\FederationClient;
 $client = new FederationClient('https://federation.example.com', 'operator-access-token');
 
 // Scan content for risk assessment
-$result = $client->scanContent('Suspicious message to scan', author: 'user@example.com');
+$result = $client->scanContent(
+    new \FederationLib\Objects\ContentInput('Suspicious message to scan'),
+    author: 'user@example.com'
+);
 printf("Risk score: %f\n", $result->getRiskScore());
 
 // Submit a report against an entity
-$client->submitReport('user@example.com', 'Spam content', \FederationLib\Enums\IncidentType::SPAM);
+$client->submitReport(
+    'user@example.com',
+    new \FederationLib\Objects\ContentInput('Spam content'),
+    \FederationLib\Enums\IncidentType::SPAM
+);
 
 // Search for existing entities
 $results = $client->search('user@example.com');
@@ -311,6 +318,8 @@ Scanning configuration section changes the scanning behavior when invoking the r
 | `scanning.classification_malicious`                    | `FEDERATION_SCANNING_CLASSIFICATION_MALICIOUS`               | float | `-0.4`         | Yes      | Score modifier when content is classified as malicious                   |
 | `scanning.auto_report`                                 | `FEDERATION_SCANNING_AUTO_REPORT`                            | bool  | `true`         | Yes      | Whether auto-reporting is enabled                                        |
 | `scanning.auto_report_threshold`                       | `FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD`                  | float | `80.0`         | Yes      | Risk score threshold triggering auto-report                              |
+| `scanning.action_block_threshold`                      | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`                 | float | `80.0`         | No       | Risk score threshold at which content should be blocked                  |
+| `scanning.action_caution_threshold`                    | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`               | float | `60.0`         | No       | Risk score threshold at which caution should be advised                  |
 | `scanning.reputation_window_duration`                  | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION`             | int   | `300` (5 min)  | Yes      | Duration of the reputation window in seconds                             |
 | `scanning.reputation_max_delta`                        | `FEDERATION_SCANNING_REPUTATION_MAX_DELTA`                   | int   | `10`           | Yes      | Maximum reputation change per update                                     |
 | `scanning.reputation_min_delta`                        | `FEDERATION_SCANNING_REPUTATION_MIN_DELTA`                   | int   | `-10`          | Yes      | Minimum reputation change per update                                     |
