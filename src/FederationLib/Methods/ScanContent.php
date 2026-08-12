@@ -8,11 +8,9 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
-    use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
-    use FederationLib\Classes\UploadHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
@@ -29,16 +27,17 @@
     use FederationLib\Objects\ScannedContent\ContentClassification;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
-    use FederationLib\Objects\UploadResult;
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use InvalidArgumentException;
-    use Throwable;
 
     class ScanContent extends RequestHandler implements RequestSpecificationInterface
     {
         private const string ERROR_AUTHENTICATION_REQUIRED = 'Scanning content is not available to the public, authentication is required';
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to scan content, client permissions are required';
-        private const string ERROR_CONTENT_EMPTY = 'Content cannot be empty';
+        private const string ERROR_EVIDENCE_REQUIRED = 'Evidence is required';
+        private const string ERROR_EVIDENCE_INVALID = 'Evidence must be a single evidence object or an array of evidence objects';
+        private const string ERROR_EVIDENCE_ITEM_INVALID = 'Each evidence entry must be an object';
+        private const string ERROR_CONTENT_EMPTY = 'At least one evidence record must contain text content';
         private const string ERROR_FAILED_RESOLVE_AUTHOR = 'Failed to resolve author entity';
 
         /**
@@ -60,11 +59,40 @@
 
             // Get the parameters
             $authorIdentifier = FederationServer::getParameter('author');
-            $content = FederationServer::getParameter('content');
+            $evidenceInput = FederationServer::getParameter('evidence');
             $topK = FederationServer::getParameter('top_k');
             $threshold = FederationServer::getParameter('threshold');
 
-            if(empty($content))
+            if(!is_array($evidenceInput) || empty($evidenceInput))
+            {
+                throw new RequestException(self::ERROR_EVIDENCE_REQUIRED, HttpResponseCode::BAD_REQUEST);
+            }
+
+            $evidenceItems = self::normalizeEvidence($evidenceInput);
+            if($evidenceItems === null)
+            {
+                throw new RequestException(self::ERROR_EVIDENCE_INVALID, HttpResponseCode::BAD_REQUEST);
+            }
+
+            foreach($evidenceItems as $index => $item)
+            {
+                if(!self::validateEvidenceItem($item))
+                {
+                    throw new RequestException(self::ERROR_EVIDENCE_ITEM_INVALID . ' at index ' . $index, HttpResponseCode::BAD_REQUEST);
+                }
+            }
+
+            $hasContent = false;
+            foreach($evidenceItems as $item)
+            {
+                if(isset($item['text_content']) && is_string($item['text_content']) && strlen($item['text_content']) > 0)
+                {
+                    $hasContent = true;
+                    break;
+                }
+            }
+
+            if(!$hasContent)
             {
                 throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
             }
@@ -83,69 +111,74 @@
                 }
             }
 
-            // Resolve any detected named entities from the text content (eg; domains, email addresses, etc)
-            $resolvedEntities = [];
-            foreach(NamedEntityType::extract($content) as $entityIdentifier => $entityPosition)
+            $parsedThreshold = null;
+            $parsedTopK = null;
+            if($threshold !== null)
             {
-                try
-                {
-                    $resolvedEntity = self::resolveEntity($entityIdentifier, $entityPosition);
-                    if($resolvedEntity === null)
-                    {
-                        continue;
-                    }
+                $parsedThreshold = (float)$threshold;
+            }
 
-                    $resolvedEntities[] = $resolvedEntity;
-                }
-                catch (DatabaseOperationException $e)
+            if($topK !== null)
+            {
+                $parsedTopK = (int)$topK;
+            }
+
+            // Process each evidence record individually
+            $allResolvedEntities = [];
+            $allClassifications = [];
+
+            foreach($evidenceItems as $item)
+            {
+                $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : '';
+                if(strlen($textContent) === 0)
                 {
-                    Logger::log()->warning('Failed to resolve ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
                     continue;
                 }
-            }
 
-            // Use BayesianServer to detect the content classification level
-            $contentClassification = null;
-            if(Configuration::getBayesianConfiguration()->isEnabled())
-            {
-                if($threshold !== null)
+                // Resolve any detected named entities from the text content
+                foreach(NamedEntityType::extract($textContent) as $entityIdentifier => $entityPosition)
                 {
-                    $threshold = (float)$threshold;
+                    try
+                    {
+                        $resolvedEntity = self::resolveEntity($entityIdentifier, $entityPosition);
+                        if($resolvedEntity === null)
+                        {
+                            continue;
+                        }
+
+                        $allResolvedEntities[$resolvedEntity->getEntity()->getUuid()] = $resolvedEntity;
+                    }
+                    catch (DatabaseOperationException $e)
+                    {
+                        Logger::log()->warning('Failed to resolve ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                        continue;
+                    }
                 }
 
-                if($topK !== null)
+                // Use BayesianServer to detect the content classification level
+                if(Configuration::getBayesianConfiguration()->isEnabled())
                 {
-                    $topK = (int)$topK;
-                }
-
-                // Classify the content
-                try
-                {
-                    $contentClassification = self::classifyContent($content, $threshold, $topK);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::log()->error('Classification Error: ' . $e->getMessage(), $e);
-                }
-            }
-
-            // Read optional metadata for evidence
-            $metadata = FederationServer::getParameter('metadata');
-            if($metadata !== null && !is_array($metadata))
-            {
-                $parsedMetadata = json_decode($metadata, true);
-                if(json_last_error() === JSON_ERROR_NONE && is_array($parsedMetadata))
-                {
-                    $metadata = $parsedMetadata;
-                }
-                else
-                {
-                    $metadata = null;
+                    try
+                    {
+                        $classification = self::classifyContent($textContent, $parsedThreshold, $parsedTopK);
+                        if($classification !== null)
+                        {
+                            $allClassifications[] = $classification;
+                        }
+                    }
+                    catch (RequestException $e)
+                    {
+                        Logger::log()->error('Classification Error: ' . $e->getMessage(), $e);
+                    }
                 }
             }
 
             // Return the scanned content
-            $scannedContent = new ScannedContent($resolvedEntities, $authorRecord, $contentClassification);
+            $scannedContent = new ScannedContent(
+                array_values($allResolvedEntities),
+                $authorRecord,
+                $allClassifications
+            );
 
             // Record the scan result into the open reputation window for every involved entity
             EntitiesManager::recordScan($scannedContent);
@@ -155,9 +188,9 @@
             {
                 try
                 {
-                    self::generateReport($scannedContent, $content, $metadata);
+                    self::generateReport($scannedContent, $evidenceItems);
                 }
-                catch (DatabaseOperationException|RequestException $e)
+                catch (DatabaseOperationException $e)
                 {
                     Logger::log()->error('Failed to generate report: ' . $e->getMessage(), $e);
                 }
@@ -231,6 +264,68 @@
                 $bayesianClassification->getConfidence(),
                 $bayesianClassification->getLanguageCode()
             );
+        }
+
+        /**
+         * Normalizes the evidence input into a list of evidence parameter arrays.
+         *
+         * @param array $evidenceInput The raw evidence parameter from the request
+         * @return array<int, array>|null A list of evidence arrays, or null if invalid
+         */
+        private static function normalizeEvidence(array $evidenceInput): ?array
+        {
+            if(array_is_list($evidenceInput))
+            {
+                if (array_any($evidenceInput, fn($item) => !is_array($item)))
+                {
+                    return null;
+                }
+
+                return $evidenceInput;
+            }
+
+            return [$evidenceInput];
+        }
+
+        /**
+         * Validates that an evidence item contains only expected fields with valid types.
+         *
+         * @param array $item The evidence item to validate
+         * @return bool True if valid, false otherwise
+         */
+        private static function validateEvidenceItem(array $item): bool
+        {
+            if (array_any(array_keys($item), fn($key) => !in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true)))
+            {
+                return false;
+            }
+
+            if(isset($item['text_content']) && !is_string($item['text_content']))
+            {
+                return false;
+            }
+
+            if(isset($item['note']) && !is_string($item['note']))
+            {
+                return false;
+            }
+
+            if(isset($item['tag']) && !is_string($item['tag']))
+            {
+                return false;
+            }
+
+            if(isset($item['confidential']) && !is_bool($item['confidential']) && !is_string($item['confidential']) && !is_int($item['confidential']))
+            {
+                return false;
+            }
+
+            if(isset($item['metadata']) && !is_array($item['metadata']))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         /**
@@ -377,12 +472,10 @@
          * null if auto-reporting conditions are not met
          *
          * @param ScannedContent $scannedContent The scanned content results
-         * @param string $content The text input content
-         * @param array|null $metadata Optional metadata to associate with the evidence record
+         * @param array<int, array> $evidenceItems The evidence items provided in the scan request
          * @throws DatabaseOperationException Thrown if there was a database operation error
-         * @throws RequestException Thrown if the file upload validation fails
          */
-        private static function generateReport(ScannedContent $scannedContent, string $content, ?array $metadata=null): void
+        private static function generateReport(ScannedContent $scannedContent, array $evidenceItems): void
         {
             // Do not generate the report if it's less than the required threshold
             if($scannedContent->getRiskScore() < Configuration::getScanningConfiguration()->getAutoReportThreshold())
@@ -422,16 +515,6 @@
             $suggestedAction = $scannedContent->getSuggestedAction();
             $reportMessage .= sprintf("\nSuggested Action: %s\nRisk Score: %f", $suggestedAction?->value ?? 'none', $scannedContent->getRiskScore());
 
-            // Generate the evidence message
-            if($scannedContent->getClassification() !== null)
-            {
-                $evidenceMessage = (string)$scannedContent->getClassification();
-            }
-            else
-            {
-                $evidenceMessage = sprintf("Risk Score: %f", $scannedContent->getRiskScore());
-            }
-
             $systemOperator = OperatorManager::getSystemOperator();
 
             // Create the report
@@ -446,53 +529,57 @@
             // Assign the report to the randomly selected auto assign operator
             ReportManager::assignOperator($reportUuid, $assignedOperator->getUuid());
 
-            // Create the evidence
-            $evidenceUuid = EvidenceManager::addEvidence(
-                entity: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
-                operator: $systemOperator->getUuid(),
-                textContent: $content,
-                note: $evidenceMessage,
-                tag: $scannedContent->getClassification()?->getClassificationFlag()->value ?? $suggestedAction?->value ?? 'scan',
-                report: $reportUuid,
-                metadata: $metadata
-            );
-
-            // Handle the optional file attachment uploads, referencing the evidence uuid for the upload
-            $uploadResults = [];
-            if(isset($_FILES['file']) && $_FILES['file']['error'] !== UPLOAD_ERR_NO_FILE)
+            // Create an evidence record for each provided evidence item
+            $firstEvidenceUuid = null;
+            foreach($evidenceItems as $item)
             {
-                $uploadInfo = UploadHandler::validateUpload();
-                try
+                $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null;
+                if($textContent === null || strlen($textContent) === 0)
                 {
-                    UploadHandler::finalizeUpload($uploadInfo);
-                    FileAttachmentManager::createRecord(
-                        uuid: $uploadInfo['uuid'],
-                        evidence: $evidenceUuid,
-                        fileMime: $uploadInfo['mime_type'],
-                        fileName: $uploadInfo['original_name'],
-                        fileSize: $uploadInfo['size']
-                    );
-
-                    $uploadResults[] = new UploadResult($uploadInfo['uuid'],
-                        Configuration::getServerConfiguration()->getBaseUrl() . '/attachments/' . $uploadInfo['uuid']
-                    );
+                    continue;
                 }
-                catch (Throwable $e)
+
+                $note = isset($item['note']) && is_string($item['note']) ? $item['note'] : null;
+                $tag = isset($item['tag']) && is_string($item['tag']) ? $item['tag'] : null;
+                $confidential = isset($item['confidential'])
+                    ? filter_var($item['confidential'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false
+                    : false;
+                $metadata = isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null;
+
+                // Classify the individual content for the evidence tag/note
+                $itemClassification = null;
+                if(Configuration::getBayesianConfiguration()->isEnabled())
                 {
-                    if(file_exists($uploadInfo['destination_path']))
+                    try
                     {
-                        @unlink($uploadInfo['destination_path']);
+                        $itemClassification = self::classifyContent($textContent, null, null);
                     }
-
-                    Logger::log()->error(sprintf('Failed to process file upload for evidence %s: %s', $evidenceUuid, $e->getMessage()), $e);
+                    catch (RequestException $e)
+                    {
+                        Logger::log()->error('Failed to classify evidence content: ' . $e->getMessage(), $e);
+                    }
                 }
-                finally
+
+                $evidenceMessage = $itemClassification !== null
+                    ? (string)$itemClassification : sprintf("Risk Score: %f", $scannedContent->getRiskScore());
+
+                $evidenceTag = $tag ?? $itemClassification?->getClassificationFlag()->value ?? $suggestedAction?->value ?? 'scan';
+                $evidenceUuid = EvidenceManager::addEvidence(
+                    entity: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
+                    operator: $systemOperator->getUuid(),
+                    textContent: $textContent,
+                    note: $note ?? $evidenceMessage,
+                    tag: $evidenceTag,
+                    confidential: $confidential,
+                    report: $reportUuid,
+                    metadata: $metadata
+                );
+
+                if($firstEvidenceUuid === null)
                 {
-                    UploadHandler::cleanupTempFiles($uploadInfo);
+                    $firstEvidenceUuid = $evidenceUuid;
                 }
             }
-
-            $fileAttachmentUuid = !empty($uploadResults) ? $uploadResults[0]->getUuid() : null;
 
             // Create an audit log entry
             AuditLogManager::createEntry(
@@ -500,8 +587,7 @@
                 message: sprintf('Generated report %s with a risk score of %f', $reportUuid, $scannedContent->getRiskScore()),
                 operatorUuid: $systemOperator->getUuid(),
                 entityUuid: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
-                evidenceUuid: $evidenceUuid,
-                fileAttachmentUuid: $fileAttachmentUuid
+                evidenceUuid: $firstEvidenceUuid
             );
         }
 
@@ -526,7 +612,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Scans content for entities, blacklist records, and classifies the content using Bayesian analysis. Requires client permissions if authenticated.';
+            return 'Scans one or more content messages for entities, blacklist records, and classifies the content using Bayesian analysis. Requires client permissions if authenticated.';
         }
 
         /**
@@ -550,6 +636,37 @@
          */
         public static function getRequestBody(): ?array
         {
+            $evidenceSchema = [
+                'type' => 'object',
+                'properties' => [
+                    'text_content' => [
+                        'type' => 'string',
+                        'description' => 'Text content of the message to scan',
+                        'nullable' => true,
+                    ],
+                    'note' => [
+                        'type' => 'string',
+                        'description' => 'Optional note to associate with any generated evidence',
+                        'nullable' => true,
+                    ],
+                    'tag' => [
+                        'type' => 'string',
+                        'description' => 'Optional tag name for any generated evidence',
+                        'nullable' => true,
+                    ],
+                    'confidential' => [
+                        'type' => 'boolean',
+                        'description' => 'Whether any generated evidence is confidential',
+                        'default' => false,
+                    ],
+                    'metadata' => [
+                        'type' => 'object',
+                        'description' => 'Arbitrary JSON-encoded metadata to associate with any generated evidence',
+                        'nullable' => true,
+                    ],
+                ],
+            ];
+
             return [
                 'required' => true,
                 'content' => [
@@ -562,9 +679,19 @@
                                     'description' => 'UUID, SHA-256 hash, or entity address of the author',
                                     'nullable' => true,
                                 ],
-                                'content' => [
-                                    'type' => 'string',
-                                    'description' => 'The content to scan',
+                                'evidence' => [
+                                    'oneOf' => [
+                                        [
+                                            'type' => 'object',
+                                            'description' => 'Single message to scan',
+                                            'properties' => $evidenceSchema['properties'],
+                                        ],
+                                        [
+                                            'type' => 'array',
+                                            'description' => 'Multiple messages to scan',
+                                            'items' => $evidenceSchema,
+                                        ],
+                                    ],
                                 ],
                                 'top_k' => [
                                     'type' => 'integer',
@@ -577,51 +704,8 @@
                                     'description' => 'Confidence threshold for classification',
                                     'nullable' => true,
                                 ],
-                                'metadata' => [
-                                    'type' => 'object',
-                                    'description' => 'Optional metadata to associate with the evidence record',
-                                    'nullable' => true,
-                                ],
                             ],
-                            'required' => ['content'],
-                        ],
-                    ],
-                    'multipart/form-data' => [
-                        'schema' => [
-                            'type' => 'object',
-                            'properties' => [
-                                'author' => [
-                                    'type' => 'string',
-                                    'description' => 'UUID, SHA-256 hash, or entity address of the author',
-                                    'nullable' => true,
-                                ],
-                                'content' => [
-                                    'type' => 'string',
-                                    'description' => 'The content to scan',
-                                ],
-                                'metadata' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional metadata to associate with the evidence record (JSON-encoded object)',
-                                    'nullable' => true,
-                                ],
-                                'top_k' => [
-                                    'type' => 'integer',
-                                    'description' => 'Number of top classifications to return',
-                                    'nullable' => true,
-                                ],
-                                'threshold' => [
-                                    'type' => 'number',
-                                    'format' => 'float',
-                                    'description' => 'Confidence threshold for classification',
-                                    'nullable' => true,
-                                ],
-                                'file' => [
-                                    'type' => 'string',
-                                    'format' => 'binary',
-                                    'description' => 'Optional file attachment to associate with the evidence record',
-                                ],
-                            ],
-                            'required' => ['content'],
+                            'required' => ['evidence'],
                         ],
                     ],
                 ],
