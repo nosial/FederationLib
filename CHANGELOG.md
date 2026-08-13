@@ -26,6 +26,10 @@ This update introduces updates as per specification and some minor improvements
  - Updated `CloseReport` to classify and train only previously unclassified evidence records. Report closure
    now still assigns classifications when Bayesian training is disabled or unavailable.
 
+### Fixed
+ - Fixed `SubmitReport` overwriting the operator selected by auto-assignment with the submitting operator.
+   Reports now retain the eligible management operator selected by `ReportManager::createReport()`.
+
 ## [1.0.2] - 2026-08-12
 
 This update introduces new features and changes
