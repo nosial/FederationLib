@@ -128,8 +128,6 @@
                     message: $reportMessage ?? null
                 );
 
-                ReportManager::assignOperator($reportUuid, $authenticatedOperator->getUuid());
-
                 // Create the evidence records
                 $evidenceRecords = [];
                 foreach($evidenceItems as $item)
