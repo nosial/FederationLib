@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.3] - 2026-08-13
 
+This update introduces updates as per specification and some minor improvements
+
 ### Added
  - Added `ClassifyEvidence` request handler for `PATCH /evidence/{uuid}/classify`. It requires management
    permissions, assigns an evidence classification exactly once, returns `409 Conflict` for repeat attempts,
