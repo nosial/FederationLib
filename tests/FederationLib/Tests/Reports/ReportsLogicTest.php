@@ -180,6 +180,7 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
             $this->client->closeReport($reportUuid, ClassificationFlag::SUSPICIOUS);
 
             $report = $this->client->getReport($reportUuid);
@@ -200,6 +201,7 @@
                 $this->createdReports[] = $reportUuid;
                 $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+                $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
                 $this->client->closeReport($reportUuid, $sample['flag']);
 
                 $report = $this->client->getReport($reportUuid);

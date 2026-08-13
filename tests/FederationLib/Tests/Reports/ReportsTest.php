@@ -257,6 +257,7 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
             $this->client->closeReport($reportUuid);
             $report = $this->client->getReport($reportUuid);
             $this->assertFalse($report->isOpened());
@@ -273,6 +274,7 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
             $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
             $report = $this->client->getReport($reportUuid);
             $this->assertFalse($report->isOpened());
@@ -633,6 +635,7 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
             $this->client->closeReport($reportUuid);
 
             $reports = $this->client->listReports(1, 100, 'CLOSED');

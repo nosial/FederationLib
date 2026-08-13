@@ -541,6 +541,7 @@ class EvidenceLogicTest extends TestCase
         $this->createdEvidenceRecords[] = $unclassifiedEvidenceUuid;
         $this->client->addEvidenceToReport($unclassifiedEvidenceUuid, $reportUuid);
 
+        $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
         $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
 
         $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($classifiedEvidenceUuid)->getClassificationFlag());

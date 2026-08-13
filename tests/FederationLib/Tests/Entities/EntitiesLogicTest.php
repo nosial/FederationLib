@@ -323,6 +323,7 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
             $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
 
             // Report is now closed; clear the reputation explicitly and verify it resets.
@@ -442,6 +443,7 @@
                 $submission = $this->client->submitReport($entityUuids[0], ['text_content' => "Order threat report $j"], IncidentType::SPAM);
                 $this->createdReports[] = $submission->getReport()->getUuid();
                 $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+                $this->client->assignOperatorToReport($submission->getReport()->getUuid(), $this->client->getSelf()->getUuid());
                 $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
             }
 
@@ -449,6 +451,7 @@
             $submission = $this->client->submitReport($entityUuids[1], ['text_content' => 'Order threat report'], IncidentType::SPAM);
             $this->createdReports[] = $submission->getReport()->getUuid();
             $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $this->client->assignOperatorToReport($submission->getReport()->getUuid(), $this->client->getSelf()->getUuid());
             $this->client->closeReport($submission->getReport()->getUuid(), ClassificationFlag::MALICIOUS);
 
             // entity[2] has no reports, reputation = 0

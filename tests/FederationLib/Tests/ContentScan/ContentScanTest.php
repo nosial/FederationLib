@@ -42,6 +42,7 @@
                 $reportUuid = $submission->getReport()->getUuid();
                 self::$createdTrainingReports[] = $reportUuid;
                 self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
+                self::$trainingClient->assignOperatorToReport($reportUuid, self::$trainingClient->getSelf()->getUuid());
                 self::$trainingClient->closeReport($reportUuid, $sample['flag']);
             }
 
