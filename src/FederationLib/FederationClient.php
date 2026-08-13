@@ -1444,11 +1444,12 @@
          * @param string|null $textContent Optional. The textual content of the evidence
          * @param string|null $note Optional. An optional note about the evidence
          * @param bool $confidential Optional. If true, the evidence is marked as confidential (default is false)
+         * @param ClassificationFlag|null $classification Optional immutable classification. Requires management permissions.
          * @return string The UUID of the created evidence record
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function submitEvidence(string $entityIdentifier, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?array $metadata=null): string
+        public function submitEvidence(string $entityIdentifier, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?array $metadata=null, ?ClassificationFlag $classification=null): string
         {
             if(empty($entityIdentifier))
             {
@@ -1475,6 +1476,11 @@
             if($metadata !== null)
             {
                 $parameters['metadata'] = $metadata;
+            }
+
+            if($classification !== null)
+            {
+                $parameters['classification'] = $classification->value;
             }
 
             return $this->makeRequest('POST', 'evidence', $parameters, [HttpResponseCode::CREATED],
@@ -1524,6 +1530,26 @@
 
             $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/update-tag', ['tag' => $tag], [HttpResponseCode::OK],
                 sprintf('Failed to update tag for evidence with UUID %s', $evidenceUuid)
+            );
+        }
+
+        /**
+         * Assigns an immutable classification to evidence.
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to classify
+         * @param ClassificationFlag $classification The classification to assign
+         * @throws RequestException If the request fails or the evidence was already classified
+         * @throws InvalidArgumentException If the evidence UUID is empty
+         */
+        public function classifyEvidence(string $evidenceUuid, ClassificationFlag $classification): void
+        {
+            if(empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            $this->makeRequest('PATCH', 'evidence/' . $evidenceUuid . '/classify', ['classification_flag' => $classification->value], [HttpResponseCode::OK],
+                sprintf('Failed to classify evidence with UUID %s', $evidenceUuid)
             );
         }
 
