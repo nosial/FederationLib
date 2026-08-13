@@ -4,6 +4,7 @@ namespace FederationLib\Tests\Evidence;
 
 use FederationLib\Enums\HttpResponseCode;
 use FederationLib\Enums\IncidentType;
+use FederationLib\Enums\ClassificationFlag;
 use FederationLib\Exceptions\RequestException;
 use FederationLib\FederationClient;
 use FederationLib\Helpers\Logger;
@@ -501,5 +502,72 @@ class EvidenceLogicTest extends TestCase
         $this->assertNotEmpty($resultUpper);
         $this->assertSame($upperUuids, $lowerUuids);
         $this->assertSame($upperUuids, $mixedUuids);
+    }
+
+    public function testEvidenceClassificationIsImmutable(): void
+    {
+        $entityUuid = $this->client->pushEntity('immutable-classification.com', 'immutable_' . uniqid());
+        $this->createdEntityRecords[] = $entityUuid;
+
+        $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Immutable classification evidence', 'Note', 'immutable');
+        $this->createdEvidenceRecords[] = $evidenceUuid;
+
+        $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::NORMAL);
+        $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
+
+        $this->expectRequestFailure(
+            fn() => $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::MALICIOUS),
+            [HttpResponseCode::CONFLICT->value],
+            'A classification must not be replaced'
+        );
+
+        $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
+    }
+
+    public function testCloseReportSkipsPreviouslyClassifiedEvidence(): void
+    {
+        $entityUuid = $this->client->pushEntity('close-skip-classified.com', 'close_skip_' . uniqid());
+        $this->createdEntityRecords[] = $entityUuid;
+
+        $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Previously classified report evidence'], IncidentType::SPAM);
+        $reportUuid = $submission->getReport()->getUuid();
+        $classifiedEvidenceUuid = $submission->getEvidence()[0]->getUuid();
+        $this->createdReports[] = $reportUuid;
+        $this->createdEvidenceRecords[] = $classifiedEvidenceUuid;
+
+        $this->client->classifyEvidence($classifiedEvidenceUuid, ClassificationFlag::NORMAL);
+
+        $unclassifiedEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Unclassified report evidence', 'Note', 'close_skip');
+        $this->createdEvidenceRecords[] = $unclassifiedEvidenceUuid;
+        $this->client->addEvidenceToReport($unclassifiedEvidenceUuid, $reportUuid);
+
+        $this->client->closeReport($reportUuid, ClassificationFlag::MALICIOUS);
+
+        $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($classifiedEvidenceUuid)->getClassificationFlag());
+        $this->assertSame(ClassificationFlag::MALICIOUS, $this->client->getEvidenceRecord($unclassifiedEvidenceUuid)->getClassificationFlag());
+    }
+
+    public function testSubmitEvidenceWithClassificationPersistsClassification(): void
+    {
+        $entityUuid = $this->client->pushEntity('submit-classification.com', 'submit_classification_' . uniqid());
+        $this->createdEntityRecords[] = $entityUuid;
+
+        $evidenceUuid = $this->client->submitEvidence(
+            $entityUuid,
+            'Classified at submission',
+            'Note',
+            'submit_classification',
+            false,
+            null,
+            ClassificationFlag::SUSPICIOUS
+        );
+        $this->createdEvidenceRecords[] = $evidenceUuid;
+
+        $this->assertSame(ClassificationFlag::SUSPICIOUS, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
+        $this->expectRequestFailure(
+            fn() => $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::NORMAL),
+            [HttpResponseCode::CONFLICT->value],
+            'Submission classification must be immutable'
+        );
     }
 }

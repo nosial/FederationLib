@@ -350,4 +350,37 @@ class EvidenceSecurityTest extends TestCase
             );
         }
     }
+
+    public function testClassifyEvidenceRequiresManagementPermission(): void
+    {
+        $entityUuid = $this->createSecurityEntity();
+        $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+        $clientOnly = $this->createLimitedOperator('classify_client', client: true);
+
+        $this->expectRequestFailure(
+            fn() => $clientOnly->classifyEvidence($evidenceUuid, \FederationLib\Enums\ClassificationFlag::MALICIOUS),
+            [HttpResponseCode::FORBIDDEN->value],
+            'Client-only operator must not classify evidence'
+        );
+    }
+
+    public function testSubmitEvidenceClassificationRequiresManagementPermission(): void
+    {
+        $entityUuid = $this->createSecurityEntity();
+        $clientOnly = $this->createLimitedOperator('submit_classify_client', client: true);
+
+        $this->expectRequestFailure(
+            fn() => $clientOnly->submitEvidence(
+                $entityUuid,
+                'Unauthorized classified evidence',
+                'Note',
+                'submit_classify',
+                false,
+                null,
+                \FederationLib\Enums\ClassificationFlag::MALICIOUS
+            ),
+            [HttpResponseCode::FORBIDDEN->value],
+            'Client-only operator must not assign classifications during evidence submission'
+        );
+    }
 }
