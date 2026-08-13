@@ -36,6 +36,7 @@
     use FederationLib\Methods\Entities\SetWhitelist;
     use FederationLib\Methods\Entities\TopThreats;
     use FederationLib\Methods\Entities\UpdateEntity;
+    use FederationLib\Methods\Evidence\ClassifyEvidence;
     use FederationLib\Methods\Evidence\DeleteEvidence;
     use FederationLib\Methods\Evidence\GetEvidenceAttachments;
     use FederationLib\Methods\Evidence\GetEvidenceRecord;
@@ -129,6 +130,7 @@
         case SUBMIT_EVIDENCE;
         case GET_EVIDENCE_RECORD;
         case GET_EVIDENCE_ATTACHMENTS;
+        case CLASSIFY_EVIDENCE;
         case UPDATE_CONFIDENTIALITY;
         case UPDATE_EVIDENCE_TAG;
         case DELETE_EVIDENCE;
@@ -225,6 +227,7 @@
                 self::GET_EVIDENCE_RECORD => ['/evidence/{uuid}', 'get', GetEvidenceRecord::class],
                 self::DELETE_EVIDENCE => ['/evidence/{uuid}', 'delete', DeleteEvidence::class],
                 self::GET_EVIDENCE_ATTACHMENTS => ['/evidence/{uuid}/attachments', 'get', GetEvidenceAttachments::class],
+                self::CLASSIFY_EVIDENCE => ['/evidence/{uuid}/classify', 'patch', ClassifyEvidence::class],
                 self::UPDATE_CONFIDENTIALITY => ['/evidence/{uuid}/update-confidentiality', 'patch', UpdateConfidentiality::class],
                 self::UPDATE_EVIDENCE_TAG => ['/evidence/{uuid}/update-tag', 'patch', UpdateTag::class],
                 self::SEARCH_EVIDENCE => ['/evidence/search', 'get', SearchEvidence::class],
@@ -354,6 +357,7 @@
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/attachments$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_ATTACHMENTS,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-confidentiality$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_CONFIDENTIALITY,
+                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/classify$#', $path) && $requestMethod === 'PATCH' => Method::CLASSIFY_EVIDENCE,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-tag$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_EVIDENCE_TAG,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})/link-report$#', $path) && $requestMethod === 'PATCH' => Method::ADD_EVIDENCE_TO_REPORT,
                 preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
