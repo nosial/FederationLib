@@ -127,24 +127,18 @@
                 throw new RequestException(self::ERROR_ALREADY_CLOSED, HttpResponseCode::BAD_REQUEST);
             }
 
-            // Submit the learning data to the BayesianServer for improved classifications.
-            // Bayesian learning is non-critical; failures are logged but do not block closing.
-            if($classificationFlag !== null && FederationServer::getBayesianClient() !== null)
+            // Assign classifications before training. The conditional database update
+            // preserves immutable classifications and prevents duplicate training.
+            if($classificationFlag !== null)
             {
                 foreach(EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true) as $evidenceRecord)
                 {
                     try
                     {
-                        FederationServer::getBayesianClient()->learn($evidenceRecord->getTextContent(), $classificationFlag->value);
-                    }
-                    catch(RequestException $e)
-                    {
-                        Logger::log()->warning('Bayesian learn failed: ' . $e->getMessage());
-                    }
-
-                    try
-                    {
-                        EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag);
+                        if(!EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag))
+                        {
+                            continue;
+                        }
                     }
                     catch(InvalidArgumentException $e)
                     {
@@ -153,6 +147,18 @@
                     catch(DatabaseOperationException $e)
                     {
                         throw new RequestException(self::ERROR_FAILED_UPDATE_CLASSIFICATION, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
+                    }
+
+                    if(($bayesianClient = FederationServer::getBayesianClient()) !== null && $evidenceRecord->getTextContent() !== null)
+                    {
+                        try
+                        {
+                            $bayesianClient->learn($evidenceRecord->getTextContent(), $classificationFlag->value);
+                        }
+                        catch(RequestException $e)
+                        {
+                            Logger::log()->warning('Bayesian learn failed: ' . $e->getMessage());
+                        }
                     }
                 }
             }
