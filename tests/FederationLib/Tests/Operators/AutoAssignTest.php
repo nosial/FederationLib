@@ -298,6 +298,30 @@
             );
         }
 
+        public function testSubmitReportAssignsEligibleAutoAssignOperator(): void
+        {
+            $submitter = $this->createLimitedOperator('auto_assign_submitter', client: true);
+            $assignee = $this->createLimitedOperator('auto_assign_assignee', management: true);
+            $assigneeUuid = $assignee->getSelf()->getUuid();
+            $this->client->setAutoAssign($assigneeUuid, true);
+
+            $entityUuid = $this->createSecurityEntity($submitter);
+            $submission = $submitter->submitReport(
+                $entityUuid,
+                ['text_content' => 'Report submitted by a client operator'],
+                IncidentType::SPAM
+            );
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+            $this->assertEquals(
+                $assigneeUuid,
+                $this->client->getReport($reportUuid)->getAssignedOperator(),
+                'Reports submitted by operators must retain the eligible auto-assign operator'
+            );
+        }
+
         /**
          * Returns the built-in system operator record, or null if it is not present.
          */

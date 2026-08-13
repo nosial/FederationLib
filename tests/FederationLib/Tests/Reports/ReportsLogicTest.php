@@ -212,6 +212,7 @@
             $submitter = $this->createLimitedOperator('lifecycle_submitter', client: true);
             $manager = $this->createLimitedOperator('lifecycle_manager', management: true, operator: true);
             $managerUuid = $manager->getSelf()->getUuid();
+            $this->client->setAutoAssign($managerUuid, true);
 
             $entityUuid = $this->createSecurityEntity($submitter);
             $submission = $submitter->submitReport($entityUuid, ['text_content' => 'Full lifecycle report'], IncidentType::SPAM);
@@ -220,10 +221,9 @@
             $this->createdReports[] = $reportUuid;
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $submitterUuid = $submitter->getSelf()->getUuid();
             $report = $this->client->getReport($reportUuid);
             $this->assertTrue($report->isOpened());
-            $this->assertEquals($submitterUuid, $report->getAssignedOperator(), 'Report should be auto-assigned to the submitter');
+            $this->assertEquals($managerUuid, $report->getAssignedOperator(), 'Report should be assigned to an eligible auto-assign operator');
 
             $manager->assignOperatorToReport($reportUuid, $managerUuid);
             $assignedReport = $this->client->getReport($reportUuid);
