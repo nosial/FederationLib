@@ -32,11 +32,12 @@
          * @param bool $confidential Whether the evidence is confidential (default is false).
          * @param string|null $report Optional. The UUID of the report record that this evidence record is associated with
          * @param array|null $metadata Optional. Metadata to associate with the evidence record
+         * @param ClassificationFlag|null $classification Optional immutable classification assigned when evidence is created
          * @throws InvalidArgumentException If the entity or operator is not provided or is empty.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @return string The UUID of the newly created evidence record.
          */
-        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?string $report=null, ?array $metadata=null): string
+        public static function addEvidence(string $entity, string $operator, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?string $report=null, ?array $metadata=null, ?ClassificationFlag $classification=null): string
         {
             if(strlen($entity) < 1 || strlen($operator) < 1)
             {
@@ -112,8 +113,9 @@
 
             try
             {
-                $columns = 'uuid, entity, operator, confidential, text_content, note, tag, report';
-                $values = ':uuid, :entity, :operator, :confidential, :text_content, :note, :tag, :report';
+                $columns = 'uuid, entity, operator, confidential, text_content, note, tag, report, classification_flag';
+                $values = ':uuid, :entity, :operator, :confidential, :text_content, :note, :tag, :report, :classification_flag';
+                $classificationValue = $classification?->value;
 
                 if($metadata !== null)
                 {
@@ -132,6 +134,7 @@
                 $stmt->bindParam(':note', $note);
                 $stmt->bindParam(':tag', $tag);
                 $stmt->bindParam(':report', $report);
+                $stmt->bindParam(':classification_flag', $classificationValue);
 
                 if($metadata !== null)
                 {
@@ -767,24 +770,30 @@
         }
 
         /**
-         * Updates/sets the classification flag for an evidence record
+         * Assigns a classification flag to an unclassified evidence record.
+         *
+         * The conditional update makes classification immutable even when concurrent
+         * requests attempt to classify the same evidence.
          *
          * @param string $evidence The UUID of the evidence record to update
          * @param ClassificationFlag $classification The classification flag to set
+         * @return bool True when the classification was assigned, false when it was already assigned or the record does not exist
          * @throws DatabaseOperationException Thrown if there was a database operation error
          */
-        public static function updateClassificationFlag(string $evidence, ClassificationFlag $classification): void
+        public static function updateClassificationFlag(string $evidence, ClassificationFlag $classification): bool
         {
             $now = date('Y-m-d H:i:s');
             $classificationValue = $classification->value;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET classification_flag=:classification_flag, updated=:updated WHERE uuid=:uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET classification_flag=:classification_flag, updated=:updated WHERE uuid=:uuid AND classification_flag IS NULL");
                 $stmt->bindParam(':uuid', $evidence);
                 $stmt->bindParam(':classification_flag', $classificationValue);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
+
+                return $stmt->rowCount() === 1;
             }
             catch (PDOException $e)
             {
