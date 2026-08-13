@@ -5,11 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.3] - Ongoing
+## [1.0.3] - 2026-08-13
 
-This is an ongoing update
+### Added
+ - Added `ClassifyEvidence` request handler for `PATCH /evidence/{uuid}/classify`. It requires management
+   permissions, assigns an evidence classification exactly once, returns `409 Conflict` for repeat attempts,
+   and submits textual evidence to Bayesian training when enabled.
+ - Added optional `classification` to `SubmitEvidence` and `FederationClient::submitEvidence()`. A
+   management operator can classify evidence at creation time and supply Bayesian training data without a
+   separate request.
+ - Added classification immutability, report-close skip, submission-classification, and authorization coverage
+   to the evidence test suites.
 
-
+### Changed
+ - Updated `EvidenceManager::addEvidence()` to persist an optional classification in the initial evidence
+   insert. `updateClassificationFlag()` now uses a conditional update so concurrent classification requests
+   cannot replace an existing value.
+ - Updated `CloseReport` to classify and train only previously unclassified evidence records. Report closure
+   now still assigns classifications when Bayesian training is disabled or unavailable.
 
 ## [1.0.2] - 2026-08-12
 
