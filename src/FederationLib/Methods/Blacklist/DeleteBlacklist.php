@@ -52,7 +52,7 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                AuditLogManager::createEntry(AuditLogType::BLACKLIST_RECORD_DELETED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::BLACKLIST_DELETED, sprintf(
                     'Blacklist record %s deleted by operator %s',
                     $blacklistUuid,
                     $authenticatedOperator->getName()

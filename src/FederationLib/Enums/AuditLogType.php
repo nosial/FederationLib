@@ -30,7 +30,7 @@
         case ENTITY_PUSHED = 'ENTITY_PUSHED';
         case ENTITY_UPDATED = 'ENTITY_UPDATED';
 
-        case BLACKLIST_RECORD_DELETED = 'BLACKLIST_DELETED';
+        case BLACKLIST_DELETED = 'BLACKLIST_DELETED';
         case BLACKLIST_LIFTED = 'BLACKLIST_LIFTED';
         case BLACKLIST_EXTENDED = 'BLACKLIST_EXTENDED';
 
@@ -90,7 +90,7 @@
                 self::ENTITY_PUSHED,
                 self::ENTITY_UPDATED => AuditLogCategory::ENTITY_EVENTS,
 
-                self::BLACKLIST_RECORD_DELETED,
+                self::BLACKLIST_DELETED,
                 self::BLACKLIST_LIFTED,
                 self::BLACKLIST_EXTENDED => AuditLogCategory::BLACKLIST_EVENTS,
 
