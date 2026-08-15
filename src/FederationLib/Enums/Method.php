@@ -78,6 +78,7 @@
     use FederationLib\Methods\Reports\SearchReports;
     use FederationLib\Methods\Reports\SubmitReport;
     use FederationLib\Methods\ScanContent;
+    use FederationLib\Methods\QueryEntity;
     use FederationLib\Methods\Search;
 
     enum    Method
@@ -112,6 +113,7 @@
         case UPDATE_OPERATOR_NAME;
 
         case GET_ENTITY_RECORD;
+        case QUERY_ENTITY;
         case DELETE_ENTITY;
         case LIST_ENTITIES;
         case PUSH_ENTITY;
@@ -202,6 +204,7 @@
                 self::UPLOAD_ATTACHMENT_PUT => ['/attachments', 'put', UploadAttachment::class],
                 self::SEARCH_ATTACHMENTS => ['/attachments/search', 'get', SearchAttachments::class],
                 self::GET_ENTITY_RECORD => ['/entities/{identifier}', 'get', GetEntityRecord::class],
+                self::QUERY_ENTITY => ['/entities/{identifier}/query', 'get', QueryEntity::class],
                 self::DELETE_ENTITY => ['/entities/{identifier}', 'delete', DeleteEntity::class],
                 self::SET_ENTITY_RELATIONSHIP => ['/entities/{identifier}/relationship', 'patch', SetRelationship::class],
                 self::CLEAR_ENTITY_RELATIONSHIP => ['/entities/{identifier}/relationship', 'delete', ClearRelationship::class],
@@ -306,6 +309,7 @@
                 // Entity address relationship routing
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/relationship$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_RELATIONSHIP,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/relationship$#', $path) && $requestMethod === 'DELETE' => Method::CLEAR_ENTITY_RELATIONSHIP,
+                preg_match('#^/entities/([a-fA-F0-9\-]{36})/query$#', $path) && $requestMethod === 'GET' => Method::QUERY_ENTITY,
                 // UUID entity routing
                 $path === '/entities' && $requestMethod === 'GET' => Method::LIST_ENTITIES,
                 $path === '/entities' && $requestMethod === 'POST' => Method::PUSH_ENTITY,
@@ -330,6 +334,7 @@
                 preg_match('#^/entities/([a-f0-9\-]{64})/clear-reputation$#', $path) && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
                 preg_match('#^/entities/([a-f0-9\-]{64})/whitelist$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
                 preg_match('#^/entities/([a-f0-9\-]{64})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
+                preg_match('#^/entities/([a-f0-9\-]{64})/query$#', $path) && $requestMethod === 'GET' => Method::QUERY_ENTITY,
                 // Entity address routing
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
@@ -340,6 +345,7 @@
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/clear-reputation$#', $path) && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/whitelist$#', $path) && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
                 preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
+                preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/query$#', $path) && $requestMethod === 'GET' => Method::QUERY_ENTITY,
 
                 // Blcaklist Methods
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
