@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.4] - Ongoing
+## [1.0.4] - 2026-08-15
 
-This update adds relationship-aware entity queries and prevents PHP diagnostics from being emitted in web responses.
+This update adds relationship-aware entity queries, configurable scan score modifiers, and safeguards against PHP
+diagnostics, timing attacks, and unsafe attachment filenames in web responses.
 
 ### Added
  - Added `QueryEntity` for `GET /entities/{identifier}/query` and
@@ -30,6 +31,17 @@ This update adds relationship-aware entity queries and prevents PHP diagnostics 
    `SubmitEvidence`, `SubmitReport`, and `ScanContent`; `EntityQueryResult` is included in generated schemas.
  - Consolidated audit mutation events. Entity reputation and whitelist changes now use `ENTITY_UPDATED`; operator
    permission, access-token, name, auto-assign, and CLI edit changes now use `OPERATOR_UPDATED`.
+ - Renamed all scan score modifier configuration keys to `scanning.modifier_*` (and their
+   `FEDERATION_SCANNING_MODIFIER_*` environment variables). Each author, named-entity, parent, and classification
+   modifier is configurable through `ScanningConfiguration`.
+ - Renamed `ScanningConfiguration` modifier accessors to `getModifier*()` and removed unused legacy scoring
+   configuration accessors.
+ - Renamed the `BLACKLIST_RECORD_DELETED` audit log type to `BLACKLIST_DELETED`.
+
+### Fixed
+ - Sanitized the server-supplied filename used by `FederationClient::downloadAttachment()`. Directory components
+   are stripped for both slash styles, and empty or relative-only names fall back to the attachment UUID.
+ - Replaced the master access-token comparison with `hash_equals()` to prevent timing-based token disclosure.
 
 ### Removed
  - Removed superseded audit log types `ENTITY_REPUTATION_CLEARED`, `ENTITY_WHITELIST_CHANGED`,
