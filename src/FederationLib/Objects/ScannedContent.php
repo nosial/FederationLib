@@ -191,7 +191,6 @@
             }
 
             $longestActiveBlacklist = 0;
-            /** @var BlacklistRecord $activeBlacklistRecord */
             foreach($this->authorEntity->getActiveBlacklists() as $activeBlacklistRecord)
             {
                 if($activeBlacklistRecord->getExpires() === null)
@@ -231,12 +230,12 @@
             {
                 self::applyWhitelistBlacklistRules($scanningRules, $this->authorEntity,
                     ScanningRules::AUTHOR_WHITELISTED, ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED, ScanningRules::AUTHOR_BLACKLISTED,
-                    $config->getAuthorWhitelisted(), $config->getAuthorPermanentlyBlacklisted(), $config->getAuthorBlacklisted()
+                    $config->getModifierAuthorWhitelisted(), $config->getModifierAuthorPermanentlyBlacklisted(), $config->getModifierAuthorBlacklisted()
                 );
 
                 self::applyReputationRules($scanningRules, $this->authorEntity,
                     ScanningRules::AUTHOR_GOOD_REPUTATION, ScanningRules::AUTHOR_BAD_REPUTATION,
-                    $config->getAuthorGoodReputation(), $config->getAuthorBadReputation()
+                    $config->getModifierAuthorGoodReputation(), $config->getModifierAuthorBadReputation()
                 );
 
                 $authorParent = $this->authorEntity->getParentEntity();
@@ -244,12 +243,12 @@
                 {
                     self::applyWhitelistBlacklistRules($scanningRules, $authorParent,
                         ScanningRules::AUTHOR_PARENT_WHITELISTED, ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED, ScanningRules::AUTHOR_PARENT_BLACKLISTED,
-                        $config->getAuthorParentWhitelisted(), $config->getAuthorParentPermanentlyBlacklisted(), $config->getAuthorParentBlacklisted()
+                        $config->getModifierAuthorParentWhitelisted(), $config->getModifierAuthorParentPermanentlyBlacklisted(), $config->getModifierAuthorParentBlacklisted()
                     );
 
                     self::applyReputationRules($scanningRules, $authorParent,
                         ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION, ScanningRules::AUTHOR_PARENT_BAD_REPUTATION,
-                        $config->getAuthorParentGoodReputation(), $config->getAuthorParentBadReputation()
+                        $config->getModifierAuthorParentGoodReputation(), $config->getModifierAuthorParentBadReputation()
                     );
                 }
             }
@@ -258,12 +257,12 @@
             {
                 self::applyWhitelistBlacklistRules($scanningRules, $resolvedEntity,
                     ScanningRules::NAMED_ENTITY_WHITELISTED, ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED, ScanningRules::NAMED_ENTITY_BLACKLISTED,
-                    $config->getNamedEntityWhitelisted(), $config->getNamedEntityPermanentlyBlacklisted(), $config->getNamedEntityBlacklisted()
+                    $config->getModifierNamedEntityWhitelisted(), $config->getModifierNamedEntityPermanentlyBlacklisted(), $config->getModifierNamedEntityBlacklisted()
                 );
 
                 self::applyReputationRules($scanningRules, $resolvedEntity,
                     ScanningRules::NAMED_ENTITY_GOOD_REPUTATION, ScanningRules::NAMED_ENTITY_BAD_REPUTATION,
-                    $config->getNamedEntityGoodReputation(), $config->getNamedEntityBadReputation()
+                    $config->getModifierNamedEntityGoodReputation(), $config->getModifierNamedEntityBadReputation()
                 );
 
                 $entityParent = $resolvedEntity->getParentEntity();
@@ -271,12 +270,12 @@
                 {
                     self::applyWhitelistBlacklistRules($scanningRules, $entityParent,
                         ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED, ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED, ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED,
-                        $config->getNamedEntityParentWhitelisted(), $config->getNamedEntityParentPermanentlyBlacklisted(), $config->getNamedEntityParentBlacklisted()
+                        $config->getModifierNamedEntityParentWhitelisted(), $config->getModifierNamedEntityParentPermanentlyBlacklisted(), $config->getModifierNamedEntityParentBlacklisted()
                     );
 
                     self::applyReputationRules($scanningRules, $entityParent,
                         ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION, ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION,
-                        $config->getNamedEntityParentGoodReputation(), $config->getNamedEntityParentBadReputation()
+                        $config->getModifierNamedEntityParentGoodReputation(), $config->getModifierNamedEntityParentBadReputation()
                     );
                 }
             }
@@ -419,9 +418,9 @@
 
             $points = match($classification->getClassificationFlag())
             {
-                ClassificationFlag::NORMAL => $config->getClassificationNormal(),
-                ClassificationFlag::SUSPICIOUS => $config->getClassificationSuspicious(),
-                ClassificationFlag::MALICIOUS => $config->getClassificationMalicious(),
+                ClassificationFlag::NORMAL => $config->getModifierClassificationNormal(),
+                ClassificationFlag::SUSPICIOUS => $config->getModifierClassificationSuspicious(),
+                ClassificationFlag::MALICIOUS => $config->getModifierClassificationMalicious(),
             };
 
             $rule = match($classification->getClassificationFlag())

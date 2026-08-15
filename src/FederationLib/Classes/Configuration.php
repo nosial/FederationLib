@@ -54,24 +54,29 @@
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
 
             // Scanning configuration
-            self::$configuration->setDefault('scanning.default_rosl_score', 0.0, 'FEDERATION_SCORING_RISK_DEFAULT');
-            self::$configuration->setDefault('scanning.risk_score_steepness', 0.25, 'FEDERATION_SCANNING_RISK_AUTHOR_WHITELISTEDSCORE_STEEPNESS');
-            self::$configuration->setDefault('scanning.reputation_update_interval', 900, 'FEDERATION_SCANNING_REPUTATION_UPDATE_INTERVAL');
-            self::$configuration->setDefault('scanning.good_reputation_threshold', 0, 'FEDERATION_SCANNING_GOOD_REPUTATION_THRESHOLD');
-            self::$configuration->setDefault('scanning.bad_reputation_threshold', 0, 'FEDERATION_SCANNING_BAD_REPUTATION_THRESHOLD');
-            self::$configuration->setDefault('scanning.author_blacklisted', ScanningRules::AUTHOR_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_BLACKLISTED');
-            self::$configuration->setDefault('scanning.author_permanently_blacklisted', ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_PERMANENTLY_BLACKLISTED');
-            self::$configuration->setDefault('scanning.author_whitelisted', ScanningRules::AUTHOR_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_AUTHOR_WHITELISTED');
-            self::$configuration->setDefault('scanning.named_entity_blacklisted', ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_NAMED_ENTITY_BLACKLISTED');
-            self::$configuration->setDefault('scanning.named_entity_permanently_blacklisted', ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_NAMED_ENTITY_PERMANENTLY_BLACKLISTED');
-            self::$configuration->setDefault('scanning.named_entity_whitelisted', ScanningRules::NAMED_ENTITY_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_NAMED_ENTITY_WHITELISTED');
-            self::$configuration->setDefault('scanning.author_good_reputation', ScanningRules::AUTHOR_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_AUTHOR_GOOD_REPUTATION');
-            self::$configuration->setDefault('scanning.author_bad_reputation', ScanningRules::AUTHOR_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_AUTHOR_BAD_REPUTATION');
-            self::$configuration->setDefault('scanning.named_entity_bad_repuation', ScanningRules::NAMED_ENTITY_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_NAMED_ENTITY_BAD_REPUTATION');
-            self::$configuration->setDefault('scanning.named_entity_good_repuation', ScanningRules::NAMED_ENTITY_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_NAMED_ENTITY_GOOD_REPUTATION');
-            self::$configuration->setDefault('scanning.classification_normal', ScanningRules::CLASSIFICATION_NORMAL->getModifier(), 'FEDERATION_SCANNING_CLASSIFICATION_NORMAL');
-            self::$configuration->setDefault('scanning.classification_suspicious', ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier(), 'FEDERATION_SCANNING_CLASSIFICATION_SUSPICIOUS');
-            self::$configuration->setDefault('scanning.classification_malicious', ScanningRules::CLASSIFICATION_MALICIOUS->getModifier(), 'FEDERATION_SCANNING_CLASSIFICATION_MALICIOUS');
+            self::$configuration->setDefault('scanning.modifier_author_blacklisted', ScanningRules::AUTHOR_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_author_permanently_blacklisted', ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PERMANENTLY_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_author_whitelisted', ScanningRules::AUTHOR_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_WHITELISTED');
+            self::$configuration->setDefault('scanning.modifier_author_good_reputation', ScanningRules::AUTHOR_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_GOOD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_author_bad_reputation', ScanningRules::AUTHOR_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_BAD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_author_parent_blacklisted', ScanningRules::AUTHOR_PARENT_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_author_parent_permanently_blacklisted', ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_PERMANENTLY_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_author_parent_whitelisted', ScanningRules::AUTHOR_PARENT_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_WHITELISTED');
+            self::$configuration->setDefault('scanning.modifier_author_parent_good_reputation', ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_GOOD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_author_parent_bad_reputation', ScanningRules::AUTHOR_PARENT_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BAD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_named_entity_blacklisted', ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_permanently_blacklisted', ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PERMANENTLY_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_whitelisted', ScanningRules::NAMED_ENTITY_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_WHITELISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_good_reputation', ScanningRules::NAMED_ENTITY_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_GOOD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_named_entity_bad_reputation', ScanningRules::NAMED_ENTITY_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BAD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_named_entity_parent_blacklisted', ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_parent_permanently_blacklisted', ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_parent_whitelisted', ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_WHITELISTED');
+            self::$configuration->setDefault('scanning.modifier_named_entity_parent_good_reputation', ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_GOOD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_named_entity_parent_bad_reputation', ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION->getModifier(), 'FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BAD_REPUTATION');
+            self::$configuration->setDefault('scanning.modifier_classification_normal', ScanningRules::CLASSIFICATION_NORMAL->getModifier(), 'FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_NORMAL');
+            self::$configuration->setDefault('scanning.modifier_classification_suspicious', ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier(), 'FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_SUSPICIOUS');
+            self::$configuration->setDefault('scanning.modifier_classification_malicious', ScanningRules::CLASSIFICATION_MALICIOUS->getModifier(), 'FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_MALICIOUS');
             self::$configuration->setDefault('scanning.auto_report', true, 'FEDERATION_SCANNING_AUTO_REPORT');
             self::$configuration->setDefault('scanning.auto_report_threshold', 80.00, 'FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD');
             self::$configuration->setDefault('scanning.action_block_threshold', 80.00, 'FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD');
@@ -80,6 +85,12 @@
             self::$configuration->setDefault('scanning.reputation_max_delta', 10, 'FEDERATION_SCANNING_REPUTATION_MAX_DELTA');
             self::$configuration->setDefault('scanning.reputation_min_delta', -10, 'FEDERATION_SCANNING_REPUTATION_MIN_DELTA');
             self::$configuration->setDefault('scanning.reputation_scaling_factor', 0.25, 'FEDERATION_SCANNING_REPUTATION_SCALING_FACTOR');
+            self::$configuration->setDefault('scanning.reputation_min_bound', -1000, 'FEDERATION_SCANNING_REPUTATION_MIN_BOUND');
+            self::$configuration->setDefault('scanning.reputation_max_bound', 1000, 'FEDERATION_SCANNING_REPUTATION_MAX_BOUND');
+            self::$configuration->setDefault('scanning.risk_score_neutral_point', 50.0, 'FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT');
+            self::$configuration->setDefault('scanning.risk_score_scaling_factor', 2.3, 'FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR');
+            self::$configuration->setDefault('scanning.risk_score_min_bound', 0.0, 'FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND');
+            self::$configuration->setDefault('scanning.risk_score_max_bound', 100.0, 'FEDERATION_SCANNING_RISK_SCORE_MAX_BOUND');
 
             // Bayesian filter configuration
             self::$configuration->setDefault('bayesian.enabled', true, 'FEDERATION_BS_ENABLED');

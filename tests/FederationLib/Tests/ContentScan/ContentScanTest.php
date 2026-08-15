@@ -2,6 +2,7 @@
 
     namespace FederationLib\Tests\ContentScan;
 
+    use FederationLib\Classes\Configuration\ScanningConfiguration;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\EntityRelationshipType;
@@ -489,6 +490,51 @@
             foreach ($scanned->getResolvedEntities() as $resolvedEntity)
             {
                 $this->assertNotEquals($unknownHost, $resolvedEntity->getEntity()->getHost(), 'Unknown domain should not be resolved as an entity');
+            }
+        }
+
+        public function testEveryScanningRuleModifierCanBeConfigured(): void
+        {
+            $rules = [
+                'author_blacklisted' => ['getModifierAuthorBlacklisted', ScanningRules::AUTHOR_BLACKLISTED],
+                'author_permanently_blacklisted' => ['getModifierAuthorPermanentlyBlacklisted', ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED],
+                'author_whitelisted' => ['getModifierAuthorWhitelisted', ScanningRules::AUTHOR_WHITELISTED],
+                'author_good_reputation' => ['getModifierAuthorGoodReputation', ScanningRules::AUTHOR_GOOD_REPUTATION],
+                'author_bad_reputation' => ['getModifierAuthorBadReputation', ScanningRules::AUTHOR_BAD_REPUTATION],
+                'author_parent_blacklisted' => ['getModifierAuthorParentBlacklisted', ScanningRules::AUTHOR_PARENT_BLACKLISTED],
+                'author_parent_permanently_blacklisted' => ['getModifierAuthorParentPermanentlyBlacklisted', ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED],
+                'author_parent_whitelisted' => ['getModifierAuthorParentWhitelisted', ScanningRules::AUTHOR_PARENT_WHITELISTED],
+                'author_parent_good_reputation' => ['getModifierAuthorParentGoodReputation', ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION],
+                'author_parent_bad_reputation' => ['getModifierAuthorParentBadReputation', ScanningRules::AUTHOR_PARENT_BAD_REPUTATION],
+                'named_entity_blacklisted' => ['getModifierNamedEntityBlacklisted', ScanningRules::NAMED_ENTITY_BLACKLISTED],
+                'named_entity_permanently_blacklisted' => ['getModifierNamedEntityPermanentlyBlacklisted', ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED],
+                'named_entity_whitelisted' => ['getModifierNamedEntityWhitelisted', ScanningRules::NAMED_ENTITY_WHITELISTED],
+                'named_entity_good_reputation' => ['getModifierNamedEntityGoodReputation', ScanningRules::NAMED_ENTITY_GOOD_REPUTATION],
+                'named_entity_bad_reputation' => ['getModifierNamedEntityBadReputation', ScanningRules::NAMED_ENTITY_BAD_REPUTATION],
+                'named_entity_parent_blacklisted' => ['getModifierNamedEntityParentBlacklisted', ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED],
+                'named_entity_parent_permanently_blacklisted' => ['getModifierNamedEntityParentPermanentlyBlacklisted', ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED],
+                'named_entity_parent_whitelisted' => ['getModifierNamedEntityParentWhitelisted', ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED],
+                'named_entity_parent_good_reputation' => ['getModifierNamedEntityParentGoodReputation', ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION],
+                'named_entity_parent_bad_reputation' => ['getModifierNamedEntityParentBadReputation', ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION],
+                'classification_normal' => ['getModifierClassificationNormal', ScanningRules::CLASSIFICATION_NORMAL],
+                'classification_suspicious' => ['getModifierClassificationSuspicious', ScanningRules::CLASSIFICATION_SUSPICIOUS],
+                'classification_malicious' => ['getModifierClassificationMalicious', ScanningRules::CLASSIFICATION_MALICIOUS],
+            ];
+
+            $values = [];
+            $expectedValues = [];
+            $value = 1.5;
+            foreach($rules as $key => [$getter, $rule])
+            {
+                $values['modifier_' . $key] = $value;
+                $expectedValues[$getter] = $value;
+                $value += 1.0;
+            }
+
+            $configuration = new ScanningConfiguration($values);
+            foreach($expectedValues as $getter => $expectedValue)
+            {
+                $this->assertSame($expectedValue, $configuration->$getter(), "$getter must use its configured modifier");
             }
         }
 

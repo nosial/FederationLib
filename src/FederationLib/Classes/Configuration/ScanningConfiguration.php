@@ -6,34 +6,29 @@
 
     class ScanningConfiguration
     {
-        private float $defaultScore;
-        private float $trustScoreSteepness;
-        private int $reputationUpdateInterval;
-        private int $goodReputationThreshold;
-        private int $badReputationThreshold;
-        private float $authorBlacklisted;
-        private float $authorPermanentlyBlacklisted;
-        private float $authorWhitelisted;
-        private float $authorGoodReputation;
-        private float $authorBadReputation;
-        private float $authorParentBlacklisted;
-        private float $authorParentPermanentlyBlacklisted;
-        private float $authorParentWhitelisted;
-        private float $authorParentGoodReputation;
-        private float $authorParentBadReputation;
-        private float $namedEntityBlacklisted;
-        private float $namedEntityPermanentlyBlacklisted;
-        private float $namedEntityWhitelisted;
-        private float $namedEntityGoodReputation;
-        private float $namedEntityBadReputation;
-        private float $namedEntityParentBlacklisted;
-        private float $namedEntityParentPermanentlyBlacklisted;
-        private float $namedEntityParentWhitelisted;
-        private float $namedEntityParentGoodReputation;
-        private float $namedEntityParentBadReputation;
-        private float $classificationNormal;
-        private float $classificationSuspicious;
-        private float $classificationMalicious;
+        private float $modifierAuthorBlacklisted;
+        private float $modifierAuthorPermanentlyBlacklisted;
+        private float $modifierAuthorWhitelisted;
+        private float $modifierAuthorGoodReputation;
+        private float $modifierAuthorBadReputation;
+        private float $modifierAuthorParentBlacklisted;
+        private float $modifierAuthorParentPermanentlyBlacklisted;
+        private float $modifierAuthorParentWhitelisted;
+        private float $modifierAuthorParentGoodReputation;
+        private float $modifierAuthorParentBadReputation;
+        private float $modifierNamedEntityBlacklisted;
+        private float $modifierNamedEntityPermanentlyBlacklisted;
+        private float $modifierNamedEntityWhitelisted;
+        private float $modifierNamedEntityGoodReputation;
+        private float $modifierNamedEntityBadReputation;
+        private float $modifierNamedEntityParentBlacklisted;
+        private float $modifierNamedEntityParentPermanentlyBlacklisted;
+        private float $modifierNamedEntityParentWhitelisted;
+        private float $modifierNamedEntityParentGoodReputation;
+        private float $modifierNamedEntityParentBadReputation;
+        private float $modifierClassificationNormal;
+        private float $modifierClassificationSuspicious;
+        private float $modifierClassificationMalicious;
         private bool $autoReport;
         private float $autoReportThreshold;
         private float $actionBlockThreshold;
@@ -56,34 +51,29 @@
          */
         public function __construct(array $configuration)
         {
-            $this->defaultScore = (float)($configuration['default_score'] ?? 0.0);
-            $this->trustScoreSteepness = (float)($configuration['trust_score_steepness'] ?? 0.25);
-            $this->reputationUpdateInterval = (int)($configuration['reputation_update_interval'] ?? 900);
-            $this->goodReputationThreshold = (int)($configuration['good_reputation_threshold'] ?? 0);
-            $this->badReputationThreshold = (int)($configuration['bad_reputation_threshold'] ?? 0);
-            $this->authorBlacklisted = (float)($configuration['author_blacklisted'] ?? ScanningRules::AUTHOR_BLACKLISTED->getModifier());
-            $this->authorPermanentlyBlacklisted = (float)($configuration['author_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->authorWhitelisted = (float)($configuration['author_whitelisted'] ?? ScanningRules::AUTHOR_WHITELISTED->getModifier());
-            $this->namedEntityBlacklisted = (float)($configuration['named_entity_blacklisted'] ?? ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier());
-            $this->namedEntityPermanentlyBlacklisted = (float)($configuration['named_entity_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->namedEntityWhitelisted = (float)($configuration['named_entity_whitelisted'] ?? ScanningRules::NAMED_ENTITY_WHITELISTED->getModifier());
-            $this->authorBadReputation = (float)($configuration['author_bad_reputation'] ?? ScanningRules::AUTHOR_BAD_REPUTATION->getModifier());
-            $this->authorGoodReputation = (float)($configuration['author_good_reputation'] ?? ScanningRules::AUTHOR_GOOD_REPUTATION->getModifier());
-            $this->authorParentBlacklisted = (float)($configuration['author_parent_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_BLACKLISTED->getModifier());
-            $this->authorParentPermanentlyBlacklisted = (float)($configuration['author_parent_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->authorParentWhitelisted = (float)($configuration['author_parent_whitelisted'] ?? ScanningRules::AUTHOR_PARENT_WHITELISTED->getModifier());
-            $this->authorParentGoodReputation = (float)($configuration['author_parent_good_reputation'] ?? ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION->getModifier());
-            $this->authorParentBadReputation = (float)($configuration['author_parent_bad_reputation'] ?? ScanningRules::AUTHOR_PARENT_BAD_REPUTATION->getModifier());
-            $this->namedEntityBadReputation = (float)($configuration['named_entity_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_BAD_REPUTATION->getModifier());
-            $this->namedEntityGoodReputation = (float)($configuration['named_entity_good_reputation'] ?? ScanningRules::NAMED_ENTITY_GOOD_REPUTATION->getModifier());
-            $this->namedEntityParentBlacklisted = (float)($configuration['named_entity_parent_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED->getModifier());
-            $this->namedEntityParentPermanentlyBlacklisted = (float)($configuration['named_entity_parent_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->namedEntityParentWhitelisted = (float)($configuration['named_entity_parent_whitelisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED->getModifier());
-            $this->namedEntityParentGoodReputation = (float)($configuration['named_entity_parent_good_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION->getModifier());
-            $this->namedEntityParentBadReputation = (float)($configuration['named_entity_parent_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION->getModifier());
-            $this->classificationNormal = (float)($configuration['classification_normal'] ?? ScanningRules::CLASSIFICATION_NORMAL->getModifier());
-            $this->classificationSuspicious = (float)($configuration['classification_suspicious'] ?? ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier());
-            $this->classificationMalicious = (float)($configuration['classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
+            $this->modifierAuthorBlacklisted = (float)($configuration['modifier_author_blacklisted'] ?? ScanningRules::AUTHOR_BLACKLISTED->getModifier());
+            $this->modifierAuthorPermanentlyBlacklisted = (float)($configuration['modifier_author_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier());
+            $this->modifierAuthorWhitelisted = (float)($configuration['modifier_author_whitelisted'] ?? ScanningRules::AUTHOR_WHITELISTED->getModifier());
+            $this->modifierAuthorGoodReputation = (float)($configuration['modifier_author_good_reputation'] ?? ScanningRules::AUTHOR_GOOD_REPUTATION->getModifier());
+            $this->modifierAuthorBadReputation = (float)($configuration['modifier_author_bad_reputation'] ?? ScanningRules::AUTHOR_BAD_REPUTATION->getModifier());
+            $this->modifierAuthorParentBlacklisted = (float)($configuration['modifier_author_parent_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_BLACKLISTED->getModifier());
+            $this->modifierAuthorParentPermanentlyBlacklisted = (float)($configuration['modifier_author_parent_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
+            $this->modifierAuthorParentWhitelisted = (float)($configuration['modifier_author_parent_whitelisted'] ?? ScanningRules::AUTHOR_PARENT_WHITELISTED->getModifier());
+            $this->modifierAuthorParentGoodReputation = (float)($configuration['modifier_author_parent_good_reputation'] ?? ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION->getModifier());
+            $this->modifierAuthorParentBadReputation = (float)($configuration['modifier_author_parent_bad_reputation'] ?? ScanningRules::AUTHOR_PARENT_BAD_REPUTATION->getModifier());
+            $this->modifierNamedEntityBlacklisted = (float)($configuration['modifier_named_entity_blacklisted'] ?? ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier());
+            $this->modifierNamedEntityPermanentlyBlacklisted = (float)($configuration['modifier_named_entity_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier());
+            $this->modifierNamedEntityWhitelisted = (float)($configuration['modifier_named_entity_whitelisted'] ?? ScanningRules::NAMED_ENTITY_WHITELISTED->getModifier());
+            $this->modifierNamedEntityGoodReputation = (float)($configuration['modifier_named_entity_good_reputation'] ?? ScanningRules::NAMED_ENTITY_GOOD_REPUTATION->getModifier());
+            $this->modifierNamedEntityBadReputation = (float)($configuration['modifier_named_entity_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_BAD_REPUTATION->getModifier());
+            $this->modifierNamedEntityParentBlacklisted = (float)($configuration['modifier_named_entity_parent_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED->getModifier());
+            $this->modifierNamedEntityParentPermanentlyBlacklisted = (float)($configuration['modifier_named_entity_parent_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
+            $this->modifierNamedEntityParentWhitelisted = (float)($configuration['modifier_named_entity_parent_whitelisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED->getModifier());
+            $this->modifierNamedEntityParentGoodReputation = (float)($configuration['modifier_named_entity_parent_good_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION->getModifier());
+            $this->modifierNamedEntityParentBadReputation = (float)($configuration['modifier_named_entity_parent_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION->getModifier());
+            $this->modifierClassificationNormal = (float)($configuration['modifier_classification_normal'] ?? ScanningRules::CLASSIFICATION_NORMAL->getModifier());
+            $this->modifierClassificationSuspicious = (float)($configuration['modifier_classification_suspicious'] ?? ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier());
+            $this->modifierClassificationMalicious = (float)($configuration['modifier_classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
             $this->autoReport = (bool)($configuration['auto_report'] ?? false);
             $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
             $this->actionBlockThreshold = (float)($configuration['action_block_threshold'] ?? 80.00);
@@ -101,63 +91,13 @@
         }
 
         /**
-         * Returns the default score
-         *
-         * @return float Default score value
-         */
-        public function getDefaultScore(): float
-        {
-            return $this->defaultScore;
-        }
-
-        /**
-         * Returns the trust score steepness
-         *
-         * @return float Trust score steepness
-         */
-        public function getTrustScoreSteepness(): float
-        {
-            return $this->trustScoreSteepness;
-        }
-
-        /**
-         * Returns the reputation update interval
-         *
-         * @return int Update interval in seconds
-         */
-        public function getReputationUpdateInterval(): int
-        {
-            return $this->reputationUpdateInterval;
-        }
-
-        /**
-         * Returns the bad reputation threshold
-         *
-         * @return int Bad reputation threshold
-         */
-        public function getBadReputationThreshold(): int
-        {
-            return $this->badReputationThreshold;
-        }
-
-        /**
-         * Returns the good reputation threshold
-         *
-         * @return int Good reputation threshold
-         */
-        public function getGoodReputationThreshold(): int
-        {
-            return $this->goodReputationThreshold;
-        }
-
-        /**
          * Returns the author blacklisted score modifier
          *
          * @return float Score modifier
          */
-        public function getAuthorBlacklisted(): float
+        public function getModifierAuthorBlacklisted(): float
         {
-            return $this->authorBlacklisted;
+            return $this->modifierAuthorBlacklisted;
         }
 
         /**
@@ -165,9 +105,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorPermanentlyBlacklisted(): float
+        public function getModifierAuthorPermanentlyBlacklisted(): float
         {
-            return $this->authorPermanentlyBlacklisted;
+            return $this->modifierAuthorPermanentlyBlacklisted;
         }
 
         /**
@@ -175,9 +115,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorWhitelisted(): float
+        public function getModifierAuthorWhitelisted(): float
         {
-            return $this->authorWhitelisted;
+            return $this->modifierAuthorWhitelisted;
         }
 
         /**
@@ -185,9 +125,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorGoodReputation(): float
+        public function getModifierAuthorGoodReputation(): float
         {
-            return $this->authorGoodReputation;
+            return $this->modifierAuthorGoodReputation;
         }
 
         /**
@@ -195,9 +135,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorBadReputation(): float
+        public function getModifierAuthorBadReputation(): float
         {
-            return $this->authorBadReputation;
+            return $this->modifierAuthorBadReputation;
         }
 
         /**
@@ -205,9 +145,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityBlacklisted(): float
+        public function getModifierNamedEntityBlacklisted(): float
         {
-            return $this->namedEntityBlacklisted;
+            return $this->modifierNamedEntityBlacklisted;
         }
 
         /**
@@ -215,9 +155,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityPermanentlyBlacklisted(): float
+        public function getModifierNamedEntityPermanentlyBlacklisted(): float
         {
-            return $this->namedEntityPermanentlyBlacklisted;
+            return $this->modifierNamedEntityPermanentlyBlacklisted;
         }
 
         /**
@@ -225,9 +165,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityWhitelisted(): float
+        public function getModifierNamedEntityWhitelisted(): float
         {
-            return $this->namedEntityWhitelisted;
+            return $this->modifierNamedEntityWhitelisted;
         }
 
         /**
@@ -235,9 +175,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityGoodReputation(): float
+        public function getModifierNamedEntityGoodReputation(): float
         {
-            return $this->namedEntityGoodReputation;
+            return $this->modifierNamedEntityGoodReputation;
         }
 
         /**
@@ -245,9 +185,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityBadReputation(): float
+        public function getModifierNamedEntityBadReputation(): float
         {
-            return $this->namedEntityBadReputation;
+            return $this->modifierNamedEntityBadReputation;
         }
 
         /**
@@ -255,9 +195,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorParentBlacklisted(): float
+        public function getModifierAuthorParentBlacklisted(): float
         {
-            return $this->authorParentBlacklisted;
+            return $this->modifierAuthorParentBlacklisted;
         }
 
         /**
@@ -265,9 +205,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorParentPermanentlyBlacklisted(): float
+        public function getModifierAuthorParentPermanentlyBlacklisted(): float
         {
-            return $this->authorParentPermanentlyBlacklisted;
+            return $this->modifierAuthorParentPermanentlyBlacklisted;
         }
 
         /**
@@ -275,9 +215,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorParentWhitelisted(): float
+        public function getModifierAuthorParentWhitelisted(): float
         {
-            return $this->authorParentWhitelisted;
+            return $this->modifierAuthorParentWhitelisted;
         }
 
         /**
@@ -285,9 +225,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorParentGoodReputation(): float
+        public function getModifierAuthorParentGoodReputation(): float
         {
-            return $this->authorParentGoodReputation;
+            return $this->modifierAuthorParentGoodReputation;
         }
 
         /**
@@ -295,9 +235,9 @@
          *
          * @return float Score modifier
          */
-        public function getAuthorParentBadReputation(): float
+        public function getModifierAuthorParentBadReputation(): float
         {
-            return $this->authorParentBadReputation;
+            return $this->modifierAuthorParentBadReputation;
         }
 
         /**
@@ -305,9 +245,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityParentBlacklisted(): float
+        public function getModifierNamedEntityParentBlacklisted(): float
         {
-            return $this->namedEntityParentBlacklisted;
+            return $this->modifierNamedEntityParentBlacklisted;
         }
 
         /**
@@ -315,9 +255,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityParentPermanentlyBlacklisted(): float
+        public function getModifierNamedEntityParentPermanentlyBlacklisted(): float
         {
-            return $this->namedEntityParentPermanentlyBlacklisted;
+            return $this->modifierNamedEntityParentPermanentlyBlacklisted;
         }
 
         /**
@@ -325,9 +265,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityParentWhitelisted(): float
+        public function getModifierNamedEntityParentWhitelisted(): float
         {
-            return $this->namedEntityParentWhitelisted;
+            return $this->modifierNamedEntityParentWhitelisted;
         }
 
         /**
@@ -335,9 +275,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityParentGoodReputation(): float
+        public function getModifierNamedEntityParentGoodReputation(): float
         {
-            return $this->namedEntityParentGoodReputation;
+            return $this->modifierNamedEntityParentGoodReputation;
         }
 
         /**
@@ -345,9 +285,9 @@
          *
          * @return float Score modifier
          */
-        public function getNamedEntityParentBadReputation(): float
+        public function getModifierNamedEntityParentBadReputation(): float
         {
-            return $this->namedEntityParentBadReputation;
+            return $this->modifierNamedEntityParentBadReputation;
         }
 
         /**
@@ -355,9 +295,9 @@
          *
          * @return float Score modifier
          */
-        public function getClassificationNormal(): float
+        public function getModifierClassificationNormal(): float
         {
-            return $this->classificationNormal;
+            return $this->modifierClassificationNormal;
         }
 
         /**
@@ -365,9 +305,9 @@
          *
          * @return float Score modifier
          */
-        public function getClassificationSuspicious(): float
+        public function getModifierClassificationSuspicious(): float
         {
-            return $this->classificationSuspicious;
+            return $this->modifierClassificationSuspicious;
         }
 
         /**
@@ -375,9 +315,9 @@
          *
          * @return float Score modifier
          */
-        public function getClassificationMalicious(): float
+        public function getModifierClassificationMalicious(): float
         {
-            return $this->classificationMalicious;
+            return $this->modifierClassificationMalicious;
         }
 
         /**

@@ -256,6 +256,9 @@ Federated Database to be fine-tuned for different services/applications. Configu
 This section is used to configured how the server operates, dictating the permissions that is permitted for public use,
 where data is stored at, what limits should be applied.
 
+The production Docker image sets `display_errors = Off` and `display_startup_errors = Off`. PHP errors remain available
+to registered handlers such as LogLib2, but are not emitted into HTTP responses.
+
 | Name                                | Environment Variable                   | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                             |
 |-------------------------------------|----------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------------------|
 | `server.base_url`                   | `FEDERATION_BASE_URL`                  | string   | `http://127.0.0.1:7000`                                                                                                                                                                       | Yes      | Base URL of the server                                                  |
@@ -278,6 +281,7 @@ where data is stored at, what limits should be applied.
 | `server.public_entity_metadata`     | `FEDERATION_PUBLIC_ENTITY_METADATA`    | bool     | `false`                                                                                                                                                                                       | Yes      | Whether entity metadata is publicly accessible to unauthenticated users |
 | `server.public_reports`             | `FEDERATION_PUBLIC_REPORTS`            | bool     | `true`                                                                                                                                                                                        | Yes      | Whether reports are publicly accessible                                 |
 | `server.public_scan_content`        | `FEDERATION_PUBLIC_SCAN_CONTENT`       | bool     | `true`                                                                                                                                                                                        | Yes      | Whether scan content endpoint is publicly accessible                    |
+| `server.public_query_entity`        | `FEDERATION_PUBLIC_QUERY_ENTITY`       | bool     | `true`                                                                                                                                                                                        | Yes      | Whether entity relationship queries are publicly accessible             |
 | `server.min_blacklist_time`         | `FEDERATION_MIN_BLACKLIST_TIME`        | int      | `1800` (30 min)                                                                                                                                                                               | Yes      | Minimum allowed blacklist expiration time in seconds                    |
 | `server.top_threats_limit`          | `FEDERATION_TOP_THREATS_LIMIT`         | int      | `25`                                                                                                                                                                                          | Yes      | Maximum number of top-threat entities to return                         |
 
@@ -286,50 +290,51 @@ where data is stored at, what limits should be applied.
 
 Scanning configuration section changes the scanning behavior when invoking the request path `/scan` to scan content.
 
-| Name                                                   | Environment Variable                                         | Type  | Default Value  | Required | Description                                                              |
-|--------------------------------------------------------|--------------------------------------------------------------|-------|----------------|----------|--------------------------------------------------------------------------|
-| `scanning.default_rosl_score`                          | `FEDERATION_SCORING_RISK_DEFAULT`                            | float | `0.0`          | Yes      | Default risk score for scanned content                                   |
-| `scanning.risk_score_steepness`                        | `FEDERATION_SCANNING_RISK_AUTHOR_WHITELISTEDSCORE_STEEPNESS` | float | `0.25`         | Yes      | Steepness of the trust score curve                                       |
-| `scanning.reputation_update_interval`                  | `FEDERATION_SCANNING_REPUTATION_UPDATE_INTERVAL`             | int   | `900` (15 min) | Yes      | Interval between reputation updates in seconds                           |
-| `scanning.good_reputation_threshold`                   | `FEDERATION_SCANNING_GOOD_REPUTATION_THRESHOLD`              | int   | `50`           | Yes      | Threshold above which reputation is considered good                      |
-| `scanning.bad_reputation_threshold`                    | `FEDERATION_SCANNING_BAD_REPUTATION_THRESHOLD`               | int   | `-50`          | Yes      | Threshold below which reputation is considered bad                       |
-| `scanning.author_blacklisted`                          | `FEDERATION_SCANNING_AUTHOR_BLACKLISTED`                     | float | `-20.0`        | Yes      | Score modifier when author is blacklisted                                |
-| `scanning.author_permanently_blacklisted`              | `FEDERATION_SCANNING_AUTHOR_PERMANENTLY_BLACKLISTED`         | float | `-35.0`        | Yes      | Score modifier when author is permanently blacklisted                    |
-| `scanning.author_whitelisted`                          | `FEDERATION_SCANNING_AUTHOR_WHITELISTED`                     | float | `20.0`         | Yes      | Score modifier when author is whitelisted                                |
-| `scanning.named_entity_blacklisted`                    | `FEDERATION_SCANNING_NAMED_ENTITY_BLACKLISTED`               | float | `-8.0`         | Yes      | Score modifier when named entity is blacklisted                          |
-| `scanning.named_entity_permanently_blacklisted`        | `FEDERATION_SCANNING_NAMED_ENTITY_PERMANENTLY_BLACKLISTED`   | float | `-13.0`        | Yes      | Score modifier when named entity is permanently blacklisted              |
-| `scanning.named_entity_whitelisted`                    | `FEDERATION_SCANNING_NAMED_ENTITY_WHITELISTED`               | float | `8.0`          | Yes      | Score modifier when named entity is whitelisted                          |
-| `scanning.author_good_reputation`                      | `FEDERATION_SCANNING_AUTHOR_GOOD_REPUTATION`                 | float | `1.5`          | Yes      | Score modifier when author has good reputation                           |
-| `scanning.author_bad_reputation`                       | `FEDERATION_SCANNING_AUTHOR_BAD_REPUTATION`                  | float | `-2.5`         | Yes      | Score modifier when author has bad reputation                            |
-| `scanning.named_entity_good_repuation`                 | `FEDERATION_SCANNING_NAMED_ENTITY_GOOD_REPUTATION`           | float | `0.8`          | Yes      | Score modifier when named entity has good reputation                     |
-| `scanning.named_entity_bad_repuation`                  | `FEDERATION_SCANNING_NAMED_ENTITY_BAD_REPUTATION`            | float | `-1.8`         | Yes      | Score modifier when named entity has bad reputation                      |
-| `scanning.author_parent_blacklisted`                   | —                                                            | float | `-15.0`        | No       | Score modifier when the author's parent is blacklisted                   |
-| `scanning.author_parent_permanently_blacklisted`       | —                                                            | float | `-25.0`        | No       | Score modifier when the author's parent is permanently blacklisted       |
-| `scanning.author_parent_whitelisted`                   | —                                                            | float | `12.0`         | No       | Score modifier when the author's parent is whitelisted                   |
-| `scanning.author_parent_good_reputation`               | —                                                            | float | `1.0`          | No       | Score modifier when the author's parent has good reputation              |
-| `scanning.author_parent_bad_reputation`                | —                                                            | float | `-1.5`         | No       | Score modifier when the author's parent has bad reputation               |
-| `scanning.named_entity_parent_blacklist`               | —                                                            | float | `-5.0`         | No       | Score modifier when the named entity's parent is blacklisted             |
-| `scanning.named_entity_parent_permanently_blacklisted` | —                                                            | float | `-8.0`         | No       | Score modifier when the named entity's parent is permanently blacklisted |
-| `scanning.named_entity_parent_whitelisted`             | —                                                            | float | `5.0`          | No       | Score modifier when the named entity's parent is whitelisted             |
-| `scanning.named_entity_parent_good_reputation`         | —                                                            | float | `0.5`          | No       | Score modifier when the named entity's parent has good reputation        |
-| `scanning.named_entity_parent_bad_reputation`          | —                                                            | float | `-1.0`         | No       | Score modifier when the named entity's parent has bad reputation         |
-| `scanning.classification_normal`                       | `FEDERATION_SCANNING_CLASSIFICATION_NORMAL`                  | float | `0.3`          | Yes      | Score modifier when content is classified as normal                      |
-| `scanning.classification_suspicious`                   | `FEDERATION_SCANNING_CLASSIFICATION_SUSPICIOUS`              | float | `-0.3`         | Yes      | Score modifier when content is classified as suspicious                  |
-| `scanning.classification_malicious`                    | `FEDERATION_SCANNING_CLASSIFICATION_MALICIOUS`               | float | `-0.4`         | Yes      | Score modifier when content is classified as malicious                   |
-| `scanning.auto_report`                                 | `FEDERATION_SCANNING_AUTO_REPORT`                            | bool  | `true`         | Yes      | Whether auto-reporting is enabled                                        |
-| `scanning.auto_report_threshold`                       | `FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD`                  | float | `80.0`         | Yes      | Risk score threshold triggering auto-report                              |
-| `scanning.action_block_threshold`                      | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`                 | float | `80.0`         | No       | Risk score threshold at which content should be blocked                  |
-| `scanning.action_caution_threshold`                    | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`               | float | `60.0`         | No       | Risk score threshold at which caution should be advised                  |
-| `scanning.reputation_window_duration`                  | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION`             | int   | `300` (5 min)  | Yes      | Duration of the reputation window in seconds                             |
-| `scanning.reputation_max_delta`                        | `FEDERATION_SCANNING_REPUTATION_MAX_DELTA`                   | int   | `10`           | Yes      | Maximum reputation change per update                                     |
-| `scanning.reputation_min_delta`                        | `FEDERATION_SCANNING_REPUTATION_MIN_DELTA`                   | int   | `-10`          | Yes      | Minimum reputation change per update                                     |
-| `scanning.reputation_scaling_factor`                   | `FEDERATION_SCANNING_REPUTATION_SCALING_FACTOR`              | float | `0.25`         | Yes      | Scaling factor applied to reputation changes                             |
-| `scanning.reputation_min_bound`                        | —                                                            | int   | `-1000`        | No       | Minimum bound for reputation score                                       |
-| `scanning.reputation_max_bound`                        | —                                                            | int   | `1000`         | No       | Maximum bound for reputation score                                       |
-| `scanning.risk_score_neutral_point`                    | —                                                            | float | `50.0`         | No       | Neutral point of the risk score curve                                    |
-| `scanning.risk_score_scaling_factor`                   | —                                                            | float | `2.3`          | No       | Scaling factor for risk score calculation                                |
-| `scanning.risk_score_min_bound`                        | —                                                            | float | `0.0`          | No       | Minimum bound for risk score                                             |
-| `scanning.risk_score_max_bound`                        | —                                                            | float | `100.0`        | No       | Maximum bound for risk score                                             |
+All score modifiers are configurable. Their configuration keys use the `modifier_` prefix, and each is consumed by
+`ScannedContent` when it calculates scan results. Override them with the corresponding environment variable.
+
+| Name                                                            | Environment Variable                                                       | Default | Description                                 |
+|-----------------------------------------------------------------|----------------------------------------------------------------------------|--------:|---------------------------------------------|
+| `scanning.modifier_author_blacklisted`                          | `FEDERATION_SCANNING_MODIFIER_AUTHOR_BLACKLISTED`                          | `-20.0` | Blacklisted author                          |
+| `scanning.modifier_author_permanently_blacklisted`              | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PERMANENTLY_BLACKLISTED`              | `-35.0` | Permanently blacklisted author              |
+| `scanning.modifier_author_whitelisted`                          | `FEDERATION_SCANNING_MODIFIER_AUTHOR_WHITELISTED`                          |  `20.0` | Whitelisted author                          |
+| `scanning.modifier_author_good_reputation`                      | `FEDERATION_SCANNING_MODIFIER_AUTHOR_GOOD_REPUTATION`                      |  `20.0` | Author with good reputation                 |
+| `scanning.modifier_author_bad_reputation`                       | `FEDERATION_SCANNING_MODIFIER_AUTHOR_BAD_REPUTATION`                       | `-25.0` | Author with bad reputation                  |
+| `scanning.modifier_author_parent_blacklisted`                   | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BLACKLISTED`                   | `-15.0` | Blacklisted author parent                   |
+| `scanning.modifier_author_parent_permanently_blacklisted`       | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_PERMANENTLY_BLACKLISTED`       | `-25.0` | Permanently blacklisted author parent       |
+| `scanning.modifier_author_parent_whitelisted`                   | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_WHITELISTED`                   |  `12.0` | Whitelisted author parent                   |
+| `scanning.modifier_author_parent_good_reputation`               | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_GOOD_REPUTATION`               |  `10.0` | Author parent with good reputation          |
+| `scanning.modifier_author_parent_bad_reputation`                | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BAD_REPUTATION`                | `-12.0` | Author parent with bad reputation           |
+| `scanning.modifier_named_entity_blacklisted`                    | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BLACKLISTED`                    |  `-8.0` | Blacklisted named entity                    |
+| `scanning.modifier_named_entity_permanently_blacklisted`        | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PERMANENTLY_BLACKLISTED`        | `-13.0` | Permanently blacklisted named entity        |
+| `scanning.modifier_named_entity_whitelisted`                    | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_WHITELISTED`                    |   `8.0` | Whitelisted named entity                    |
+| `scanning.modifier_named_entity_good_reputation`                | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_GOOD_REPUTATION`                |   `5.0` | Named entity with good reputation           |
+| `scanning.modifier_named_entity_bad_reputation`                 | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BAD_REPUTATION`                 | `-10.0` | Named entity with bad reputation            |
+| `scanning.modifier_named_entity_parent_blacklisted`             | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BLACKLISTED`             |  `-5.0` | Blacklisted named-entity parent             |
+| `scanning.modifier_named_entity_parent_permanently_blacklisted` | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED` |  `-8.0` | Permanently blacklisted named-entity parent |
+| `scanning.modifier_named_entity_parent_whitelisted`             | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_WHITELISTED`             |   `5.0` | Whitelisted named-entity parent             |
+| `scanning.modifier_named_entity_parent_good_reputation`         | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_GOOD_REPUTATION`         |   `3.0` | Named-entity parent with good reputation    |
+| `scanning.modifier_named_entity_parent_bad_reputation`          | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BAD_REPUTATION`          |  `-5.0` | Named-entity parent with bad reputation     |
+| `scanning.modifier_classification_normal`                       | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_NORMAL`                       |   `1.0` | Normal classification                       |
+| `scanning.modifier_classification_suspicious`                   | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_SUSPICIOUS`                   | `-10.0` | Suspicious classification                   |
+| `scanning.modifier_classification_malicious`                    | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_MALICIOUS`                    | `-25.0` | Malicious classification                    |
+
+| Name                                  | Environment Variable                             | Type  | Default | Description                                  |
+|---------------------------------------|--------------------------------------------------|-------|--------:|----------------------------------------------|
+| `scanning.auto_report`                | `FEDERATION_SCANNING_AUTO_REPORT`                | bool  |  `true` | Enable automatic report generation           |
+| `scanning.auto_report_threshold`      | `FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD`      | float |  `80.0` | Risk score that triggers automatic reporting |
+| `scanning.action_block_threshold`     | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`     | float |  `80.0` | Risk score that suggests blocking content    |
+| `scanning.action_caution_threshold`   | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`   | float |  `60.0` | Risk score that suggests caution             |
+| `scanning.reputation_window_duration` | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION` | int   |   `300` | Reputation window duration in seconds        |
+| `scanning.reputation_max_delta`       | `FEDERATION_SCANNING_REPUTATION_MAX_DELTA`       | int   |    `10` | Maximum reputation change per window         |
+| `scanning.reputation_min_delta`       | `FEDERATION_SCANNING_REPUTATION_MIN_DELTA`       | int   |   `-10` | Minimum reputation change per window         |
+| `scanning.reputation_scaling_factor`  | `FEDERATION_SCANNING_REPUTATION_SCALING_FACTOR`  | float |  `0.25` | Reputation change scaling factor             |
+| `scanning.reputation_min_bound`       | `FEDERATION_SCANNING_REPUTATION_MIN_BOUND`       | int   | `-1000` | Minimum stored reputation                    |
+| `scanning.reputation_max_bound`       | `FEDERATION_SCANNING_REPUTATION_MAX_BOUND`       | int   |  `1000` | Maximum stored reputation                    |
+| `scanning.risk_score_neutral_point`   | `FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT`   | float |  `50.0` | Neutral risk score                           |
+| `scanning.risk_score_scaling_factor`  | `FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR`  | float |   `2.3` | Scan-result to risk-score scaling factor     |
+| `scanning.risk_score_min_bound`       | `FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND`       | float |   `0.0` | Minimum returned risk score                  |
+| `scanning.risk_score_max_bound`       | `FEDERATION_SCANNING_RISK_SCORE_MAX_BOUND`       | float | `100.0` | Maximum returned risk score                  |
 
 
 ### Bayesian Server Configuration
