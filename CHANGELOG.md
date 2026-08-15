@@ -26,6 +26,16 @@ This update adds relationship-aware entity queries and prevents PHP diagnostics 
 ### Changed
  - Updated the production PHP configuration to disable displayed startup and runtime errors. PHP diagnostics remain
    available to registered handlers, including LogLib2, without being included in HTTP responses.
+ - Updated the OpenAPI component registry and request schemas: `ContentInput` is now a reusable schema used by
+   `SubmitEvidence`, `SubmitReport`, and `ScanContent`; `EntityQueryResult` is included in generated schemas.
+ - Consolidated audit mutation events. Entity reputation and whitelist changes now use `ENTITY_UPDATED`; operator
+   permission, access-token, name, auto-assign, and CLI edit changes now use `OPERATOR_UPDATED`.
+
+### Removed
+ - Removed superseded audit log types `ENTITY_REPUTATION_CLEARED`, `ENTITY_WHITELIST_CHANGED`,
+   `OPERATOR_PERMISSIONS_CHANGED`, `OPERATOR_ACCESS_TOKEN_GENERATED`, `OPERATOR_NAME_CHANGED`, and
+   `OPERATOR_AUTO_ASSIGN_CHANGED`.
+ - Removed the unused `BLACKLIST_ATTACHMENT_ADDED` audit log type.
 
 
 
