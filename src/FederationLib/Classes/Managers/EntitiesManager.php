@@ -356,6 +356,35 @@
         }
 
         /**
+         * Retrieves all entities that directly reference the given entity as their relationship target.
+         *
+         * @param string $entityUuid The relationship target UUID.
+         * @return EntityRecord[] Entities that reference the target UUID.
+         * @throws InvalidArgumentException If the UUID is invalid.
+         * @throws DatabaseOperationException If the query fails.
+         */
+        public static function getEntitiesByRelationshipEntity(string $entityUuid): array
+        {
+            if(!Validate::uuid($entityUuid))
+            {
+                throw new InvalidArgumentException('A valid Entity UUID must be provided');
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare('SELECT * FROM entities WHERE relationship_entity = :relationship_entity');
+                $stmt->bindParam(':relationship_entity', $entityUuid);
+                $stmt->execute();
+
+                return array_map(fn(array $entity) => new EntityRecord($entity), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch(PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve entities by relationship target: ' . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Retrieves an entity by its ID and domain.
          *
          * @param string $host The host of the entity.
