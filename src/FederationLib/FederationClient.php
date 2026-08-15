@@ -14,6 +14,7 @@
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
     use FederationLib\Objects\EntityRecord;
+    use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
     use FederationLib\Objects\OperatorCreated;
@@ -967,6 +968,30 @@
 
             return EntityRecord::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
                 sprintf('Failed to get the entity record for %s', $entityIdentifier)
+            ));
+        }
+
+        /**
+         * Retrieves an entity and the other entities in its direct relationship group.
+         *
+         * If the entity references a parent, the result contains that parent and the
+         * parent's other related entities, excluding the queried entity itself.
+         *
+         * @param string $entityIdentifier The entity UUID, hash, or address to query.
+         * @return EntityQueryResult The queried entity and its related entities.
+         * @throws RequestException If the request fails or the entity is not found.
+         * @throws InvalidArgumentException If the identifier is empty.
+         */
+        public function queryEntity(string $entityIdentifier): EntityQueryResult
+        {
+            if(empty($entityIdentifier))
+            {
+                throw new InvalidArgumentException('Entity identifier cannot be empty');
+            }
+
+            return EntityQueryResult::fromArray(
+                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query', null, [HttpResponseCode::OK],
+                sprintf('Failed to query entity %s', $entityIdentifier)
             ));
         }
 
