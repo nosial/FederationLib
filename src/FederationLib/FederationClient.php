@@ -2467,12 +2467,17 @@
 
             $headers = substr($response, 0, $headerSize);
             $body = substr($response, $headerSize);
-
             $suggestedFilename = $this->extractFilenameFromHeaders($headers);
-            $filename = !empty($suggestedFilename) ? $suggestedFilename : $attachmentUuid;
-            $finalFilePath = $directoryPath . DIRECTORY_SEPARATOR . $filename;
+            $filename = $suggestedFilename !== null ? basename(str_replace('\\', '/', $suggestedFilename)) : '';
 
+            if($filename === '' || $filename === '.' || $filename === '..')
+            {
+                $filename = $attachmentUuid;
+            }
+
+            $finalFilePath = $directoryPath . DIRECTORY_SEPARATOR . $filename;
             $fileHandle = fopen($finalFilePath, 'wb');
+
             if($fileHandle === false)
             {
                 throw new InvalidArgumentException('Failed to open file for writing: ' . $finalFilePath);
