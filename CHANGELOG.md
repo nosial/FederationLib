@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.4] - Ongoing
 
-This is an ongoing update.
+This update adds relationship-aware entity queries and prevents PHP diagnostics from being emitted in web responses.
+
+### Added
+ - Added `QueryEntity` for `GET /entities/{identifier}/query` and
+   `FederationClient::queryEntity()`. Queries accept UUID, SHA-256 hash, and entity-address identifiers and return
+   the target entity with its direct relationship group.
+ - Added `EntityQueryResult`, containing `entity_record`, `related_entities`, `active_blacklists`,
+   `suggested_action`, and `suggested_lift_timestamp`.
+ - Added `server.public_query_entity` (`FEDERATION_PUBLIC_QUERY_ENTITY`, default `true`) to control whether
+   unauthenticated clients may query entity relationship groups.
+ - Added `EntitiesManager::getEntitiesByRelationshipEntity()` and
+   `BlacklistManager::getActiveEntriesByEntities()` for resolving a relationship group and its non-lifted,
+   non-expired blacklist records.
+ - Added entity-query coverage for relationship grouping, UUID/hash/address lookup, blacklist action precedence,
+   public access, self-references, unknown identifiers, and lifted-blacklist exclusion.
+
+### Changed
+ - Updated the production PHP configuration to disable displayed startup and runtime errors. PHP diagnostics remain
+   available to registered handlers, including LogLib2, without being included in HTTP responses.
 
 
 
