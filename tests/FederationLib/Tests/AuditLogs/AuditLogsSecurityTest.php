@@ -99,7 +99,7 @@
             $victim = $this->createLimitedOperator('audit_victim', management: true);
             $snooper = $this->createLimitedOperator('audit_snooper', client: true);
 
-            // Generate a private audit log entry (OPERATOR_PERMISSIONS_CHANGED) as the actor.
+            // Generate a private OPERATOR_UPDATED audit entry as the actor.
             $actor->setManagementPermissions($victim->getSelf()->getUuid(), false);
 
             $this->expectRequestFailure(

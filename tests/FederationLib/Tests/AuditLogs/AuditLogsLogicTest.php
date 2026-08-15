@@ -454,10 +454,7 @@
                     AuditLogType::OPERATOR_DELETED,
                     AuditLogType::OPERATOR_DISABLED,
                     AuditLogType::OPERATOR_ENABLED,
-                    AuditLogType::OPERATOR_PERMISSIONS_CHANGED,
-                    AuditLogType::OPERATOR_ACCESS_TOKEN_GENERATED,
-                    AuditLogType::OPERATOR_NAME_CHANGED,
-                    AuditLogType::OPERATOR_AUTO_ASSIGN_CHANGED
+                    AuditLogType::OPERATOR_UPDATED,
                 ]);
             }
         }
@@ -483,7 +480,7 @@
                     AuditLogType::ENTITY_DELETED,
                     AuditLogType::ENTITY_BLACKLISTED,
                     AuditLogType::ENTITY_PUSHED,
-                    AuditLogType::ENTITY_REPUTATION_CLEARED,
+                    AuditLogType::ENTITY_UPDATED,
                 ]);
             }
         }
@@ -557,7 +554,7 @@
                     AuditLogType::ENTITY_DELETED,
                     AuditLogType::ENTITY_BLACKLISTED,
                     AuditLogType::ENTITY_PUSHED,
-                    AuditLogType::ENTITY_REPUTATION_CLEARED,
+                    AuditLogType::ENTITY_UPDATED,
                 ]);
             }
         }

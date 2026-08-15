@@ -59,7 +59,7 @@
                 }
 
                 $newAccessToken = OperatorManager::newAccessToken($operatorUuid);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_ACCESS_TOKEN_GENERATED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_UPDATED, sprintf(
                     'Operator %s (%s) generated Access Token by %s',
                     $existingOperator->getName(),
                     $existingOperator->getUuid(),

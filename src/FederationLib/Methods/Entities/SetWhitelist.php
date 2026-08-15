@@ -114,7 +114,7 @@
                 if(EntitiesManager::setEntityWhitelist($entityUuid, $whitelisted))
                 {
                     $state = $whitelisted ? 'whitelisted' : 'unwhitelisted';
-                    AuditLogManager::createEntry(AuditLogType::ENTITY_WHITELIST_CHANGED, sprintf(
+                    AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                         'Entity %s %s by operator %s',
                         $entityRecord->getAddress(),
                         $state,

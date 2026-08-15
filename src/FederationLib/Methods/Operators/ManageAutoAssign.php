@@ -71,7 +71,7 @@
                 }
 
                 OperatorManager::setAutoAssign($operatorUuid, $enabled);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_AUTO_ASSIGN_CHANGED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_UPDATED, sprintf(
                     'Operator %s %s auto assign by %s',
                     $targetOperator->getName(),
                     $enabled ? 'enabled' : 'disabled',

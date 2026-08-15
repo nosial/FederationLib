@@ -10,10 +10,7 @@
         case OPERATOR_DELETED = 'OPERATOR_DELETED';
         case OPERATOR_DISABLED = 'OPERATOR_DISABLED';
         case OPERATOR_ENABLED = 'OPERATOR_ENABLED';
-        case OPERATOR_PERMISSIONS_CHANGED = 'OPERATOR_PERMISSIONS_CHANGED';
-        case OPERATOR_ACCESS_TOKEN_GENERATED = 'OPERATOR_ACCESS_TOKEN_GENERATED';
-        case OPERATOR_NAME_CHANGED = 'OPERATOR_NAME_CHANGED';
-        case OPERATOR_AUTO_ASSIGN_CHANGED = 'OPERATOR_AUTO_ASSIGN_CHANGED';
+        case OPERATOR_UPDATED = 'OPERATOR_UPDATED';
 
         case ATTACHMENT_UPLOADED = 'ATTACHMENT_UPLOADED';
         case ATTACHMENT_DELETED = 'ATTACHMENT_DELETED';
@@ -32,13 +29,10 @@
         case ENTITY_BLACKLISTED = 'ENTITY_BLACKLISTED';
         case ENTITY_PUSHED = 'ENTITY_PUSHED';
         case ENTITY_UPDATED = 'ENTITY_UPDATED';
-        case ENTITY_REPUTATION_CLEARED = 'ENTITY_REPUTATION_CLEARED';
-        case ENTITY_WHITELIST_CHANGED = 'ENTITY_WHITELIST_CHANGED';
 
         case BLACKLIST_RECORD_DELETED = 'BLACKLIST_DELETED';
         case BLACKLIST_LIFTED = 'BLACKLIST_LIFTED';
         case BLACKLIST_EXTENDED = 'BLACKLIST_EXTENDED';
-        case BLACKLIST_ATTACHMENT_ADDED = 'BLACKLIST_ATTACHMENT_ADDED';
 
         case OTHER = 'OTHER';
 
@@ -76,10 +70,7 @@
                 self::OPERATOR_DELETED,
                 self::OPERATOR_DISABLED,
                 self::OPERATOR_ENABLED,
-                self::OPERATOR_PERMISSIONS_CHANGED,
-                self::OPERATOR_ACCESS_TOKEN_GENERATED,
-                self::OPERATOR_NAME_CHANGED,
-                self::OPERATOR_AUTO_ASSIGN_CHANGED => AuditLogCategory::OPERATOR_EVENTS,
+                self::OPERATOR_UPDATED => AuditLogCategory::OPERATOR_EVENTS,
 
                 self::ATTACHMENT_UPLOADED,
                 self::ATTACHMENT_DELETED => AuditLogCategory::ATTACHMENT_EVENTS,
@@ -97,13 +88,11 @@
                 self::ENTITY_DELETED,
                 self::ENTITY_BLACKLISTED,
                 self::ENTITY_PUSHED,
-                self::ENTITY_REPUTATION_CLEARED,
-                self::ENTITY_WHITELIST_CHANGED => AuditLogCategory::ENTITY_EVENTS,
+                self::ENTITY_UPDATED => AuditLogCategory::ENTITY_EVENTS,
 
                 self::BLACKLIST_RECORD_DELETED,
                 self::BLACKLIST_LIFTED,
-                self::BLACKLIST_EXTENDED,
-                self::BLACKLIST_ATTACHMENT_ADDED => AuditLogCategory::BLACKLIST_EVENTS,
+                self::BLACKLIST_EXTENDED => AuditLogCategory::BLACKLIST_EVENTS,
 
                 default => AuditLogCategory::OTHER
             };

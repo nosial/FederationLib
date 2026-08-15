@@ -71,7 +71,7 @@
                 }
 
                 OperatorManager::setManagementPermissions($operatorUuid, $enabled);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_PERMISSIONS_CHANGED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_UPDATED, sprintf(
                     'Operator %s %s management permissions by %s',
                     $targetOperator->getName(),
                     $enabled ? 'enabled' : 'disabled',

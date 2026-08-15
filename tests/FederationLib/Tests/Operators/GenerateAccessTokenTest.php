@@ -218,7 +218,7 @@
             $auditLogs = $this->client->listAuditLogs(1, 100);
             $matches = array_filter(
                 $auditLogs,
-                fn($log) => $log->getType() === AuditLogType::OPERATOR_ACCESS_TOKEN_GENERATED
+                fn($log) => $log->getType() === AuditLogType::OPERATOR_UPDATED
                     && str_contains($log->getMessage(), $operatorUuid)
             );
 

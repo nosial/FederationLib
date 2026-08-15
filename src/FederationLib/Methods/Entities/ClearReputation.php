@@ -77,7 +77,7 @@
 
                 EntitiesManager::clearReputation($entityRecord->getUuid());
 
-                AuditLogManager::createEntry(AuditLogType::ENTITY_REPUTATION_CLEARED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                     'Reputation cleared for entity %s by %s',
                     $entityRecord->getAddress(),
                     $authenticatedOperator->getName()

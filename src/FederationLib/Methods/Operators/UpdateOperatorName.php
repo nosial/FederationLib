@@ -78,7 +78,7 @@
                 }
 
                 OperatorManager::updateOperatorName($operatorUuid, $name);
-                AuditLogManager::createEntry(AuditLogType::OPERATOR_NAME_CHANGED, sprintf(
+                AuditLogManager::createEntry(AuditLogType::OPERATOR_UPDATED, sprintf(
                     'Operator %s renamed to %s by %s',
                     $targetOperator->getName(),
                     $name,
