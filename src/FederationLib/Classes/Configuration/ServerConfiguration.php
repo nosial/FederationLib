@@ -29,6 +29,7 @@
         private bool $publicEntityMetadata;
         private bool $publicReports;
         private bool $publicScanContent;
+        private bool $publicQueryEntity;
         private int $minBlacklistTime;
         private int $topThreatsLimit;
 
@@ -59,6 +60,7 @@
             $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
             $this->publicReports = $config['public_reports'] ?? true;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
+            $this->publicQueryEntity = $config['public_query_entity'] ?? true;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
             $this->topThreatsLimit = $config['top_threats_limit'] ?? 25;
         }
@@ -261,6 +263,16 @@
         public function isScanContentPublic(): bool
         {
             return $this->publicScanContent;
+        }
+
+        /**
+         * Checks if entity relationship queries are publicly accessible.
+         *
+         * @return bool True if public entity queries are enabled, false otherwise.
+         */
+        public function isQueryEntityPublic(): bool
+        {
+            return $this->publicQueryEntity;
         }
 
         /**
