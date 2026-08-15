@@ -478,4 +478,44 @@
                 );
             }
         }
+
+        public function testQueryEntityIsPublicByDefaultAndExcludesSelfReferences(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $this->client->setEntityRelationship($entityUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE);
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $queryResult = $anonymousClient->queryEntity($entityUuid);
+
+            $this->assertSame($entityUuid, $queryResult->getEntityRecord()->getUuid());
+            $this->assertSame([], $queryResult->getRelatedEntities());
+        }
+
+        public function testQueryEntityRejectsMissingAndUnknownIdentifiers(): void
+        {
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->queryEntity('');
+        }
+
+        public function testQueryEntityReturnsNotFoundForUnknownEntity(): void
+        {
+            $this->expectRequestFailure(
+                fn() => $this->client->queryEntity($this->randomUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
+                'Querying an unknown entity must not disclose or create relationship data'
+            );
+        }
+
+        public function testQueryEntityExcludesLiftedBlacklists(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $blacklistUuid = $this->createSecurityBlacklist($entityUuid);
+
+            $this->client->liftBlacklistRecord($blacklistUuid);
+
+            $queryResult = $this->client->queryEntity($entityUuid);
+            $this->assertSame([], $queryResult->getActiveBlacklists());
+            $this->assertNull($queryResult->getSuggestedAction());
+            $this->assertNull($queryResult->getSuggestedLiftTimestamp());
+        }
     }

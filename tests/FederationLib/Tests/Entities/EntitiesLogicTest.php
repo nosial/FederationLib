@@ -1073,4 +1073,85 @@
             $this->assertGreaterThanOrEqual($afterSet, $afterClear,
                 'Updated should not go backwards after clearing relationship');
         }
+
+        public function testQueryEntityReturnsRelationshipGroup(): void
+        {
+            $parent = $this->createSecurityEntity();
+            $unrelated = $this->createSecurityEntity();
+            $childC = $this->createSecurityEntity();
+            $childD = $this->createSecurityEntity();
+
+            $this->client->setEntityRelationship($childC, $parent, EntityRelationshipType::CHILD);
+            $this->client->setEntityRelationship($childD, $parent, EntityRelationshipType::PROXY);
+
+            $parentQuery = $this->client->queryEntity($parent);
+            $this->assertSame($parent, $parentQuery->getEntityRecord()->getUuid());
+            $this->assertEqualsCanonicalizing(
+                [$childC, $childD],
+                array_map(fn(EntityRecord $entity) => $entity->getUuid(), $parentQuery->getRelatedEntities())
+            );
+
+            $childQuery = $this->client->queryEntity($childD);
+            $this->assertSame($childD, $childQuery->getEntityRecord()->getUuid());
+            $this->assertEqualsCanonicalizing(
+                [$parent, $childC],
+                array_map(fn(EntityRecord $entity) => $entity->getUuid(), $childQuery->getRelatedEntities())
+            );
+
+            $unrelatedQuery = $this->client->queryEntity($unrelated);
+            $this->assertSame($unrelated, $unrelatedQuery->getEntityRecord()->getUuid());
+            $this->assertSame([], $unrelatedQuery->getRelatedEntities());
+        }
+
+        public function testQueryEntitySupportsHashAndAddressIdentifiers(): void
+        {
+            $host = 'query-identifier-test.com';
+            $id = 'query_user';
+            $entityUuid = $this->client->pushEntity($host, $id);
+            $this->createdEntities[] = $entityUuid;
+
+            $byHash = $this->client->queryEntity(Utilities::hashEntity($host, $id));
+            $this->assertSame($entityUuid, $byHash->getEntityRecord()->getUuid());
+
+            $byAddress = $this->client->queryEntity($id . '@' . $host);
+            $this->assertSame($entityUuid, $byAddress->getEntityRecord()->getUuid());
+        }
+
+        public function testQueryEntityBlacklistSuggestedActionPrecedence(): void
+        {
+            $parent = $this->createSecurityEntity();
+            $child = $this->createSecurityEntity();
+            $this->client->setEntityRelationship($child, $parent, EntityRelationshipType::CHILD);
+
+            $parentEvidence = $this->client->submitEvidence($parent, 'Parent blacklist evidence');
+            $this->createdEvidenceRecords[] = $parentEvidence;
+            $parentBlacklist = $this->client->blacklistEntity($parent, $parentEvidence, IncidentType::MALWARE, null);
+            $this->createdBlacklistRecords[] = $parentBlacklist;
+
+            $relatedPermanentQuery = $this->client->queryEntity($child);
+            $this->assertCount(1, $relatedPermanentQuery->getActiveBlacklists());
+            $this->assertSame('TEMPORARILY_BLOCK_ENTITY', $relatedPermanentQuery->getSuggestedAction()?->value);
+            $this->assertSame(PHP_INT_MAX, $relatedPermanentQuery->getSuggestedLiftTimestamp());
+
+            $temporaryExpiry = time() + 3600;
+            $childEvidence = $this->client->submitEvidence($child, 'Child temporary blacklist evidence');
+            $this->createdEvidenceRecords[] = $childEvidence;
+            $childTemporaryBlacklist = $this->client->blacklistEntity($child, $childEvidence, IncidentType::SPAM, $temporaryExpiry);
+            $this->createdBlacklistRecords[] = $childTemporaryBlacklist;
+
+            $temporaryQuery = $this->client->queryEntity($child);
+            $this->assertCount(2, $temporaryQuery->getActiveBlacklists());
+            $this->assertSame('TEMPORARILY_BLOCK_ENTITY', $temporaryQuery->getSuggestedAction()?->value);
+            $this->assertSame(PHP_INT_MAX, $temporaryQuery->getSuggestedLiftTimestamp());
+
+            $permanentEvidence = $this->client->submitEvidence($child, 'Child permanent blacklist evidence');
+            $this->createdEvidenceRecords[] = $permanentEvidence;
+            $childPermanentBlacklist = $this->client->blacklistEntity($child, $permanentEvidence, IncidentType::MALWARE, null);
+            $this->createdBlacklistRecords[] = $childPermanentBlacklist;
+
+            $permanentQuery = $this->client->queryEntity($child);
+            $this->assertCount(3, $permanentQuery->getActiveBlacklists());
+            $this->assertSame('PERMANENTLY_BLOCK_ENTITY', $permanentQuery->getSuggestedAction()?->value);
+            $this->assertNull($permanentQuery->getSuggestedLiftTimestamp());
+        }
     }
