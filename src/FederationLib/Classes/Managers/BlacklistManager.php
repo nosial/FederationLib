@@ -518,6 +518,48 @@
         }
 
         /**
+         * Retrieves active blacklist entries for the supplied entities.
+         *
+         * Active records have not been lifted and have not expired.
+         *
+         * @param string[] $entityUuids Entity UUIDs to query.
+         * @return BlacklistRecord[] Active blacklist records for the entities.
+         * @throws InvalidArgumentException If an entity UUID is invalid.
+         * @throws DatabaseOperationException If the query fails.
+         */
+        public static function getActiveEntriesByEntities(array $entityUuids): array
+        {
+            $entityUuids = array_values(array_unique($entityUuids));
+            if(empty($entityUuids))
+            {
+                return [];
+            }
+
+            foreach($entityUuids as $entityUuid)
+            {
+                if(!is_string($entityUuid) || !Validate::uuid($entityUuid))
+                {
+                    throw new InvalidArgumentException('Entity must be a valid UUID.');
+                }
+            }
+
+            try
+            {
+                $placeholders = implode(', ', array_fill(0, count($entityUuids), '?'));
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM blacklist WHERE entity IN ($placeholders) AND lifted=0 AND (expires IS NULL OR expires > NOW()) ORDER BY created DESC, uuid DESC"
+                );
+                $stmt->execute($entityUuids);
+
+                return array_map(fn(array $blacklist) => new BlacklistRecord($blacklist), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch(PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve active blacklist entries by entities: ' . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
          * Retrieves all blacklist entries associated with a specific evidence record.
          *
          * @param string $evidenceUuid The UUID of the evidence.
