@@ -293,7 +293,8 @@
             }
 
             // If the given Access Token matches the master operator's Access Token, we can retrieve the master operator.
-            if(Configuration::getServerConfiguration()->getAccessToken() !== null && $accessToken === Configuration::getServerConfiguration()->getAccessToken())
+            $configuredAccessToken = Configuration::getServerConfiguration()->getAccessToken();
+            if($configuredAccessToken !== null && hash_equals($configuredAccessToken, $accessToken))
             {
                 // A master operator is automatically created if it does not exist.
                 // This is useful for initial setup or if the master operator was deleted.
