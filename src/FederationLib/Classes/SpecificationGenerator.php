@@ -7,7 +7,9 @@
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\EntityRecord;
+    use FederationLib\Objects\EntityQueryResult;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\FileAttachmentRecord;
@@ -141,7 +143,9 @@
                 'AuditLog' => AuditLog::class,
                 'BlacklistRecord' => BlacklistRecord::class,
                 'ContentClassification' => ContentClassification::class,
+                'ContentInput' => ContentInput::class,
                 'EntityRecord' => EntityRecord::class,
+                'EntityQueryResult' => EntityQueryResult::class,
                 'ErrorResponse' => ErrorResponse::class,
                 'EvidenceRecord' => EvidenceRecord::class,
                 'FileAttachmentRecord' => FileAttachmentRecord::class,

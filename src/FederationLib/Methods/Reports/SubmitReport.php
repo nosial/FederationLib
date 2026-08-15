@@ -14,6 +14,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\ReportSubmission;
     use InvalidArgumentException;
@@ -298,36 +299,6 @@
          */
         public static function getRequestBody(): ?array
         {
-            $evidenceSchema = [
-                'type' => 'object',
-                'properties' => [
-                    'text_content' => [
-                        'type' => 'string',
-                        'description' => 'Text content of the evidence',
-                        'nullable' => true,
-                    ],
-                    'note' => [
-                        'type' => 'string',
-                        'description' => 'Optional note by the operator',
-                        'nullable' => true,
-                    ],
-                    'tag' => [
-                        'type' => 'string',
-                        'description' => 'Optional tag name for the evidence',
-                        'nullable' => true,
-                    ],
-                    'confidential' => [
-                        'type' => 'boolean',
-                        'description' => 'Whether the evidence is confidential',
-                        'default' => false,
-                    ],
-                    'metadata' => [
-                        'type' => 'object',
-                        'description' => 'Arbitrary JSON-encoded metadata',
-                        'nullable' => true,
-                    ],
-                ],
-            ];
 
             return [
                 'required' => true,
@@ -342,15 +313,11 @@
                                 ],
                                 'evidence' => [
                                     'oneOf' => [
-                                        [
-                                            'type' => 'object',
-                                            'description' => 'Single evidence record to create with the report',
-                                            'properties' => $evidenceSchema['properties'],
-                                        ],
+                                        ['$ref' => ContentInput::getReference()],
                                         [
                                             'type' => 'array',
                                             'description' => 'Multiple evidence records to create with the report',
-                                            'items' => $evidenceSchema,
+                                            'items' => ['$ref' => ContentInput::getReference()],
                                         ],
                                     ],
                                 ],

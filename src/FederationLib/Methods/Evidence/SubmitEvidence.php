@@ -13,6 +13,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
     use InvalidArgumentException;
     use FederationLib\Interfaces\RequestSpecificationInterface;
@@ -194,45 +195,25 @@
                 'content' => [
                     'application/json' => [
                         'schema' => [
-                            'type' => 'object',
-                            'properties' => [
-                                'entity_identifier' => [
-                                    'type' => 'string',
-                                    'description' => 'UUID, SHA-256 hash, or entity address of the entity',
-                                ],
-                                'text_content' => [
-                                    'type' => 'string',
-                                    'description' => 'Text content of the evidence',
-                                    'nullable' => true,
-                                ],
-                                'note' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional note by the operator',
-                                    'nullable' => true,
-                                ],
-                                'tag' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional tag name for the evidence',
-                                    'nullable' => true,
-                                ],
-                                'confidential' => [
-                                    'type' => 'boolean',
-                                    'description' => 'Whether the evidence is confidential',
-                                    'default' => false,
-                                ],
-                                'metadata' => [
+                            'allOf' => [
+                                ['$ref' => ContentInput::getReference()],
+                                [
                                     'type' => 'object',
-                                    'description' => 'Arbitrary JSON-encoded metadata',
-                                    'nullable' => true,
-                                ],
-                                'classification' => [
-                                    'type' => 'string',
-                                    'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions and submits text for Bayesian training when enabled.',
-                                    'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS'],
-                                    'nullable' => true,
+                                    'properties' => [
+                                        'entity_identifier' => [
+                                            'type' => 'string',
+                                            'description' => 'UUID, SHA-256 hash, or entity address of the entity',
+                                        ],
+                                        'classification' => [
+                                            'type' => 'string',
+                                            'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions and submits text for Bayesian training when enabled.',
+                                            'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS'],
+                                            'nullable' => true,
+                                        ],
+                                    ],
+                                    'required' => ['entity_identifier'],
                                 ],
                             ],
-                            'required' => ['entity_identifier'],
                         ],
                     ],
                 ],

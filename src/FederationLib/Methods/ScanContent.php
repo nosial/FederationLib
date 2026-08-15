@@ -22,6 +22,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Objects\EntityRecord;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ScannedContent\ContentClassification;
@@ -636,36 +637,6 @@
          */
         public static function getRequestBody(): ?array
         {
-            $evidenceSchema = [
-                'type' => 'object',
-                'properties' => [
-                    'text_content' => [
-                        'type' => 'string',
-                        'description' => 'Text content of the message to scan',
-                        'nullable' => true,
-                    ],
-                    'note' => [
-                        'type' => 'string',
-                        'description' => 'Optional note to associate with any generated evidence',
-                        'nullable' => true,
-                    ],
-                    'tag' => [
-                        'type' => 'string',
-                        'description' => 'Optional tag name for any generated evidence',
-                        'nullable' => true,
-                    ],
-                    'confidential' => [
-                        'type' => 'boolean',
-                        'description' => 'Whether any generated evidence is confidential',
-                        'default' => false,
-                    ],
-                    'metadata' => [
-                        'type' => 'object',
-                        'description' => 'Arbitrary JSON-encoded metadata to associate with any generated evidence',
-                        'nullable' => true,
-                    ],
-                ],
-            ];
 
             return [
                 'required' => true,
@@ -681,15 +652,11 @@
                                 ],
                                 'evidence' => [
                                     'oneOf' => [
-                                        [
-                                            'type' => 'object',
-                                            'description' => 'Single message to scan',
-                                            'properties' => $evidenceSchema['properties'],
-                                        ],
+                                        ['$ref' => ContentInput::getReference()],
                                         [
                                             'type' => 'array',
                                             'description' => 'Multiple messages to scan',
-                                            'items' => $evidenceSchema,
+                                            'items' => ['$ref' => ContentInput::getReference()],
                                         ],
                                     ],
                                 ],

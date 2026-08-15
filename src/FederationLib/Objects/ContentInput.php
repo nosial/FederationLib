@@ -1,8 +1,9 @@
 <?php
 
     namespace FederationLib\Objects;
+    use FederationLib\Interfaces\ObjectSpecificationInterface;
 
-    class ContentInput
+    class ContentInput implements ObjectSpecificationInterface
     {
         private ?string $textContent;
         private ?string $note;
@@ -113,5 +114,63 @@
             }
 
             return $result;
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectType(): string
+        {
+            return 'object';
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectProperties(): array
+        {
+            return [
+                'text_content' => [
+                    'type' => 'string',
+                    'description' => 'Text content',
+                    'nullable' => true,
+                ],
+                'note' => [
+                    'type' => 'string',
+                    'description' => 'Optional operator note',
+                    'nullable' => true,
+                ],
+                'tag' => [
+                    'type' => 'string',
+                    'description' => 'Optional tag',
+                    'nullable' => true,
+                ],
+                'confidential' => [
+                    'type' => 'boolean',
+                    'description' => 'Whether the content is confidential',
+                    'default' => false,
+                ],
+                'metadata' => [
+                    'type' => 'object',
+                    'description' => 'Optional arbitrary metadata',
+                    'nullable' => true,
+                ],
+            ];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getObjectRequired(): array
+        {
+            return [];
+        }
+
+        /**
+         * @inheritDoc
+         */
+        public static function getReference(): string
+        {
+            return '#/components/schemas/ContentInput';
         }
     }
