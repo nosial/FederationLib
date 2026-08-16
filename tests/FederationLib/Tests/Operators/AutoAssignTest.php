@@ -387,6 +387,15 @@
             $this->assertTrue($generatedReport->isAutomated(), 'Generated report should be marked as automated');
             $this->assertEquals($autoAssignOperator->getSelf()->getUuid(), $generatedReport->getAssignedOperator(), 'Generated report should be assigned to the auto assign operator');
 
+            $this->assertEquals($entityUuid, $generatedReport->getReportingEntity(), 'Generated report should reference the scanned author entity');
+            $generatedEvidence = $this->client->listReportEvidenceRecords($generatedReport->getUuid(), 1, 100, includeConfidential: true);
+            $this->assertNotEmpty($generatedEvidence, 'Generated report should include evidence from the scan input');
+            foreach($generatedEvidence as $evidence)
+            {
+                $this->assertEquals($generatedReport->getUuid(), $evidence->getReport(), 'Generated evidence should reference the generated report');
+                $this->assertEquals($entityUuid, $evidence->getEntityUuid(), 'Generated evidence should reference the scanned author entity');
+            }
+
             // Clean up the evidence the system attached to the generated report
             foreach ($this->client->listEvidence(1, 1000) as $evidence)
             {

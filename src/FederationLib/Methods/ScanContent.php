@@ -521,7 +521,7 @@
             // Create the report
             $reportUuid = ReportManager::createReport(
                 submittingOperator: $systemOperator->getUuid(),
-                reportingEntity: null,
+                reportingEntity: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
                 type: IncidentType::SPAM,
                 message: $reportMessage,
                 automated: true
