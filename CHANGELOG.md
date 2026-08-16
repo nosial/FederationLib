@@ -5,9 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.5] - Ongoing
+## [1.0.5] - 2026-08-16
 
-This is an ongoing update
+This update corrects automated scan-report associations and improves fresh-database query performance and Redis cache throughput.
+
+### Changed
+ - Optimized fresh database schemas for report, evidence, and audit-log timelines. Replaced redundant report UUID
+   indexes with ordered composite indexes aligned with manager filtering and pagination; report-evidence reads now
+   index confidentiality and ordering; audit relation/type timelines include UUID tie-breakers.
+ - Updated `RedisConnection` search-result invalidation to use atomic namespace generations instead of scanning and
+   deleting every cached result key. Search keys now include a SHA-256 parameter digest and the current namespace
+   generation.
+ - Batched Redis record writes and reverse-dependency invalidation with pipelines. Manager pre-cache population now
+   writes record hashes and TTLs in a single pipeline per result set.
+ - Added cache-through result caching for entity-scoped evidence, reports, blacklist records, and audit-log
+   timelines. Each result set is invalidated through its manager namespace after a successful mutation.
+
+### Fixed
+ - Fixed automatically generated scan reports omitting their reporting entity. Automated reports now reference the
+   resolved author entity and retain their generated evidence records through the report association, matching
+   manually submitted reports.
 
 
 
