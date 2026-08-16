@@ -28,15 +28,15 @@ create table audit_log
 )
     comment 'The table for housing audit logs';
 
-create index audit_log_entity_timestamp_index
-    on audit_log (entity asc, timestamp desc);
+create index audit_log_entity_timestamp_uuid_index
+    on audit_log (entity asc, timestamp desc, uuid desc);
 
-create index audit_log_operator_timestamp_index
-    on audit_log (operator asc, timestamp desc);
+create index audit_log_operator_timestamp_uuid_index
+    on audit_log (operator asc, timestamp desc, uuid desc);
 
 create index audit_log_timestamp_index
     on audit_log (timestamp desc, uuid desc);
 
-create index audit_log_type_timestamp_index
-    on audit_log (type asc, timestamp desc);
+create index audit_log_type_timestamp_uuid_index
+    on audit_log (type asc, timestamp desc, uuid desc);
 

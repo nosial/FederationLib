@@ -10,6 +10,7 @@ create table reports
     message             text                                                                                                                        null comment 'Optional. The message provided with the report by the entity',
     created             timestamp                                                                                         default current_timestamp not null comment 'The timestamp for when the report was created',
     updated             timestamp                                                                                                                   null comment 'The Timestamp for when the record was last updated',
+    primary key (uuid),
     constraint reports_entities_uuid_fk
         foreign key (reporting_entity) references entities (uuid)
             on update cascade on delete cascade,
@@ -22,25 +23,15 @@ create table reports
 )
     comment 'Table for housing user submitted reports via clients';
 
-create index reports_assigned_operator_index
-    on reports (assigned_operator);
+create index reports_assigned_operator_created_uuid_index
+    on reports (assigned_operator asc, created desc, uuid desc);
 
-create index reports_created_index
-    on reports (created);
+create index reports_created_uuid_index
+    on reports (created desc, uuid desc);
 
-create index reports_reporting_entity_index
-    on reports (reporting_entity);
+create index reports_reporting_entity_created_uuid_index
+    on reports (reporting_entity asc, created desc, uuid desc);
 
-create index reports_submitting_operator_index
-    on reports (submitting_operator);
-
-create index reports_uuid_index
-    on reports (uuid);
-
-alter table reports
-    add primary key (uuid);
-
-alter table reports
-    add constraint reports_uuid_uindex
-        unique (uuid);
+create index reports_submitting_operator_created_uuid_index
+    on reports (submitting_operator asc, created desc, uuid desc);
 

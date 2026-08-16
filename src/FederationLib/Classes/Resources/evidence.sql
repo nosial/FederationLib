@@ -34,8 +34,8 @@ create index evidence_entity_created_index
 create index evidence_operator_created_index
     on evidence (operator asc, created desc);
 
-create index evidence_report_index
-    on evidence (report);
+create index evidence_report_confidential_created_uuid_index
+    on evidence (report asc, confidential asc, created desc, uuid desc);
 
 create index evidence_tag_created_index
     on evidence (tag asc, created desc);
