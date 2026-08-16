@@ -391,6 +391,17 @@
             }
 
             $offset = ($page - 1) * $limit;
+            $cacheKey = null;
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn($data) => new AuditLog($data), $cached);
+                }
+            }
+
             try
             {
                 $sql = "SELECT * FROM audit_log WHERE entity = :entity";
@@ -445,6 +456,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve audit log entries by entity: " . $e->getMessage(), 0, $e);
+            }
+
+            if($cacheKey !== null)
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(AuditLog $record) => $record->toArray(), $entries));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())

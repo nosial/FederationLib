@@ -480,6 +480,17 @@
             }
 
             $offset = ($page - 1) * $limit;
+            $cacheKey = null;
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn($data) => new BlacklistRecord($data), $cached);
+                }
+            }
+
 
             try
             {
@@ -503,6 +514,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve blacklist entries by entity: " . $e->getMessage(), 0, $e);
+            }
+
+            if($cacheKey !== null)
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(BlacklistRecord $record) => $record->toArray(), $results));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())

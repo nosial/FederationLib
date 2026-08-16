@@ -374,6 +374,17 @@
             {
                 throw new InvalidArgumentException('Page must be greater than 0');
             }
+            $cacheKey = null;
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, func_get_args());
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn($data) => new EvidenceRecord($data), $cached);
+                }
+            }
+
 
             try
             {
@@ -401,6 +412,11 @@
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve evidence by entity: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if($cacheKey !== null)
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EvidenceRecord $record) => $record->toArray(), $evidenceRecords));
             }
 
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
