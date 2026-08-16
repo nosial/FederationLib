@@ -158,7 +158,26 @@
          */
         public static function clearSearchCache(string $resourcePrefix): void
         {
-            self::clearRecords(self::SEARCH_CACHE_PREFIX . $resourcePrefix);
+            $redis = self::getConnection();
+            if($redis === null)
+            {
+                return;
+            }
+
+            try
+            {
+                // An atomic namespace generation avoids blocking SCAN/DEL invalidation
+                // and prevents an in-flight pre-mutation query from being reused later.
+                $redis->incr(self::SEARCH_CACHE_VERSION_PREFIX . $resourcePrefix);
+            }
+            catch(RedisException $e)
+            {
+                Logger::log()->error(sprintf("Failed to invalidate search cache namespace '%s': %s", $resourcePrefix, $e->getMessage()), $e);
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException(sprintf("Failed to invalidate search cache namespace '%s'", $resourcePrefix), $e->getCode(), $e);
+                }
+            }
         }
 
         /**
@@ -172,33 +191,30 @@
          */
         public static function setRecord(SerializableInterface $record, string $cacheKey, ?int $ttl=null, bool $overwrite=true): void
         {
-            if($ttl === null)
+            $redis = self::getConnection();
+            if($redis === null)
             {
-                $ttl = 0;
+                return;
             }
 
+            $ttl ??= 0;
             try
             {
-                if(self::recordExists($cacheKey))
+                if(!$overwrite && $redis->exists($cacheKey) > 0)
                 {
-                    if(!$overwrite)
-                    {
-                        Logger::log()->debug(sprintf("Cache record with key '%s' already exists and overwrite is disabled, skipping", $cacheKey));
-                        return;
-                    }
+                    return;
                 }
 
-                Logger::log()->debug(sprintf("Caching record with '%s'", $cacheKey));
-                RedisConnection::getConnection()->hMset($cacheKey, $record->toArray());
-
-                // Set the cache expiration if configured
+                // Pipeline the hash write and expiry into one client/server round trip.
+                $pipeline = $redis->multi(Redis::PIPELINE);
+                $pipeline->hMSet($cacheKey, $record->toArray());
                 if($ttl > 0)
                 {
-                    Logger::log()->debug(sprintf("Setting expiration for cache key '%s' to %d seconds", $cacheKey, Configuration::getRedisConfiguration()->getOperatorCacheTtl()));
-                    RedisConnection::getConnection()->expire($cacheKey, $ttl);
+                    $pipeline->expire($cacheKey, $ttl);
                 }
+                $pipeline->exec();
             }
-            catch (RedisException $e)
+            catch(RedisException $e)
             {
                 Logger::log()->error(sprintf("Failed to cache record with '%s': %s", $cacheKey, $e->getMessage()), $e);
                 if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
@@ -313,17 +329,34 @@
         }
 
         private const string SEARCH_CACHE_PREFIX = 'search:';
+        private const string SEARCH_CACHE_VERSION_PREFIX = 'search:version:';
 
         /**
-         * Returns a cache key for search or listing result sets.
+         * Returns a versioned cache key for a search or listing result set.
          *
-         * @param string $resourcePrefix The resource-specific prefix (e.g. 'entity:', 'evidence:').
-         * @param array $params All parameters that define the query.
-         * @return string The generated cache key.
+         * Search namespaces are invalidated atomically by incrementing their version,
+         * so stale result keys expire naturally without an O(n) key scan.
          */
         public static function getSearchCacheKey(string $resourcePrefix, array $params): string
         {
-            return sprintf('%s%s%s', self::SEARCH_CACHE_PREFIX, $resourcePrefix, md5(serialize($params)));
+            $version = 0;
+            $redis = self::getConnection();
+            if($redis !== null)
+            {
+                try
+                {
+                    $version = (int)($redis->get(self::SEARCH_CACHE_VERSION_PREFIX . $resourcePrefix) ?: 0);
+                }
+                catch(RedisException $e)
+                {
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to read search cache namespace '%s'", $resourcePrefix), $e->getCode(), $e);
+                    }
+                }
+            }
+
+            return sprintf('%s%s%d:%s', self::SEARCH_CACHE_PREFIX, $resourcePrefix, $version, hash('sha256', serialize($params)));
         }
 
         /**
@@ -436,21 +469,34 @@
 
             try
             {
-                // Use SCAN to iterate through keys and find matching records
+                // SCAN is non-blocking; pipeline the hash reads for each batch and
+                // delete all matching keys in one command.
                 do
                 {
                     $keys = $redis->scan($iterator, $pattern, 100);
-                    if ($keys !== false && count($keys) > 0)
+                    if ($keys === false || $keys === [])
                     {
-                        foreach ($keys as $key)
+                        continue;
+                    }
+
+                    $pipeline = $redis->multi(Redis::PIPELINE);
+                    foreach($keys as $key)
+                    {
+                        $pipeline->hGetAll($key);
+                    }
+                    $records = $pipeline->exec();
+                    $matchingKeys = [];
+                    foreach($keys as $index => $key)
+                    {
+                        $record = $records[$index] ?? [];
+                        if(isset($record[$field]) && $record[$field] == $value)
                         {
-                            $record = $redis->hGetAll($key);
-                            if (isset($record[$field]) && $record[$field] == $value)
-                            {
-                                $redis->del($key);
-                                $deletedCount++;
-                            }
+                            $matchingKeys[] = $key;
                         }
+                    }
+                    if($matchingKeys !== [])
+                    {
+                        $deletedCount += $redis->del($matchingKeys);
                     }
                 }
                 while ($iterator !== 0);
@@ -484,55 +530,59 @@
                 return 0;
             }
 
-            $cached = 0;
-
-            // Check if the propertyName method exists on the record
             $firstRecord = reset($records);
             if (!method_exists($firstRecord, $propertyName))
             {
                 throw new InvalidArgumentException(sprintf("Property method '%s' does not exist on the record class", $propertyName));
             }
 
-            if ($limit === 0)
+            $serializableRecords = array_values(array_filter($records, fn($record) => $record instanceof SerializableInterface));
+
+            if($limit > 0)
             {
-                // No limit, cache all records
-                foreach ($records as $record)
-                {
-                    if (!$record instanceof SerializableInterface)
-                    {
-                        continue;
-                    }
-
-                    // Get the unique identifier value by dynamically calling the method
-                    self::setRecord($record, sprintf('%s%s', $prefix, $record->$propertyName()), $ttl);
-                    $cached++;
-                }
-            }
-            else
-            {
-                // Calculate available space
-                $currentCount = self::countKeys($prefix);
-                $availableSpace = max(0, $limit - $currentCount);
-
-                if ($availableSpace > 0)
-                {
-                    // Cache only up to available space
-                    $recordsToCache = array_slice($records, 0, $availableSpace);
-                    foreach ($recordsToCache as $record)
-                    {
-                        if (!$record instanceof SerializableInterface)
-                        {
-                            continue;
-                        }
-
-                        // Get the unique identifier value by dynamically calling the method
-                        self::setRecord($record, sprintf('%s%s', $prefix, $record->$propertyName()), $ttl);
-                        $cached++;
-                    }
-                }
+                $availableSpace = max(0, $limit - self::countKeys($prefix));
+                $serializableRecords = array_slice($serializableRecords, 0, $availableSpace);
             }
 
-            return $cached;
+            if($serializableRecords === [])
+            {
+                return 0;
+            }
+
+            $redis = self::getConnection();
+            if($redis === null)
+            {
+                return 0;
+            }
+
+            $ttl ??= 0;
+            try
+            {
+                // List and search paths often pre-cache dozens of records. Pipeline
+                // every hash write and expiry rather than issuing one round trip per row.
+                $pipeline = $redis->multi(Redis::PIPELINE);
+                foreach($serializableRecords as $record)
+                {
+                    $cacheKey = sprintf('%s%s', $prefix, $record->$propertyName());
+                    $pipeline->hMSet($cacheKey, $record->toArray());
+                    if($ttl > 0)
+                    {
+                        $pipeline->expire($cacheKey, $ttl);
+                    }
+                }
+                $pipeline->exec();
+            }
+            catch(RedisException $e)
+            {
+                Logger::log()->error(sprintf("Failed to batch cache records with prefix '%s': %s", $prefix, $e->getMessage()), $e);
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException(sprintf("Failed to batch cache records with prefix '%s'", $prefix), $e->getCode(), $e);
+                }
+                return 0;
+            }
+
+            return count($serializableRecords);
         }
 
     }
