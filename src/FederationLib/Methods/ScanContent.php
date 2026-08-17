@@ -499,13 +499,21 @@
 
             // Generate the report message
             $reportMessage = "Automated Report\n";
-            if(count($scannedContent->getScanResults()) > 0)
+            $hasScanResults = false;
+            foreach($scannedContent->getScanResults() as $scanningRule => $value)
             {
-                $reportMessage .= "\n";
-                foreach($scannedContent->getScanResults() as $scanningRule => $value)
+                if($value == 0.0)
                 {
-                    $reportMessage .= sprintf(" - %s: %f%%\n", $scanningRule, $value);
+                    continue;
                 }
+
+                if(!$hasScanResults)
+                {
+                    $reportMessage .= "\n";
+                    $hasScanResults = true;
+                }
+
+                $reportMessage .= sprintf(" - %s: %f%%\n", $scanningRule, $value);
             }
 
             if($scannedContent->getClassification() !== null)

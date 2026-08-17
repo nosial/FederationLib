@@ -7,6 +7,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\TextGenerator;
     use FederationLib\Helpers\TestHelpers;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
@@ -24,6 +25,73 @@
         private array $createdBlacklistRecords = [];
         private array $createdReports = [];
         private array $tempFiles = [];
+
+        private static ?FederationClient $trainingClient = null;
+        private static ?string $trainingEntityUuid = null;
+        private static array $createdTrainingReports = [];
+        private static array $createdTrainingEvidence = [];
+
+        public static function setUpBeforeClass(): void
+        {
+            self::$trainingClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            self::$trainingEntityUuid = self::$trainingClient->pushEntity('auto-assign-training.com', 'auto_assign_training');
+
+            foreach (TextGenerator::trainingSet() as $sample)
+            {
+                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
+                $reportUuid = $submission->getReport()->getUuid();
+                self::$createdTrainingReports[] = $reportUuid;
+                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
+                self::$trainingClient->assignOperatorToReport($reportUuid, self::$trainingClient->getSelf()->getUuid());
+                self::$trainingClient->closeReport($reportUuid, $sample['flag']);
+            }
+
+            sleep(3);
+        }
+
+        public static function tearDownAfterClass(): void
+        {
+            foreach (self::$createdTrainingReports as $reportUuid)
+            {
+                try
+                {
+                    self::$trainingClient?->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete training report $reportUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach (self::$createdTrainingEvidence as $evidenceUuid)
+            {
+                try
+                {
+                    self::$trainingClient?->deleteEvidence($evidenceUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete training evidence $evidenceUuid: " . $e->getMessage());
+                }
+            }
+
+            if (self::$trainingEntityUuid !== null)
+            {
+                try
+                {
+                    self::$trainingClient?->deleteEntity(self::$trainingEntityUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete training entity " . self::$trainingEntityUuid . ": " . $e->getMessage());
+                }
+            }
+
+            self::$trainingClient = null;
+            self::$trainingEntityUuid = null;
+            self::$createdTrainingReports = [];
+            self::$createdTrainingEvidence = [];
+        }
 
         protected function setUp(): void
         {
@@ -386,6 +454,26 @@
             $this->assertEquals($systemOperator->getUuid(), $generatedReport->getSubmittingOperator(), 'Generated report should be submitted by the system operator');
             $this->assertTrue($generatedReport->isAutomated(), 'Generated report should be marked as automated');
             $this->assertEquals($autoAssignOperator->getSelf()->getUuid(), $generatedReport->getAssignedOperator(), 'Generated report should be assigned to the auto assign operator');
+
+            $reportMessage = (string)$generatedReport->getMessage();
+            $activeScanResults = array_filter(
+                $scanned->getScanResults(),
+                static fn(float $value): bool => $value != 0.0
+            );
+            $this->assertNotEmpty($activeScanResults, 'Scanned content should have at least one active rule');
+            foreach ($activeScanResults as $scanningRule => $value)
+            {
+                $this->assertStringContainsString(
+                    sprintf(" - %s: %f%%", $scanningRule, $value),
+                    $reportMessage,
+                    'Automated reports should include each active scan rule'
+                );
+            }
+            $this->assertDoesNotMatchRegularExpression(
+                '/^ - [A-Z_]+: 0\.000000%$/m',
+                $reportMessage,
+                'Automated reports should omit scan rules with no effect'
+            );
 
             $this->assertEquals($entityUuid, $generatedReport->getReportingEntity(), 'Generated report should reference the scanned author entity');
             $generatedEvidence = $this->client->listReportEvidenceRecords($generatedReport->getUuid(), 1, 100, includeConfidential: true);
