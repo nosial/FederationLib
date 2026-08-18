@@ -9,6 +9,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Objects\ServerInformation;
+    use LogLib2\Logger;
     use PHPUnit\Framework\TestCase;
 
     class ServerInformationTest extends TestCase
