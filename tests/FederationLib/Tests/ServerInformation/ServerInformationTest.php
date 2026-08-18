@@ -5,9 +5,10 @@
     namespace FederationLib\Tests\ServerInformation;
 
     use FederationLib\Enums\IncidentType;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use LogLib2\Logger;
+    use FederationLib\Objects\ServerInformation;
     use PHPUnit\Framework\TestCase;
 
     class ServerInformationTest extends TestCase
@@ -35,6 +36,50 @@
             $this->assertNotEmpty($serverInfo->getApiVersion());
             $this->assertIsBool($serverInfo->isPublicEntities());
             $this->assertIsBool($serverInfo->isPublicEvidence());
+        }
+
+        public function testServerInformationIncludesPublicCapabilityMetadata(): void
+        {
+            $serverInfo = $this->client->getServerInformation();
+
+            $this->assertIsBool($serverInfo->isPublicEntityMetadata());
+            $this->assertIsBool($serverInfo->isPublicScanContent());
+            $this->assertIsBool($serverInfo->isPublicQueryEntity());
+            $this->assertIsBool($serverInfo->isSearchEnabled());
+            $this->assertIsBool($serverInfo->isPublicSearch());
+            $this->assertContainsOnlyInstancesOf(RecordType::class, $serverInfo->getSearchTypes());
+            $this->assertContainsOnlyInstancesOf(RecordType::class, $serverInfo->getPublicSearchTypes());
+
+            foreach ($serverInfo->getPublicSearchTypes() as $type)
+            {
+                $this->assertContains($type, $serverInfo->getSearchTypes());
+            }
+        }
+
+        public function testServerInformationSerializesPublicCapabilityMetadata(): void
+        {
+            $serverInfo = new ServerInformation([
+                'public_entity_metadata' => true,
+                'public_scan_content' => true,
+                'public_query_entity' => false,
+                'search_enabled' => true,
+                'public_search' => false,
+                'search_types' => [RecordType::ENTITY->value, RecordType::REPORT->value],
+                'public_search_types' => [RecordType::ENTITY->value],
+            ]);
+
+            $this->assertTrue($serverInfo->isPublicEntityMetadata());
+            $this->assertTrue($serverInfo->isPublicScanContent());
+            $this->assertFalse($serverInfo->isPublicQueryEntity());
+            $this->assertTrue($serverInfo->isSearchEnabled());
+            $this->assertFalse($serverInfo->isPublicSearch());
+            $this->assertSame([RecordType::ENTITY, RecordType::REPORT], $serverInfo->getSearchTypes());
+            $this->assertSame([RecordType::ENTITY], $serverInfo->getPublicSearchTypes());
+            $this->assertSame(
+                [RecordType::ENTITY->value, RecordType::REPORT->value],
+                $serverInfo->toArray()['search_types']
+            );
+            $this->assertSame([RecordType::ENTITY->value], $serverInfo->toArray()['public_search_types']);
         }
 
         public function testServerInformationConsistency(): void

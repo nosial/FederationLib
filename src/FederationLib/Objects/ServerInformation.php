@@ -3,6 +3,7 @@
     namespace FederationLib\Objects;
 
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
@@ -15,6 +16,19 @@
         private bool $publicBlacklist;
         private bool $publicEntities;
         private bool $publicReports;
+        private bool $publicEntityMetadata;
+        private bool $publicScanContent;
+        private bool $publicQueryEntity;
+        private bool $searchEnabled;
+        private bool $publicSearch;
+        /**
+         * @var RecordType[]
+         */
+        private array $searchTypes;
+        /**
+         * @var RecordType[]
+         */
+        private array $publicSearchTypes;
         /**
          * @var AuditLogType[]
          */
@@ -40,6 +54,19 @@
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
+            $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
+            $this->publicScanContent = $config['public_scan_content'] ?? false;
+            $this->publicQueryEntity = $config['public_query_entity'] ?? true;
+            $this->searchEnabled = $config['search_enabled'] ?? true;
+            $this->publicSearch = $config['public_search'] ?? false;
+            $this->searchTypes = isset($config['search_types']) ? array_map(
+                fn($type) => RecordType::from($type),
+                $config['search_types']
+            ) : [];
+            $this->publicSearchTypes = isset($config['public_search_types']) ? array_map(
+                fn($type) => RecordType::from($type),
+                $config['public_search_types']
+            ) : [];
             $this->publicReports = $config['public_reports'] ?? true;
             $this->publicAuditLogsVisibility = isset($config['public_audit_logs_visibility']) ? array_map(
                 fn($type) => AuditLogType::from($type),
@@ -113,6 +140,76 @@
         {
             return $this->publicEntities;
         }
+        /**
+         * Returns whether entity metadata is publicly included in responses.
+         *
+         * @return bool True if entity metadata is publicly accessible, false otherwise.
+         */
+        public function isPublicEntityMetadata(): bool
+        {
+            return $this->publicEntityMetadata;
+        }
+
+        /**
+         * Returns whether content scanning is publicly accessible.
+         *
+         * @return bool True if content scanning is available without authentication, false otherwise.
+         */
+        public function isPublicScanContent(): bool
+        {
+            return $this->publicScanContent;
+        }
+
+        /**
+         * Returns whether entity relationship queries are publicly accessible.
+         *
+         * @return bool True if entity relationship queries are available without authentication, false otherwise.
+         */
+        public function isPublicQueryEntity(): bool
+        {
+            return $this->publicQueryEntity;
+        }
+
+        /**
+         * Returns whether search functionality is enabled.
+         *
+         * @return bool True if at least one search endpoint may be available, false otherwise.
+         */
+        public function isSearchEnabled(): bool
+        {
+            return $this->searchEnabled;
+        }
+
+        /**
+         * Returns whether the global search endpoint is publicly accessible.
+         *
+         * @return bool True if global search is available without authentication, false otherwise.
+         */
+        public function isPublicSearch(): bool
+        {
+            return $this->publicSearch;
+        }
+
+        /**
+         * Returns record types with enabled dedicated search endpoints.
+         *
+         * @return RecordType[]
+         */
+        public function getSearchTypes(): array
+        {
+            return $this->searchTypes;
+        }
+
+        /**
+         * Returns record types whose dedicated search endpoints are publicly accessible.
+         *
+         * @return RecordType[]
+         */
+        public function getPublicSearchTypes(): array
+        {
+            return $this->publicSearchTypes;
+        }
+
 
         /**
          * Returns an array of AuditLogType enums representing the visibility of public audit logs that
@@ -218,6 +315,13 @@
                 'public_blacklist' => $this->publicBlacklist,
                 'public_entities' => $this->publicEntities,
                 'public_reports' => $this->publicReports,
+                'public_entity_metadata' => $this->publicEntityMetadata,
+                'public_scan_content' => $this->publicScanContent,
+                'public_query_entity' => $this->publicQueryEntity,
+                'search_enabled' => $this->searchEnabled,
+                'public_search' => $this->publicSearch,
+                'search_types' => array_map(fn(RecordType $type) => $type->value, $this->searchTypes),
+                'public_search_types' => array_map(fn(RecordType $type) => $type->value, $this->publicSearchTypes),
                 'public_audit_logs_visibility' => array_map(
                     fn(AuditLogType $type) => $type->value,
                     $this->publicAuditLogsVisibility
@@ -261,6 +365,21 @@
                 'public_blacklist' => ['type' => 'boolean', 'description' => 'Whether the blacklist is publicly accessible'],
                 'public_entities' => ['type' => 'boolean', 'description' => 'Whether entities are publicly accessible'],
                 'public_reports' => ['type' => 'boolean', 'description' => 'Whether reports are publicly accessible'],
+                'public_entity_metadata' => ['type' => 'boolean', 'description' => 'Whether entity metadata is publicly included in responses'],
+                'public_scan_content' => ['type' => 'boolean', 'description' => 'Whether content scanning is publicly accessible'],
+                'public_query_entity' => ['type' => 'boolean', 'description' => 'Whether entity relationship queries are publicly accessible'],
+                'search_enabled' => ['type' => 'boolean', 'description' => 'Whether search functionality is enabled'],
+                'public_search' => ['type' => 'boolean', 'description' => 'Whether the global search endpoint is publicly accessible'],
+                'search_types' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'Record types with enabled dedicated search endpoints',
+                ],
+                'public_search_types' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'Record types whose dedicated search endpoints are publicly accessible',
+                ],
                 'public_audit_logs_visibility' => [
                     'type' => 'array',
                     'items' => ['type' => 'string'],
@@ -281,7 +400,22 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['name', 'api_version', 'public_audit_logs', 'public_evidence', 'public_blacklist', 'public_entities', 'public_reports'];
+            return [
+                'name',
+                'api_version',
+                'public_audit_logs',
+                'public_evidence',
+                'public_blacklist',
+                'public_entities',
+                'public_reports',
+                'public_entity_metadata',
+                'public_scan_content',
+                'public_query_entity',
+                'search_enabled',
+                'public_search',
+                'search_types',
+                'public_search_types',
+            ];
         }
 
         /**

@@ -10,6 +10,7 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
+    use FederationLib\Enums\RecordType;
     use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
@@ -212,6 +213,19 @@
                     'public_blacklist' => Configuration::getServerConfiguration()->isBlacklistPublic(),
                     'public_entities' => Configuration::getServerConfiguration()->isEntitiesPublic(),
                     'public_reports' => Configuration::getServerConfiguration()->isReportsPublic(),
+                    'public_entity_metadata' => Configuration::getServerConfiguration()->isEntityMetadataPublic(),
+                    'public_scan_content' => Configuration::getServerConfiguration()->isScanContentPublic(),
+                    'public_query_entity' => Configuration::getServerConfiguration()->isQueryEntityPublic(),
+                    'search_enabled' => Configuration::getSearchConfiguration()->isEnabled(),
+                    'public_search' => Configuration::getSearchConfiguration()->isPublicSearch(),
+                    'search_types' => array_map(
+                        fn(RecordType $type) => $type->value,
+                        self::getSearchTypes()
+                    ),
+                    'public_search_types' => array_map(
+                        fn(RecordType $type) => $type->value,
+                        self::getPublicSearchTypes()
+                    ),
                     'public_audit_logs_visibility' => array_map(
                         fn($type) => $type->value,
                         Configuration::getServerConfiguration()->getPublicAuditEntries()
@@ -232,6 +246,90 @@
             }
 
             return $serverInformation;
+        }
+        /**
+         * Returns record types with enabled dedicated search endpoints.
+         *
+         * @return RecordType[]
+         */
+        private static function getSearchTypes(): array
+        {
+            $searchConfiguration = Configuration::getSearchConfiguration();
+            if (!$searchConfiguration->isEnabled())
+            {
+                return [];
+            }
+
+            $types = [];
+            if ($searchConfiguration->isEntitiesEnabled())
+            {
+                $types[] = RecordType::ENTITY;
+            }
+            if ($searchConfiguration->isEvidenceEnabled())
+            {
+                $types[] = RecordType::EVIDENCE;
+            }
+            if ($searchConfiguration->isBlacklistEnabled())
+            {
+                $types[] = RecordType::BLACKLIST;
+            }
+            if ($searchConfiguration->isReportsEnabled())
+            {
+                $types[] = RecordType::REPORT;
+            }
+            if ($searchConfiguration->isAttachmentsEnabled())
+            {
+                $types[] = RecordType::ATTACHMENT;
+            }
+            if ($searchConfiguration->isAuditLogsEnabled())
+            {
+                $types[] = RecordType::AUDIT_LOG;
+            }
+            if ($searchConfiguration->isOperatorsEnabled())
+            {
+                $types[] = RecordType::OPERATOR;
+            }
+
+            return $types;
+        }
+
+        /**
+         * Returns record types whose dedicated search endpoints are publicly accessible.
+         *
+         * @return RecordType[]
+         */
+        private static function getPublicSearchTypes(): array
+        {
+            $searchConfiguration = Configuration::getSearchConfiguration();
+            $serverConfiguration = Configuration::getServerConfiguration();
+            if (!$searchConfiguration->isEnabled())
+            {
+                return [];
+            }
+
+            $types = [];
+            if ($searchConfiguration->isEntitiesEnabled() && $serverConfiguration->isEntitiesPublic())
+            {
+                $types[] = RecordType::ENTITY;
+            }
+            if ($searchConfiguration->isEvidenceEnabled() && $serverConfiguration->isEvidencePublic())
+            {
+                $types[] = RecordType::EVIDENCE;
+            }
+            if ($searchConfiguration->isBlacklistEnabled() && $serverConfiguration->isBlacklistPublic())
+            {
+                $types[] = RecordType::BLACKLIST;
+            }
+            if ($searchConfiguration->isReportsEnabled() && $serverConfiguration->isReportsPublic())
+            {
+                $types[] = RecordType::REPORT;
+            }
+            if ($searchConfiguration->isAuditLogsEnabled() && $serverConfiguration->isAuditLogsPublic())
+            {
+                $types[] = RecordType::AUDIT_LOG;
+            }
+
+            return $types;
         }
 
         /**
