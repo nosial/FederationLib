@@ -4,7 +4,7 @@ create table blacklist
         primary key,
     operator  varchar(36)                                                                                       not null comment 'The operator that created this blacklist record',
     entity    varchar(36)                                                                                       not null comment 'The target entity that is blacklisted',
-    evidence  varchar(36)                                                                                       null comment 'Optional. The evidence for the blacklist',
+    report    varchar(36)                                                                                       null comment 'Optional. The UUID of the report supporting the blacklist',
     type      enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER') not null comment 'The incident type',
     lifted    tinyint(1)  default 0                                                                             not null comment 'Default: 0, 1=The blacklist was lifted and is no longer in effect, 0=The blacklist is not lifted, it is in effect until it expires',
     lifted_by varchar(36)                                                                                       null comment 'Optional. If the blacklist was manually lifted by an operator, this column represents the operator UUID that made the change.',
@@ -13,9 +13,9 @@ create table blacklist
     constraint blacklist_entities_uuid_fk
         foreign key (entity) references entities (uuid)
             on update cascade on delete cascade,
-    constraint blacklist_evidence_uuid_fk
-        foreign key (evidence) references evidence (uuid)
-            on update cascade on delete cascade,
+    constraint blacklist_reports_uuid_fk
+        foreign key (report) references reports (uuid)
+            on update cascade on delete set null,
     constraint blacklist_operators_uuid_fk
         foreign key (operator) references operators (uuid)
             on update cascade on delete cascade,
@@ -31,8 +31,8 @@ create index blacklist_created_index
 create index blacklist_entity_created_index
     on blacklist (entity asc, created desc);
 
-create index blacklist_evidence_index
-    on blacklist (evidence);
+create index blacklist_report_index
+    on blacklist (report);
 
 create index blacklist_operator_created_index
     on blacklist (operator asc, created desc);
