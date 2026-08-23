@@ -28,12 +28,12 @@
          * @param string $operatorUuid The UUID of the operator performing the blacklisting.
          * @param IncidentType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
-         * @param string|null $evidenceUuid Optional evidence UUID, must be a valid UUID if provided.
+         * @param string|null $reportUuid Optional report UUID, must be a valid UUID if provided.
          * @return string The UUID of the created blacklist entry.
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function blacklistEntity(string $entityUuid, string $operatorUuid, IncidentType $type, ?int $expires=null, ?string $evidenceUuid=null): string
+        public static function blacklistEntity(string $entityUuid, string $operatorUuid, IncidentType $type, ?int $expires=null, ?string $reportUuid=null): string
         {
             if(empty($entityUuid) || empty($operatorUuid))
             {
@@ -55,22 +55,22 @@
                 throw new InvalidArgumentException("Expiration time must be in the future or null for permanent blacklisting.");
             }
 
-            if(!is_null($evidenceUuid) && !Validate::uuid($evidenceUuid))
+            if(!is_null($reportUuid) && !Validate::uuid($reportUuid))
             {
-                throw new InvalidArgumentException("Evidence must be a valid UUID.");
+                throw new InvalidArgumentException("Report must be a valid UUID.");
             }
 
             $uuid = Uuid::v7()->toRfc4122();
+            $type = $type->value;
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (uuid, entity, operator, type, expires, evidence) VALUES (:blacklist_uuid, :entity_uuid, :operator_uuid, :type, :expires, :evidence)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO blacklist (uuid, entity, operator, type, expires, report) VALUES (:blacklist_uuid, :entity_uuid, :operator_uuid, :type, :expires, :report)");
                 $stmt->bindParam(':blacklist_uuid', $uuid);
-                $type = $type->value;
                 $stmt->bindParam(':entity_uuid', $entityUuid);
                 $stmt->bindParam(':operator_uuid', $operatorUuid);
                 $stmt->bindParam(':type', $type);
-                $stmt->bindParam(':evidence', $evidenceUuid);
+                $stmt->bindParam(':report', $reportUuid);
 
                 // Convert expires to datetime
                 if(is_null($expires))
@@ -573,47 +573,6 @@
             {
                 throw new DatabaseOperationException('Failed to retrieve active blacklist entries by entities: ' . $e->getMessage(), 0, $e);
             }
-        }
-
-        /**
-         * Retrieves all blacklist entries associated with a specific evidence record.
-         *
-         * @param string $evidenceUuid The UUID of the evidence.
-         * @return BlacklistRecord[] An array of BlacklistRecord objects.
-         * @throws InvalidArgumentException If the evidence UUID is empty.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         */
-        public static function getEntriesByEvidence(string $evidenceUuid): array
-        {
-            if(empty($evidenceUuid))
-            {
-                throw new InvalidArgumentException("Evidence UUID cannot be empty.");
-            }
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE evidence=:evidence_uuid ORDER BY created DESC, uuid DESC");
-                $stmt->bindParam(':evidence_uuid', $evidenceUuid);
-                $stmt->execute();
-
-                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $results = array_map(fn($data) => new BlacklistRecord($data), $results);
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to retrieve blacklist entries by evidence: " . $e->getMessage(), 0, $e);
-            }
-
-            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
-            {
-                RedisConnection::setRecords(
-                    records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
-                    limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
-                );
-            }
-
-            return $results;
         }
 
         /**
