@@ -4,7 +4,6 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
-    use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\ReportCategory;
@@ -321,6 +320,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+
+                    // Blacklist records keep existing with their report reference cleared by the database.
+                    RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'report', $reportUuid);
+                    RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
                 }
             }
         }
@@ -701,7 +704,7 @@
 
         /**
          * Deletes report records older than the specified TTL.
-         * Related evidence records have their report FK set to NULL by the database.
+         * Related evidence and blacklist records have their report FK set to NULL by the database.
          *
          * @param int $ttl The TTL in seconds after which report records are considered old
          * @return int The number of deleted records
@@ -733,6 +736,8 @@
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
                 }
             }
         }

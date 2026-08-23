@@ -124,8 +124,7 @@
                     $values .= ', :metadata';
                 }
 
-                $sql = "INSERT INTO evidence ($columns) VALUES ($values)";
-                $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence $columns VALUES $values");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
@@ -190,7 +189,6 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'evidence', $uuid);
                     RedisConnection::deleteRecordsByField(FileAttachmentManager::CACHE_PREFIX, 'evidence', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
@@ -958,7 +956,7 @@
 
         /**
          * Deletes evidence records older than the specified TTL.
-         * Related file_attachments and blacklist records are cascade-deleted by the database.
+         * Related file_attachments records are cascade-deleted by the database.
          *
          * @param int $ttl The TTL in seconds after which evidence records are considered old
          * @return int The number of deleted records
@@ -990,7 +988,6 @@
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearRecords(FileAttachmentManager::CACHE_PREFIX);
-                    RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
