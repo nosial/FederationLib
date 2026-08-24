@@ -183,7 +183,8 @@
                         entityUuid: $reportRecord->getReportingEntity(),
                         operatorUuid: $authenticatedOperator->getUuid(),
                         type: $blacklistType,
-                        expires: $blacklistExpires
+                        expires: $blacklistExpires,
+                        reportUuid: $reportUuid
                     );
                 }
 
