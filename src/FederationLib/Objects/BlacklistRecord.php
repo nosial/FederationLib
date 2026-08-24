@@ -12,7 +12,7 @@
         private string $uuid;
         private string $operatorUuid;
         private string $entityUuid;
-        private ?string $evidenceUuid;
+        private ?string $reportUuid;
         private IncidentType $type;
         private bool $lifted;
         private ?string $liftedBy;
@@ -29,7 +29,7 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->operatorUuid = $data['operator'] ?? '';
             $this->entityUuid = $data['entity'] ?? '';
-            $this->evidenceUuid = $data['evidence'] ?? null;
+            $this->reportUuid = $data['report'] ?? null;
             if(isset($data['type']) && $data['type'] instanceof IncidentType)
             {
                 $this->type = $data['type'];
@@ -111,16 +111,13 @@
         }
 
         /**
-         * Get the evidence UUID associated with the blacklist record, if any.
+         * Get the report UUID associated with the blacklist record, if any.
          *
-         * @return string|null The UUID of the evidence, or null if not applicable.
+         * @return string|null The UUID of the report, or null if not applicable.
          */
-        /**
-         * @return string|null
-         */
-        public function getEvidenceUuid(): ?string
+        public function getReportUuid(): ?string
         {
-            return $this->evidenceUuid;
+            return $this->reportUuid;
         }
 
         /**
@@ -183,7 +180,7 @@
                 'uuid' => $this->uuid,
                 'operator' => $this->operatorUuid,
                 'entity' => $this->entityUuid,
-                'evidence' => $this->evidenceUuid,
+                'report' => $this->reportUuid,
                 'type' => $this->type->value,
                 'lifted' => $this->lifted,
                 'lifted_by' => $this->liftedBy,
@@ -252,7 +249,7 @@
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the blacklist entry'],
                 'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who created the entry'],
                 'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the blacklisted entity'],
-                'evidence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of supporting evidence', 'nullable' => true],
+                'report' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the supporting report', 'nullable' => true],
                 'type' => ['type' => 'string', 'description' => 'Type of blacklist incident'],
                 'lifted' => ['type' => 'boolean', 'description' => 'Whether the blacklist has been lifted'],
                 'lifted_by' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who lifted the blacklist', 'nullable' => true],
