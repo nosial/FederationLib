@@ -124,7 +124,7 @@
                     $values .= ', :metadata';
                 }
 
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence $columns VALUES $values");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO evidence ($columns) VALUES ($values)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':entity', $entity);
                 $stmt->bindParam(':operator', $operator);
