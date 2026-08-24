@@ -81,7 +81,7 @@
                 }
             }
 
-            // Process blacklist (depends on entities, evidence)
+            // Process blacklist (depends on entities, reports)
             if(Configuration::getMaintenanceConfiguration()->isCleanBlacklistEnabled())
             {
                 $exitCode = self::cleanBlacklist($archivePath);
@@ -166,7 +166,7 @@
 
         /**
          * Archives old evidence records to CSV and removes them.
-         * Also archives associated file attachments and blacklist records.
+         * Also archives associated file attachments.
          */
         private static function cleanEvidence(?string $archivePath): int
         {
@@ -208,12 +208,6 @@
                         foreach($attachments as $attachment)
                         {
                             self::archiveRecord($archivePath, 'file_attachments', $attachment->toArray());
-                        }
-
-                        $blacklistEntries = BlacklistManager::getEntriesByEvidence($evUuid);
-                        foreach($blacklistEntries as $entry)
-                        {
-                            self::archiveRecord($archivePath, 'blacklist', $entry->toArray());
                         }
                     }
                 }
