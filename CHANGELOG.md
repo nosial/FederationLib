@@ -5,9 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.8] - Ongoing
+## [1.0.8] - 2026-08-23
 
-This is an ongoing update
+This update changes how blacklist records reference the report record rather than a singular evidence record as
+per the specification change.
+
+### Changed
+ - Blacklist records now reference a report instead of a single evidence record, allowing the supporting material of a
+   blacklist to span every evidence record attached to that report. The `blacklist.evidence` column was replaced by
+   `blacklist.report` (foreign key to `reports`, cleared on report deletion), `POST /blacklist` now accepts
+   `report_uuid` instead of `evidence_uuid`, `BlacklistRecord` exposes `report` / `getReportUuid()` instead of
+   `evidence` / `getEvidenceUuid()`, and `FederationClient::blacklistEntity()` takes the supporting report UUID. A
+   supplied report must exist and must belong to the entity being blacklisted.
+ - Closing a report with a blacklist action now links the created blacklist record to the closed report.
+ - Deleting or pruning a report no longer removes blacklist records: the blacklist stays in effect and only loses its
+   report reference, where deleting evidence previously deleted the blacklist records it backed.
 
 
 
