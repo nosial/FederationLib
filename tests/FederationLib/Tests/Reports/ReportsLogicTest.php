@@ -122,6 +122,40 @@
             $this->tempFiles = [];
         }
 
+        public function testCloseReportWithBlacklistActionLinksBlacklistToReport(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'Close with blacklist action');
+
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
+
+            [$statusCode, $responseBody] = $this->rawRequest(
+                'PATCH',
+                'reports/' . $reportUuid . '/close',
+                getenv('SERVER_ACCESS_TOKEN'),
+                json_encode(['blacklist_incident_type' => IncidentType::SPAM->value])
+            );
+
+            $this->assertEquals(HttpResponseCode::OK->value, $statusCode, 'Failed to close report with a blacklist action: ' . $responseBody);
+
+            $blacklistRecords = $this->client->listEntityBlacklistRecords($entityUuid, 1, 100, true);
+            foreach ($blacklistRecords as $blacklistRecord)
+            {
+                $this->createdBlacklistRecords[] = $blacklistRecord->getUuid();
+            }
+
+            $linkedRecords = array_values(array_filter(
+                $blacklistRecords,
+                fn($blacklistRecord) => $blacklistRecord->getReportUuid() === $reportUuid
+            ));
+
+            $this->assertCount(1, $linkedRecords, 'Closing a report with a blacklist action must create exactly one blacklist record referencing that report');
+            $this->assertEquals($entityUuid, $linkedRecords[0]->getEntityUuid());
+            $this->assertEquals(IncidentType::SPAM, $linkedRecords[0]->getType());
+            $this->assertNull($linkedRecords[0]->getExpires());
+            $this->assertFalse($linkedRecords[0]->isLifted());
+        }
+
         public function testBulkReportSubmissionConsistency(): void
         {
             $entityUuid = $this->client->pushEntity('bulk-report.com', 'bulk_user');

@@ -342,7 +342,8 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Query evidence', 'Note', 'query');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Query blacklist report evidence');
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $entityRecord = $this->client->getEntityRecord($entityUuid);
@@ -366,8 +367,8 @@
             $confidentialEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Confidential evidence', 'Note', 'confidential', true);
             $this->createdEvidenceRecords[] = $confidentialEvidenceUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Blacklist evidence', 'Note', 'bl');
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Blacklist evidence');
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             $this->client->liftBlacklistRecord($blacklistUuid);
 
@@ -1123,9 +1124,8 @@
             $child = $this->createSecurityEntity();
             $this->client->setEntityRelationship($child, $parent, EntityRelationshipType::CHILD);
 
-            $parentEvidence = $this->client->submitEvidence($parent, 'Parent blacklist evidence');
-            $this->createdEvidenceRecords[] = $parentEvidence;
-            $parentBlacklist = $this->client->blacklistEntity($parent, $parentEvidence, IncidentType::MALWARE, null);
+            $parentReport = $this->createReportForEntity($parent, $this->client, 'Parent blacklist evidence');
+            $parentBlacklist = $this->client->blacklistEntity($parent, $parentReport, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $parentBlacklist;
 
             $relatedPermanentQuery = $this->client->queryEntity($child);
@@ -1134,9 +1134,8 @@
             $this->assertSame(PHP_INT_MAX, $relatedPermanentQuery->getSuggestedLiftTimestamp());
 
             $temporaryExpiry = time() + 3600;
-            $childEvidence = $this->client->submitEvidence($child, 'Child temporary blacklist evidence');
-            $this->createdEvidenceRecords[] = $childEvidence;
-            $childTemporaryBlacklist = $this->client->blacklistEntity($child, $childEvidence, IncidentType::SPAM, $temporaryExpiry);
+            $childReport = $this->createReportForEntity($child, $this->client, 'Child temporary blacklist evidence');
+            $childTemporaryBlacklist = $this->client->blacklistEntity($child, $childReport, IncidentType::SPAM, $temporaryExpiry);
             $this->createdBlacklistRecords[] = $childTemporaryBlacklist;
 
             $temporaryQuery = $this->client->queryEntity($child);
@@ -1144,9 +1143,8 @@
             $this->assertSame('TEMPORARILY_BLOCK_ENTITY', $temporaryQuery->getSuggestedAction()?->value);
             $this->assertSame(PHP_INT_MAX, $temporaryQuery->getSuggestedLiftTimestamp());
 
-            $permanentEvidence = $this->client->submitEvidence($child, 'Child permanent blacklist evidence');
-            $this->createdEvidenceRecords[] = $permanentEvidence;
-            $childPermanentBlacklist = $this->client->blacklistEntity($child, $permanentEvidence, IncidentType::MALWARE, null);
+            $permanentReport = $this->createReportForEntity($child, $this->client, 'Child permanent blacklist evidence');
+            $childPermanentBlacklist = $this->client->blacklistEntity($child, $permanentReport, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $childPermanentBlacklist;
 
             $permanentQuery = $this->client->queryEntity($child);

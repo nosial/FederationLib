@@ -150,13 +150,13 @@
         {
             $clientOnly = $this->createLimitedOperator('client_only', client: true);
             $entityUuid = $this->createSecurityEntity();
-            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->createReportForEntity($entityUuid);
             $blacklistUuid = $this->createSecurityBlacklist($entityUuid);
             $report = $this->createSecurityReport();
 
             $privilegedOperations = [
                 'createOperator' => fn() => $clientOnly->createOperator('child'),
-                'blacklistEntity' => fn() => $clientOnly->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM),
+                'blacklistEntity' => fn() => $clientOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM),
                 'deleteReport' => fn() => $clientOnly->deleteReport($report['report']),
                 'assignOperatorToReport' => fn() => $clientOnly->assignOperatorToReport($report['report'], $this->client->getSelf()->getUuid()),
                 'closeReport' => fn() => $clientOnly->closeReport($report['report']),
@@ -195,9 +195,9 @@
         {
             $managementOnly = $this->createLimitedOperator('management_only', management: true);
             $entityUuid = $this->createSecurityEntity();
-            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->createReportForEntity($entityUuid);
 
-            $blacklistUuid = $managementOnly->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $managementOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             $this->assertNotEmpty($blacklistUuid);
 

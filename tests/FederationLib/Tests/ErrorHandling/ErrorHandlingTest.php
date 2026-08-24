@@ -19,6 +19,7 @@ namespace FederationLib\Tests\ErrorHandling;
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -27,6 +28,18 @@ namespace FederationLib\Tests\ErrorHandling;
 
         protected function tearDown(): void
         {
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
+                }
+            }
+
             foreach ($this->createdBlacklistRecords as $blacklistUuid)
             {
                 try
@@ -79,6 +92,7 @@ namespace FederationLib\Tests\ErrorHandling;
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
+            $this->createdReports = [];
         }
 
         public function testMalformedEntityIdentifiers(): void
@@ -290,10 +304,9 @@ namespace FederationLib\Tests\ErrorHandling;
             $entityUuid = $this->client->pushEntity('concurrent-delete-test.com', 'concurrent_delete_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence for concurrent delete test', 'Concurrent delete', 'concurrent_delete');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Evidence for concurrent delete test');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $secondClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
@@ -311,11 +324,10 @@ namespace FederationLib\Tests\ErrorHandling;
             $entityUuid = $this->client->pushEntity('rollback-test.com', 'rollback_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Rollback test evidence', 'Rollback test', 'rollback');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Rollback test evidence');
 
             $this->expectException(InvalidArgumentException::class);
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, -1);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, -1);
         }
 
         public function testDataConsistencyAfterErrors(): void
@@ -325,6 +337,8 @@ namespace FederationLib\Tests\ErrorHandling;
 
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Consistency test', 'Consistency', 'consistency');
             $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Consistency test report evidence');
 
             try
             {
@@ -338,7 +352,7 @@ namespace FederationLib\Tests\ErrorHandling;
 
             try
             {
-                $this->client->blacklistEntity('invalid-entity-uuid', $evidenceUuid, IncidentType::SPAM);
+                $this->client->blacklistEntity('invalid-entity-uuid', $reportUuid, IncidentType::SPAM);
                 $this->fail('Expected RequestException for invalid entity UUID');
             }
             catch (RequestException $e)
@@ -488,8 +502,7 @@ namespace FederationLib\Tests\ErrorHandling;
             $entityUuid = $this->client->pushEntity('invalid-incident.com', 'user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence', 'Note', 'invalid');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Evidence');
 
             $token = getenv('SERVER_ACCESS_TOKEN');
             [$code] = $this->rawRequest(
@@ -498,7 +511,7 @@ namespace FederationLib\Tests\ErrorHandling;
                 $token,
                 json_encode([
                     'entity_uuid' => $entityUuid,
-                    'evidence_uuid' => $evidenceUuid,
+                    'report_uuid' => $reportUuid,
                     'incident_type' => 'NOT_VALID',
                     'expires' => time() + 3600,
                 ])

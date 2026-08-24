@@ -8,6 +8,7 @@
     use FederationLib\Helpers\Logger;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\BlacklistRecord;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\OperatorRecord;
@@ -21,6 +22,7 @@
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -38,6 +40,18 @@
                 catch (RequestException $e)
                 {
                     Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
                 }
             }
 
@@ -81,6 +95,7 @@
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
+            $this->createdReports = [];
         }
 
         public function testServerInformationResponseStructure(): void
@@ -304,11 +319,13 @@
             $entityUuid = $this->client->pushEntity('blacklist-response-test.com', 'blacklist_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Blacklist evidence', 'Blacklist note', 'blacklist_test');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Blacklist evidence', 'Blacklist note', 'blacklist_test'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $expiration = time() + 3600;
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expiration);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, $expiration);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $this->assertIsString($blacklistUuid);
@@ -319,7 +336,7 @@
             $this->assertInstanceOf(BlacklistRecord::class, $blacklistRecord);
             $this->assertIsString($blacklistRecord->getUuid());
             $this->assertIsString($blacklistRecord->getEntityUuid());
-            $this->assertIsString($blacklistRecord->getEvidenceUuid());
+            $this->assertIsString($blacklistRecord->getReportUuid());
             $this->assertIsString($blacklistRecord->getOperatorUuid());
             $this->assertInstanceOf(IncidentType::class, $blacklistRecord->getType());
             $this->assertIsInt($blacklistRecord->getCreated());
@@ -327,7 +344,7 @@
             $this->assertIsBool($blacklistRecord->isLifted());
             $this->assertEquals($blacklistUuid, $blacklistRecord->getUuid());
             $this->assertEquals($entityUuid, $blacklistRecord->getEntityUuid());
-            $this->assertEquals($evidenceUuid, $blacklistRecord->getEvidenceUuid());
+            $this->assertEquals($reportUuid, $blacklistRecord->getReportUuid());
             $this->assertEquals(IncidentType::SPAM, $blacklistRecord->getType());
             $this->assertEquals($expiration, $blacklistRecord->getExpires());
             $this->assertFalse($blacklistRecord->isLifted());
@@ -341,10 +358,12 @@
                 $entityUuid = $this->client->pushEntity("blacklist-list-$i.com", "blacklist_list_user_$i");
                 $this->createdEntities[] = $entityUuid;
 
-                $evidenceUuid = $this->client->submitEvidence($entityUuid, "Evidence $i", "Note $i", 'list_test');
-                $this->createdEvidenceRecords[] = $evidenceUuid;
+                $submission = $this->client->submitReport($entityUuid, new ContentInput("Evidence $i", "Note $i", 'list_test'), IncidentType::SPAM);
+                $reportUuid = $submission->getReport()->getUuid();
+                $this->createdReports[] = $reportUuid;
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
                 $this->createdBlacklistRecords[] = $blacklistUuid;
             }
 
@@ -357,7 +376,7 @@
                 $this->assertInstanceOf(BlacklistRecord::class, $blacklistRecord);
                 $this->assertIsString($blacklistRecord->getUuid());
                 $this->assertIsString($blacklistRecord->getEntityUuid());
-                $this->assertIsString($blacklistRecord->getEvidenceUuid());
+                $this->assertIsString($blacklistRecord->getReportUuid());
                 $this->assertIsString($blacklistRecord->getOperatorUuid());
                 $this->assertInstanceOf(IncidentType::class, $blacklistRecord->getType());
                 $this->assertIsInt($blacklistRecord->getCreated());

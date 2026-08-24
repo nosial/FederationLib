@@ -405,10 +405,12 @@
             $entityUuid = $this->client->pushEntity('scan-classify-blacklist.com', 'scan_classify_blacklist');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Spam evidence for classification override', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence for classification override', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, null);
 
 
             $text = TextGenerator::testText(ClassificationFlag::NORMAL);
@@ -462,10 +464,12 @@
             $entityUuid = $this->client->pushEntity($host);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence for resolved entity', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence for resolved entity', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
 
 
             $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
@@ -495,10 +499,12 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence for high risk', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence for high risk', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
 
             $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
             $scanned = $this->client->scanContent($text, $entityUuid);
@@ -515,10 +521,12 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Spam evidence for author', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence for author', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -568,11 +576,13 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Temporary spam evidence', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Temporary spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $expires = time() + 3600;
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expires);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, $expires);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -590,10 +600,12 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Permanent spam evidence', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Permanent spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, null);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -610,14 +622,18 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $tempEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Temporary evidence', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $tempEvidenceUuid;
+            $tempSubmission = $this->client->submitReport($entityUuid, new ContentInput('Temporary evidence', 'Test note', 'spam'), IncidentType::SPAM);
+            $tempReportUuid = $tempSubmission->getReport()->getUuid();
+            $this->createdReports[] = $tempReportUuid;
+            $this->createdEvidenceRecords[] = $tempSubmission->getEvidence()[0]->getUuid();
 
-            $permEvidenceUuid = $this->client->submitEvidence($entityUuid, 'Permanent evidence', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $permEvidenceUuid;
+            $permSubmission = $this->client->submitReport($entityUuid, new ContentInput('Permanent evidence', 'Test note', 'malware'), IncidentType::MALWARE);
+            $permReportUuid = $permSubmission->getReport()->getUuid();
+            $this->createdReports[] = $permReportUuid;
+            $this->createdEvidenceRecords[] = $permSubmission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $tempEvidenceUuid, IncidentType::SPAM, time() + 3600);
-            $this->client->blacklistEntity($entityUuid, $permEvidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($entityUuid, $tempReportUuid, IncidentType::SPAM, time() + 3600);
+            $this->client->blacklistEntity($entityUuid, $permReportUuid, IncidentType::MALWARE, null);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -639,10 +655,12 @@
 
             $this->client->setEntityRelationship($childUuid, $parentUuid, EntityRelationshipType::CHILD);
 
-            $evidenceUuid = $this->client->submitEvidence($parentUuid, 'Parent is malicious', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($parentUuid, new ContentInput('Parent is malicious', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($parentUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($parentUuid, $reportUuid, IncidentType::MALWARE, null);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $childUuid);
 
@@ -671,10 +689,12 @@
 
             $this->client->setEntityRelationship($childUuid, $parentUuid, EntityRelationshipType::CHILD);
 
-            $evidenceUuid = $this->client->submitEvidence($parentUuid, 'Parent malware evidence', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($parentUuid, new ContentInput('Parent malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($parentUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($parentUuid, $reportUuid, IncidentType::MALWARE, null);
 
             $text = "Visit $childHost for updates. " . self::BENIGN_SAMPLE_TEXT;
             $scanned = $this->client->scanContent($text);
@@ -704,10 +724,12 @@
             $entityUuid = $this->client->pushEntity($host);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Temporary spam evidence', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Temporary spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
 
             $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
             $scanned = $this->client->scanContent($text);
@@ -739,10 +761,12 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -757,13 +781,15 @@
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Spam evidence', 'Test note', 'spam');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
             $baselineScan = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
             $baselineRisk = $baselineScan->getRiskScore();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
 
             $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
 
@@ -778,10 +804,12 @@
             $entityUuid = $this->client->pushEntity($host);
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
 
-            $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
 
             $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
             $scanned = $this->client->scanContent($text);

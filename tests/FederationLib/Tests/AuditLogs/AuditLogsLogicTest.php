@@ -20,6 +20,7 @@
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -37,6 +38,18 @@
                 catch (RequestException $e)
                 {
                     Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
                 }
             }
 
@@ -80,6 +93,7 @@
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
+            $this->createdReports = [];
         }
 
         private function generateSampleAuditLogs(bool &$operatorUuid=null): void
@@ -240,12 +254,11 @@
             $entityUuid = $operatorClient->pushEntity('blacklist-audit-test.com', 'blacklist_audit_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Audit test evidence', 'Audit test', 'audit');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $operatorClient, 'Audit test evidence');
 
             $initialLogCount = count($this->client->listOperatorAuditLogs($operatorUuid));
 
-            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $operatorClient->liftBlacklistRecord($blacklistUuid);
@@ -260,9 +273,9 @@
 
             foreach ($operatorLogs as $log)
             {
-                $message = $log->getMessage();
+                $message = strtolower($log->getMessage());
 
-                if (str_contains($message, 'blacklist') && str_contains($message, 'created'))
+                if (str_contains($message, 'blacklisted'))
                 {
                     $foundBlacklistCreation = true;
                 }
@@ -365,7 +378,9 @@
             $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Actor evidence', 'Note', 'actor');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $reportUuid = $this->createReportForEntity($entityUuid, $operatorClient, 'Actor report evidence');
+
+            $blacklistUuid = $operatorClient->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $logs = $this->client->listOperatorAuditLogs($operatorUuid);
@@ -379,7 +394,8 @@
                     $foundEvidence = true;
                 }
 
-                if ($log->getBlacklistUuid() === $blacklistUuid && $log->getOperatorUuid() === $operatorUuid)
+                if ($log->getType() === AuditLogType::ENTITY_BLACKLISTED && $log->getBlacklistUuid() === $blacklistUuid
+                    && $log->getEntityUuid() === $entityUuid && $log->getOperatorUuid() === $operatorUuid)
                 {
                     $foundBlacklist = true;
                 }

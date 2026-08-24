@@ -119,11 +119,11 @@
             $entityUuid = $this->client->pushEntity('unauthorized-test.com', 'unauthorized_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test content', 'Test note', 'test');
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'Test content');
 
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::FORBIDDEN->value);
-            $basicClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM);
+            $basicClient->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM);
         }
 
         public function testSecurityBlacklistLiftAndDeleteRestrictions(): void
@@ -156,22 +156,22 @@
         public function testSecurityBlacklistWithInvalidOrExpiredData(): void
         {
             $entityUuid = $this->createSecurityEntity();
-            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->createReportForEntity($entityUuid);
 
             $this->expectRequestFailure(
                 fn() => $this->client->blacklistEntity($entityUuid, 'not-a-uuid', IncidentType::SPAM),
                 [HttpResponseCode::BAD_REQUEST->value],
-                'Blacklist with invalid evidence UUID format should fail'
+                'Blacklist with invalid report UUID format should fail'
             );
 
             $this->expectRequestFailure(
-                fn() => $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() - 1),
+                fn() => $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() - 1),
                 [HttpResponseCode::BAD_REQUEST->value],
                 'Blacklist with expiration in the past should fail'
             );
 
             $this->expectRequestFailure(
-                fn() => $this->client->blacklistEntity($this->randomUuid(), $evidenceUuid, IncidentType::SPAM),
+                fn() => $this->client->blacklistEntity($this->randomUuid(), $reportUuid, IncidentType::SPAM),
                 [HttpResponseCode::NOT_FOUND->value],
                 'Blacklist of non-existent entity should fail'
             );
@@ -180,19 +180,19 @@
         public function testSecurityBlacklistRequiresManagementPermission(): void
         {
             $entityUuid = $this->createSecurityEntity();
-            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->createReportForEntity($entityUuid);
 
             $clientOnly = $this->createLimitedOperator('bl_create_client', client: true);
             $operatorOnly = $this->createLimitedOperator('bl_create_operator', operator: true);
 
             $this->expectRequestFailure(
-                fn() => $clientOnly->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM),
+                fn() => $clientOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM),
                 [HttpResponseCode::FORBIDDEN->value],
                 'Client-only operator should not create blacklists'
             );
 
             $this->expectRequestFailure(
-                fn() => $operatorOnly->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM),
+                fn() => $operatorOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM),
                 [HttpResponseCode::FORBIDDEN->value],
                 'Operator-only account should not create blacklists'
             );
@@ -235,10 +235,9 @@
             $entityUuid = $owner->pushEntity('bl-owner-preserve.com', 'bl_owner_preserve');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $owner->submitEvidence($entityUuid, 'Owner evidence', 'Note', 'bl_owner');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $owner, 'Owner evidence');
 
-            $blacklistUuid = $owner->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $owner->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $owner->liftBlacklistRecord($blacklistUuid);
@@ -256,10 +255,9 @@
             $entityUuid = $owner->pushEntity('bl-owner-ext.com', 'bl_owner_ext');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $owner->submitEvidence($entityUuid, 'Owner ext evidence', 'Note', 'bl_owner_ext');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $owner, 'Owner ext evidence');
 
-            $blacklistUuid = $owner->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $owner->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $owner->extendBlacklistRecord($blacklistUuid, 3600);
@@ -268,16 +266,16 @@
             $this->assertEquals($ownerUuid, $record->getOperatorUuid(), 'Blacklist record operator UUID should be preserved after extend');
         }
 
-        public function testSecurityBlacklistWithEvidenceFromDifferentEntity(): void
+        public function testSecurityBlacklistWithReportFromDifferentEntity(): void
         {
             $entityA = $this->createSecurityEntity();
             $entityB = $this->createSecurityEntity();
-            $evidenceForB = $this->createSecurityEvidence($entityB);
+            $reportForB = $this->createReportForEntity($entityB);
 
             $this->expectRequestFailure(
-                fn() => $this->client->blacklistEntity($entityA, $evidenceForB, IncidentType::SPAM, time() + 3600),
+                fn() => $this->client->blacklistEntity($entityA, $reportForB, IncidentType::SPAM, time() + 3600),
                 [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
-                'Blacklisting entity A with evidence belonging to entity B should be rejected'
+                'Blacklisting entity A with a report belonging to entity B should be rejected'
             );
         }
 

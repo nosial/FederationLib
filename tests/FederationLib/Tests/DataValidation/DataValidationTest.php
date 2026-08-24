@@ -6,6 +6,7 @@
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
+    use FederationLib\Objects\ContentInput;
     use FederationLib\Helpers\Logger;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
@@ -17,6 +18,7 @@
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -25,6 +27,18 @@
 
         protected function tearDown(): void
         {
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
+                }
+            }
+
             foreach ($this->createdBlacklistRecords as $blacklistUuid)
             {
                 try
@@ -77,6 +91,7 @@
             $this->createdEntities = [];
             $this->createdEvidenceRecords = [];
             $this->createdBlacklistRecords = [];
+            $this->createdReports = [];
         }
 
         public function testEntityHostValidation(): void
@@ -334,8 +349,14 @@
             $entityUuid = $this->client->pushEntity('blacklist-validation.com', 'blacklist_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Test evidence', 'Test note', 'test');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Test evidence', 'Test note', 'test'), IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+
+            foreach ($submission->getEvidence() as $evidenceRecord)
+            {
+                $this->createdEvidenceRecords[] = $evidenceRecord->getUuid();
+            }
 
             $invalidExpirations = [
                 -1,
@@ -346,7 +367,7 @@
             {
                 try
                 {
-                    $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, $expiration);
+                    $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, $expiration);
                     if ($blacklistUuid)
                     {
                         $this->createdBlacklistRecords[] = $blacklistUuid;
@@ -364,32 +385,32 @@
             }
         }
 
-        public function testBlacklistWithNonExistentEvidence(): void
+        public function testBlacklistWithNonExistentReport(): void
         {
-            $entityUuid = $this->client->pushEntity('blacklist-invalid-evidence.com', 'invalid_evidence_user');
+            $entityUuid = $this->client->pushEntity('blacklist-invalid-report.com', 'invalid_report_user');
             $this->createdEntities[] = $entityUuid;
 
-            $fakeEvidenceUuid = '01234567-89ab-cdef-0123-456789abcdef';
+            $fakeReportUuid = '01234567-89ab-cdef-0123-456789abcdef';
 
             try
             {
-                $this->client->blacklistEntity($entityUuid, $fakeEvidenceUuid, IncidentType::SPAM, time() + 3600);
-                $this->fail('Expected RequestException for non-existent evidence');
+                $this->client->blacklistEntity($entityUuid, $fakeReportUuid, IncidentType::SPAM, time() + 3600);
+                $this->fail('Expected RequestException for non-existent report');
             }
             catch (RequestException $e)
             {
-                $this->assertContains($e->getCode(), [400, 404], 'Expected 400 or 404 for non-existent evidence');
+                $this->assertContains($e->getCode(), [400, 404], 'Expected 400 or 404 for non-existent report');
             }
         }
 
         public function testBlacklistWithNonExistentEntity(): void
         {
             $fakeEntityUuid = '01234567-89ab-cdef-0123-456789abcdef';
-            $fakeEvidenceUuid = '01234567-89ab-cdef-0123-456789abcdef';
+            $fakeReportUuid = '01234567-89ab-cdef-0123-456789abcdef';
 
             try
             {
-                $this->client->blacklistEntity($fakeEntityUuid, $fakeEvidenceUuid, IncidentType::SPAM, time() + 3600);
+                $this->client->blacklistEntity($fakeEntityUuid, $fakeReportUuid, IncidentType::SPAM, time() + 3600);
                 $this->fail('Expected RequestException for non-existent entity');
             }
             catch (RequestException $e)

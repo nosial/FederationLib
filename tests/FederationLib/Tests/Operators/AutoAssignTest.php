@@ -420,10 +420,9 @@
             $entityUuid = $this->client->pushEntity('auto-assign-report.com', 'auto_assign_report_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence for auto assign report', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Malware evidence for auto assign report');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $reportsBefore = $this->client->listReports(1, 1000);
@@ -508,10 +507,9 @@
             $entityUuid = $this->client->pushEntity('auto-assign-missing.com', 'auto_assign_missing_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Malware evidence without auto assign', 'Test note', 'malware');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, $this->client, 'Malware evidence without auto assign');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::MALWARE, null);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $reportsBefore = $this->client->listReports(1, 1000);

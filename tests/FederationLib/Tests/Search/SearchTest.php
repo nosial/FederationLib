@@ -245,10 +245,9 @@
             $entityUuid = $this->client->pushEntity('search-blacklist.com', 'bl_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'bl content', 'bl note', 'bl_tag');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'bl content');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $prefix = substr($entityUuid, 0, 8);
@@ -560,15 +559,14 @@
             $this->assertTrue($found, 'Evidence should be found by UUID prefix search');
         }
 
-        public function testSearchBlacklistByEvidenceUuid(): void
+        public function testSearchBlacklistByReportUuid(): void
         {
             $entityUuid = $this->client->pushEntity('search-bl-ev.com', 'bl_ev_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'bl ev content', 'bl ev note', 'bl_ev_tag');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'bl ev content');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 7200);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $results = $this->client->searchBlacklist($entityUuid);
@@ -690,10 +688,9 @@
             $entityUuid = $this->client->pushEntity('bl-fields.com', 'bl_fields_user');
             $this->createdEntities[] = $entityUuid;
 
-            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'bl fields content', 'bl fields note', 'bl_fields_tag');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'bl fields content');
 
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 7200);
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 7200);
             $this->createdBlacklistRecords[] = $blacklistUuid;
 
             $results = $this->client->searchBlacklist($entityUuid);

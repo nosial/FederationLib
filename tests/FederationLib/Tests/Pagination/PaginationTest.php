@@ -8,6 +8,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Objects\ContentInput;
     use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
@@ -18,6 +19,7 @@
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -35,6 +37,18 @@
                 catch (RequestException $e)
                 {
                     Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
                 }
             }
 
@@ -299,17 +313,26 @@
                 $entityUuid = $this->client->pushEntity("blacklist-pagination-$i.com", "blacklist_user_$i");
                 $this->createdEntities[] = $entityUuid;
 
-                $evidenceUuid = $this->client->submitEvidence(
+                $submission = $this->client->submitReport(
                     $entityUuid,
-                    "Blacklist evidence $i",
-                    "Blacklist note $i",
-                    'blacklist_pagination'
+                    new ContentInput(
+                        "Blacklist evidence $i",
+                        "Blacklist note $i",
+                        'blacklist_pagination'
+                    ),
+                    IncidentType::SPAM
                 );
-                $this->createdEvidenceRecords[] = $evidenceUuid;
+                $reportUuid = $submission->getReport()->getUuid();
+                $this->createdReports[] = $reportUuid;
+
+                foreach ($submission->getEvidence() as $evidenceRecord)
+                {
+                    $this->createdEvidenceRecords[] = $evidenceRecord->getUuid();
+                }
 
                 $blacklistUuid = $this->client->blacklistEntity(
                     $entityUuid,
-                    $evidenceUuid,
+                    $reportUuid,
                     IncidentType::SPAM,
                     time() + 3600
                 );

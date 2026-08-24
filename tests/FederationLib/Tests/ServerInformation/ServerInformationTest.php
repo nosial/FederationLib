@@ -210,17 +210,25 @@
             $afterEntity = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getKnownEntities() + 1, $afterEntity->getKnownEntities());
 
+            // The blacklist record must reference a report, which brings its own evidence record along.
+            $submission = $authenticatedClient->submitReport($entityUuid, ['text_content' => 'Count accuracy report'], IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $reportEvidenceUuid = $submission->getEvidence()[0]->getUuid();
+            $beforeEvidence = $authenticatedClient->getServerInformation();
+
             $evidenceUuid = $authenticatedClient->submitEvidence($entityUuid, 'Count accuracy evidence', 'Note', 'count');
             $afterEvidence = $authenticatedClient->getServerInformation();
-            $this->assertEquals($before->getEvidenceRecords() + 1, $afterEvidence->getEvidenceRecords());
+            $this->assertEquals($beforeEvidence->getEvidenceRecords() + 1, $afterEvidence->getEvidenceRecords());
 
-            $blacklistUuid = $authenticatedClient->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $blacklistUuid = $authenticatedClient->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $afterBlacklist = $authenticatedClient->getServerInformation();
             $this->assertEquals($before->getBlacklistRecords() + 1, $afterBlacklist->getBlacklistRecords());
 
             // Cleanup in reverse order of foreign-key dependencies.
             $authenticatedClient->deleteBlacklistRecord($blacklistUuid);
             $authenticatedClient->deleteEvidence($evidenceUuid);
+            $authenticatedClient->deleteReport($reportUuid);
+            $authenticatedClient->deleteEvidence($reportEvidenceUuid);
             $authenticatedClient->deleteEntity($entityUuid);
 
             $afterCleanup = $authenticatedClient->getServerInformation();
@@ -314,8 +322,9 @@
             // Create a representative set of records to test visibility.
             $entityUuid = $authenticatedClient->pushEntity('public-flag-test.com', 'public_flag_user');
             $evidenceUuid = $authenticatedClient->submitEvidence($entityUuid, 'Public flag evidence', 'Note', 'public_flag');
-            $blacklistEvidenceUuid = $authenticatedClient->submitEvidence($entityUuid, 'Blacklist evidence', 'Note', 'bl');
-            $blacklistUuid = $authenticatedClient->blacklistEntity($entityUuid, $blacklistEvidenceUuid, IncidentType::SPAM, time() + 3600);
+            $submission = $authenticatedClient->submitReport($entityUuid, ['text_content' => 'Blacklist evidence'], IncidentType::SPAM);
+            $blacklistReportUuid = $submission->getReport()->getUuid();
+            $blacklistUuid = $authenticatedClient->blacklistEntity($entityUuid, $blacklistReportUuid, IncidentType::SPAM, time() + 3600);
 
             // Entities
             if ($serverInfo->isPublicEntities())
@@ -353,7 +362,8 @@
             // Cleanup
             $authenticatedClient->deleteBlacklistRecord($blacklistUuid);
             $authenticatedClient->deleteEvidence($evidenceUuid);
-            $authenticatedClient->deleteEvidence($blacklistEvidenceUuid);
+            $authenticatedClient->deleteReport($blacklistReportUuid);
+            $authenticatedClient->deleteEvidence($submission->getEvidence()[0]->getUuid());
             $authenticatedClient->deleteEntity($entityUuid);
         }
 

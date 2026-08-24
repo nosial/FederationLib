@@ -9,6 +9,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
     use FederationLib\Helpers\Logger;
+    use FederationLib\Objects\ContentInput;
     use PHPUnit\Framework\TestCase;
 
     class FeaturesTest extends TestCase
@@ -18,6 +19,7 @@
         private array $createdEntities = [];
         private array $createdEvidenceRecords = [];
         private array $createdBlacklistRecords = [];
+        private array $createdReports = [];
 
         protected function setUp(): void
         {
@@ -35,6 +37,18 @@
                 catch (RequestException $e)
                 {
                     Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
+                }
+            }
+
+            foreach ($this->createdReports as $reportUuid)
+            {
+                try
+                {
+                    $this->client->deleteReport($reportUuid);
+                }
+                catch (RequestException $e)
+                {
+                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
                 }
             }
 
@@ -199,11 +213,17 @@
             $blacklistUuids = [];
             for ($i = 1; $i <= 2; $i++)
             {
-                $evidenceUuid = $this->client->submitEvidence($entityUuid, "Blacklist evidence $i", "Blacklist note $i", "blacklist_tag_$i");
-                $this->createdEvidenceRecords[] = $evidenceUuid;
+                $submission = $this->client->submitReport($entityUuid, new ContentInput("Blacklist evidence $i", "Blacklist note $i", "blacklist_tag_$i"), IncidentType::SPAM);
+                $reportUuid = $submission->getReport()->getUuid();
+                $this->createdReports[] = $reportUuid;
+
+                foreach ($submission->getEvidence() as $evidenceRecord)
+                {
+                    $this->createdEvidenceRecords[] = $evidenceRecord->getUuid();
+                }
 
                 $blacklistType = ($i === 1) ? IncidentType::SPAM : IncidentType::MALWARE;
-                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $evidenceUuid, $blacklistType, time() + 3600);
+                $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, $blacklistType, time() + 3600);
                 $blacklistUuids[] = $blacklistUuid;
                 $this->createdBlacklistRecords[] = $blacklistUuid;
             }

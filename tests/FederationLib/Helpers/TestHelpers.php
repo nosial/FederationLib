@@ -73,13 +73,32 @@
         }
 
         /**
+         * Creates a report (with a single evidence record) for an existing entity and registers both for cleanup.
+         */
+        private function createReportForEntity(string $entityUuid, ?FederationClient $client = null, string $content = 'Security test report'): string
+        {
+            $client ??= $this->client;
+            $submission = $client->submitReport($entityUuid, new ContentInput($content), IncidentType::SPAM);
+
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+
+            foreach($submission->getEvidence() as $evidenceRecord)
+            {
+                $this->createdEvidenceRecords[] = $evidenceRecord->getUuid();
+            }
+
+            return $reportUuid;
+        }
+
+        /**
          * Creates a blacklist record for an entity and registers it for cleanup.
          */
         private function createSecurityBlacklist(string $entityUuid, ?FederationClient $client = null): string
         {
             $client ??= $this->client;
-            $evidenceUuid = $this->createSecurityEvidence($entityUuid, false, $client);
-            $blacklistUuid = $client->blacklistEntity($entityUuid, $evidenceUuid, IncidentType::SPAM, time() + 3600);
+            $reportUuid = $this->createReportForEntity($entityUuid, $client);
+            $blacklistUuid = $client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
             $this->createdBlacklistRecords[] = $blacklistUuid;
             return $blacklistUuid;
         }
