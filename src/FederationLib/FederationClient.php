@@ -1251,28 +1251,28 @@
         }
 
         /**
-         * Sets a relationship between an entity and a target entity.
+         * Sets a relationship between an entity and a related entity.
          *
-         * @param string $entityIdentifier The entity UUID, hash, or address to set the relationship for
-         * @param string $targetIdentifier The UUID, SHA-256 hash, or entity address of the target entity (the parent entity in the relationship)
+         * @param string $entityIdentifier The entity UUID, hash, or address setting the relationship
+         * @param string $relatedEntityIdentifier The UUID, SHA-256 hash, or entity address of the related entity
          * @param EntityRelationshipType $relationshipType The type of relationship to set
          * @throws RequestException If the request fails or the response is invalid
-         * @throws InvalidArgumentException If the entity identifier is empty
+         * @throws InvalidArgumentException If an identifier is empty
          */
-        public function setEntityRelationship(string $entityIdentifier, string $targetIdentifier, EntityRelationshipType $relationshipType): void
+        public function setEntityRelationship(string $entityIdentifier, string $relatedEntityIdentifier, EntityRelationshipType $relationshipType): void
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            if(empty($targetIdentifier))
+            if(empty($relatedEntityIdentifier))
             {
-                throw new InvalidArgumentException('Target entity identifier cannot be empty');
+                throw new InvalidArgumentException('Related entity identifier cannot be empty');
             }
 
             $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/relationship',
-                ['target_identifier' => $targetIdentifier, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
+                ['target_identifier' => $relatedEntityIdentifier, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
                 sprintf('Failed to set relationship for entity %s', $entityIdentifier)
             );
         }
