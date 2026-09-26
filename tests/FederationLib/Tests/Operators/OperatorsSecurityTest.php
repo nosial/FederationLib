@@ -191,7 +191,7 @@
             }
         }
 
-        public function testSecurityManagementOnlyOperatorCanManageRecordsButNotClientOrOperatorActions(): void
+        public function testSecurityManagementOnlyOperatorCanManageRecordsAndClientActionsButNotOperatorActions(): void
         {
             $managementOnly = $this->createLimitedOperator('management_only', management: true);
             $entityUuid = $this->createSecurityEntity();
@@ -201,6 +201,15 @@
             $this->createdBlacklistRecords[] = $blacklistUuid;
             $this->assertNotEmpty($blacklistUuid);
 
+            // Management permissions inherit client permissions, so a management-only operator can perform client actions.
+            $pushedEntityUuid = $managementOnly->pushEntity('mgmt-inherits-client.com', 'user');
+            $this->createdEntities[] = $pushedEntityUuid;
+            $this->assertNotEmpty($pushedEntityUuid);
+
+            $evidenceUuid = $managementOnly->submitEvidence($entityUuid, 'text', 'note', 'tag');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $this->assertNotEmpty($evidenceUuid);
+
             $report = $this->createSecurityReport();
             $managementOnly->assignOperatorToReport($report['report'], $managementOnly->getSelf()->getUuid());
             $managementOnly->closeReport($report['report']);
@@ -209,8 +218,6 @@
 
             $forbiddenActions = [
                 'createOperator' => fn() => $managementOnly->createOperator('child'),
-                'pushEntity' => fn() => $managementOnly->pushEntity('example.com', 'user'),
-                'submitEvidence' => fn() => $managementOnly->submitEvidence($entityUuid, 'text', 'note', 'tag'),
             ];
 
             foreach ($forbiddenActions as $name => $callback)

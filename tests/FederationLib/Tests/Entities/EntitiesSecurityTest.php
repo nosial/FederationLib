@@ -108,12 +108,20 @@
         public function testSecurityUpdateEntityRequiresClientPermissions(): void
         {
             $entityUuid = $this->createSecurityEntity();
-            $managementOnly = $this->createLimitedOperator('update_entity_mgmt', management: true);
 
+            // Management permissions inherit client permissions, so a management-only operator can update entities.
+            $managementOnly = $this->createLimitedOperator('update_entity_mgmt', management: true);
+            $managementOnly->updateEntity($entityUuid, ['key' => 'value']);
+
+            $entityRecord = $this->client->getEntityRecord($entityUuid);
+            $this->assertEquals(['key' => 'value'], $entityRecord->getMetadata());
+
+            // An operator without client or management permissions cannot update entities.
+            $operatorOnly = $this->createLimitedOperator('update_entity_operator', operator: true);
             $this->expectRequestFailure(
-                fn() => $managementOnly->updateEntity($entityUuid, ['key' => 'value']),
+                fn() => $operatorOnly->updateEntity($entityUuid, ['bad' => 'value']),
                 [HttpResponseCode::FORBIDDEN->value],
-                'Management-only operator should not update entities'
+                'Operator-only account should not update entities'
             );
         }
 

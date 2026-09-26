@@ -522,7 +522,7 @@
                 $this->assertEquals("batch_operator_$index", $operator->getName());
                 $this->assertEquals($index % 2 === 0, $operator->hasManagementPermissions());
                 $this->assertEquals($index % 3 === 0, $operator->hasOperatorPermissions());
-                $this->assertEquals($index % 4 === 0, $operator->hasClientPermissions());
+                $this->assertEquals($index % 4 === 0 || $index % 2 === 0, $operator->hasClientPermissions());
             }
 
             $allOperators = $this->client->listOperators(1, 100);
@@ -849,11 +849,11 @@
                 $self = $limited->getSelf();
                 $this->assertEquals($combo['management'], $self->hasManagementPermissions(), $combo['name'] . ' management mismatch');
                 $this->assertEquals($combo['operator'], $self->hasOperatorPermissions(), $combo['name'] . ' operator mismatch');
-                $this->assertEquals($combo['client'], $self->hasClientPermissions(), $combo['name'] . ' client mismatch');
+                $this->assertEquals($combo['client'] || $combo['management'], $self->hasClientPermissions(), $combo['name'] . ' client mismatch');
 
-                // Client-only actions
+                // Client-only actions (management inherits client)
                 $domain = str_replace('_', '-', "matrix-{$combo['name']}.com");
-                if ($combo['client'])
+                if ($combo['client'] || $combo['management'])
                 {
                     $testEntity = $limited->pushEntity($domain, 'user');
                     $this->createdEntities[] = $testEntity;

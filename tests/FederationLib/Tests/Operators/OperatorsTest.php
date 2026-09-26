@@ -131,7 +131,7 @@
             $operatorRecord = $this->client->getOperator($operatorUuid);
             $this->assertTrue($operatorRecord->hasManagementPermissions());
             $this->assertFalse($operatorRecord->hasOperatorPermissions());
-            $this->assertFalse($operatorRecord->hasClientPermissions());
+            $this->assertTrue($operatorRecord->hasClientPermissions());
         }
 
         public function testCreateOperatorWithOperatorPermission(): void
