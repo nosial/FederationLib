@@ -120,13 +120,13 @@
         }
 
         /**
-         * Check if the operator has client permissions (inherits management_permissions).
+         * Check if the operator has client permissions (management operators inherit client permissions).
          *
          * @return bool
          */
         public function hasClientPermissions(): bool
         {
-            return $this->clientPermissions;
+            return $this->clientPermissions || $this->managementPermissions;
         }
 
         /**
