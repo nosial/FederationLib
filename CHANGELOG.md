@@ -5,10 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.9] - Ongoing
+## [1.0.9] - 2026-09-26
 
-This is an ongoing update
+This update includes changes from the specification
 
+### Changed
+ - Management permissions now include client permissions, but client permissions do NOT include management
+   permissions. `OperatorRecord::hasClientPermissions()` returns `true` for any operator with management
+   permissions, so a management-only operator can also perform client-level actions (e.g. `pushEntity`,
+   `submitEvidence`, `submitReport`, and entity metadata updates), while
+   `OperatorRecord::hasManagementPermissions()` remains `true` only when management permissions were explicitly
+   granted (client-only operators are not promoted to managers). Operator permissions remain separate and are not
+   inherited.
+ - Updated `SetRelationship` terminology from "target entity" to "related entity" in error messages, parameter
+   descriptions, and the OpenAPI schema; `FederationClient::setEntityRelationship()` parameter renamed from
+   `targetIdentifier` to `relatedEntityIdentifier`
 
 
 
