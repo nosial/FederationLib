@@ -181,6 +181,40 @@
         }
 
         /**
+         * Converts a record to the fields of a Redis hash.
+         *
+         * <p>A hash holds only flat strings, so values are encoded the way the record constructors
+         * read them back: arrays as JSON (a raw array would be stored as the string "Array"),
+         * booleans as "1" or "0", and null fields are left out entirely. A missing field reads back
+         * as null, whereas null written into a hash comes back as "", which the constructors take as
+         * a real value — an unassigned report would read as assigned to operator "", and a permanent
+         * blacklist as expiring at the Unix epoch.
+         *
+         * @param SerializableInterface $record The record to convert.
+         * @return array<string, string|int|float> The hash fields.
+         */
+        private static function toHashFields(SerializableInterface $record): array
+        {
+            $fields = [];
+            foreach($record->toArray() as $key => $value)
+            {
+                if($value === null)
+                {
+                    continue;
+                }
+
+                $fields[$key] = match(true)
+                {
+                    is_array($value), is_object($value) => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    is_bool($value) => $value ? '1' : '0',
+                    default => $value,
+                };
+            }
+
+            return $fields;
+        }
+
+        /**
          * Retrieves a cached operator record by its UUID.
          *
          * @param SerializableInterface $record The operator record to cache.
@@ -205,9 +239,11 @@
                     return;
                 }
 
-                // Pipeline the hash write and expiry into one client/server round trip.
+                // Pipeline the hash write and expiry into one client/server round trip. The key is
+                // replaced rather than merged into, so a field that became null does not linger.
                 $pipeline = $redis->multi(Redis::PIPELINE);
-                $pipeline->hMSet($cacheKey, $record->toArray());
+                $pipeline->del($cacheKey);
+                $pipeline->hMSet($cacheKey, self::toHashFields($record));
                 if($ttl > 0)
                 {
                     $pipeline->expire($cacheKey, $ttl);
@@ -564,7 +600,8 @@
                 foreach($serializableRecords as $record)
                 {
                     $cacheKey = sprintf('%s%s', $prefix, $record->$propertyName());
-                    $pipeline->hMSet($cacheKey, $record->toArray());
+                    $pipeline->del($cacheKey);
+                    $pipeline->hMSet($cacheKey, self::toHashFields($record));
                     if($ttl > 0)
                     {
                         $pipeline->expire($cacheKey, $ttl);
