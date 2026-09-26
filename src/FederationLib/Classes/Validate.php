@@ -45,16 +45,32 @@
                 return false;
             }
 
-            // Check for valid IPv4
-            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
+            // An entity host must already be canonical (OFD "Entity Address Canonicalization"):
+            // the SHA-256 identifier is derived from the exact string, so Example.COM and
+            // example.com, or 2001:DB8:0:0::1 and 2001:db8::1, would otherwise be separate entities.
+
+            // Four dot-separated numbers are an IPv4 address, never a domain: they must be four
+            // decimal octets without leading zeros ("010.1.1.1" is rejected, not read as a name)
+            if (preg_match('/^[0-9]+(\.[0-9]+){3}$/', $host))
             {
-                return true;
+                return filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false && long2ip(ip2long($host)) === $host;
             }
 
-            // Check for valid IPv6
-            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
+            // IPv6 must be in its lowercase compressed textual representation
+            if (str_contains($host, ':'))
             {
-                return true;
+                if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false)
+                {
+                    return false;
+                }
+                $packed = @inet_pton($host);
+                return $packed !== false && inet_ntop($packed) === $host;
+            }
+
+            // DNS hosts must use lowercase ASCII labels
+            if ($host !== strtolower($host))
+            {
+                return false;
             }
 
             // Check for valid domain name
