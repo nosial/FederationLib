@@ -19,13 +19,13 @@
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to manage entities';
         private const string ERROR_IDENTIFIER_REQUIRED = 'Entity identifier is required';
-        private const string ERROR_TARGET_IDENTIFIER_REQUIRED = 'Target entity identifier is required';
-        private const string ERROR_INVALID_TARGET_IDENTIFIER = 'A valid target entity identifier is required';
+        private const string ERROR_TARGET_IDENTIFIER_REQUIRED = 'Related entity identifier is required';
+        private const string ERROR_INVALID_TARGET_IDENTIFIER = 'A valid related entity identifier is required';
         private const string ERROR_RELATIONSHIP_TYPE_REQUIRED = 'Relationship type is required';
         private const string ERROR_INVALID_RELATIONSHIP_TYPE = 'Relationship type must be one of: ALTERNATIVE, PROXY, CHILD';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_NOT_FOUND = 'Entity not found';
-        private const string ERROR_TARGET_NOT_FOUND = 'Target entity not found';
+        private const string ERROR_TARGET_NOT_FOUND = 'Related entity not found';
         private const string ERROR_UNABLE_TO_SET = 'Unable to set entity relationship';
 
         /**
@@ -200,7 +200,7 @@
                             'properties' => [
                                 'target_identifier' => [
                                     'type' => 'string',
-                                    'description' => 'UUID, SHA-256 hash, or entity address of the target entity',
+                                    'description' => 'UUID, SHA-256 hash, or entity address of the related entity',
                                 ],
                                 'relationship_type' => [
                                     'type' => 'string',
