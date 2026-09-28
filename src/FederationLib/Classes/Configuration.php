@@ -81,10 +81,8 @@
             self::$configuration->setDefault('scanning.auto_report_threshold', 80.00, 'FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD');
             self::$configuration->setDefault('scanning.action_block_threshold', 80.00, 'FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD');
             self::$configuration->setDefault('scanning.action_caution_threshold', 60.00, 'FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD');
-            self::$configuration->setDefault('scanning.reputation_window_duration', 300, 'FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION');
-            self::$configuration->setDefault('scanning.reputation_max_delta', 10, 'FEDERATION_SCANNING_REPUTATION_MAX_DELTA');
-            self::$configuration->setDefault('scanning.reputation_min_delta', -10, 'FEDERATION_SCANNING_REPUTATION_MIN_DELTA');
-            self::$configuration->setDefault('scanning.reputation_scaling_factor', 0.25, 'FEDERATION_SCANNING_REPUTATION_SCALING_FACTOR');
+            self::$configuration->setDefault('scanning.reputation_window_duration', 3600, 'FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION');
+            self::$configuration->setDefault('scanning.reputation_gain', 1, 'FEDERATION_SCANNING_REPUTATION_GAIN');
             self::$configuration->setDefault('scanning.reputation_min_bound', -1000, 'FEDERATION_SCANNING_REPUTATION_MIN_BOUND');
             self::$configuration->setDefault('scanning.reputation_max_bound', 1000, 'FEDERATION_SCANNING_REPUTATION_MAX_BOUND');
             self::$configuration->setDefault('scanning.risk_score_neutral_point', 50.0, 'FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT');

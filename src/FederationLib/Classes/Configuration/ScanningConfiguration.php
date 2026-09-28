@@ -34,9 +34,7 @@
         private float $actionBlockThreshold;
         private float $actionCautionThreshold;
         private int $reputationWindowDuration;
-        private int $reputationMaxDelta;
-        private int $reputationMinDelta;
-        private float $reputationScalingFactor;
+        private int $reputationGain;
         private int $reputationMinBound;
         private int $reputationMaxBound;
         private float $riskScoreNeutralPoint;
@@ -78,10 +76,9 @@
             $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
             $this->actionBlockThreshold = (float)($configuration['action_block_threshold'] ?? 80.00);
             $this->actionCautionThreshold = (float)($configuration['action_caution_threshold'] ?? 60.00);
-            $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 300);
-            $this->reputationMaxDelta = (int)($configuration['reputation_max_delta'] ?? 10);
-            $this->reputationMinDelta = (int)($configuration['reputation_min_delta'] ?? -10);
-            $this->reputationScalingFactor = (float)($configuration['reputation_scaling_factor'] ?? 0.25);
+            $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 3600);
+            // OFD: incremental positive adjustments SHOULD NOT exceed 10 points; 0 disables gains
+            $this->reputationGain = max(0, min(10, (int)($configuration['reputation_gain'] ?? 1)));
             $this->reputationMinBound = (int)($configuration['reputation_min_bound'] ?? -1000);
             $this->reputationMaxBound = (int)($configuration['reputation_max_bound'] ?? 1000);
             $this->riskScoreNeutralPoint = (float)($configuration['risk_score_neutral_point'] ?? 50.0);
@@ -371,33 +368,13 @@
         }
 
         /**
-         * Returns the maximum reputation delta
+         * Returns the reputation gained by an entity for each window of clean, authenticated activity
          *
-         * @return int Maximum delta
+         * @return int Reputation gain per window
          */
-        public function getReputationMaxDelta(): int
+        public function getReputationGain(): int
         {
-            return $this->reputationMaxDelta;
-        }
-
-        /**
-         * Returns the minimum reputation delta
-         *
-         * @return int Minimum delta
-         */
-        public function getReputationMinDelta(): int
-        {
-            return $this->reputationMinDelta;
-        }
-
-        /**
-         * Returns the reputation scaling factor
-         *
-         * @return float Scaling factor
-         */
-        public function getReputationScalingFactor(): float
-        {
-            return $this->reputationScalingFactor;
+            return $this->reputationGain;
         }
 
         /**
