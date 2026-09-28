@@ -131,6 +131,32 @@
             $this->assertSame(Method::CLEAR_ENTITY_RELATIONSHIP, Method::matchHandle('DELETE', "/entities/$email/relationship"));
         }
 
+        public function testEntityRoutesMatchHandleByHostAddress(): void
+        {
+            foreach(['example.com', '203.0.113.45', '2001:db8::1', 'john@2001:db8::1'] as $address)
+            {
+                $this->assertSame(Method::GET_ENTITY_RECORD, Method::matchHandle('GET', "/entities/$address"), $address);
+                $this->assertSame(Method::DELETE_ENTITY, Method::matchHandle('DELETE', "/entities/$address"), $address);
+                $this->assertSame(Method::UPDATE_ENTITY, Method::matchHandle('PATCH', "/entities/$address"), $address);
+                $this->assertSame(Method::QUERY_ENTITY, Method::matchHandle('GET', "/entities/$address/query"), $address);
+                $this->assertSame(Method::LIST_ENTITY_EVIDENCE, Method::matchHandle('GET', "/entities/$address/evidence"), $address);
+                $this->assertSame(Method::CLEAR_REPUTATION, Method::matchHandle('PATCH', "/entities/$address/clear-reputation"), $address);
+                $this->assertSame(Method::SET_ENTITY_RELATIONSHIP, Method::matchHandle('PATCH', "/entities/$address/relationship"), $address);
+            }
+        }
+
+        public function testEntityIdentifierRoutesNeverMatchLiteralSubPaths(): void
+        {
+            $this->assertSame(Method::SEARCH_ENTITIES, Method::matchHandle('GET', '/entities/search'));
+            $this->assertSame(Method::TOP_THREATS, Method::matchHandle('GET', '/entities/top-threats'));
+
+            // OFD: a dynamic segment must not match a literal sub-path of the same domain, whatever the method
+            $this->assertNull(Method::matchHandle('DELETE', '/entities/search'));
+            $this->assertNull(Method::matchHandle('PATCH', '/entities/top-threats'));
+            $this->assertNull(Method::matchHandle('GET', '/entities/search/evidence'));
+            $this->assertNull(Method::matchHandle('GET', '/entities/top-threats/query'));
+        }
+
         public function testBlacklistRoutesMatchHandle(): void
         {
             $this->assertSame(Method::LIST_BLACKLIST, Method::matchHandle('GET', '/blacklist'));

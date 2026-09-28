@@ -3,7 +3,9 @@
     namespace FederationLib\Tests\Entities;
 
     use FederationLib\Classes\Utilities;
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
@@ -414,6 +416,111 @@
             }
         }
 
+        public function testEntityPathRoutesResolveByHostAddress(): void
+        {
+            // Issue #1: every /entities/{identifier} route must resolve a host entity by its entity address (the host
+            // alone), not only by its UUID or SHA-256 identifier
+            $host = 'host-only-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host);
+            $this->createdEntities[] = $entityUuid;
+
+            $this->assertSame($entityUuid, $this->client->getEntityRecord($host)->getUuid());
+            $this->assertSame($entityUuid, $this->client->queryEntity($host)->getEntityRecord()->getUuid());
+
+            $this->client->updateEntity($host, ['source' => 'host_address_test']);
+            $this->assertSame('host_address_test', $this->client->getEntityRecord($entityUuid)->getMetadata()['source'] ?? null);
+
+            $this->client->setEntityWhitelist($host, true);
+            $this->assertTrue($this->client->getEntityRecord($entityUuid)->isWhitelisted());
+            $this->client->setEntityWhitelist($host, false);
+            $this->assertFalse($this->client->getEntityRecord($entityUuid)->isWhitelisted());
+
+            $this->client->clearEntityReputation($host);
+            $this->assertSame(0, $this->client->getEntityRecord($entityUuid)->getReputation());
+
+            $this->assertIsArray($this->client->listEntityEvidenceRecords($host));
+            $this->assertIsArray($this->client->listEntityAuditLogs($host));
+            $this->assertIsArray($this->client->listEntityBlacklistRecords($host));
+            $this->assertIsArray($this->client->listEntityReports($host));
+
+            $childHost = 'child.' . $host;
+            $childUuid = $this->client->pushEntity($childHost);
+            $this->createdEntities[] = $childUuid;
+
+            $this->client->setEntityRelationship($childHost, $host, EntityRelationshipType::CHILD);
+            $this->assertSame($entityUuid, $this->client->getEntityRecord($childUuid)->getRelationshipEntity());
+            $this->client->clearEntityRelationship($childHost);
+            $this->assertNull($this->client->getEntityRecord($childUuid)->getRelationshipEntity());
+        }
+
+        public function testEntityRequestMembersResolveByHostAddress(): void
+        {
+            // Issue #1: request members carrying an entity identifier must accept the host alone as well
+            $host = 'host-member-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host);
+            $this->createdEntities[] = $entityUuid;
+
+            $evidenceUuid = $this->client->submitEvidence($host, 'Host address evidence', 'Note', 'host');
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+            $this->assertContains($evidenceUuid, array_map(fn($evidence) => $evidence->getUuid(), $this->client->listEntityEvidenceRecords($host)));
+
+            $submission = $this->client->submitReport($host, ['text_content' => 'Host address report'], IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $this->assertSame($entityUuid, $submission->getReport()->getReportingEntity());
+            $this->assertContains($reportUuid, array_map(fn($report) => $report->getUuid(), $this->client->listEntityReports($host)));
+
+            $blacklistUuid = $this->client->blacklistEntity($host, $reportUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+            $this->assertContains($blacklistUuid, array_map(fn($blacklist) => $blacklist->getUuid(), $this->client->listEntityBlacklistRecords($host)));
+        }
+
+        public function testEntityResolvableByNamedAddressWithIpHost(): void
+        {
+            // Named entity addresses whose entity host is an IP address are routable in a path as well
+            $id = 'ip_user_' . uniqid();
+            foreach (['203.0.113.77', '2001:db8::77'] as $ipHost)
+            {
+                $entityUuid = $this->client->pushEntity($ipHost, $id);
+                $this->createdEntities[] = $entityUuid;
+                $this->assertSame($entityUuid, $this->client->getEntityRecord("$id@$ipHost")->getUuid(), "$id@$ipHost");
+            }
+        }
+
+        public function testEntityDeletableByHostAddress(): void
+        {
+            $host = 'host-delete-' . uniqid() . '.com';
+            $entityUuid = $this->client->pushEntity($host);
+            $this->createdEntities[] = $entityUuid;
+
+            $this->client->deleteEntity($host);
+            $this->expectRequestFailure(
+                fn() => $this->client->getEntityRecord($entityUuid),
+                [HttpResponseCode::NOT_FOUND->value],
+                'Entity deleted by its host address must no longer exist'
+            );
+        }
+
+        public function testEntityIdentifierRejectsNonCanonicalAddress(): void
+        {
+            // OFD: an entity address must be canonical; anything else is not a valid identifier (HTTP 400), in a path
+            // segment and in a request member alike
+            foreach (['Example.COM', 'john@Example.com', '2001:0db8::1', 'Not_A_Valid_Identifier'] as $identifier)
+            {
+                $this->expectRequestFailure(
+                    fn() => $this->client->getEntityRecord($identifier),
+                    [HttpResponseCode::BAD_REQUEST->value],
+                    "Non-canonical path identifier $identifier must be rejected"
+                );
+                $this->expectRequestFailure(
+                    fn() => $this->client->submitEvidence($identifier, 'Non-canonical evidence'),
+                    [HttpResponseCode::BAD_REQUEST->value],
+                    "Non-canonical request member $identifier must be rejected"
+                );
+            }
+        }
+
         public function testEntityClearReputationRequiresExistingEntity(): void
         {
             $this->expectRequestFailure(
@@ -422,8 +529,9 @@
                 'Clearing reputation for non-existent entity should fail'
             );
 
+            // A lowercase string like 'not-a-valid-uuid' is a valid host entity address, so use one that is not
             $this->expectRequestFailure(
-                fn() => $this->client->clearEntityReputation('not-a-valid-uuid'),
+                fn() => $this->client->clearEntityReputation('Not_A_Valid_Identifier'),
                 [HttpResponseCode::BAD_REQUEST->value],
                 'Clearing reputation for malformed identifier should fail'
             );
