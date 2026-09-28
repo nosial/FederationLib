@@ -969,11 +969,12 @@
 
         public function testSearchEntityHostCaseInsensitive(): void
         {
-            $host = 'Case-Insensitive-Test-' . uniqid() . '.Com';
+            // OFD requires DNS entity hosts to be lowercase, so the case difference is in the search query instead
+            $host = 'case-insensitive-test-' . uniqid() . '.com';
             $entityUuid = $this->client->pushEntity($host, 'ci_user');
             $this->createdEntities[] = $entityUuid;
 
-            $results = $this->client->searchEntities(strtolower($host));
+            $results = $this->client->searchEntities(strtoupper($host));
             $this->assertIsArray($results);
         }
 
