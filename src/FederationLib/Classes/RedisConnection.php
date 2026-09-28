@@ -10,6 +10,9 @@
 
     class RedisConnection
     {
+        private const string KEY_COUNT_PREFIX = 'cache_count:';
+        private const int KEY_COUNT_TTL = 10;
+
         private static ?Redis $redis = null;
 
         /**
@@ -76,6 +79,37 @@
         }
 
         /**
+         * Returns the number of keys with a given prefix, reusing a recent count for a few seconds.
+         *
+         * <p>SCAN walks the whole keyspace no matter the MATCH pattern, so counting on every cache miss makes
+         * each miss slower as Redis grows. Cache limits only need to be approximate, so the count is kept for
+         * KEY_COUNT_TTL seconds under a key that the prefix pattern itself does not match.
+         *
+         * @param string $prefix The prefix to match keys against.
+         * @return int The (approximate) number of keys matching the prefix.
+         * @throws RedisException If there is an error during the operation.
+         */
+        private static function approximateKeyCount(string $prefix): int
+        {
+            $redis = self::getConnection();
+            if($redis === null)
+            {
+                return 0;
+            }
+
+            $countKey = self::KEY_COUNT_PREFIX . $prefix;
+            $cached = $redis->get($countKey);
+            if($cached !== false && is_numeric($cached))
+            {
+                return (int)$cached;
+            }
+
+            $count = self::countKeys($prefix);
+            $redis->setex($countKey, self::KEY_COUNT_TTL, $count);
+            return $count;
+        }
+
+        /**
          * Check if the number of keys with a given prefix exceeds a specified limit.
          *
          * @param string $prefix The prefix to check against.
@@ -92,7 +126,7 @@
 
             try
             {
-                return self::countKeys($prefix) >= $limit;
+                return self::approximateKeyCount($prefix) >= $limit;
             }
             catch (RedisException $e)
             {
@@ -138,6 +172,8 @@
                     }
                 }
                 while ($iterator !== 0);
+
+                $redis->del(self::KEY_COUNT_PREFIX . $prefix);
             }
             catch (RedisException $e)
             {
@@ -293,11 +329,19 @@
          */
         public static function getRecord(string $cacheKey): ?array
         {
+            $redis = self::getConnection();
+            if($redis === null)
+            {
+                return null;
+            }
+
             try
             {
-                if (RedisConnection::getConnection()->exists($cacheKey))
+                // HGETALL returns an empty array for a missing key, so no separate EXISTS round trip is needed
+                $record = $redis->hGetAll($cacheKey);
+                if(is_array($record) && $record !== [])
                 {
-                    return RedisConnection::getConnection()->hGetAll($cacheKey);
+                    return $record;
                 }
             }
             catch (RedisException $e)
@@ -576,7 +620,7 @@
 
             if($limit > 0)
             {
-                $availableSpace = max(0, $limit - self::countKeys($prefix));
+                $availableSpace = max(0, $limit - self::approximateKeyCount($prefix));
                 $serializableRecords = array_slice($serializableRecords, 0, $availableSpace);
             }
 
