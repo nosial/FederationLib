@@ -25,6 +25,13 @@
         private array $classifications;
 
         /**
+         * Memoized result of getScanResults(); the object is immutable after construction
+         *
+         * @var array<string, float>|null
+         */
+        private ?array $scanResults = null;
+
+        /**
          * ScannedContent Public Constructor
          *
          * @param ResolvedEntity[] $resolvedEntities An array of resolved entities from the text content
@@ -223,6 +230,11 @@
          */
         public function getScanResults(): array
         {
+            if($this->scanResults !== null)
+            {
+                return $this->scanResults;
+            }
+
             $scanningRules = ScanningRules::newTable();
             $config = Configuration::getScanningConfiguration();
 
@@ -285,7 +297,7 @@
                 self::applyClassificationRules($scanningRules, $classification);
             }
 
-            return $scanningRules;
+            return $this->scanResults = $scanningRules;
         }
 
         /**
