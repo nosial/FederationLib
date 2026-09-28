@@ -940,15 +940,24 @@
         }
 
         /**
-         * Records a completed scan result into the open reputation window for the author entity.
+         * Records a completed scan of authored content into the open reputation window of the author entity
+         * and its parent entity, if any.
          *
-         * Author-specific and classification signals are attributed to the author entity.
-         * If the author entity has a parent entity, the same points are also attributed to the parent entity.
+         * Scans never decrease reputation: a scan classified as suspicious or malicious, or authored by a
+         * blacklisted entity, only marks the window as flagged so that it closes without a gain. Negative
+         * adjustments are left to concluded reports. The caller is responsible for only recording scans from
+         * authenticated clients.
          *
          * @param ScannedContent $scannedContent The fully constructed scan result
          */
         public static function recordScan(ScannedContent $scannedContent): void
         {
+            $author = $scannedContent->getAuthorEntity();
+            if($author === null)
+            {
+                return;
+            }
+
             $redis = self::getReputationRedis();
             if($redis === null)
             {
@@ -957,30 +966,20 @@
 
             $now = time();
             $scanResults = $scannedContent->getScanResults();
+            $flagged = ($scanResults[ScanningRules::CLASSIFICATION_SUSPICIOUS->name] ?? 0.0) < 0
+                || ($scanResults[ScanningRules::CLASSIFICATION_MALICIOUS->name] ?? 0.0) < 0
+                || count($author->getActiveBlacklists()) > 0;
 
-            if($scannedContent->getAuthorEntity() !== null)
+            $authorUuid = $author->getEntity()->getUuid();
+            self::recordActivity($authorUuid, $flagged, $now, $redis);
+            self::closeReputationWindow($authorUuid, $redis);
+
+            $authorParent = $author->getParentEntity();
+            if($authorParent !== null)
             {
-                $authorUuid = $scannedContent->getAuthorEntity()->getEntity()->getUuid();
-                $authorPoints = 0.0;
-
-                foreach(ScanningRules::cases() as $rule)
-                {
-                    if($rule->isAuthorRule() || $rule->isClassificationRule())
-                    {
-                        $authorPoints += $scanResults[$rule->name] ?? 0.0;
-                    }
-                }
-
-                self::accumulateReputation($authorUuid, $authorPoints, $now, $redis);
-                self::closeReputationWindow($authorUuid, $redis);
-
-                $authorParent = $scannedContent->getAuthorEntity()->getParentEntity();
-                if($authorParent !== null)
-                {
-                    $parentUuid = $authorParent->getEntity()->getUuid();
-                    self::accumulateReputation($parentUuid, $authorPoints, $now, $redis);
-                    self::closeReputationWindow($parentUuid, $redis);
-                }
+                $parentUuid = $authorParent->getEntity()->getUuid();
+                self::recordActivity($parentUuid, $flagged || count($authorParent->getActiveBlacklists()) > 0, $now, $redis);
+                self::closeReputationWindow($parentUuid, $redis);
             }
         }
 
@@ -1040,9 +1039,10 @@
             }
         }
 
-        /**AuditLogManager
-         * Checks whether a single entity's reputation window has elapsed and, if so, computes the
-         * reputation delta, persists it to SQL, and cleans up the Redis window data.
+        /**
+         * Checks whether a single entity's reputation window has elapsed and, if so, applies the configured
+         * reputation gain when the window was clean and the entity has no opened reports awaiting a conclusion,
+         * then cleans up the Redis window data. However many scans the window received, it gains at most once.
          *
          * @param string $entityUuid The entity UUID
          * @param Redis $redis The Redis connection
@@ -1085,23 +1085,19 @@
                 return false;
             }
 
-            $accumulatedPoints = (float)($data['accumulated_points'] ?? 0.0);
+            $flagged = (bool)(int)($data['flagged'] ?? 0);
             $scanCount = (int)($data['scan_count'] ?? 0);
-            $maxDelta = Configuration::getScanningConfiguration()->getReputationMaxDelta();
-            $minDelta = Configuration::getScanningConfiguration()->getReputationMinDelta();
-            $scalingFactor = Configuration::getScanningConfiguration()->getReputationScalingFactor();
-
-            $delta = (int)round($accumulatedPoints * $scalingFactor);
-            $delta = max($minDelta, min($maxDelta, $delta));
+            $gain = Configuration::getScanningConfiguration()->getReputationGain();
 
             try
             {
-                if($delta !== 0)
+                // Hold back gains while a report against the entity is still awaiting its conclusion
+                if(!$flagged && $gain > 0 && !ReportManager::hasOpenReports($entityUuid))
                 {
-                    self::updateEntityReputation($entityUuid, $delta);
+                    self::updateEntityReputation($entityUuid, $gain);
 
-                    Logger::log()->debug(sprintf('Reputation window closed for %s: %+d delta (%d scans, %.2f accumulated points)',
-                        $entityUuid, $delta, $scanCount, $accumulatedPoints
+                    Logger::log()->debug(sprintf('Reputation window closed for %s: %+d gain (%d scans)',
+                        $entityUuid, $gain, $scanCount
                     ));
                 }
 
@@ -1122,39 +1118,34 @@
         }
 
         /**
-         * Atomically accumulates scan points into an entity's open window.
-         * Creates the window if it does not yet exist.
+         * Records a scan into an entity's open window, creating the window if it does not yet exist.
+         * Once a window is flagged it stays flagged until it closes.
          *
          * @param string $entityUuid The entity UUID
-         * @param float $points The points to add
+         * @param bool $flagged True if the scan showed abnormal activity, False otherwise
          * @param int $now Current Unix timestamp
          * @param Redis $redis The Redis connection
          */
-        private static function accumulateReputation(string $entityUuid, float $points, int $now, Redis $redis): void
+        private static function recordActivity(string $entityUuid, bool $flagged, int $now, Redis $redis): void
         {
             $key = self::REPUTATION_WINDOW_PREFIX . $entityUuid;
 
             try
             {
-                $exists = $redis->exists($key);
-                if(!$exists)
+                $redis->hSetNx($key, 'window_start', $now);
+                $redis->hSetNx($key, 'flagged', 0);
+                if($flagged)
                 {
-                    $redis->hMSet($key, [
-                        'window_start' => $now,
-                        'scan_count' => 0,
-                        'accumulated_points' => 0.0,
-                        'last_scan_at' => 0,
-                    ]);
+                    $redis->hSet($key, 'flagged', 1);
                 }
 
-                $redis->hIncrByFloat($key, 'accumulated_points', $points);
                 $redis->hIncrBy($key, 'scan_count', 1);
-                $redis->hMSet($key, ['last_scan_at' => $now]);
+                $redis->hSet($key, 'last_scan_at', $now);
                 $redis->sAdd(self::REPUTATION_ACTIVE_SET, $entityUuid);
             }
             catch (RedisException $e)
             {
-                Logger::log()->error(sprintf('Failed to accumulate reputation for %s: %s', $entityUuid, $e->getMessage()), $e);
+                Logger::log()->error(sprintf('Failed to record reputation activity for %s: %s', $entityUuid, $e->getMessage()), $e);
             }
         }
 
