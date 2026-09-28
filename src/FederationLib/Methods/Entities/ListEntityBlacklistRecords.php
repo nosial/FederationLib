@@ -4,7 +4,6 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\BlacklistManager;
-    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -47,16 +46,7 @@
                 $page = 1;
             }
 
-            if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/blacklist$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/blacklist$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/blacklist$#', FederationServer::getPath(), $matches)
-            )
-            {
-                throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
-            }
-
-            $entityIdentifier = $matches[1];
+            $entityIdentifier = Utilities::matchEntityPath(FederationServer::getPath(), '/blacklist');
             if(!$entityIdentifier)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
@@ -64,24 +54,7 @@
 
             try
             {
-                if(Utilities::isUuid($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-                }
-                elseif(Utilities::isSha256($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $entityAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($entityAddress['host'], $entityAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, 400);
-                }
-
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
                 if($entityRecord === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);

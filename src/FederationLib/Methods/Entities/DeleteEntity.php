@@ -33,16 +33,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$#', FederationServer::getPath(), $matches)
-            )
-            {
-                throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
-            }
-
-            $entityIdentifier = $matches[1];
+            $entityIdentifier = Utilities::matchEntityPath(FederationServer::getPath());
             if(!$entityIdentifier)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
@@ -50,24 +41,7 @@
 
             try
             {
-                if(Utilities::isUuid($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-                }
-                elseif(Utilities::isSha256($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, 400);
-                }
-
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
                 if($entityRecord === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);

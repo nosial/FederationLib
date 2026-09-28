@@ -8,6 +8,31 @@
     class Utilities
     {
         /**
+         * Route pattern fragment for an OFD entity identifier path segment: a UUID, a SHA-256 identifier or an entity
+         * address (named or host alone, with a DNS, IPv4 or IPv6 entity host). It never matches a literal sub-path of
+         * the entities domain, whatever the request method, as OFD "Route Patterns" requires. The segment is only
+         * shape-matched here; EntitiesManager::getEntityByIdentifier() validates it.
+         */
+        public const string ENTITY_IDENTIFIER_SEGMENT = '(?!(?:search|top-threats)(?:/|$))([a-zA-Z0-9._%+:@-]+)';
+
+        /**
+         * Matches a path of the form /entities/{identifier}{suffix} and returns the identifier segment.
+         *
+         * @param string $path The request path
+         * @param string $suffix Optional. The literal path that follows the identifier, e.g. '/evidence'
+         * @return string|null The identifier segment, or null if the path does not match
+         */
+        public static function matchEntityPath(string $path, string $suffix=''): ?string
+        {
+            if(preg_match('#^/entities/' . self::ENTITY_IDENTIFIER_SEGMENT . preg_quote($suffix, '#') . '$#', $path, $matches) === 1)
+            {
+                return $matches[1];
+            }
+
+            return null;
+        }
+
+        /**
          * Generate a random string of specified length.
          *
          * @param int $length Length of the random string to generate.

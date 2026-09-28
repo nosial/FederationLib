@@ -3,10 +3,8 @@
     namespace FederationLib\Methods\Evidence;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
-    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
-    use FederationLib\Classes\Utilities;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\HttpResponseCode;
@@ -81,24 +79,7 @@
                     throw new RequestException(self::ERROR_METADATA_INVALID, 400);
                 }
 
-                if(Utilities::isUuid($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-                }
-                elseif(Utilities::isSha256($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, 400);
-                }
-
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
                 if($entityRecord === null)
                 {
                     throw new RequestException(self::ERROR_ENTITY_NOT_FOUND, 404);

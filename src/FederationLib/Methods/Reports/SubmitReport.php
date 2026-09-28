@@ -3,11 +3,9 @@
     namespace FederationLib\Methods\Reports;
 
     use FederationLib\Classes\Managers\AuditLogManager;
-    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
-    use FederationLib\Classes\Utilities;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
@@ -91,23 +89,7 @@
 
             try
             {
-                if(Utilities::isUuid($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-                }
-                elseif(Utilities::isSha256($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, HttpResponseCode::BAD_REQUEST);
-                }
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
             }
             catch(DatabaseOperationException $e)
             {

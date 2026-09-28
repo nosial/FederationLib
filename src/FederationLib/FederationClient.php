@@ -1103,7 +1103,7 @@
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of evidence records per page (default is 100)
          * @param bool $includeLifted Optional. If True, lifted records will be included in the results
-         * @return EvidenceRecord[] An array of EvidenceRecord objects
+         * @return BlacklistRecord[] An array of BlacklistRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty or if the page or limit parameters are invalid
          */

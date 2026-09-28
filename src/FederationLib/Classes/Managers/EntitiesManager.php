@@ -545,6 +545,50 @@
         }
 
         /**
+         * Retrieves an entity by any OFD entity identifier form: its UUID, its SHA-256 identifier, a named entity
+         * address (local-part@entity-host) or a host entity address (the entity host alone). An entity address must
+         * be in canonical form, and its entity host may be a DNS name, an IPv4 address or an IPv6 address.
+         *
+         * @param string $identifier The entity identifier
+         * @return EntityRecord|null The EntityRecord object if found, null otherwise.
+         * @throws InvalidArgumentException If the identifier is not a valid entity identifier.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntityByIdentifier(string $identifier): ?EntityRecord
+        {
+            if(Utilities::isUuid($identifier))
+            {
+                return self::getEntityByUuid($identifier);
+            }
+
+            if(Utilities::isSha256($identifier))
+            {
+                return self::getEntityByHash($identifier);
+            }
+
+            // The local part cannot contain '@', so the last one separates it from the entity host
+            $separator = strrpos($identifier, '@');
+            if($separator !== false)
+            {
+                $id = substr($identifier, 0, $separator);
+                $host = substr($identifier, $separator + 1);
+                if(preg_match('/^[a-zA-Z0-9._%+-]+$/', $id) !== 1 || !Validate::host($host))
+                {
+                    throw new InvalidArgumentException('Invalid entity address');
+                }
+
+                return self::getEntityByHash(Utilities::hashEntity($host, $id));
+            }
+
+            if(!Validate::host($identifier))
+            {
+                throw new InvalidArgumentException('Invalid entity identifier');
+            }
+
+            return self::getEntityByHash(Utilities::hashEntity($identifier));
+        }
+
+        /**
          * Retrieves an entity by its SHA-256 hash.
          *
          * @param string $hash The SHA-256 hash of the entity.

@@ -34,18 +34,15 @@
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, HttpResponseCode::UNAUTHORIZED);
             }
 
-            if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/query$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/query$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/query$#', FederationServer::getPath(), $matches)
-            )
+            $entityIdentifier = Utilities::matchEntityPath(FederationServer::getPath(), '/query');
+            if(!$entityIdentifier)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }
 
             try
             {
-                $entityRecord = self::resolveEntity($matches[1]);
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
                 if($entityRecord === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
@@ -84,33 +81,6 @@
             self::successResponse(
                 new EntityQueryResult($entityRecord, $relatedEntities, $activeBlacklists)->toStandardArray(!self::omitEntityMetadata())
             );
-        }
-
-        /**
-         * Resolves a UUID, SHA-256 hash, or entity address to an entity record.
-         *
-         * @throws RequestException If the identifier format is invalid.
-         * @throws DatabaseOperationException If entity retrieval fails.
-         */
-        private static function resolveEntity(string $identifier): ?EntityRecord
-        {
-            if(Utilities::isUuid($identifier))
-            {
-                return EntitiesManager::getEntityByUuid($identifier);
-            }
-
-            if(Utilities::isSha256($identifier))
-            {
-                return EntitiesManager::getEntityByHash($identifier);
-            }
-
-            if(Utilities::isEntityAddress($identifier))
-            {
-                $address = Utilities::parseEntityAddress($identifier);
-                return EntitiesManager::getEntityByHash(Utilities::hashEntity($address['host'], $address['id']));
-            }
-
-            throw new RequestException(self::ERROR_INVALID_IDENTIFIER, HttpResponseCode::BAD_REQUEST);
         }
 
         /**

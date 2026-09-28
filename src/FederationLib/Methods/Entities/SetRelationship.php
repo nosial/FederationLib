@@ -39,18 +39,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            $path = FederationServer::getPath();
-
-            if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/relationship$#', $path, $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/relationship$#', $path, $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/relationship$#', $path, $matches)
-            )
-            {
-                throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
-            }
-
-            $entityIdentifier = $matches[1];
+            $entityIdentifier = Utilities::matchEntityPath(FederationServer::getPath(), '/relationship');
             if(!$entityIdentifier)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
@@ -76,47 +65,13 @@
 
             try
             {
-                if(Utilities::isUuid($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-                }
-                elseif(Utilities::isSha256($entityIdentifier))
-                {
-                    $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_IDENTIFIER, 400);
-                }
-
+                $entityRecord = self::resolveEntityIdentifier($entityIdentifier, self::ERROR_INVALID_IDENTIFIER);
                 if($entityRecord === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                if(Utilities::isUuid($targetEntityIdentifier))
-                {
-                    $targetEntityRecord = EntitiesManager::getEntityByUuid($targetEntityIdentifier);
-                }
-                elseif(Utilities::isSha256($targetEntityIdentifier))
-                {
-                    $targetEntityRecord = EntitiesManager::getEntityByHash($targetEntityIdentifier);
-                }
-                elseif(Utilities::isEntityAddress($targetEntityIdentifier))
-                {
-                    $targetParsedAddress = Utilities::parseEntityAddress($targetEntityIdentifier);
-                    $targetEntityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($targetParsedAddress['host'], $targetParsedAddress['id']));
-                }
-                else
-                {
-                    throw new RequestException(self::ERROR_INVALID_TARGET_IDENTIFIER, 400);
-                }
-
+                $targetEntityRecord = self::resolveEntityIdentifier($targetEntityIdentifier, self::ERROR_INVALID_TARGET_IDENTIFIER);
                 if($targetEntityRecord === null)
                 {
                     throw new RequestException(self::ERROR_TARGET_NOT_FOUND, 404);

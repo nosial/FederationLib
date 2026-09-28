@@ -4,7 +4,6 @@
 
     use Exception;
     use FederationLib\Classes\Configuration;
-    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
@@ -21,6 +20,7 @@
     {
         private const string ERROR_AUTHENTICATION_REQUIRED = 'Public reports are disabled and no operator is authenticated';
         private const string ERROR_IDENTIFIER_REQUIRED = 'Entity identifier UUID/SHA-256 is required';
+        private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_NOT_FOUND = 'Entity not found';
         private const string ERROR_FAILED_TO_GET_ENTITY = 'Failed to get entity';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve reports';
@@ -52,16 +52,7 @@
             $categoryInput = FederationServer::getParameter('category');
             $category = $categoryInput !== null ? ReportCategory::tryFromCaseInsensitive($categoryInput) : null;
 
-            if(
-                !preg_match('#^/entities/([a-fA-F0-9\-]{36})/reports$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-f0-9\-]{64})/reports$#', FederationServer::getPath(), $matches) &&
-                !preg_match('#^/entities/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/reports$#', FederationServer::getPath(), $matches)
-            )
-            {
-                throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
-            }
-
-            $entity = $matches[1];
+            $entity = Utilities::matchEntityPath(FederationServer::getPath(), '/reports');
             if(!$entity)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
@@ -69,26 +60,7 @@
 
             try
             {
-                if(Utilities::isUuid($entity))
-                {
-                    $entityRecord = EntitiesManager::getEntityByUuid($entity);
-                    $entityUuid = $entityRecord?->getUuid();
-                }
-                elseif(Utilities::isSha256($entity))
-                {
-                    $entityUuid = EntitiesManager::getEntityByHash($entity)?->getUuid();
-                }
-                elseif(Utilities::isEntityAddress($entity))
-                {
-                    $parsed = Utilities::parseEntityAddress($entity);
-                    $hash = Utilities::hashEntity($parsed['host'], $parsed['id']);
-                    $entityUuid = EntitiesManager::getEntityByHash($hash)?->getUuid();
-                }
-                else
-                {
-                    $entityUuid = null;
-                }
-
+                $entityUuid = self::resolveEntityIdentifier($entity, self::ERROR_INVALID_IDENTIFIER)?->getUuid();
                 if ($entityUuid === null)
                 {
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);

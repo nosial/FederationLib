@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -9,6 +10,7 @@
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
     use FederationLib\Interfaces\StandardObjectInterface;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\SuccessResponse;
@@ -116,6 +118,28 @@
         protected static function getPath(): ?string
         {
             return self::$path;
+        }
+
+        /**
+         * Resolves any entity identifier form (UUID, SHA-256 identifier or entity address) to its entity record,
+         * rejecting an identifier that is not valid with HTTP 400.
+         *
+         * @param string $identifier The entity identifier
+         * @param string $invalidIdentifierMessage The error message to respond with when the identifier is not valid
+         * @return EntityRecord|null The entity record, or null if no entity has the identifier
+         * @throws RequestException If the identifier is not a valid entity identifier
+         * @throws DatabaseOperationException If there is an error retrieving the entity
+         */
+        protected static function resolveEntityIdentifier(string $identifier, string $invalidIdentifierMessage): ?EntityRecord
+        {
+            try
+            {
+                return EntitiesManager::getEntityByIdentifier($identifier);
+            }
+            catch (InvalidArgumentException $e)
+            {
+                throw new RequestException($invalidIdentifierMessage, HttpResponseCode::BAD_REQUEST, $e);
+            }
         }
 
         /**
