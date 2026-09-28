@@ -111,9 +111,13 @@
                 throw new InvalidArgumentException('Invalid Report UUID');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid)))
+            if(self::isCachingEnabled())
             {
-                return new ReportRecord(RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid)));
+                $cached = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
+                if($cached !== null)
+                {
+                    return new ReportRecord($cached);
+                }
             }
 
             try
