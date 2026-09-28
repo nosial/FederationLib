@@ -325,10 +325,8 @@ All score modifiers are configurable. Their configuration keys use the `modifier
 | `scanning.auto_report_threshold`      | `FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD`      | float |  `80.0` | Risk score that triggers automatic reporting |
 | `scanning.action_block_threshold`     | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`     | float |  `80.0` | Risk score that suggests blocking content    |
 | `scanning.action_caution_threshold`   | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`   | float |  `60.0` | Risk score that suggests caution             |
-| `scanning.reputation_window_duration` | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION` | int   |   `300` | Reputation window duration in seconds        |
-| `scanning.reputation_max_delta`       | `FEDERATION_SCANNING_REPUTATION_MAX_DELTA`       | int   |    `10` | Maximum reputation change per window         |
-| `scanning.reputation_min_delta`       | `FEDERATION_SCANNING_REPUTATION_MIN_DELTA`       | int   |   `-10` | Minimum reputation change per window         |
-| `scanning.reputation_scaling_factor`  | `FEDERATION_SCANNING_REPUTATION_SCALING_FACTOR`  | float |  `0.25` | Reputation change scaling factor             |
+| `scanning.reputation_window_duration` | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION` | int   |  `3600` | Reputation window duration in seconds        |
+| `scanning.reputation_gain`            | `FEDERATION_SCANNING_REPUTATION_GAIN`            | int   |     `1` | Reputation gained per clean activity window  |
 | `scanning.reputation_min_bound`       | `FEDERATION_SCANNING_REPUTATION_MIN_BOUND`       | int   | `-1000` | Minimum stored reputation                    |
 | `scanning.reputation_max_bound`       | `FEDERATION_SCANNING_REPUTATION_MAX_BOUND`       | int   |  `1000` | Maximum stored reputation                    |
 | `scanning.risk_score_neutral_point`   | `FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT`   | float |  `50.0` | Neutral risk score                           |
