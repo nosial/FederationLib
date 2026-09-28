@@ -1329,18 +1329,37 @@
                 throw new InvalidArgumentException('Limit must be 1 or greater');
             }
 
+            // Shares the entity search namespace, which every entity insert, update and delete invalidates
+            $cacheKey = null;
+            if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['top_threats', $limit]);
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn($data) => new EntityRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY reputation ASC, uuid DESC LIMIT :limit");
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $entities = array_map(fn($row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve top threats: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if($cacheKey !== null && !empty($entities))
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EntityRecord $r) => $r->toArray(), $entities));
+            }
+
+            return $entities;
         }
 
         /**
