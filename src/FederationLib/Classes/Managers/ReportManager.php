@@ -186,6 +186,29 @@
         }
 
         /**
+         * Checks if an entity has any opened reports against it that have not yet been concluded.
+         *
+         * @param string $entityUuid The UUID of the reported entity
+         * @return bool True if at least one opened report exists for the entity, false otherwise.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function hasOpenReports(string $entityUuid): bool
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT EXISTS(SELECT 1 FROM reports WHERE reporting_entity = :uuid AND opened = 1)");
+                $stmt->bindParam(':uuid', $entityUuid);
+                $stmt->execute();
+
+                return (bool)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to check opened reports: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Assigns an operator to handle a report.
          *
          * @param string $reportUuid The UUID of the report.
