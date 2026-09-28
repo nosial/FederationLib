@@ -430,7 +430,12 @@
                 ClassificationFlag::MALICIOUS => ScanningRules::CLASSIFICATION_MALICIOUS,
             };
 
-            $scanningRules[$rule->name] += $points * $classification->getConfidence();
+            // Scale by how far the probability is above chance, so a near coin-flip between the labels (e.g. 0.52
+            // MALICIOUS on a two-word message) carries little weight while a confident classification keeps it all
+            $chance = 1.0 / count(ClassificationFlag::cases());
+            $certainty = max(0.0, min(1.0, ($classification->getConfidence() - $chance) / (1.0 - $chance)));
+
+            $scanningRules[$rule->name] += $points * $certainty;
         }
 
         /**
