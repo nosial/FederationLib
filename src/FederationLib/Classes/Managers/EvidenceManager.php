@@ -214,9 +214,13 @@
                 throw new InvalidArgumentException('Invalid Evidence UUID');
             }
 
-            if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+            if(self::isCachingEnabled())
             {
-                return new EvidenceRecord(RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)));
+                $cached = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                if($cached !== null)
+                {
+                    return new EvidenceRecord($cached);
+                }
             }
 
             try
