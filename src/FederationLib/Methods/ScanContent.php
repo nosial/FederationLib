@@ -181,8 +181,11 @@
                 $allClassifications
             );
 
-            // Record the scan result into the open reputation window for every involved entity
-            EntitiesManager::recordScan($scannedContent);
+            // Only authenticated clients contribute to reputation; anonymous scans must not affect it in any way
+            if($authenticatedOperator !== null)
+            {
+                EntitiesManager::recordScan($scannedContent);
+            }
 
             // Generate a report if auto-reporting is enabled.
             if(Configuration::getScanningConfiguration()->isAutoReport())
