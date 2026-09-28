@@ -167,6 +167,7 @@
                 $this->assertInstanceOf(ClassificationFlag::class, $classification->getClassificationFlag());
                 $this->assertIsFloat($classification->getConfidence());
                 $this->assertGreaterThanOrEqual(0.0, $classification->getConfidence());
+                $this->assertLessThanOrEqual(1.0, $classification->getConfidence());
             }
             else
             {

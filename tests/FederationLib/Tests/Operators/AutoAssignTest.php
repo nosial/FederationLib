@@ -463,13 +463,13 @@
             foreach ($activeScanResults as $scanningRule => $value)
             {
                 $this->assertStringContainsString(
-                    sprintf(" - %s: %f%%", $scanningRule, $value),
+                    sprintf(" - %s: %+.2f points", $scanningRule, $value),
                     $reportMessage,
                     'Automated reports should include each active scan rule'
                 );
             }
             $this->assertDoesNotMatchRegularExpression(
-                '/^ - [A-Z_]+: 0\.000000%$/m',
+                '/^ - [A-Z_]+: [+-]0\.00 points$/m',
                 $reportMessage,
                 'Automated reports should omit scan rules with no effect'
             );
