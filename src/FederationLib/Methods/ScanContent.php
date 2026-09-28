@@ -260,9 +260,11 @@
                 }
             }
 
+            // Use the classifier's probability for the top label, not the server's 'confidence' field which is the
+            // language detection confidence (always 1.0 for the top language) and says nothing about the label
             return new ContentClassification(
                 ClassificationFlag::from($bayesianClassification->getTopLabel()),
-                $bayesianClassification->getConfidence(),
+                $bayesianClassification->getTopProbability(),
                 $bayesianClassification->getLanguageCode()
             );
         }
@@ -513,7 +515,7 @@
                     $hasScanResults = true;
                 }
 
-                $reportMessage .= sprintf(" - %s: %f%%\n", $scanningRule, $value);
+                $reportMessage .= sprintf(" - %s: %+.2f points\n", $scanningRule, $value);
             }
 
             if($scannedContent->getClassification() !== null)
@@ -522,7 +524,7 @@
             }
 
             $suggestedAction = $scannedContent->getSuggestedAction();
-            $reportMessage .= sprintf("\nSuggested Action: %s\nRisk Score: %f", $suggestedAction?->value ?? 'none', $scannedContent->getRiskScore());
+            $reportMessage .= sprintf("\nSuggested Action: %s\nRisk Score: %.2f", $suggestedAction?->value ?? 'none', $scannedContent->getRiskScore());
 
             $systemOperator = OperatorManager::getSystemOperator();
 
