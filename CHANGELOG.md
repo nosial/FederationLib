@@ -5,9 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.10] - Ongoing
+## [1.0.10] - 2026-09-08
 
-This is an ongoing update
+This update introduces improvments to the learning logic & bug fixes.
+
+This update also updated in accordance to version `v1.0-R1` of the OFD Specification.
+
+### Added
+ - `scanning.reputation_gain` configuration option (`FEDERATION_SCANNING_REPUTATION_GAIN`, default `1`) and
+   `ScanningConfiguration::getReputationGain()`, the reputation granted per clean activity window. The value is clamped
+   to `0`-`10` as the OFD specification limits incremental positive adjustments to 10 points; `0` disables gains.
+ - `ReportManager::hasOpenReports()` to check whether an entity has opened reports awaiting a conclusion.
+ - `EntitiesManager::getEntityByIdentifier()`, which resolves any OFD entity identifier form (UUID, SHA-256 identifier,
+   named entity address or host entity address with a DNS, IPv4 or IPv6 entity host), and
+   `Utilities::matchEntityPath()` for matching `/entities/{identifier}` routes.
+
+### Changed
+ - Content scans no longer decrease reputation. Reputation now increases gradually for sustained normal activity of the
+   author entity and its parent: each reputation window grants `scanning.reputation_gain` once, regardless of how many
+   scans it received.
+ - A reputation window grants nothing if any scan in it was classified as suspicious or malicious, if the entity was
+   blacklisted, or if the entity has an opened report awaiting its conclusion. Submitted reports, including automated
+   ones, no longer affect reputation until they are closed; decreases only come from closing a report as malicious.
+ - Only scans from authenticated clients affect reputation. Anonymous scans still return results and still generate
+   automated reports for high risk content, but never change reputation.
+ - `scanning.reputation_window_duration` now defaults to `3600` seconds instead of `300`.
+ - Cache size limits reuse a key count for up to 10 seconds instead of scanning the whole Redis keyspace on every cache
+   miss, so cache misses no longer slow down as Redis grows. Limits may be briefly exceeded by the records cached within
+   that window.
+ - `RedisConnection::getRecord()` reads a cached record with a single `HGETALL` instead of `EXISTS` followed by
+   `HGETALL`, and returns null when Redis is disabled.
+ - The Top Threats result set is cached in the entity search namespace, so it is invalidated by any entity change.
+ - `ScannedContent::getScanResults()` is computed once per scan instead of on every call.
+ - `/entities/{identifier}` routes accept every entity identifier form, following OFD-Specification 1.0-R1: a host
+   entity address (e.g. `/entities/example.com`, `/entities/2001:db8::1`) and named entity addresses with an IP entity
+   host are now routable. An entity address in a path must be canonical; an invalid identifier is rejected with HTTP
+   400. A dynamic segment never matches the literal sub-paths `search` and `top-threats`, whatever the request method.
+   A lowercase single-label string such as `not-a-valid-uuid` is a valid host entity address, so an unknown one is now
+   answered with HTTP 404 (entity not found) instead of HTTP 400.
+ - All entity handlers resolve identifiers through `EntitiesManager::getEntityByIdentifier()` instead of each
+   duplicating the UUID/SHA-256/address lookup.
+
+### Removed
+ - `scanning.reputation_max_delta`, `scanning.reputation_min_delta` and `scanning.reputation_scaling_factor`
+   configuration options and their `ScanningConfiguration` getters, replaced by `scanning.reputation_gain`.
+
+### Fixed
+ - An entity could not be resolved by its host entity address alone (issue #1): `GET /entities/example.com` did not
+   route, and `entity_identifier`, `reporting_entity` and `target_identifier` request members rejected a bare host
+   with HTTP 400, even though the entity was resolvable by its UUID or SHA-256 identifier.
+ - `FederationClient::listEntityBlacklistRecords()` was documented as returning `EvidenceRecord[]` instead of
+   `BlacklistRecord[]`.
+ - `ReportManager::getReport()` and `EvidenceManager::getEvidence()` threw a `TypeError` when the cached record expired
+   between the existence check and the read.
+ - An entity's own reputation fed back into its next reputation window through the author reputation scan rules, so
+   a negative reputation kept decreasing with any activity and a positive one kept increasing.
+ - Content classification used BayesianServer's `confidence` field, which is the language detection confidence (always
+   `1.0` for the detected language), so every non-normal classification applied its full penalty. It now uses the
+   classifier's `top_probability`.
+ - Classification penalties are scaled by how far the probability is above chance (1/3 for three labels), so near
+   coin-flip classifications of short messages no longer push normal content over the block threshold.
+ - `ContentClassification::getReportUuid()` returned `string` for a nullable value, and `fromArray()` required the
+   `report_uuid` key.
+ - Automated report messages showed rule points and confidence with a misleading `%` suffix; rule points are now shown as
+   points and confidence as a percentage.
 
 
 ## [1.0.9] - 2026-09-26
