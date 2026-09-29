@@ -4,6 +4,7 @@
 
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
+    use FederationLib\Interfaces\StandardObjectInterface;
     use PHPUnit\Framework\TestCase;
 
     class ObjectSchemaTest extends TestCase
@@ -27,6 +28,7 @@
                 'ResolvedEntity' => 'FederationLib\Objects\ScannedContent\ResolvedEntity',
                 'ResolvedEntityPosition' => 'FederationLib\Objects\ScannedContent\ResolvedEntityPosition',
                 'ScannedContent' => 'FederationLib\Objects\ScannedContent',
+                'SearchResult' => 'FederationLib\Objects\SearchResult',
                 'ServerInformation' => 'FederationLib\Objects\ServerInformation',
                 'SuccessResponse' => 'FederationLib\Objects\SuccessResponse',
                 'UploadResult' => 'FederationLib\Objects\UploadResult',
@@ -97,23 +99,65 @@
                 {
                     $this->assertIsArray($definition, "Property '$propName' in $name must have an array definition");
 
+                    $this->assertArrayNotHasKey('nullable', $definition, "Property '$propName' in $name uses 'nullable', which is not valid in OpenAPI 3.1 and later");
+
                     if (isset($definition['$ref']))
                     {
                         $this->assertIsString($definition['$ref']);
                         $this->assertStringStartsWith('#/components/schemas/', $definition['$ref']);
                     }
+                    elseif (isset($definition['anyOf']) || isset($definition['oneOf']))
+                    {
+                        $subschemas = $definition['anyOf'] ?? $definition['oneOf'];
+                        $this->assertIsArray($subschemas);
+                        $this->assertNotEmpty($subschemas, "Property '$propName' in $name must have at least one subschema");
+
+                        foreach ($subschemas as $subschema)
+                        {
+                            $this->assertTrue(isset($subschema['$ref']) || isset($subschema['type']), "Subschema of '$propName' in $name must have a '\$ref' or 'type' key");
+                        }
+                    }
                     else
                     {
-                        $this->assertArrayHasKey('type', $definition, "Property '$propName' in $name must have a 'type' key when not using \$ref");
-                        $this->assertIsString($definition['type']);
+                        $this->assertArrayHasKey('type', $definition, "Property '$propName' in $name must have a 'type' key when not using \$ref, anyOf or oneOf");
 
-                        if ($definition['type'] === 'array')
+                        // OpenAPI 3.1 and later express nullable members as a type array, e.g. ['string', 'null']
+                        $types = (array)$definition['type'];
+                        $this->assertNotEmpty($types, "Property '$propName' in $name must declare at least one type");
+                        foreach ($types as $type)
+                        {
+                            $this->assertContains($type, ['string', 'integer', 'number', 'boolean', 'object', 'array', 'null'], "Property '$propName' in $name has an invalid type");
+                        }
+
+                        if (in_array('array', $types, true))
                         {
                             $this->assertArrayHasKey('items', $definition, "Array property '$propName' in $name must have 'items' key");
+                        }
+
+                        if (isset($definition['enum']) && in_array('null', $types, true))
+                        {
+                            $this->assertContains(null, $definition['enum'], "Nullable enum property '$propName' in $name must include null in its enum");
                         }
                     }
                 }
             }
+        }
+
+        /**
+         * Returns every schema reference within a property definition, including those nested in anyOf, oneOf and items
+         *
+         * @param array $definition The property definition
+         * @return string[] The schema references
+         */
+        private static function getDefinitionReferences(array $definition): array
+        {
+            $references = isset($definition['$ref']) ? [$definition['$ref']] : [];
+            foreach (array_merge($definition['anyOf'] ?? [], $definition['oneOf'] ?? [], isset($definition['items']) ? [$definition['items']] : []) as $subschema)
+            {
+                $references = array_merge($references, self::getDefinitionReferences($subschema));
+            }
+
+            return $references;
         }
 
         public function testAllObjectReferencesResolveToKnownSchemas(): void
@@ -127,25 +171,13 @@
 
                 foreach ($properties as $propName => $definition)
                 {
-                    if (isset($definition['$ref']))
+                    foreach (self::getDefinitionReferences($definition) as $ref)
                     {
-                        $ref = $definition['$ref'];
                         $schemaName = str_replace('#/components/schemas/', '', $ref);
                         $this->assertContains(
                             $schemaName,
                             $allSchemas,
                             "Reference '$ref' in '$name::$propName' points to unknown schema '$schemaName'"
-                        );
-                    }
-
-                    if (isset($definition['items']['$ref']))
-                    {
-                        $ref = $definition['items']['$ref'];
-                        $schemaName = str_replace('#/components/schemas/', '', $ref);
-                        $this->assertContains(
-                            $schemaName,
-                            $allSchemas,
-                            "Reference '$ref' in '$name::$propName items' points to unknown schema '$schemaName'"
                         );
                     }
                 }
@@ -178,6 +210,7 @@
                 'FileAttachmentRecord' => ['uuid' => 'a', 'evidence' => 'b', 'file_name' => 'f.txt', 'file_size' => 100, 'file_mime' => 'text/plain', 'created' => 1000],
                 'OperatorRecord' => ['uuid' => 'a', 'name' => 'op', 'created' => 1000, 'updated' => 1000],
                 'ReportRecord' => ['uuid' => 'a', 'submitting_operator' => 'b', 'incident_type' => 'OTHER', 'created' => 1000],
+                'SearchResult' => ['type' => 'AUDIT_LOG', 'record' => ['uuid' => 'a', 'type' => 'OTHER', 'message' => 'test', 'timestamp' => 1000]],
                 'ServerInformation' => ['server_name' => 'test'],
             ];
 
@@ -191,8 +224,9 @@
                     continue;
                 }
 
+                // The API responds with the standard representation when available, toArray() may carry internal members
                 $instance = $className::fromArray($constructArgs);
-                $toArrayKeys = array_keys($instance->toArray());
+                $toArrayKeys = array_keys($instance instanceof StandardObjectInterface ? $instance->toStandardArray() : $instance->toArray());
                 $properties = $className::getObjectProperties();
 
                 foreach ($toArrayKeys as $key)
