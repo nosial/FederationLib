@@ -2,6 +2,7 @@
 
     namespace FederationLib\Methods\Reports;
 
+    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\ReportManager;
@@ -32,6 +33,7 @@
         private const string ERROR_ENTITY_NOT_FOUND = 'Reporting entity not found';
         private const string ERROR_FAILED_SUBMISSION = 'Failed to create report submission';
         private const string ERROR_FAILED_GET_REPORT = 'Failed to get report information';
+        private const string ERROR_ILLEGAL_CONTENT_NOT_PERMITTED = 'Reports of type ILLEGAL_CONTENT are not permitted on this server';
 
         /**
          * @inheritDoc
@@ -81,6 +83,11 @@
                 throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
             }
 
+            if($incidentType === IncidentType::ILLEGAL_CONTENT && !Configuration::getServerConfiguration()->isIllegalContentAllowed())
+            {
+                throw new RequestException(self::ERROR_ILLEGAL_CONTENT_NOT_PERMITTED, HttpResponseCode::FORBIDDEN);
+            }
+
             $reportMessage = FederationServer::getParameter('report_message');
             if(empty((string)$reportMessage))
             {
@@ -118,9 +125,10 @@
                     $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null;
                     $note = isset($item['note']) && is_string($item['note']) ? $item['note'] : null;
                     $tag = isset($item['tag']) && is_string($item['tag']) ? $item['tag'] : null;
-                    $confidential = isset($item['confidential'])
+                    // Evidence for ILLEGAL_CONTENT reports is always confidential regardless of the submitted value
+                    $confidential = $incidentType === IncidentType::ILLEGAL_CONTENT || (isset($item['confidential'])
                         ? filter_var($item['confidential'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false
-                        : false;
+                        : false);
                     $metadata = isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null;
 
                     $evidenceUuid = EvidenceManager::addEvidence(
@@ -257,7 +265,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Creates a new report with one or more evidence records. File attachments can be added to the created evidence records afterwards. Requires client permissions.';
+            return 'Creates a new report with one or more evidence records. File attachments can be added to the created evidence records afterwards. Evidence submitted with an ILLEGAL_CONTENT report is always marked as confidential, and servers may reject ILLEGAL_CONTENT reports entirely. Requires client permissions.';
         }
 
         /**
@@ -351,7 +359,7 @@
                     ],
                 ],
                 '403' => [
-                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS . ', or ' . self::ERROR_ILLEGAL_CONTENT_NOT_PERMITTED,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
