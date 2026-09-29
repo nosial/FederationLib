@@ -32,6 +32,7 @@
         private bool $publicQueryEntity;
         private int $minBlacklistTime;
         private int $topThreatsLimit;
+        private bool $allowIllegalContent;
 
         /**
          * ServerConfiguration constructor.
@@ -63,6 +64,7 @@
             $this->publicQueryEntity = $config['public_query_entity'] ?? true;
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
             $this->topThreatsLimit = $config['top_threats_limit'] ?? 25;
+            $this->allowIllegalContent = $config['allow_illegal_content'] ?? true;
         }
 
         /**
@@ -295,5 +297,16 @@
         public function getTopThreatsLimit(): int
         {
             return $this->topThreatsLimit;
+        }
+
+        /**
+         * Checks if reports with the ILLEGAL_CONTENT incident type may be submitted to this server. Server hosts
+         * who do not want to handle illegal content can disable this, causing such submissions to be rejected.
+         *
+         * @return bool True if ILLEGAL_CONTENT reports are accepted, false otherwise
+         */
+        public function isIllegalContentAllowed(): bool
+        {
+            return $this->allowIllegalContent;
         }
     }
