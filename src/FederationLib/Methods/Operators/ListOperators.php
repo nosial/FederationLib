@@ -19,7 +19,6 @@
 
     class ListOperators extends RequestHandler implements RequestSpecificationInterface
     {
-        private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to list operators';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve operators';
 
         /**
@@ -27,11 +26,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(!$authenticatedOperator->hasOperatorPermissions())
-            {
-                throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
-            }
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
 
             $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
             $page = (int) (FederationServer::getParameter('page') ?? 1);
@@ -62,7 +57,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            $authenticatedUuid = $authenticatedOperator->getUuid();
+            $authenticatedUuid = $authenticatedOperator?->getUuid();
             array_walk($operators, function($op) use ($authenticatedUuid): void
             {
                 if ($op->getUuid() !== $authenticatedUuid)
