@@ -119,12 +119,49 @@
                 'setClientPermissions' => fn() => $unauthenticatedClient->setClientPermissions($fakeUuid, true),
                 'setAutoAssign' => fn() => $unauthenticatedClient->setAutoAssign($fakeUuid, true),
                 'generateOperatorAccessToken' => fn() => $unauthenticatedClient->generateOperatorAccessToken($fakeUuid),
-                'listOperators' => fn() => $unauthenticatedClient->listOperators(),
             ];
 
             foreach ($operations as $name => $callback)
             {
                 $this->expectRequestFailure($callback, [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value], "Unauthenticated $name should be rejected");
+            }
+        }
+
+        public function testSecurityOperatorRecordsArePublic(): void
+        {
+            $createdOperator = $this->client->createOperator(substr(uniqid('public_op_'), 0, 32));
+            $this->createdOperators[] = $createdOperator->getUuid();
+            $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), null);
+
+            $operator = $unauthenticatedClient->getOperator($createdOperator->getUuid());
+            $this->assertEquals($createdOperator->getUuid(), $operator->getUuid());
+            $this->assertEmpty($operator->getAccessToken(), 'Public operator records should not expose access tokens');
+
+            $listed = $unauthenticatedClient->listOperators(1, 1000);
+            $this->assertContains($operator->getUuid(), array_map(fn($r) => $r->getUuid(), $listed));
+            foreach ($listed as $listedOperator)
+            {
+                $this->assertEmpty($listedOperator->getAccessToken(), 'Public operator list should not expose access tokens');
+            }
+
+            try
+            {
+                $results = $unauthenticatedClient->searchOperators($operator->getName());
+            }
+            catch (RequestException $e)
+            {
+                if ($e->getCode() === HttpResponseCode::NOT_FOUND->value)
+                {
+                    $this->markTestSkipped('Operator search is disabled on the server');
+                }
+
+                throw $e;
+            }
+
+            $this->assertContains($operator->getUuid(), array_map(fn($r) => $r->getUuid(), $results));
+            foreach ($results as $result)
+            {
+                $this->assertEmpty($result->getAccessToken(), 'Public operator search should not expose access tokens');
             }
         }
 

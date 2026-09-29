@@ -646,7 +646,7 @@
             [$code, $body] = $this->rawRequest('GET', 'entities/' . $entity['uuid'], getenv('SERVER_ACCESS_TOKEN'));
             $this->assertEquals(200, $code);
             $data = json_decode($body, true);
-            $this->assertEquals(json_encode(self::TEST_METADATA, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $data['metadata']);
+            $this->assertEquals(self::TEST_METADATA, $data['metadata'], 'Entity metadata must be serialized as a JSON object');
         }
 
         public function testAnonymousGetEntityRecordOmitsMetadata(): void
