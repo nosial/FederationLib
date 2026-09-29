@@ -328,6 +328,11 @@
             {
                 $types[] = RecordType::AUDIT_LOG;
             }
+            // Operator records are always public
+            if ($searchConfiguration->isOperatorsEnabled())
+            {
+                $types[] = RecordType::OPERATOR;
+            }
 
             return $types;
         }
