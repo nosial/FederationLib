@@ -267,21 +267,18 @@
                             'type' => 'object',
                             'properties' => [
                                 'classification_flag' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'description' => 'Optional classification flag for the report',
-                                    'nullable' => true,
-                                    'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS'],
+                                    'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS', null],
                                 ],
                                 'blacklist_incident_type' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'description' => 'Optional blacklist incident type',
-                                    'nullable' => true,
-                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
+                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER', null],
                                 ],
                                 'blacklist_expires' => [
-                                    'type' => 'integer',
+                                    'type' => ['integer', 'null'],
                                     'description' => 'Optional unix timestamp for blacklist expiration',
-                                    'nullable' => true,
                                 ],
                             ],
                             'required' => [],

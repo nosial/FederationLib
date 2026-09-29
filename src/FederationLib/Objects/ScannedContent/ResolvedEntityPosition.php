@@ -92,7 +92,11 @@
             return [
                 'offset' => ['type' => 'integer', 'description' => 'Offset of the named entity mention within the text'],
                 'length' => ['type' => 'integer', 'description' => 'Length of the named entity mention within the text'],
-                'type' => ['type' => 'string', 'description' => 'Type of named entity detection'],
+                'type' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(NamedEntityType $type) => $type->value, NamedEntityType::cases()),
+                    'description' => 'Type of named entity detection',
+                ],
             ];
         }
 

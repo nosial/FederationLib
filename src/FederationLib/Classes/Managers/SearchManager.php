@@ -94,13 +94,11 @@
 
             if (($searchAll || in_array(RecordType::OPERATOR->value, $types, true)) && Configuration::getSearchConfiguration()->isOperatorsEnabled())
             {
-                if ($operator !== null)
-                {
-                    array_push($results, ...array_map(
-                        fn($r) => new SearchResult(RecordType::OPERATOR, $r),
-                        OperatorManager::searchOperators($query, $limit, $page, !$operator->hasOperatorPermissions())
-                    ));
-                }
+                // Operator records are public information, so they're returned to every requester
+                array_push($results, ...array_map(
+                    fn($r) => new SearchResult(RecordType::OPERATOR, $r),
+                    OperatorManager::searchOperators($query, $limit, $page, $operator === null || !$operator->hasOperatorPermissions())
+                ));
             }
 
             return $results;

@@ -3,6 +3,7 @@
     namespace FederationLib\Objects;
 
     use DateTime;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
@@ -290,14 +291,18 @@
                 'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the entity the evidence relates to'],
                 'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who submitted the evidence'],
                 'confidential' => ['type' => 'boolean', 'description' => 'Whether the evidence is marked as confidential'],
-                'text_content' => ['type' => 'string', 'description' => 'Text content of the evidence', 'nullable' => true],
-                'note' => ['type' => 'string', 'description' => 'Optional note attached to the evidence', 'nullable' => true],
-                'tag' => ['type' => 'string', 'description' => 'Tag categorizing the evidence', 'nullable' => true],
-                'report' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the report this evidence is linked to', 'nullable' => true],
-                'metadata' => ['type' => 'object', 'description' => 'Additional metadata attached to the evidence', 'nullable' => true],
-                'classification_flag' => ['type' => 'string', 'description' => 'Classification flag assigned to the evidence', 'nullable' => true],
+                'text_content' => ['type' => ['string', 'null'], 'description' => 'Text content of the evidence'],
+                'note' => ['type' => ['string', 'null'], 'description' => 'Optional note attached to the evidence'],
+                'tag' => ['type' => ['string', 'null'], 'description' => 'Tag categorizing the evidence'],
+                'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the report this evidence is linked to'],
+                'metadata' => Utilities::getMetadataSchema('Additional metadata attached to the evidence'),
+                'classification_flag' => [
+                    'type' => ['string', 'null'],
+                    'enum' => [...array_map(fn(ClassificationFlag $flag) => $flag->value, ClassificationFlag::cases()), null],
+                    'description' => 'Classification flag assigned to the evidence',
+                ],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the evidence was created'],
-                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the evidence was last updated'],
+                'updated' => ['type' => ['integer', 'null'], 'description' => 'Unix timestamp when the evidence was last updated'],
             ];
         }
 
@@ -306,7 +311,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['uuid', 'entity', 'operator', 'confidential', 'created', 'updated'];
+            return ['uuid', 'entity', 'operator', 'confidential', 'created'];
         }
 
         /**

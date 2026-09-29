@@ -18,6 +18,7 @@
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
     use FederationLib\Objects\ScannedContent;
+    use FederationLib\Objects\SearchResult;
     use FederationLib\Objects\ScannedContent\ContentClassification;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
@@ -156,6 +157,7 @@
                 'ResolvedEntity' => ResolvedEntity::class,
                 'ResolvedEntityPosition' => ResolvedEntityPosition::class,
                 'ScannedContent' => ScannedContent::class,
+                'SearchResult' => SearchResult::class,
                 'ServerInformation' => ServerInformation::class,
                 'SuccessResponse' => SuccessResponse::class,
                 'UploadResult' => UploadResult::class,
@@ -189,6 +191,7 @@
         private static function getPaths(): array
         {
             $paths = [];
+            $operationIds = [];
 
             $handlerMap = self::getMethodRouteMap();
             foreach(Method::cases() as $method)
@@ -217,11 +220,19 @@
                 }
                 unset($response);
 
+                // A handler may serve multiple HTTP methods, operationIds must remain unique
+                $operationId = $handlerClass::getOperationId();
+                if(isset($operationIds[$operationId]))
+                {
+                    $operationId .= ucfirst($httpMethod);
+                }
+                $operationIds[$operationId] = true;
+
                 $operation = [
                     'tags' => $handlerClass::getTags(),
                     'summary' => $handlerClass::getSummary(),
                     'description' => $handlerClass::getDescription(),
-                    'operationId' => $handlerClass::getOperationId(),
+                    'operationId' => $operationId,
                     'parameters' => $handlerClass::getParameters(),
                     'responses' => $responses,
                 ];

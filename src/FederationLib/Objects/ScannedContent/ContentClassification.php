@@ -95,9 +95,13 @@
         public static function getObjectProperties(): array
         {
             return [
-                'classification_flag' => ['type' => 'string', 'description' => 'Classification flag assigned to the content'],
+                'classification_flag' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(ClassificationFlag $flag) => $flag->value, ClassificationFlag::cases()),
+                    'description' => 'Classification flag assigned to the content',
+                ],
                 'confidence' => ['type' => 'number', 'format' => 'float', 'description' => 'Confidence score of the detected content'],
-                'detected_language' => ['type' => 'string', 'description' => 'Detected language of the content', 'nullable' => true],
+                'detected_language' => ['type' => ['string', 'null'], 'description' => 'Detected language of the content'],
             ];
         }
 

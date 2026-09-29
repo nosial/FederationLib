@@ -170,7 +170,7 @@
         {
             return [
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the file attachment'],
-                'evidence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the evidence this file is attached to', 'nullable' => true],
+                'evidence' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the evidence this file is attached to'],
                 'file_name' => ['type' => 'string', 'description' => 'Original filename of the attachment'],
                 'file_size' => ['type' => 'integer', 'description' => 'Size of the file in bytes'],
                 'file_mime' => ['type' => 'string', 'description' => 'MIME type of the file'],

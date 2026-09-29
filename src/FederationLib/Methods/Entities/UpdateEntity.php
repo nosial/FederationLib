@@ -24,6 +24,9 @@
         private const string ERROR_NOT_FOUND = 'Entity not found';
         private const string ERROR_UNABLE_TO_UPDATE = 'Unable to update entity';
 
+        /**
+         * @inheritDoc
+         */
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
@@ -76,26 +79,41 @@
             self::successResponse();
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getTags(): array
         {
             return ['Entities'];
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getSummary(): string
         {
             return 'Update an entity';
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getDescription(): string
         {
             return 'Updates an existing entity\'s metadata by UUID, SHA-256 hash, or entity address. Requires client permissions.';
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getOperationId(): string
         {
             return 'updateEntity';
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getParameters(): array
         {
             return [
@@ -109,6 +127,9 @@
             ];
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getRequestBody(): ?array
         {
             return [
@@ -118,10 +139,7 @@
                         'schema' => [
                             'type' => 'object',
                             'properties' => [
-                                'metadata' => [
-                                    'type' => 'object',
-                                    'description' => 'Arbitrary metadata to merge with existing entity metadata',
-                                ],
+                                'metadata' => Utilities::getMetadataSchema('Metadata that replaces the existing entity metadata', false),
                             ],
                             'required' => ['metadata'],
                         ],
@@ -130,6 +148,9 @@
             ];
         }
 
+        /**
+         * @inheritDoc
+         */
         public static function getResponses(): array
         {
             return [

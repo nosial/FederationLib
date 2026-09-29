@@ -237,14 +237,18 @@
             return [
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the report'],
                 'submitting_operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who submitted the report'],
-                'reporting_entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the entity being reported', 'nullable' => true],
-                'assigned_operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator assigned to the report', 'nullable' => true],
+                'reporting_entity' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the entity being reported'],
+                'assigned_operator' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the operator assigned to the report'],
                 'automated' => ['type' => 'boolean', 'description' => 'Whether the report was created automatically'],
-                'incident_type' => ['type' => 'string', 'description' => 'Type of incident being reported'],
+                'incident_type' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases()),
+                    'description' => 'Type of incident being reported',
+                ],
                 'opened' => ['type' => 'boolean', 'description' => 'Whether the report is still open'],
-                'message' => ['type' => 'string', 'description' => 'Message or description for the report', 'nullable' => true],
+                'message' => ['type' => ['string', 'null'], 'description' => 'Message or description for the report'],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the report was created'],
-                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the report was last updated', 'nullable' => true],
+                'updated' => ['type' => ['integer', 'null'], 'description' => 'Unix timestamp when the report was last updated'],
             ];
         }
 

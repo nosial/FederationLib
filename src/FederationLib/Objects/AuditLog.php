@@ -212,12 +212,16 @@
         {
             return [
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the audit log entry'],
-                'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who performed the action', 'nullable' => true],
-                'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related entity', 'nullable' => true],
-                'blacklist' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related blacklist record', 'nullable' => true],
-                'evidence' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related evidence', 'nullable' => true],
-                'file_attachment' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related file attachment', 'nullable' => true],
-                'type' => ['type' => 'string', 'description' => 'Type of audit log entry'],
+                'operator' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the operator who performed the action'],
+                'entity' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related entity'],
+                'blacklist' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related blacklist record'],
+                'evidence' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related evidence'],
+                'file_attachment' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related file attachment'],
+                'type' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases()),
+                    'description' => 'Type of audit log entry',
+                ],
                 'message' => ['type' => 'string', 'description' => 'Human-readable description of the action'],
                 'timestamp' => ['type' => 'integer', 'description' => 'Unix timestamp when the entry was created'],
             ];

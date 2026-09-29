@@ -659,9 +659,8 @@
                             'type' => 'object',
                             'properties' => [
                                 'author' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'description' => 'UUID, SHA-256 hash, or entity address of the author',
-                                    'nullable' => true,
                                 ],
                                 'evidence' => [
                                     'oneOf' => [
@@ -674,15 +673,13 @@
                                     ],
                                 ],
                                 'top_k' => [
-                                    'type' => 'integer',
+                                    'type' => ['integer', 'null'],
                                     'description' => 'Number of top classifications to return',
-                                    'nullable' => true,
                                 ],
                                 'threshold' => [
-                                    'type' => 'number',
+                                    'type' => ['number', 'null'],
                                     'format' => 'float',
                                     'description' => 'Confidence threshold for classification',
-                                    'nullable' => true,
                                 ],
                             ],
                             'required' => ['evidence'],

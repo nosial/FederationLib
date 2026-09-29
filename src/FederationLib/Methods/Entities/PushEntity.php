@@ -5,6 +5,7 @@
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -134,15 +135,10 @@
                                     'description' => 'The hostname or domain of the entity',
                                 ],
                                 'id' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'description' => 'The local part identifier of the entity (e.g. email username)',
-                                    'nullable' => true,
                                 ],
-                                'metadata' => [
-                                    'type' => 'object',
-                                    'description' => 'Arbitrary metadata associated with the entity',
-                                    'nullable' => true,
-                                ],
+                                'metadata' => Utilities::getMetadataSchema('Metadata to merge into the existing entity metadata'),
                             ],
                             'required' => ['host'],
                         ],

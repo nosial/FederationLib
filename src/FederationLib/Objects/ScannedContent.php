@@ -520,8 +520,29 @@
                     'items' => ['$ref' => ResolvedEntity::getReference()],
                     'description' => 'Resolved entities found in the scanned content',
                 ],
-                'author_entity' => ['$ref' => ResolvedEntity::getReference(), 'description' => 'The author entity', 'nullable' => true],
-                'classification' => ['$ref' => ContentClassification::getReference(), 'description' => 'Content classification result', 'nullable' => true],
+                'author_entity' => [
+                    'anyOf' => [['$ref' => ResolvedEntity::getReference()], ['type' => 'null']],
+                    'description' => 'The author entity',
+                ],
+                'classification' => [
+                    'anyOf' => [['$ref' => ContentClassification::getReference()], ['type' => 'null']],
+                    'description' => 'Content classification result',
+                ],
+                'suggested_action' => [
+                    'type' => ['string', 'null'],
+                    'enum' => [...array_map(fn(SuggestedActionType $type) => $type->value, SuggestedActionType::cases()), null],
+                    'description' => 'The action the host suggests taking against the content or its author',
+                ],
+                'suggested_lift_timestamp' => [
+                    'type' => ['integer', 'null'],
+                    'description' => 'Unix timestamp at which the host recommends lifting a temporary action',
+                ],
+                'scan_results' => [
+                    'type' => 'object',
+                    'additionalProperties' => ['type' => 'number'],
+                    'description' => 'Host-defined mapping of scanning rule names to their contribution to the risk score',
+                ],
+                'risk_score' => ['type' => 'number', 'format' => 'float', 'description' => 'The calculated content risk score'],
             ];
         }
 
@@ -530,7 +551,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['resolved_entities', 'classification'];
+            return ['resolved_entities', 'scan_results', 'risk_score'];
         }
 
         /**

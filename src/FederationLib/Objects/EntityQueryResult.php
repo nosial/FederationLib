@@ -166,11 +166,14 @@
                     'description' => 'Active blacklists for the queried entity and related entities',
                 ],
                 'suggested_action' => [
-                    'type' => 'string',
-                    'enum' => [SuggestedActionType::PERMANENTLY_BLOCK_ENTITY->value, SuggestedActionType::TEMPORARILY_BLOCK_ENTITY->value],
-                    'nullable' => true,
+                    'type' => ['string', 'null'],
+                    'enum' => [SuggestedActionType::PERMANENTLY_BLOCK_ENTITY->value, SuggestedActionType::TEMPORARILY_BLOCK_ENTITY->value, null],
+                    'description' => 'The action the host suggests taking against the queried entity',
                 ],
-                'suggested_lift_timestamp' => ['type' => 'integer', 'nullable' => true],
+                'suggested_lift_timestamp' => [
+                    'type' => ['integer', 'null'],
+                    'description' => 'Unix timestamp at which the host recommends lifting a temporary block',
+                ],
             ];
         }
 
@@ -179,7 +182,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['entity_record', 'related_entities', 'active_blacklists', 'suggested_action', 'suggested_lift_timestamp'];
+            return ['entity_record', 'related_entities', 'active_blacklists'];
         }
 
         /**

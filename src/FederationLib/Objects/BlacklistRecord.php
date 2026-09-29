@@ -176,7 +176,7 @@
          */
         public function toArray(): array
         {
-            $data = [
+            return [
                 'uuid' => $this->uuid,
                 'operator' => $this->operatorUuid,
                 'entity' => $this->entityUuid,
@@ -185,14 +185,8 @@
                 'lifted' => $this->lifted,
                 'lifted_by' => $this->liftedBy,
                 'created' => $this->created,
+                'expires' => $this->expires,
             ];
-
-            if($this->expires !== null)
-            {
-                $data['expires'] = $this->expires;
-            }
-
-            return $data;
         }
 
         /**
@@ -249,11 +243,15 @@
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the blacklist entry'],
                 'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who created the entry'],
                 'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the blacklisted entity'],
-                'report' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the supporting report', 'nullable' => true],
-                'type' => ['type' => 'string', 'description' => 'Type of blacklist incident'],
+                'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the supporting report'],
+                'type' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases()),
+                    'description' => 'Type of blacklist incident',
+                ],
                 'lifted' => ['type' => 'boolean', 'description' => 'Whether the blacklist has been lifted'],
-                'lifted_by' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who lifted the blacklist', 'nullable' => true],
-                'expires' => ['type' => 'integer', 'description' => 'Unix timestamp when the blacklist expires', 'nullable' => true],
+                'lifted_by' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the operator who lifted the blacklist'],
+                'expires' => ['type' => ['integer', 'null'], 'description' => 'Unix timestamp when the blacklist expires, or null if the blacklist is permanent'],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the entry was created'],
             ];
         }

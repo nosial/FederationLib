@@ -1,6 +1,7 @@
 <?php
 
     namespace FederationLib\Objects;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
 
     class ContentInput implements ObjectSpecificationInterface
@@ -131,30 +132,23 @@
         {
             return [
                 'text_content' => [
-                    'type' => 'string',
+                    'type' => ['string', 'null'],
                     'description' => 'Text content',
-                    'nullable' => true,
                 ],
                 'note' => [
-                    'type' => 'string',
+                    'type' => ['string', 'null'],
                     'description' => 'Optional operator note',
-                    'nullable' => true,
                 ],
                 'tag' => [
-                    'type' => 'string',
+                    'type' => ['string', 'null'],
                     'description' => 'Optional tag',
-                    'nullable' => true,
                 ],
                 'confidential' => [
                     'type' => 'boolean',
                     'description' => 'Whether the content is confidential',
                     'default' => false,
                 ],
-                'metadata' => [
-                    'type' => 'object',
-                    'description' => 'Optional arbitrary metadata',
-                    'nullable' => true,
-                ],
+                'metadata' => Utilities::getMetadataSchema('Optional arbitrary metadata'),
             ];
         }
 

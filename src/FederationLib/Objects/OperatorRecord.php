@@ -264,7 +264,6 @@
         {
             return [
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the operator'],
-                'access_token' => ['type' => 'string', 'description' => 'Access token for authentication', 'nullable' => true],
                 'name' => ['type' => 'string', 'description' => 'Display name of the operator'],
                 'disabled' => ['type' => 'boolean', 'description' => 'Whether the operator account is disabled'],
                 'client_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has client-level permissions'],

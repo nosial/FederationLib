@@ -176,15 +176,13 @@
                                     'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
                                 ],
                                 'report_uuid' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'format' => 'uuid',
                                     'description' => 'UUID of the report supporting the blacklist',
-                                    'nullable' => true,
                                 ],
                                 'expires' => [
-                                    'type' => 'integer',
+                                    'type' => ['integer', 'null'],
                                     'description' => 'Unix timestamp when the blacklist should expire',
-                                    'nullable' => true,
                                 ],
                             ],
                             'required' => ['entity_identifier', 'type'],

@@ -25,7 +25,7 @@
          */
         public static function handleRequest(): void
         {
-            FederationServer::requireAuthenticatedOperator();
+            // Operator records are public information, no authentication is required
             if(!preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', FederationServer::getPath(), $matches))
             {
                 throw new RequestException(self::ERROR_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
@@ -74,7 +74,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Retrieves details of an operator by UUID. If the authenticated operator does not have operator management permissions, the access token is cleared from the response.';
+            return 'Retrieves details of an operator by UUID. Operator records are public, so no authentication is required.';
         }
 
         /**
@@ -125,14 +125,6 @@
                 ],
                 '400' => [
                     'description' => self::ERROR_INVALID_UUID,
-                    'content' => [
-                        'application/json' => [
-                            'schema' => ['$ref' => ErrorResponse::getReference()],
-                        ],
-                    ],
-                ],
-                '401' => [
-                    'description' => 'Authentication required',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],

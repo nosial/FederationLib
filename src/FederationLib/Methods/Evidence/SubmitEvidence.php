@@ -186,10 +186,9 @@
                                             'description' => 'UUID, SHA-256 hash, or entity address of the entity',
                                         ],
                                         'classification' => [
-                                            'type' => 'string',
+                                            'type' => ['string', 'null'],
                                             'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions and submits text for Bayesian training when enabled.',
-                                            'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS'],
-                                            'nullable' => true,
+                                            'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS', null],
                                         ],
                                     ],
                                     'required' => ['entity_identifier'],

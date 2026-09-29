@@ -309,9 +309,8 @@
                                     'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
                                 ],
                                 'report_message' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'description' => 'Optional message for the report',
-                                    'nullable' => true,
                                 ],
                             ],
                             'required' => ['reporting_entity', 'evidence', 'incident_type'],

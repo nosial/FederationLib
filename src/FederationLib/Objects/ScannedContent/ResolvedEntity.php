@@ -127,13 +127,13 @@
         {
             return [
                 'entity' => ['$ref' => EntityRecord::getReference()],
-                'entity_position' => ['$ref' => ResolvedEntityPosition::getReference(), 'nullable' => true],
+                'entity_position' => ['anyOf' => [['$ref' => ResolvedEntityPosition::getReference()], ['type' => 'null']]],
                 'active_blacklists' => [
                     'type' => 'array',
                     'items' => ['$ref' => BlacklistRecord::getReference()],
                     'description' => 'Active blacklist records associated with the entity',
                 ],
-                'parent_entity' => ['$ref' => ResolvedEntity::getReference(), 'nullable' => true],
+                'parent_entity' => ['anyOf' => [['$ref' => ResolvedEntity::getReference()], ['type' => 'null']]],
             ];
         }
 

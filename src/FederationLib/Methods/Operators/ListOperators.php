@@ -95,7 +95,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Retrieves a paginated list of all operators. Requires operator management permissions.';
+            return 'Retrieves a paginated list of all operators. Operator records are public, so no authentication is required.';
         }
 
         /**
@@ -178,22 +178,6 @@
                                 'type' => 'array',
                                 'items' => ['$ref' => OperatorRecord::getReference()],
                             ],
-                        ],
-                    ],
-                ],
-                '401' => [
-                    'description' => 'Authentication required',
-                    'content' => [
-                        'application/json' => [
-                            'schema' => ['$ref' => ErrorResponse::getReference()],
-                        ],
-                    ],
-                ],
-                '403' => [
-                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
-                    'content' => [
-                        'application/json' => [
-                            'schema' => ['$ref' => ErrorResponse::getReference()],
                         ],
                     ],
                 ],

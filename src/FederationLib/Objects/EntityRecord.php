@@ -297,7 +297,7 @@
                 'hash' => $this->getHash(),
                 'host' => $this->host,
                 'id' => $this->id,
-                'metadata' => $includeMetadata ? $this->metadata !== null ? json_encode($this->metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null : null,
+                'metadata' => $includeMetadata && !empty($this->metadata) ? $this->metadata : null,
                 'whitelisted' => $this->whitelisted,
                 'reputation' => $this->reputation,
                 'reputation_last_updated' => $this->reputationLastUpdated,
@@ -333,15 +333,19 @@
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the entity'],
                 'hash' => ['type' => 'string', 'description' => 'SHA-256 hash of the entity'],
                 'host' => ['type' => 'string', 'description' => 'Hostname or domain of the entity'],
-                'id' => ['type' => 'string', 'description' => 'Local-part identifier (email username)', 'nullable' => true],
-                'metadata' => ['type' => 'object', 'description' => 'Additional entity metadata', 'nullable' => true],
+                'id' => ['type' => ['string', 'null'], 'description' => 'Local-part identifier (email username)'],
+                'metadata' => Utilities::getMetadataSchema('Additional entity metadata'),
                 'whitelisted' => ['type' => 'boolean', 'description' => 'Whether the entity is whitelisted'],
                 'reputation' => ['type' => 'integer', 'description' => 'Reputation score between -1000 and 1000'],
-                'reputation_last_updated' => ['type' => 'integer', 'description' => 'Unix timestamp of last reputation update', 'nullable' => true],
-                'relationship_entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the related entity', 'nullable' => true],
-                'relationship_type' => ['type' => 'string', 'description' => 'Type of relationship with the related entity', 'nullable' => true],
+                'reputation_last_updated' => ['type' => ['integer', 'null'], 'description' => 'Unix timestamp of last reputation update'],
+                'relationship_entity' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related entity'],
+                'relationship_type' => [
+                    'type' => ['string', 'null'],
+                    'enum' => [...array_map(fn(EntityRelationshipType $type) => $type->value, EntityRelationshipType::cases()), null],
+                    'description' => 'Type of relationship with the related entity',
+                ],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the entity was created'],
-                'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the entity was last updated'],
+                'updated' => ['type' => ['integer', 'null'], 'description' => 'Unix timestamp when the entity was last updated'],
             ];
         }
 
@@ -350,7 +354,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['uuid', 'hash', 'host', 'whitelisted', 'reputation', 'created', 'updated'];
+            return ['uuid', 'hash', 'host', 'whitelisted', 'reputation', 'created'];
         }
 
         /**

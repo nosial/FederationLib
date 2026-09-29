@@ -193,10 +193,9 @@
                             'type' => 'object',
                             'properties' => [
                                 'operator' => [
-                                    'type' => 'string',
+                                    'type' => ['string', 'null'],
                                     'format' => 'uuid',
                                     'description' => 'UUID of the operator to assign (optional, defaults to authenticated operator)',
-                                    'nullable' => true,
                                 ],
                             ],
                             'required' => [],

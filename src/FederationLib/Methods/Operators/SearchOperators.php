@@ -20,7 +20,6 @@
         private const string ERROR_SEARCH_DISABLED = 'Search functionality is disabled for operators';
         private const string ERROR_QUERY_REQUIRED = 'Search query is required';
         private const string ERROR_QUERY_TOO_SHORT = 'Search query must be at least 2 characters';
-        private const string ERROR_AUTH_REQUIRED = 'Authentication is required to search operators';
         private const string ERROR_UNABLE_TO_SEARCH = 'There was an internal server error while performing the search operation';
 
         /**
@@ -34,12 +33,8 @@
                 throw new RequestException(self::ERROR_SEARCH_DISABLED, 404);
             }
 
+            // Operator records are public information, no authentication is required
             $authenticatedOperator = FederationServer::getAuthenticatedOperator();
-            if ($authenticatedOperator === null)
-            {
-                throw new RequestException(self::ERROR_AUTH_REQUIRED, 401);
-            }
-
             $query = FederationServer::getParameter('q');
             if (empty($query))
             {
@@ -80,7 +75,7 @@
 
             try
             {
-                $results = OperatorManager::searchOperators($likePattern, $limit, $page, !$authenticatedOperator->hasOperatorPermissions(), $category, $by, $order);
+                $results = OperatorManager::searchOperators($likePattern, $limit, $page, $authenticatedOperator === null || !$authenticatedOperator->hasOperatorPermissions(), $category, $by, $order);
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +106,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches operators by UUID or name.';
+            return 'Searches operators by UUID or name. Operator records are public, so no authentication is required.';
         }
 
         /**
@@ -206,10 +201,6 @@
                 ],
                 '400' => [
                     'description' => self::ERROR_QUERY_REQUIRED,
-                    'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]],
-                ],
-                '401' => [
-                    'description' => self::ERROR_AUTH_REQUIRED,
                     'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]],
                 ],
                 '404' => [

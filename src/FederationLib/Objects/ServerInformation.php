@@ -372,17 +372,17 @@
                 'public_search' => ['type' => 'boolean', 'description' => 'Whether the global search endpoint is publicly accessible'],
                 'search_types' => [
                     'type' => 'array',
-                    'items' => ['type' => 'string'],
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(RecordType $type) => $type->value, RecordType::cases())],
                     'description' => 'Record types with enabled dedicated search endpoints',
                 ],
                 'public_search_types' => [
                     'type' => 'array',
-                    'items' => ['type' => 'string'],
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(RecordType $type) => $type->value, RecordType::cases())],
                     'description' => 'Record types whose dedicated search endpoints are publicly accessible',
                 ],
                 'public_audit_logs_visibility' => [
                     'type' => 'array',
-                    'items' => ['type' => 'string'],
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases())],
                     'description' => 'Types of audit log entries that are publicly visible',
                 ],
                 'audit_log_records' => ['type' => 'integer', 'description' => 'Total number of audit log records'],
@@ -415,6 +415,14 @@
                 'public_search',
                 'search_types',
                 'public_search_types',
+                'public_audit_logs_visibility',
+                'audit_log_records',
+                'blacklist_records',
+                'known_entities',
+                'evidence_records',
+                'file_attachment_records',
+                'operators',
+                'reports',
             ];
         }
 
