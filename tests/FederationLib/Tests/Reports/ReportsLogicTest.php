@@ -426,4 +426,57 @@
                 $this->assertContains($e->getCode(), [HttpResponseCode::NOT_FOUND->value, HttpResponseCode::FORBIDDEN->value]);
             }
         }
+
+        public function testIllegalContentReportEvidenceIsAlwaysConfidential(): void
+        {
+            if(!$this->client->getServerInformation()->isAllowIllegalContent())
+            {
+                $this->markTestSkipped('Server does not accept ILLEGAL_CONTENT reports');
+            }
+
+            $entityUuid = $this->createSecurityEntity();
+            $submission = $this->client->submitReport($entityUuid, [
+                ['text_content' => 'Illegal content evidence, not flagged'],
+                ['text_content' => 'Illegal content evidence, explicitly public', 'confidential' => false],
+            ], IncidentType::ILLEGAL_CONTENT);
+
+            $this->createdReports[] = $submission->getReport()->getUuid();
+            $this->assertCount(2, $submission->getEvidence());
+            foreach($submission->getEvidence() as $evidenceRecord)
+            {
+                $this->createdEvidenceRecords[] = $evidenceRecord->getUuid();
+                $this->assertTrue($evidenceRecord->isConfidential(), 'Evidence of an ILLEGAL_CONTENT report must be confidential');
+                $this->assertTrue($this->client->getEvidenceRecord($evidenceRecord->getUuid())->isConfidential());
+            }
+        }
+
+        public function testLinkingEvidenceToIllegalContentReportMarksItConfidential(): void
+        {
+            if(!$this->client->getServerInformation()->isAllowIllegalContent())
+            {
+                $this->markTestSkipped('Server does not accept ILLEGAL_CONTENT reports');
+            }
+
+            $entityUuid = $this->createSecurityEntity();
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Illegal content report'], IncidentType::ILLEGAL_CONTENT);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $this->assertFalse($this->client->getEvidenceRecord($evidenceUuid)->isConfidential());
+
+            $this->client->addEvidenceToReport($evidenceUuid, $reportUuid);
+            $this->assertTrue($this->client->getEvidenceRecord($evidenceUuid)->isConfidential(), 'Evidence linked to an ILLEGAL_CONTENT report must become confidential');
+        }
+
+        public function testNonIllegalContentReportRespectsConfidentialFlag(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Spam evidence'], IncidentType::SPAM);
+            $this->createdReports[] = $submission->getReport()->getUuid();
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+            $this->assertFalse($submission->getEvidence()[0]->isConfidential());
+        }
     }
