@@ -216,6 +216,7 @@
                     'public_entity_metadata' => Configuration::getServerConfiguration()->isEntityMetadataPublic(),
                     'public_scan_content' => Configuration::getServerConfiguration()->isScanContentPublic(),
                     'public_query_entity' => Configuration::getServerConfiguration()->isQueryEntityPublic(),
+                    'allow_illegal_content' => Configuration::getServerConfiguration()->isIllegalContentAllowed(),
                     'search_enabled' => Configuration::getSearchConfiguration()->isEnabled(),
                     'public_search' => Configuration::getSearchConfiguration()->isPublicSearch(),
                     'search_types' => array_map(
