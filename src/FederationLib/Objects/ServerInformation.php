@@ -19,6 +19,7 @@
         private bool $publicEntityMetadata;
         private bool $publicScanContent;
         private bool $publicQueryEntity;
+        private bool $allowIllegalContent;
         private bool $searchEnabled;
         private bool $publicSearch;
         /**
@@ -57,6 +58,7 @@
             $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
             $this->publicQueryEntity = $config['public_query_entity'] ?? true;
+            $this->allowIllegalContent = $config['allow_illegal_content'] ?? true;
             $this->searchEnabled = $config['search_enabled'] ?? true;
             $this->publicSearch = $config['public_search'] ?? false;
             $this->searchTypes = isset($config['search_types']) ? array_map(
@@ -168,6 +170,16 @@
         public function isPublicQueryEntity(): bool
         {
             return $this->publicQueryEntity;
+        }
+
+        /**
+         * Returns whether the server accepts reports with the ILLEGAL_CONTENT incident type.
+         *
+         * @return bool True if ILLEGAL_CONTENT reports are accepted, false otherwise.
+         */
+        public function isAllowIllegalContent(): bool
+        {
+            return $this->allowIllegalContent;
         }
 
         /**
@@ -318,6 +330,7 @@
                 'public_entity_metadata' => $this->publicEntityMetadata,
                 'public_scan_content' => $this->publicScanContent,
                 'public_query_entity' => $this->publicQueryEntity,
+                'allow_illegal_content' => $this->allowIllegalContent,
                 'search_enabled' => $this->searchEnabled,
                 'public_search' => $this->publicSearch,
                 'search_types' => array_map(fn(RecordType $type) => $type->value, $this->searchTypes),
@@ -368,6 +381,7 @@
                 'public_entity_metadata' => ['type' => 'boolean', 'description' => 'Whether entity metadata is publicly included in responses'],
                 'public_scan_content' => ['type' => 'boolean', 'description' => 'Whether content scanning is publicly accessible'],
                 'public_query_entity' => ['type' => 'boolean', 'description' => 'Whether entity relationship queries are publicly accessible'],
+                'allow_illegal_content' => ['type' => 'boolean', 'description' => 'Whether the server accepts reports with the ILLEGAL_CONTENT incident type'],
                 'search_enabled' => ['type' => 'boolean', 'description' => 'Whether search functionality is enabled'],
                 'public_search' => ['type' => 'boolean', 'description' => 'Whether the global search endpoint is publicly accessible'],
                 'search_types' => [
@@ -411,6 +425,7 @@
                 'public_entity_metadata',
                 'public_scan_content',
                 'public_query_entity',
+                'allow_illegal_content',
                 'search_enabled',
                 'public_search',
                 'search_types',
