@@ -33,6 +33,29 @@
         }
 
         /**
+         * Returns the OpenAPI schema of an entity or evidence metadata object, as defined by OFD "Entity Metadata": a
+         * flat JSON object whose keys are 1 to 64 bytes and whose values are scalars or null, with string values of 1
+         * to 1000 bytes. JSON Schema measures lengths in characters, so the byte limits are only approximated.
+         *
+         * @param string $description The description of the metadata member
+         * @param bool $nullable Whether the metadata member itself may be null
+         * @return array The metadata schema
+         */
+        public static function getMetadataSchema(string $description, bool $nullable=true): array
+        {
+            return [
+                'type' => $nullable ? ['object', 'null'] : 'object',
+                'propertyNames' => ['minLength' => 1, 'maxLength' => 64],
+                'additionalProperties' => [
+                    'type' => ['string', 'integer', 'number', 'boolean', 'null'],
+                    'minLength' => 1,
+                    'maxLength' => 1000,
+                ],
+                'description' => $description,
+            ];
+        }
+
+        /**
          * Generate a random string of specified length.
          *
          * @param int $length Length of the random string to generate.
