@@ -5,9 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.11] - Ongoing
+## [1.0.11] - 2026-09-29
 
-This is an ongoing update
+This update also updated in accordance to version `v1.0-R2` of the OFD Specification and includes bug fixes & improvements.
+
+### Changed
+ - Operator records are now public information: `GET /operators`, `GET /operators/{uuid}` and `GET /operators/search`
+   no longer require authentication or operator permissions, and the cross-collection search returns operator records to unauthenticated requests.
+ - `public_search_types` in the server information now includes `OPERATOR` whenever operator search is enabled.
+
+### Fixed
+ - The generated OpenAPI specification referenced `#/components/schemas/SearchResult` without defining it, which
+   caused specification parsers to fail with `EMISSINGPOINTER`; `SearchResult` is now a component schema.
+ - `POST /attachments` and `PUT /attachments` no longer share the duplicate operationId `uploadAttachment`; the `PUT`
+   operation is now `uploadAttachmentPut`.
+ - Object and request body schemas no longer use the `nullable` keyword, which is invalid in OpenAPI 3.1 and later;
+   nullable members are now declared as `"type": [..., "null"]`, or `anyOf` with a `null` type for references.
+ - Entity and evidence metadata schemas now declare the flat object of scalar values defined by the specification,
+   and the Update Entity request body no longer describes its metadata as merged, since it replaces the existing metadata.
+ - The `ScannedContent` schema was missing the `suggested_action`, `suggested_lift_timestamp`, `scan_results` and
+   `risk_score` members.
+ - The `OperatorRecord` schema no longer declares an `access_token` member, which is not part of an operator record.
+ - `GET /search` serialized operator records with their `access_token` member (`null`, or the stored token hash for
+   requesters with operator permissions); search results now use the standard record representation, which omits it.
+ - `EntityRecord.metadata` was serialized as a JSON-encoded string rather than a JSON object; it is now an object, or
+   null when the entity has no metadata.
+ - `BlacklistRecord.expires` was omitted from serialized blacklist records when the blacklist is permanent; it is now
+   always present and null for permanent blacklists.
+ - `SearchResult::fromArray()` read the record type from `record_type` instead of `type`.
+
 
 
 ## [1.0.10] - 2026-09-08
