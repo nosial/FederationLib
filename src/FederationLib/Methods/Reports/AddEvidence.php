@@ -9,6 +9,7 @@
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -63,12 +64,20 @@
                     throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if(!ReportManager::reportExists($reportUuid))
+                $reportRecord = ReportManager::getReport($reportUuid);
+                if($reportRecord === null)
                 {
                     throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
                 EvidenceManager::updateEvidenceReport($evidenceUuid, $reportUuid);
+
+                // Evidence linked to an ILLEGAL_CONTENT report is always confidential
+                if($reportRecord->getIncidentType() === IncidentType::ILLEGAL_CONTENT && !$evidenceRecord->isConfidential())
+                {
+                    EvidenceManager::updateConfidentiality($evidenceUuid, true);
+                }
+
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, sprintf(
                     'Evidence %s linked to report %s by %s',
                     $evidenceUuid,
@@ -109,7 +118,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Links an existing evidence record to a report. Requires operator management permissions.';
+            return 'Links an existing evidence record to a report. Evidence linked to an ILLEGAL_CONTENT report is automatically marked as confidential. Requires operator management permissions.';
         }
 
         /**
