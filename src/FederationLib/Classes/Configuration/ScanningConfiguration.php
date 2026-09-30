@@ -46,6 +46,8 @@
         private int $reportNamedEntityReputationNormal;
         private int $reportNamedEntityReputationSuspicious;
         private int $reportNamedEntityReputationMalicious;
+        private int $blacklistReputation;
+        private int $blacklistRelatedReputation;
         private float $riskScoreNeutralPoint;
         private float $riskScoreScalingFactor;
         private float $riskScoreMinBound;
@@ -93,13 +95,16 @@
             $this->reputationMaxBound = (int)($configuration['reputation_max_bound'] ?? 1000);
             // Reputation adjustments applied when a report is closed with a classification flag. Positive
             // adjustments are clamped to 0-10 per the OFD incremental gain rule, negative ones to 0 or below.
-            $this->reportReputationNormal = max(0, min(10, (int)($configuration['report_reputation_normal'] ?? 2)));
+            $this->reportReputationNormal = max(0, min(10, (int)($configuration['report_reputation_normal'] ?? 1)));
             $this->reportReputationSuspicious = min(0, (int)($configuration['report_reputation_suspicious'] ?? -10));
             $this->reportReputationMalicious = min(0, (int)($configuration['report_reputation_malicious'] ?? -20));
             $this->reportNamedEntityReputation = (bool)($configuration['report_named_entity_reputation'] ?? true);
             $this->reportNamedEntityReputationNormal = max(0, min(10, (int)($configuration['report_named_entity_reputation_normal'] ?? 1)));
             $this->reportNamedEntityReputationSuspicious = min(0, (int)($configuration['report_named_entity_reputation_suspicious'] ?? -5));
             $this->reportNamedEntityReputationMalicious = min(0, (int)($configuration['report_named_entity_reputation_malicious'] ?? -10));
+            // Reputation decreases applied when an entity is blacklisted, clamped to 0 or below
+            $this->blacklistReputation = min(0, (int)($configuration['blacklist_reputation'] ?? -50));
+            $this->blacklistRelatedReputation = min(0, (int)($configuration['blacklist_related_reputation'] ?? -10));
             $this->riskScoreNeutralPoint = (float)($configuration['risk_score_neutral_point'] ?? 50.0);
             $this->riskScoreScalingFactor = (float)($configuration['risk_score_scaling_factor'] ?? 2.3);
             $this->riskScoreMinBound = (float)($configuration['risk_score_min_bound'] ?? 0.0);
@@ -469,6 +474,26 @@
                 ClassificationFlag::SUSPICIOUS => $this->reportNamedEntityReputationSuspicious,
                 ClassificationFlag::MALICIOUS => $this->reportNamedEntityReputationMalicious,
             };
+        }
+
+        /**
+         * Returns the reputation adjustment applied to an entity when it is blacklisted
+         *
+         * @return int The reputation delta, 0 or below
+         */
+        public function getBlacklistReputation(): int
+        {
+            return $this->blacklistReputation;
+        }
+
+        /**
+         * Returns the reputation adjustment applied to the entities directly related to a blacklisted entity
+         *
+         * @return int The reputation delta, 0 or below
+         */
+        public function getBlacklistRelatedReputation(): int
+        {
+            return $this->blacklistRelatedReputation;
         }
 
         /**

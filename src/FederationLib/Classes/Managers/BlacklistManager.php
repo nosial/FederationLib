@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\BlacklistCategory;
@@ -93,6 +94,9 @@
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+
+            // A blacklist is a deliberate operator decision, lower the reputation of the entity and its relatives
+            self::applyBlacklistReputation($entityUuid);
 
             return $uuid;
         }
@@ -742,5 +746,70 @@
 
             $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
             return "ORDER BY $column $direction, uuid $secondaryDirection";
+        }
+
+        /**
+         * Applies the configured reputation decreases for a newly blacklisted entity: the blacklisted entity itself,
+         * and every entity directly related to it (its relationship target and the entities that reference it).
+         * Each related entity is adjusted once, and the blacklisted entity is never adjusted as its own relative.
+         * Failures are logged rather than thrown, since the blacklist record already exists at this point.
+         *
+         * @param string $entityUuid The UUID of the blacklisted entity
+         */
+        private static function applyBlacklistReputation(string $entityUuid): void
+        {
+            $scanningConfiguration = Configuration::getScanningConfiguration();
+
+            $delta = $scanningConfiguration->getBlacklistReputation();
+            if($delta !== 0)
+            {
+                try
+                {
+                    EntitiesManager::updateEntityReputation($entityUuid, $delta);
+                }
+                catch(DatabaseOperationException $e)
+                {
+                    Logger::log()->warning(sprintf('Failed to update reputation of blacklisted entity %s: %s', $entityUuid, $e->getMessage()), $e);
+                }
+            }
+
+            $relatedDelta = $scanningConfiguration->getBlacklistRelatedReputation();
+            if($relatedDelta === 0)
+            {
+                return;
+            }
+
+            try
+            {
+                $relatedEntities = [];
+                $parentUuid = EntitiesManager::getEntityByUuid($entityUuid)?->getRelationshipEntity();
+                if($parentUuid !== null)
+                {
+                    $relatedEntities[$parentUuid] = true;
+                }
+
+                foreach(EntitiesManager::getEntitiesByRelationshipEntity($entityUuid) as $childEntity)
+                {
+                    $relatedEntities[$childEntity->getUuid()] = true;
+                }
+            }
+            catch(DatabaseOperationException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to resolve entities related to blacklisted entity %s: %s', $entityUuid, $e->getMessage()), $e);
+                return;
+            }
+
+            unset($relatedEntities[$entityUuid]);
+            foreach(array_keys($relatedEntities) as $relatedUuid)
+            {
+                try
+                {
+                    EntitiesManager::updateEntityReputation($relatedUuid, $relatedDelta);
+                }
+                catch(DatabaseOperationException $e)
+                {
+                    Logger::log()->warning(sprintf('Failed to update reputation of entity %s related to blacklisted entity %s: %s', $relatedUuid, $entityUuid, $e->getMessage()), $e);
+                }
+            }
         }
     }

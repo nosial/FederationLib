@@ -92,9 +92,11 @@
             self::$configuration->setDefault('scanning.report_reputation_suspicious', -10, 'FEDERATION_SCANNING_REPORT_REPUTATION_SUSPICIOUS');
             self::$configuration->setDefault('scanning.report_reputation_malicious', -20, 'FEDERATION_SCANNING_REPORT_REPUTATION_MALICIOUS');
             self::$configuration->setDefault('scanning.report_named_entity_reputation', true, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION');
-            self::$configuration->setDefault('scanning.report_named_entity_reputation_normal', 2, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_NORMAL');
+            self::$configuration->setDefault('scanning.report_named_entity_reputation_normal', 1, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_NORMAL');
             self::$configuration->setDefault('scanning.report_named_entity_reputation_suspicious', -5, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_SUSPICIOUS');
             self::$configuration->setDefault('scanning.report_named_entity_reputation_malicious', -10, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_MALICIOUS');
+            self::$configuration->setDefault('scanning.blacklist_reputation', -50, 'FEDERATION_SCANNING_BLACKLIST_REPUTATION');
+            self::$configuration->setDefault('scanning.blacklist_related_reputation', -10, 'FEDERATION_SCANNING_BLACKLIST_RELATED_REPUTATION');
             self::$configuration->setDefault('scanning.risk_score_neutral_point', 50.0, 'FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT');
             self::$configuration->setDefault('scanning.risk_score_scaling_factor', 2.3, 'FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR');
             self::$configuration->setDefault('scanning.risk_score_min_bound', 0.0, 'FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND');
