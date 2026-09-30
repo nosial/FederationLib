@@ -157,6 +157,59 @@
             $this->assertNull($ipAddressEntityRecord->getId());
         }
 
+        public function testPushEntityStripsWwwPrefix(): void
+        {
+            $entityUuid = $this->client->pushEntity('www.www-strip-test.com');
+            $this->createdEntities[] = $entityUuid;
+
+            $entityRecord = $this->client->getEntityRecord($entityUuid);
+            $this->assertEquals('www-strip-test.com', $entityRecord->getHost());
+
+            $this->assertEquals($entityUuid, $this->client->pushEntity('www-strip-test.com'));
+            $this->assertEquals($entityUuid, $this->client->getEntityRecord('www.www-strip-test.com')->getUuid());
+            $this->assertEquals($entityUuid, $this->client->getEntityRecord(Utilities::hashEntity('www-strip-test.com'))->getUuid());
+
+            $namedEntityUuid = $this->client->pushEntity('www.www-strip-test.com', 'john123');
+            $this->createdEntities[] = $namedEntityUuid;
+            $this->assertEquals($namedEntityUuid, $this->client->pushEntity('www-strip-test.com', 'john123'));
+            $this->assertEquals($namedEntityUuid, $this->client->getEntityRecord('john123@www-strip-test.com')->getUuid());
+        }
+
+        public function testPushSubdomainEntityCreatesParentDomain(): void
+        {
+            $subdomain1Uuid = $this->client->pushEntity('sub1.subdomain-parent-test.com');
+            $this->createdEntities[] = $subdomain1Uuid;
+            $subdomain2Uuid = $this->client->pushEntity('sub2.subdomain-parent-test.com');
+            $this->createdEntities[] = $subdomain2Uuid;
+
+            // The parent domain is created automatically and shared by both subdomains
+            $parentRecord = $this->client->getEntityRecord('subdomain-parent-test.com');
+            $this->createdEntities[] = $parentRecord->getUuid();
+            $this->assertNull($parentRecord->getRelationshipEntity());
+
+            foreach([$subdomain1Uuid, $subdomain2Uuid] as $subdomainUuid)
+            {
+                $subdomainRecord = $this->client->getEntityRecord($subdomainUuid);
+                $this->assertNotEquals($parentRecord->getUuid(), $subdomainUuid);
+                $this->assertEquals($parentRecord->getUuid(), $subdomainRecord->getRelationshipEntity());
+                $this->assertEquals(EntityRelationshipType::CHILD, $subdomainRecord->getRelationshipType());
+            }
+
+            // Pushing the parent domain again returns the existing entity
+            $this->assertEquals($parentRecord->getUuid(), $this->client->pushEntity('subdomain-parent-test.com'));
+        }
+
+        public function testPushRegistrableDomainEntityHasNoParent(): void
+        {
+            $entityUuid = $this->client->pushEntity('no-parent-test.co.uk');
+            $this->createdEntities[] = $entityUuid;
+            $this->assertNull($this->client->getEntityRecord($entityUuid)->getRelationshipEntity());
+
+            $namedEntityUuid = $this->client->pushEntity('sub.no-parent-test.co.uk', 'john123');
+            $this->createdEntities[] = $namedEntityUuid;
+            $this->assertNull($this->client->getEntityRecord($namedEntityUuid)->getRelationshipEntity());
+        }
+
         public function testPushInvalidIpAddressEntity(): void
         {
             $this->expectException(RequestException::class);

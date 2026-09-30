@@ -131,6 +131,51 @@
             $this->assertEquals($expected, Utilities::hashEntity('example.com', 'user'));
         }
 
+        public function testCanonicalizeHostStripsWww(): void
+        {
+            $this->assertEquals('example.com', Utilities::canonicalizeHost('www.example.com'));
+            $this->assertEquals('sub.example.com', Utilities::canonicalizeHost('www.sub.example.com'));
+            $this->assertEquals('example.com', Utilities::canonicalizeHost('example.com'));
+            $this->assertEquals('www.com', Utilities::canonicalizeHost('www.com'));
+            $this->assertEquals('www.co.uk', Utilities::canonicalizeHost('www.co.uk'));
+            $this->assertEquals('wwwexample.com', Utilities::canonicalizeHost('wwwexample.com'));
+            $this->assertEquals('192.168.1.1', Utilities::canonicalizeHost('192.168.1.1'));
+        }
+
+        public function testCanonicalizeHostKeepsSubdomains(): void
+        {
+            $this->assertEquals('sub1.example.com', Utilities::canonicalizeHost('sub1.example.com'));
+            $this->assertEquals('a.b.example.com', Utilities::canonicalizeHost('a.b.example.com'));
+            $this->assertNotEquals(Utilities::hashEntity('example.com'), Utilities::hashEntity('sub1.example.com'));
+        }
+
+        public function testGetRegistrableDomain(): void
+        {
+            $this->assertEquals('example.com', Utilities::getRegistrableDomain('example.com'));
+            $this->assertEquals('example.com', Utilities::getRegistrableDomain('sub1.example.com'));
+            $this->assertEquals('example.com', Utilities::getRegistrableDomain('a.b.example.com'));
+            $this->assertEquals('example.co.uk', Utilities::getRegistrableDomain('foo.example.co.uk'));
+            $this->assertEquals('user.github.io', Utilities::getRegistrableDomain('user.github.io'));
+            $this->assertEquals('www.ck', Utilities::getRegistrableDomain('a.www.ck'));
+            $this->assertEquals('foo.bar.ck', Utilities::getRegistrableDomain('foo.bar.ck'));
+        }
+
+        public function testGetRegistrableDomainReturnsNullForNonRegistrableHosts(): void
+        {
+            $this->assertNull(Utilities::getRegistrableDomain('com'));
+            $this->assertNull(Utilities::getRegistrableDomain('co.uk'));
+            $this->assertNull(Utilities::getRegistrableDomain('github.io'));
+            $this->assertNull(Utilities::getRegistrableDomain('localhost'));
+            $this->assertNull(Utilities::getRegistrableDomain('192.168.1.1'));
+            $this->assertNull(Utilities::getRegistrableDomain('2001:db8::1'));
+        }
+
+        public function testHashEntityTreatsWwwAsSameHost(): void
+        {
+            $this->assertEquals(Utilities::hashEntity('example.com'), Utilities::hashEntity('www.example.com'));
+            $this->assertEquals(Utilities::hashEntity('example.com', 'user'), Utilities::hashEntity('www.example.com', 'user'));
+        }
+
         public function testHashEntityDeterministic(): void
         {
             $result1 = Utilities::hashEntity('test.com', 'alice');
