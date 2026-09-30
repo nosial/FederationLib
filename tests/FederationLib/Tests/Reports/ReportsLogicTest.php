@@ -470,6 +470,71 @@
             $this->assertTrue($this->client->getEvidenceRecord($evidenceUuid)->isConfidential(), 'Evidence linked to an ILLEGAL_CONTENT report must become confidential');
         }
 
+        /**
+         * Submits a report for the entity, closes it with the classification flag and returns the report UUID
+         */
+        private function submitAndCloseReport(string $entityUuid, string $content, ClassificationFlag $classificationFlag): string
+        {
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => $content], IncidentType::OTHER);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+            $this->client->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid());
+            $this->client->closeReport($reportUuid, $classificationFlag);
+            return $reportUuid;
+        }
+
+        public function testClosingReportAdjustsReportedEntityReputationByClassification(): void
+        {
+            // Default configuration: NORMAL +1, SUSPICIOUS -10, MALICIOUS -20
+            $expectedDeltas = [
+                ClassificationFlag::NORMAL->value => 1,
+                ClassificationFlag::SUSPICIOUS->value => -10,
+                ClassificationFlag::MALICIOUS->value => -20,
+            ];
+
+            foreach($expectedDeltas as $flag => $expectedDelta)
+            {
+                $entityUuid = $this->createSecurityEntity();
+                $before = $this->client->getEntityRecord($entityUuid)->getReputation();
+
+                $this->submitAndCloseReport($entityUuid, 'Reputation delta test for ' . $flag, ClassificationFlag::from($flag));
+
+                $after = $this->client->getEntityRecord($entityUuid)->getReputation();
+                $this->assertEquals($expectedDelta, $after - $before, 'Unexpected reputation delta for ' . $flag);
+            }
+        }
+
+        public function testClosingReportAdjustsMentionedEntityReputation(): void
+        {
+            $reportedUuid = $this->createSecurityEntity();
+            $mentionedHost = uniqid('mentioned-') . '.com';
+            $mentionedUuid = $this->client->pushEntity($mentionedHost);
+            $this->createdEntities[] = $mentionedUuid;
+
+            $reportedBefore = $this->client->getEntityRecord($reportedUuid)->getReputation();
+            $mentionedBefore = $this->client->getEntityRecord($mentionedUuid)->getReputation();
+
+            $this->submitAndCloseReport($reportedUuid, "Claim your prize at https://$mentionedHost/login now", ClassificationFlag::MALICIOUS);
+
+            $this->assertEquals(-20, $this->client->getEntityRecord($reportedUuid)->getReputation() - $reportedBefore);
+            // Default configuration: mentioned entities receive MALICIOUS -10
+            $this->assertEquals(-10, $this->client->getEntityRecord($mentionedUuid)->getReputation() - $mentionedBefore, 'Entities mentioned in the evidence must be affected');
+        }
+
+        public function testClosingReportAdjustsReportedEntityOnlyOnceWhenSelfMentioned(): void
+        {
+            $host = uniqid('self-mention-') . '.com';
+            $entityUuid = $this->client->pushEntity($host);
+            $this->createdEntities[] = $entityUuid;
+            $before = $this->client->getEntityRecord($entityUuid)->getReputation();
+
+            $this->submitAndCloseReport($entityUuid, "Visit https://$host and $host for more", ClassificationFlag::SUSPICIOUS);
+
+            $this->assertEquals(-10, $this->client->getEntityRecord($entityUuid)->getReputation() - $before);
+        }
+
         public function testNonIllegalContentReportRespectsConfidentialFlag(): void
         {
             $entityUuid = $this->createSecurityEntity();
