@@ -2,6 +2,7 @@
 
     namespace FederationLib\Methods\Reports;
 
+    use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\BlacklistManager;
@@ -19,6 +20,7 @@
     use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use FederationLib\Objects\ErrorResponse;
+    use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
 
@@ -129,9 +131,19 @@
 
             // Assign classifications before training. The conditional database update
             // preserves immutable classifications and prevents duplicate training.
+            $evidenceRecords = [];
             if($classificationFlag !== null)
             {
-                foreach(EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true) as $evidenceRecord)
+                try
+                {
+                    $evidenceRecords = EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true);
+                }
+                catch(DatabaseOperationException $e)
+                {
+                    throw new RequestException(self::ERROR_FAILED_TO_GET, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
+                }
+
+                foreach($evidenceRecords as $evidenceRecord)
                 {
                     try
                     {
@@ -167,14 +179,9 @@
             {
                 ReportManager::closeReport($reportUuid);
 
-                if($classificationFlag !== null && $reportRecord->getReportingEntity() !== null)
+                if($classificationFlag !== null)
                 {
-                    match($classificationFlag)
-                    {
-                        ClassificationFlag::MALICIOUS => EntitiesManager::updateEntityReputation($reportRecord->getReportingEntity(), -1),
-                        ClassificationFlag::NORMAL => EntitiesManager::updateEntityReputation($reportRecord->getReportingEntity(), 1),
-                        default => null,
-                    };
+                    self::applyReputation($reportRecord->getReportingEntity(), $classificationFlag, $evidenceRecords);
                 }
 
                 if($blacklistType !== null && $reportRecord->getReportingEntity() !== null)
@@ -207,6 +214,60 @@
         }
 
         /**
+         * Applies the configured reputation adjustment for the classification flag to the reported entity and,
+         * if enabled, to every existing entity mentioned within the report's evidence. The reported entity is
+         * adjusted only once even if its evidence mentions it.
+         *
+         * @param string|null $reportingEntity The UUID of the reported entity, if any
+         * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
+         * @param EvidenceRecord[] $evidenceRecords The evidence records linked to the report
+         * @throws DatabaseOperationException Thrown if the reported entity's reputation could not be updated
+         */
+        private static function applyReputation(?string $reportingEntity, ClassificationFlag $classificationFlag, array $evidenceRecords): void
+        {
+            $scanningConfiguration = Configuration::getScanningConfiguration();
+
+            $delta = $scanningConfiguration->getReportReputation($classificationFlag);
+            if($reportingEntity !== null && $delta !== 0)
+            {
+                EntitiesManager::updateEntityReputation($reportingEntity, $delta);
+            }
+
+            $namedEntityDelta = $scanningConfiguration->getReportNamedEntityReputation($classificationFlag);
+            if(!$scanningConfiguration->isReportNamedEntityReputationEnabled() || $namedEntityDelta === 0)
+            {
+                return;
+            }
+
+            $namedEntities = [];
+            foreach($evidenceRecords as $evidenceRecord)
+            {
+                if($evidenceRecord->getTextContent() !== null)
+                {
+                    $namedEntities += EntitiesManager::resolveNamedEntities($evidenceRecord->getTextContent());
+                }
+            }
+
+            if($reportingEntity !== null)
+            {
+                unset($namedEntities[$reportingEntity]);
+            }
+
+            foreach(array_keys($namedEntities) as $entityUuid)
+            {
+                try
+                {
+                    EntitiesManager::updateEntityReputation($entityUuid, $namedEntityDelta);
+                }
+                catch(DatabaseOperationException $e)
+                {
+                    // The report is already closed at this point, a failed mention adjustment must not fail the request
+                    Logger::log()->warning(sprintf('Failed to update reputation of mentioned entity %s: %s', $entityUuid, $e->getMessage()), $e);
+                }
+            }
+        }
+
+        /**
          * @inheritDoc
          */
         public static function getTags(): array
@@ -227,7 +288,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Closes a report with an optional classification flag. Only the assigned operator can close a report. Requires management permissions.';
+            return 'Closes a report with an optional classification flag. When a classification flag is given, the reputation of the reported entity, and of existing entities mentioned in the report\'s evidence, is adjusted according to the host\'s configuration. Only the assigned operator can close a report. Requires management permissions.';
         }
 
         /**
