@@ -121,14 +121,145 @@
         }
 
         /**
-         * Calculates the SHA256 hash of an entity with the given domain and optional ID
+         * Canonicalizes an entity host by removing a leading "www." label from DNS hosts, so that www.example.com
+         * and example.com resolve to the same entity. Other subdomains are left untouched, and the label is only
+         * removed when the remainder is still a registrable domain, so hosts such as www.com or www.co.uk (where
+         * "www" is itself the registered label) are left untouched.
          *
          * @param string $host The host/domain of the entity
+         * @return string The canonical entity host
+         */
+        public static function canonicalizeHost(string $host): string
+        {
+            if(str_starts_with($host, 'www.') && self::getRegistrableDomain(substr($host, 4)) !== null)
+            {
+                return substr($host, 4);
+            }
+
+            return $host;
+        }
+
+        /**
+         * Returns the registrable domain (the public suffix plus one label) of a DNS host using the Public Suffix
+         * List, e.g. sub.example.com and example.com both return example.com, and a.b.example.co.uk returns
+         * example.co.uk.
+         *
+         * @param string $host The DNS host
+         * @return string|null The registrable domain, or null if the host is an IP address, is itself a public
+         *                     suffix, or the Public Suffix List is unavailable
+         */
+        public static function getRegistrableDomain(string $host): ?string
+        {
+            if(filter_var($host, FILTER_VALIDATE_IP) !== false)
+            {
+                return null;
+            }
+
+            $labels = explode('.', strtolower($host));
+            $labelCount = count($labels);
+            $rules = self::getPublicSuffixRules();
+            if($labelCount < 2 || count($rules) === 0)
+            {
+                return null;
+            }
+
+            // Walk from the longest candidate suffix to the shortest; exception rules win over every other rule,
+            // otherwise the longest matching rule prevails, and the implicit "*" rule applies when none match
+            $suffixLength = null;
+            for($i = 0; $i < $labelCount && $suffixLength === null; $i++)
+            {
+                if(isset($rules['!' . implode('.', array_slice($labels, $i))]))
+                {
+                    $suffixLength = $labelCount - $i - 1;
+                }
+            }
+
+            for($i = 0; $i < $labelCount && $suffixLength === null; $i++)
+            {
+                $candidate = implode('.', array_slice($labels, $i));
+                $wildcard = $i + 1 < $labelCount ? '*.' . implode('.', array_slice($labels, $i + 1)) : null;
+
+                if(isset($rules[$candidate]) || ($wildcard !== null && isset($rules[$wildcard])))
+                {
+                    $suffixLength = $labelCount - $i;
+                }
+            }
+
+            $suffixLength ??= 1;
+
+            if($labelCount <= $suffixLength)
+            {
+                return null;
+            }
+
+            return implode('.', array_slice($labels, $labelCount - $suffixLength - 1));
+        }
+
+        /**
+         * Loads the Public Suffix List rules bundled in the Resources directory, keyed by rule (including any
+         * leading "*." wildcard or "!" exception marker). Internationalized rules are converted to their ASCII
+         * (punycode) form so they match canonical entity hosts.
+         *
+         * @return array<string, true> The rules, or an empty array if the list could not be loaded
+         */
+        private static function getPublicSuffixRules(): array
+        {
+            static $rules = null;
+            if($rules !== null)
+            {
+                return $rules;
+            }
+
+            $rules = [];
+            $lines = @file(__DIR__ . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'public_suffix_list.dat', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if($lines === false)
+            {
+                Logger::log()->warning('Unable to load the Public Suffix List, subdomain resolution is disabled');
+                return $rules;
+            }
+
+            foreach($lines as $line)
+            {
+                $rule = trim($line);
+                if($rule === '' || str_starts_with($rule, '//'))
+                {
+                    continue;
+                }
+
+                if(preg_match('/[^\x20-\x7e]/', $rule) === 1)
+                {
+                    if(!function_exists('idn_to_ascii'))
+                    {
+                        continue;
+                    }
+
+                    $prefix = str_starts_with($rule, '!') ? '!' : (str_starts_with($rule, '*.') ? '*.' : '');
+                    $rule = idn_to_ascii(substr($rule, strlen($prefix)), IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+                    if($rule === false)
+                    {
+                        continue;
+                    }
+
+                    $rule = $prefix . $rule;
+                }
+
+                $rules[strtolower($rule)] = true;
+            }
+
+            return $rules;
+        }
+
+        /**
+         * Calculates the SHA256 hash of an entity with the given domain and optional ID
+         *
+         * @param string $host The host/domain of the entity, canonicalized with canonicalizeHost() before hashing
          * @param string|null $id Optional. The ID of the entity if they belong to a specific domain
          * @return string The SHA256 calculated checksum of the
          */
         public static function hashEntity(string $host, ?string $id=null): string
         {
+            $host = self::canonicalizeHost($host);
+
             if($id !== null)
             {
                 return hash('sha256', sprintf("%s@%s", $id, $host));
