@@ -68,6 +68,7 @@
                 throw new InvalidArgumentException('Invalid entity metadata provided');
             }
 
+            $host = Utilities::canonicalizeHost($host);
             $uuid = Uuid::v7()->toRfc4122();
             $hash = Utilities::hashEntity($host, $id);
 
@@ -122,7 +123,41 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            if($id === null && Configuration::getServerConfiguration()->isLinkSubdomainEntitiesEnabled())
+            {
+                self::assignParentDomain($uuid, $host);
+            }
+
             return $uuid;
+        }
+
+        /**
+         * Links a newly registered subdomain host entity to the entity of its registrable domain, registering that
+         * domain entity first when it does not exist yet, so that sub1.example.com and sub2.example.com both become
+         * a CHILD of example.com. Hosts that are already a registrable domain or an IP address are left alone.
+         * Failures are logged rather than thrown, since the subdomain entity itself has already been registered.
+         *
+         * @param string $entityUuid The UUID of the subdomain entity
+         * @param string $host The canonical host of the subdomain entity
+         * @return void
+         */
+        private static function assignParentDomain(string $entityUuid, string $host): void
+        {
+            $parentHost = Utilities::getRegistrableDomain($host);
+            if($parentHost === null || $parentHost === $host)
+            {
+                return;
+            }
+
+            try
+            {
+                $parentUuid = self::getEntity($parentHost)?->getUuid() ?? self::registerEntity($parentHost);
+                self::assignEntityRelationship($entityUuid, $parentUuid, EntityRelationshipType::CHILD);
+            }
+            catch(DatabaseOperationException|InvalidArgumentException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to assign parent domain %s to entity %s: %s', $parentHost, $host, $e->getMessage()), $e);
+            }
         }
 
         /**
