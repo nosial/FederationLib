@@ -32,6 +32,7 @@
         private float $modifierClassificationMalicious;
         private bool $autoReport;
         private float $autoReportThreshold;
+        private bool $autoReportCaution;
         private float $actionBlockThreshold;
         private float $actionCautionThreshold;
         private int $reputationWindowDuration;
@@ -82,6 +83,7 @@
             $this->modifierClassificationMalicious = (float)($configuration['modifier_classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
             $this->autoReport = (bool)($configuration['auto_report'] ?? false);
             $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
+            $this->autoReportCaution = (bool)($configuration['auto_report_caution'] ?? false);
             $this->actionBlockThreshold = (float)($configuration['action_block_threshold'] ?? 80.00);
             $this->actionCautionThreshold = (float)($configuration['action_caution_threshold'] ?? 60.00);
             $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 3600);
@@ -352,6 +354,16 @@
         public function getAutoReportThreshold(): float
         {
             return $this->autoReportThreshold;
+        }
+
+        /**
+         * Returns whether reports should also be generated for scans that suggest the CAUTION action
+         *
+         * @return bool True if caution auto-reporting is enabled
+         */
+        public function isAutoReportCaution(): bool
+        {
+            return $this->autoReportCaution;
         }
 
         /**

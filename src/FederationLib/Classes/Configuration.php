@@ -81,6 +81,7 @@
             self::$configuration->setDefault('scanning.modifier_classification_malicious', ScanningRules::CLASSIFICATION_MALICIOUS->getModifier(), 'FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_MALICIOUS');
             self::$configuration->setDefault('scanning.auto_report', true, 'FEDERATION_SCANNING_AUTO_REPORT');
             self::$configuration->setDefault('scanning.auto_report_threshold', 80.00, 'FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD');
+            self::$configuration->setDefault('scanning.auto_report_caution', false, 'FEDERATION_SCANNING_AUTO_REPORT_CAUTION');
             self::$configuration->setDefault('scanning.action_block_threshold', 80.00, 'FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD');
             self::$configuration->setDefault('scanning.action_caution_threshold', 60.00, 'FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD');
             self::$configuration->setDefault('scanning.reputation_window_duration', 3600, 'FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION');

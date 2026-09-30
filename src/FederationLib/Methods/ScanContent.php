@@ -16,6 +16,7 @@
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\SuggestedActionType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -183,8 +184,8 @@
                 EntitiesManager::recordScan($scannedContent);
             }
 
-            // Generate a report if auto-reporting is enabled.
-            if(Configuration::getScanningConfiguration()->isAutoReport())
+            // Generate a report if auto-reporting is enabled for this scan's outcome.
+            if(self::shouldGenerateReport($scannedContent))
             {
                 try
                 {
@@ -374,8 +375,29 @@
         }
 
         /**
-         * Generates a report based off the scanned content, returns the created report UUID record otherwise returns
-         * null if auto-reporting conditions are not met
+         * Determines whether a report should be generated for the scanned content. A scan qualifies when its risk
+         * score reaches the auto-report threshold (auto_report), or when its suggested action is CAUTION
+         * (auto_report_caution). Both conditions are evaluated in a single decision so a scan that satisfies both
+         * only ever produces one report.
+         *
+         * @param ScannedContent $scannedContent The scanned content results
+         * @return bool True if a report should be generated
+         */
+        private static function shouldGenerateReport(ScannedContent $scannedContent): bool
+        {
+            $scanningConfiguration = Configuration::getScanningConfiguration();
+
+            if($scanningConfiguration->isAutoReport() && $scannedContent->getRiskScore() >= $scanningConfiguration->getAutoReportThreshold())
+            {
+                return true;
+            }
+
+            return $scanningConfiguration->isAutoReportCaution() && $scannedContent->getSuggestedAction() === SuggestedActionType::CAUTION;
+        }
+
+        /**
+         * Generates a report based off the scanned content, the caller is responsible for deciding whether the
+         * scanned content qualifies for a report (see shouldGenerateReport)
          *
          * @param ScannedContent $scannedContent The scanned content results
          * @param array<int, array> $evidenceItems The evidence items provided in the scan request
@@ -383,12 +405,6 @@
          */
         private static function generateReport(ScannedContent $scannedContent, array $evidenceItems): void
         {
-            // Do not generate the report if it's less than the required threshold
-            if($scannedContent->getRiskScore() < Configuration::getScanningConfiguration()->getAutoReportThreshold())
-            {
-                return;
-            }
-
             // Do not generate if there's no author entity to blame
             if($scannedContent->getAuthorEntity() === null)
             {
