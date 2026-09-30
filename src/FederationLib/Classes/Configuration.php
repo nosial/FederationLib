@@ -86,6 +86,13 @@
             self::$configuration->setDefault('scanning.reputation_gain', 1, 'FEDERATION_SCANNING_REPUTATION_GAIN');
             self::$configuration->setDefault('scanning.reputation_min_bound', -1000, 'FEDERATION_SCANNING_REPUTATION_MIN_BOUND');
             self::$configuration->setDefault('scanning.reputation_max_bound', 1000, 'FEDERATION_SCANNING_REPUTATION_MAX_BOUND');
+            self::$configuration->setDefault('scanning.report_reputation_normal', 1, 'FEDERATION_SCANNING_REPORT_REPUTATION_NORMAL');
+            self::$configuration->setDefault('scanning.report_reputation_suspicious', -10, 'FEDERATION_SCANNING_REPORT_REPUTATION_SUSPICIOUS');
+            self::$configuration->setDefault('scanning.report_reputation_malicious', -20, 'FEDERATION_SCANNING_REPORT_REPUTATION_MALICIOUS');
+            self::$configuration->setDefault('scanning.report_named_entity_reputation', true, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION');
+            self::$configuration->setDefault('scanning.report_named_entity_reputation_normal', 2, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_NORMAL');
+            self::$configuration->setDefault('scanning.report_named_entity_reputation_suspicious', -5, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_SUSPICIOUS');
+            self::$configuration->setDefault('scanning.report_named_entity_reputation_malicious', -10, 'FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_MALICIOUS');
             self::$configuration->setDefault('scanning.risk_score_neutral_point', 50.0, 'FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT');
             self::$configuration->setDefault('scanning.risk_score_scaling_factor', 2.3, 'FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR');
             self::$configuration->setDefault('scanning.risk_score_min_bound', 0.0, 'FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND');
@@ -143,8 +150,6 @@
             self::$configuration->setDefault('redis.throw_on_errors', true, 'FEDERATION_CACHE_THROW_ON_ERRORS');
             // If enabled, some methods will attempt to pre-cache objects before they are called.
             self::$configuration->setDefault('redis.pre_cache_enabled', true, 'FEDERATION_PRE_CACHE_ENABLED');
-            // If enabled, very specific system-related properties are cached for a slight performance increase
-            self::$configuration->setDefault('redis.system_caching_enabled', true, 'FEDERATION_SYSTEM_CACHING_ENABLED');
             // Operators cache
             self::$configuration->setDefault('redis.operator_cache_enabled', true, 'FEDERATION_OPERATOR_CACHE_ENABLED');
             self::$configuration->setDefault('redis.operator_cache_limit', 1000, 'FEDERATION_OPERATOR_CACHE_LIMIT');
