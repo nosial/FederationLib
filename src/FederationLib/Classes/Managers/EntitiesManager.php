@@ -9,6 +9,7 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\EntityRelationshipType;
+    use FederationLib\Enums\NamedEntityType;
     use FederationLib\Enums\Categories\EntityCategory;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EntityOrderType;
@@ -16,6 +17,7 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ScannedContent;
+    use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
@@ -981,6 +983,120 @@
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+        }
+
+        /**
+         * Resolves an identifier extracted from content (a UUID, SHA-256 hash, entity address, URL, email, domain,
+         * IPv4 or IPv6 address) to an existing entity record, hashing the canonical host (and optional id) the same
+         * way pushEntity stores it.
+         *
+         * @param string $entityIdentifier The identifier to resolve
+         * @param ResolvedEntityPosition|null $entityPosition Optional position metadata carrying the named entity type
+         * @return EntityRecord|null The matching entity record, or null if none exists
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function resolveNamedEntity(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?EntityRecord
+        {
+            if(strlen($entityIdentifier) < 1)
+            {
+                return null;
+            }
+
+            if(Utilities::isUuid($entityIdentifier))
+            {
+                return self::getEntityByUuid($entityIdentifier);
+            }
+
+            if(Utilities::isSha256($entityIdentifier))
+            {
+                return self::getEntityByHash($entityIdentifier);
+            }
+
+            if(Utilities::isEntityAddress($entityIdentifier))
+            {
+                $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                return self::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
+            }
+
+            $host = null;
+            $id = null;
+
+            if($entityPosition !== null)
+            {
+                switch($entityPosition->getType())
+                {
+                    case NamedEntityType::URL:
+                        $host = parse_url($entityIdentifier, PHP_URL_HOST);
+                        break;
+
+                    case NamedEntityType::EMAIL:
+                        $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
+                        if($parsedAddress !== null)
+                        {
+                            $host = $parsedAddress['host'];
+                            $id = $parsedAddress['id'];
+                        }
+                        break;
+
+                    case NamedEntityType::DOMAIN:
+                    case NamedEntityType::IPv4:
+                    case NamedEntityType::IPv6:
+                        $host = $entityIdentifier;
+                        break;
+                }
+            }
+            elseif(Validate::url($entityIdentifier))
+            {
+                $host = parse_url($entityIdentifier, PHP_URL_HOST);
+            }
+            elseif(Validate::domain($entityIdentifier) || Validate::ipv4($entityIdentifier) || Validate::ipv6($entityIdentifier))
+            {
+                $host = $entityIdentifier;
+            }
+
+            if($host === null || $host === '')
+            {
+                return null;
+            }
+
+            try
+            {
+                return self::getEntityByHash(Utilities::hashEntity($host, $id));
+            }
+            catch (InvalidArgumentException $e)
+            {
+                Logger::log()->warning('Failed to resolve entity by identifier ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                return null;
+            }
+        }
+
+        /**
+         * Resolves every existing entity mentioned in the given text content, using the same named entity
+         * extraction as content scanning.
+         *
+         * @param string $textContent The text content to extract named entities from
+         * @return array<string, EntityRecord> The resolved entity records keyed by entity UUID
+         */
+        public static function resolveNamedEntities(string $textContent): array
+        {
+            $resolved = [];
+            foreach(NamedEntityType::extract($textContent) as $entityIdentifier => $entityPosition)
+            {
+                try
+                {
+                    $entityRecord = self::resolveNamedEntity($entityIdentifier, $entityPosition);
+                    if($entityRecord !== null)
+                    {
+                        $resolved[$entityRecord->getUuid()] = $entityRecord;
+                    }
+                }
+                catch (DatabaseOperationException $e)
+                {
+                    Logger::log()->warning('Failed to resolve ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                }
+            }
+
+            return $resolved;
         }
 
         /**
