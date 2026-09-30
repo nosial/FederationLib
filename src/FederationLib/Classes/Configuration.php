@@ -53,6 +53,7 @@
             self::$configuration->setDefault('server.public_query_entity', true, 'FEDERATION_PUBLIC_QUERY_ENTITY');
             self::$configuration->setDefault('server.min_blacklist_time', 1800, 'FEDERATION_MIN_BLACKLIST_TIME');
             self::$configuration->setDefault('server.allow_illegal_content', true, 'FEDERATION_ALLOW_ILLEGAL_CONTENT');
+            self::$configuration->setDefault('server.link_subdomain_entities', true, 'FEDERATION_LINK_SUBDOMAIN_ENTITIES');
 
             // Scanning configuration
             self::$configuration->setDefault('scanning.modifier_author_blacklisted', ScanningRules::AUTHOR_BLACKLISTED->getModifier(), 'FEDERATION_SCANNING_MODIFIER_AUTHOR_BLACKLISTED');

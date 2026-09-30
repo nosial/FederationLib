@@ -33,6 +33,7 @@
         private int $minBlacklistTime;
         private int $topThreatsLimit;
         private bool $allowIllegalContent;
+        private bool $linkSubdomainEntities;
 
         /**
          * ServerConfiguration constructor.
@@ -65,6 +66,7 @@
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
             $this->topThreatsLimit = $config['top_threats_limit'] ?? 25;
             $this->allowIllegalContent = $config['allow_illegal_content'] ?? true;
+            $this->linkSubdomainEntities = $config['link_subdomain_entities'] ?? true;
         }
 
         /**
@@ -308,5 +310,16 @@
         public function isIllegalContentAllowed(): bool
         {
             return $this->allowIllegalContent;
+        }
+
+        /**
+         * Checks if newly registered subdomain host entities (e.g. sub.example.com) are automatically linked to the
+         * entity of their registrable domain (example.com) as a CHILD, registering that domain entity if needed.
+         *
+         * @return bool True if subdomain entities are linked automatically, false otherwise
+         */
+        public function isLinkSubdomainEntitiesEnabled(): bool
+        {
+            return $this->linkSubdomainEntities;
         }
     }
