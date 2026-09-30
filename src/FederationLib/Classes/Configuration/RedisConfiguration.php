@@ -11,7 +11,6 @@
         private int $database;
         private bool $throwOnErrors;
         private bool $preCacheEnabled;
-        private bool $systemCachingEnabled;
         private bool $operatorCacheEnabled;
         private int $operatorCacheLimit;
         private int $operatorCacheTtl;
@@ -49,7 +48,6 @@
             $this->database = $configuration['database'] ?? 0;
             $this->throwOnErrors = $configuration['throw_on_errors'] ?? true;
             $this->preCacheEnabled = $configuration['pre_cache_enabled'] ?? true;
-            $this->systemCachingEnabled = $configuration['system_caching_enabled'] ?? true;
             $this->operatorCacheEnabled = $configuration['operator_cache_enabled'] ?? true;
             $this->operatorCacheLimit = $configuration['operator_cache_limit'] ?? 1000;
             $this->operatorCacheTtl = $configuration['operator_cache_ttl'] ?? 600;
@@ -144,18 +142,6 @@
         public function isPreCacheEnabled(): bool
         {
             return $this->preCacheEnabled;
-        }
-
-        /**
-         * Returns True if system caching is enabled, when enabled very specific system objects and variables are cached
-         * for a slight performance increase, not necessarily required to have on but useful to take advantage of
-         * caching where possible.
-         *
-         * @return bool
-         */
-        public function isSystemCachingEnabled(): bool
-        {
-            return $this->systemCachingEnabled;
         }
 
         /**
