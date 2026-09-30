@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes\Configuration;
 
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\ScanningRules;
 
     class ScanningConfiguration
@@ -37,6 +38,13 @@
         private int $reputationGain;
         private int $reputationMinBound;
         private int $reputationMaxBound;
+        private int $reportReputationNormal;
+        private int $reportReputationSuspicious;
+        private int $reportReputationMalicious;
+        private bool $reportNamedEntityReputation;
+        private int $reportNamedEntityReputationNormal;
+        private int $reportNamedEntityReputationSuspicious;
+        private int $reportNamedEntityReputationMalicious;
         private float $riskScoreNeutralPoint;
         private float $riskScoreScalingFactor;
         private float $riskScoreMinBound;
@@ -81,6 +89,15 @@
             $this->reputationGain = max(0, min(10, (int)($configuration['reputation_gain'] ?? 1)));
             $this->reputationMinBound = (int)($configuration['reputation_min_bound'] ?? -1000);
             $this->reputationMaxBound = (int)($configuration['reputation_max_bound'] ?? 1000);
+            // Reputation adjustments applied when a report is closed with a classification flag. Positive
+            // adjustments are clamped to 0-10 per the OFD incremental gain rule, negative ones to 0 or below.
+            $this->reportReputationNormal = max(0, min(10, (int)($configuration['report_reputation_normal'] ?? 2)));
+            $this->reportReputationSuspicious = min(0, (int)($configuration['report_reputation_suspicious'] ?? -10));
+            $this->reportReputationMalicious = min(0, (int)($configuration['report_reputation_malicious'] ?? -20));
+            $this->reportNamedEntityReputation = (bool)($configuration['report_named_entity_reputation'] ?? true);
+            $this->reportNamedEntityReputationNormal = max(0, min(10, (int)($configuration['report_named_entity_reputation_normal'] ?? 1)));
+            $this->reportNamedEntityReputationSuspicious = min(0, (int)($configuration['report_named_entity_reputation_suspicious'] ?? -5));
+            $this->reportNamedEntityReputationMalicious = min(0, (int)($configuration['report_named_entity_reputation_malicious'] ?? -10));
             $this->riskScoreNeutralPoint = (float)($configuration['risk_score_neutral_point'] ?? 50.0);
             $this->riskScoreScalingFactor = (float)($configuration['risk_score_scaling_factor'] ?? 2.3);
             $this->riskScoreMinBound = (float)($configuration['risk_score_min_bound'] ?? 0.0);
@@ -395,6 +412,51 @@
         public function getReputationMaxBound(): int
         {
             return $this->reputationMaxBound;
+        }
+
+        /**
+         * Returns the reputation adjustment applied to the reported entity when a report is closed with the
+         * given classification flag
+         *
+         * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
+         * @return int The reputation delta, 0 for no adjustment
+         */
+        public function getReportReputation(ClassificationFlag $classificationFlag): int
+        {
+            return match($classificationFlag)
+            {
+                ClassificationFlag::NORMAL => $this->reportReputationNormal,
+                ClassificationFlag::SUSPICIOUS => $this->reportReputationSuspicious,
+                ClassificationFlag::MALICIOUS => $this->reportReputationMalicious,
+            };
+        }
+
+        /**
+         * Returns whether closing a classified report also adjusts the reputation of the entities mentioned
+         * within the report's evidence
+         *
+         * @return bool True if named entities are affected, false otherwise
+         */
+        public function isReportNamedEntityReputationEnabled(): bool
+        {
+            return $this->reportNamedEntityReputation;
+        }
+
+        /**
+         * Returns the reputation adjustment applied to each entity mentioned within a report's evidence when the
+         * report is closed with the given classification flag
+         *
+         * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
+         * @return int The reputation delta, 0 for no adjustment
+         */
+        public function getReportNamedEntityReputation(ClassificationFlag $classificationFlag): int
+        {
+            return match($classificationFlag)
+            {
+                ClassificationFlag::NORMAL => $this->reportNamedEntityReputationNormal,
+                ClassificationFlag::SUSPICIOUS => $this->reportNamedEntityReputationSuspicious,
+                ClassificationFlag::MALICIOUS => $this->reportNamedEntityReputationMalicious,
+            };
         }
 
         /**
