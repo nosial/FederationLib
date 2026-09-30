@@ -11,8 +11,6 @@
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
-    use FederationLib\Classes\Utilities;
-    use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\IncidentType;
@@ -21,7 +19,6 @@
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
-    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\ScannedContent;
@@ -29,7 +26,6 @@
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use FederationLib\Interfaces\RequestSpecificationInterface;
-    use InvalidArgumentException;
 
     class ScanContent extends RequestHandler implements RequestSpecificationInterface
     {
@@ -345,29 +341,7 @@
          */
         private static function resolveEntity(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?ResolvedEntity
         {
-            if(strlen($entityIdentifier) < 1)
-            {
-                return null;
-            }
-
-            if(Utilities::isUuid($entityIdentifier))
-            {
-                $entityRecord = EntitiesManager::getEntityByUuid($entityIdentifier);
-            }
-            elseif(Utilities::isSha256($entityIdentifier))
-            {
-                $entityRecord = EntitiesManager::getEntityByHash($entityIdentifier);
-            }
-            elseif(Utilities::isEntityAddress($entityIdentifier))
-            {
-                $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                $entityRecord = EntitiesManager::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
-            }
-            else
-            {
-                $entityRecord = self::resolveEntityByIdentifier($entityIdentifier, $entityPosition);
-            }
-
+            $entityRecord = EntitiesManager::resolveNamedEntity($entityIdentifier, $entityPosition);
             if($entityRecord === null)
             {
                 return null;
@@ -397,80 +371,6 @@
             }
 
             return new ResolvedEntity($entityRecord, $activeBlacklists, $entityPosition, $parentResolvedEntity);
-        }
-
-        /**
-         * Resolves a raw named-entity identifier (domain, URL, email, IPv4 or IPv6) to an EntityRecord by hashing
-         * the canonical host (and optional id) the same way pushEntity stores it.
-         *
-         * @param string $entityIdentifier The raw identifier extracted from the content
-         * @param ResolvedEntityPosition|null $entityPosition Optional position metadata carrying the entity type
-         * @return EntityRecord|null The matching entity record, or null if none exists
-         * @throws DatabaseOperationException Thrown if there was a database exception
-         */
-        private static function resolveEntityByIdentifier(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?EntityRecord
-        {
-            $host = null;
-            $id = null;
-
-            if($entityPosition !== null)
-            {
-                $type = $entityPosition->getType();
-
-                switch($type)
-                {
-                    case NamedEntityType::URL:
-                        $host = parse_url($entityIdentifier, PHP_URL_HOST);
-                        break;
-
-                    case NamedEntityType::EMAIL:
-                        $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                        if($parsedAddress !== null)
-                        {
-                            $host = $parsedAddress['host'];
-                            $id = $parsedAddress['id'];
-                        }
-                        break;
-
-                    case NamedEntityType::DOMAIN:
-                    case NamedEntityType::IPv4:
-                    case NamedEntityType::IPv6:
-                        $host = $entityIdentifier;
-                        break;
-                }
-            }
-            else
-            {
-                if(Utilities::isEntityAddress($entityIdentifier))
-                {
-                    $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                    $host = $parsedAddress['host'];
-                    $id = $parsedAddress['id'];
-                }
-                elseif(Validate::url($entityIdentifier))
-                {
-                    $host = parse_url($entityIdentifier, PHP_URL_HOST);
-                }
-                elseif(Validate::domain($entityIdentifier) || Validate::ipv4($entityIdentifier) || Validate::ipv6($entityIdentifier))
-                {
-                    $host = $entityIdentifier;
-                }
-            }
-
-            if($host === null || $host === '')
-            {
-                return null;
-            }
-
-            try
-            {
-                return EntitiesManager::getEntityByHash(Utilities::hashEntity($host, $id));
-            }
-            catch (InvalidArgumentException $e)
-            {
-                Logger::log()->warning('Failed to resolve entity by identifier ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
-                return null;
-            }
         }
 
         /**
