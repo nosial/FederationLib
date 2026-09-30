@@ -5,10 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.12] - Ongoing
+## [1.0.12] - 2026-09-30
 
-This is an ongoing update
+This update introduces changes in accordance to the specification, improvements to reputation effects and includes a
+bug fix
 
+### Added
+ - Added the `server.allow_illegal_content` configuration option (`FEDERATION_ALLOW_ILLEGAL_CONTENT`, default `true`).
+   When disabled, `POST /reports` rejects `ILLEGAL_CONTENT` reports with HTTP 403. The setting is published as
+   `allow_illegal_content` in the server information object.
+ - Added configurable reputation adjustments for closing a report with a classification flag:
+   `scanning.report_reputation_normal` (default `1`), `scanning.report_reputation_suspicious` (default `-10`) and
+   `scanning.report_reputation_malicious` (default `-20`).
+ - Closing a classified report now also adjusts the reputation of existing entities mentioned in the report's evidence,
+   resolved with the same named entity extraction as content scanning. Controlled by
+   `scanning.report_named_entity_reputation` (default `true`) and the
+   `scanning.report_named_entity_reputation_{normal,suspicious,malicious}` deltas (defaults `1`, `-5`, `-10`).
+ - Registering a subdomain host entity (e.g. `sub1.example.com`) now automatically registers its registrable domain
+   (`example.com`) when missing and sets the subdomain's relationship to it as `CHILD`. Registrable domains are
+   determined with the bundled [Public Suffix List](https://publicsuffix.org/) (`Resources/public_suffix_list.dat`),
+   exposed as `Utilities::getRegistrableDomain()`, so `foo.example.co.uk` is linked to `example.co.uk`. This is a
+   FederationLib feature built on standard OFD entity relationships and is controlled by the
+   `server.link_subdomain_entities` configuration option (`FEDERATION_LINK_SUBDOMAIN_ENTITIES`, default `true`).
+ - Added the `scanning.auto_report_caution` configuration option (`FEDERATION_SCANNING_AUTO_REPORT_CAUTION`, default
+   `false`). When enabled, content scans with a `CAUTION` suggested action also generate an automated report. It is
+   independent of `scanning.auto_report`, and a scan that meets both conditions still produces only one report (#3).
+ - Blacklisting an entity now lowers its reputation by `scanning.blacklist_reputation` (default `-50`), and lowers the
+   reputation of each directly related entity (its relationship target and the entities that reference it) by
+   `scanning.blacklist_related_reputation` (default `-10`). Applies to blacklists created with `POST /blacklist` and when
+   closing a report; setting either option to `0` disables that adjustment (#2).
+
+### Removed
+ - Removed the unused `redis.system_caching_enabled` configuration option (`FEDERATION_SYSTEM_CACHING_ENABLED`); the
+   server information cache it controlled was removed previously.
+
+### Changed
+ - Evidence created with an `ILLEGAL_CONTENT` report, or linked to one via `PATCH /evidence/{uuid}/link-report`, is
+   now always marked as confidential regardless of the submitted `confidential` value.
+ - Closing a report as `SUSPICIOUS` now lowers the reported entity's reputation (previously no effect), and `MALICIOUS`
+   lowers it by 20 instead of 1 by default.
+ - Named entity resolution used by content scanning moved to `EntitiesManager::resolveNamedEntity()` so it can be
+   shared with report closing.
+
+### Fixed
+ - A leading `www.` label is now stripped from DNS entity hosts, so `www.example.com` and `example.com` resolve to
+   the same entity instead of two separate ones. The label is kept when the remainder is a public suffix (`www.com`,
+   `www.co.uk`), and other subdomains are unaffected. Applied when registering entities and when deriving the SHA-256
+   identifier via `Utilities::canonicalizeHost()` (#4).
 
 
 ## [1.0.11] - 2026-09-29
