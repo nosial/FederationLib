@@ -390,6 +390,46 @@
             );
         }
 
+        public function testSubmitReportDistributesEvenlyAcrossAutoAssignOperators(): void
+        {
+            $submitter = $this->createLimitedOperator('rr_submitter', client: true);
+
+            $assignmentCounts = [];
+            for ($i = 0; $i < 3; $i++)
+            {
+                $assigneeUuid = $this->createLimitedOperator('rr_assignee', management: true)->getSelf()->getUuid();
+                $this->client->setAutoAssign($assigneeUuid, true);
+                $assignmentCounts[$assigneeUuid] = 0;
+            }
+
+            $entityUuid = $this->createSecurityEntity($submitter);
+            $reportsPerOperator = 3;
+            for ($i = 0; $i < $reportsPerOperator * count($assignmentCounts); $i++)
+            {
+                $submission = $submitter->submitReport(
+                    $entityUuid,
+                    ['text_content' => 'Round-robin distribution report ' . $i],
+                    IncidentType::SPAM
+                );
+                $reportUuid = $submission->getReport()->getUuid();
+                $this->createdReports[] = $reportUuid;
+                $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+
+                $assignedOperator = $this->client->getReport($reportUuid)->getAssignedOperator();
+                $this->assertArrayHasKey($assignedOperator, $assignmentCounts, 'Report must be assigned to an eligible auto-assign operator');
+                $assignmentCounts[$assignedOperator]++;
+            }
+
+            foreach ($assignmentCounts as $operatorUuid => $count)
+            {
+                $this->assertEquals(
+                    $reportsPerOperator,
+                    $count,
+                    sprintf('Operator %s should receive an equal share of auto-assigned reports', $operatorUuid)
+                );
+            }
+        }
+
         /**
          * Returns the built-in system operator record, or null if it is not present.
          */
