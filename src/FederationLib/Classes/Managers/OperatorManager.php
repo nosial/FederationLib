@@ -9,18 +9,21 @@
     use FederationLib\Enums\Categories\OperatorCategory;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\OperatorOrderType;
+    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use RedisException;
     use Symfony\Component\Uid\Uuid;
 
     class OperatorManager
     {
         public const string CACHE_PREFIX = 'operator:';
         public const string ACCESS_TOKEN_POINTER_PREFIX = 'operator_access_token:';
+        private const string AUTO_ASSIGN_COUNTER_KEY = 'operator_auto_assign_counter';
         private const string SYSTEM_ACCESS_TOKEN_SENTINEL = 'none';
 
         /**
@@ -839,33 +842,105 @@
         }
 
         /**
-         * Retrieve a random operator that has auto assign enabled and management permissions.
+         * Retrieve the next operator that has auto assign enabled and management permissions.
          *
-         * @return OperatorRecord|null The randomly selected operator record, null if no eligible operators exist.
+         * When the cache layer is enabled, eligible operators are selected in a round-robin order driven by an
+         * atomic counter in Redis, so reports are distributed evenly across all eligible operators and across
+         * all server workers. If the cache layer is disabled or unavailable, an eligible operator is selected
+         * at random instead.
+         *
+         * @return OperatorRecord|null The selected operator record, null if no eligible operators exist.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         * @throws CacheOperationException If the cache operation fails and the cache layer is configured to throw on errors.
+         */
+        public static function getNextAutoAssignOperator(): ?OperatorRecord
+        {
+            try
+            {
+                // Ordered by UUID so every worker sees the same stable rotation order
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM operators WHERE auto_assign=1 AND management_permissions=1 ORDER BY uuid"
+                );
+                $stmt->execute();
+
+                $operators = $stmt->fetchAll();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve auto assign operators', 0, $e);
+            }
+
+            if(count($operators) === 0)
+            {
+                return null; // No operator is eligible for automatic assignment
+            }
+
+            if(count($operators) === 1)
+            {
+                return new OperatorRecord($operators[0]);
+            }
+
+            $index = self::nextAutoAssignIndex(count($operators)) ?? random_int(0, count($operators) - 1);
+            return new OperatorRecord($operators[$index]);
+        }
+
+        /**
+         * Determine whether at least one operator is eligible for automatic report assignment.
+         *
+         * @return bool True if an operator with auto assign enabled and management permissions exists, false otherwise.
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function getRandomAutoAssignOperator(): ?OperatorRecord
+        public static function autoAssignOperatorExists(): bool
         {
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM operators WHERE auto_assign=1 AND management_permissions=1 ORDER BY RAND() LIMIT 1"
+                    "SELECT 1 FROM operators WHERE auto_assign=1 AND management_permissions=1 LIMIT 1"
                 );
                 $stmt->execute();
 
-                $data = $stmt->fetch();
-
-                if($data === false)
-                {
-                    return null; // No operator is eligible for automatic assignment
-                }
-
-                return new OperatorRecord($data);
+                return $stmt->fetchColumn() !== false;
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException('Failed to retrieve random auto assign operator', 0, $e);
+                throw new DatabaseOperationException('Failed to check for auto assign operators', 0, $e);
             }
+        }
+
+        /**
+         * Advance the shared round-robin counter for automatic report assignment and return the next index.
+         *
+         * @param int $operatorCount The number of currently eligible operators.
+         * @return int|null The index of the next operator to assign, null if the cache layer is disabled or failed.
+         * @throws CacheOperationException If the cache operation fails and the cache layer is configured to throw on errors.
+         */
+        private static function nextAutoAssignIndex(int $operatorCount): ?int
+        {
+            if(!Configuration::getRedisConfiguration()->isEnabled())
+            {
+                return null;
+            }
+
+            try
+            {
+                $counter = RedisConnection::getConnection()->incr(self::AUTO_ASSIGN_COUNTER_KEY);
+            }
+            catch (RedisException $e)
+            {
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException('Failed to advance the auto assign counter', $e->getCode(), $e);
+                }
+
+                return null;
+            }
+
+            if(!is_int($counter))
+            {
+                return null;
+            }
+
+            return ($counter - 1) % $operatorCount;
         }
 
         /**

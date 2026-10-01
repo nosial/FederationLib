@@ -57,7 +57,7 @@
 
             $uuid = Uuid::v7()->toRfc4122();
             $incidentType = $type->value;
-            $assignedOperator = OperatorManager::getRandomAutoAssignOperator();
+            $assignedOperator = OperatorManager::getNextAutoAssignOperator();
 
             try
             {

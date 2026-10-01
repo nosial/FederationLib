@@ -412,8 +412,7 @@
             }
 
             // Do not generate the report if there is no operator eligible to be automatically assigned it
-            $assignedOperator = OperatorManager::getRandomAutoAssignOperator();
-            if($assignedOperator === null)
+            if(!OperatorManager::autoAssignOperatorExists())
             {
                 return;
             }
@@ -447,7 +446,7 @@
 
             $systemOperator = OperatorManager::getSystemOperator();
 
-            // Create the report
+            // Create the report, which is automatically assigned to the next eligible auto assign operator
             $reportUuid = ReportManager::createReport(
                 submittingOperator: $systemOperator->getUuid(),
                 reportingEntity: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
@@ -455,9 +454,6 @@
                 message: $reportMessage,
                 automated: true
             );
-
-            // Assign the report to the randomly selected auto assign operator
-            ReportManager::assignOperator($reportUuid, $assignedOperator->getUuid());
 
             // Create an evidence record for each provided evidence item
             $firstEvidenceUuid = null;
