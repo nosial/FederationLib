@@ -8,6 +8,7 @@
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Enums\Categories\EntityCategory;
@@ -886,6 +887,142 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+        }
+
+        /**
+         * Migrates entities registered before entity hosts were canonicalized, so that hosts with a leading "www."
+         * label (e.g. www.example.com) are replaced by their canonical host (example.com).
+         *
+         * When no entity exists for the canonical host, the entity is renamed in place, keeping its UUID and
+         * everything linked to it. When one already exists, the reports, evidence, blacklist records, audit log
+         * entries and relationships of the non-canonical entity are moved to the existing entity, its reputation is
+         * added to the existing entity's reputation, and the non-canonical entity is removed. Every change is
+         * recorded in the audit log under the system operator.
+         *
+         * Once every non-canonical host has been migrated, running this again has no effect.
+         *
+         * @return int The number of entities migrated
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function migrateNonCanonicalHosts(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE host LIKE 'www.%'");
+                $stmt->execute();
+                $entities = $stmt->fetchAll();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve non-canonical entities: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            $systemOperatorUuid = null;
+            $migrated = 0;
+
+            foreach($entities as $entity)
+            {
+                $canonicalHost = Utilities::canonicalizeHost($entity['host']);
+                if($canonicalHost === $entity['host'])
+                {
+                    continue; // Hosts such as www.com where "www" is the registered label are already canonical
+                }
+
+                $systemOperatorUuid ??= OperatorManager::getSystemOperator()->getUuid();
+                $oldAddress = $entity['id'] !== null ? sprintf('%s@%s', $entity['id'], $entity['host']) : $entity['host'];
+                $newAddress = $entity['id'] !== null ? sprintf('%s@%s', $entity['id'], $canonicalHost) : $canonicalHost;
+                $canonicalHash = Utilities::hashEntity($canonicalHost, $entity['id']);
+                $connection = DatabaseConnection::getConnection();
+
+                try
+                {
+                    $connection->beginTransaction();
+
+                    $stmt = $connection->prepare("SELECT uuid FROM entities WHERE uuid != :uuid AND (hash = :hash OR (host = :host AND id <=> :id)) LIMIT 1");
+                    $stmt->bindParam(':uuid', $entity['uuid']);
+                    $stmt->bindParam(':hash', $canonicalHash);
+                    $stmt->bindParam(':host', $canonicalHost);
+                    $stmt->bindParam(':id', $entity['id']);
+                    $stmt->execute();
+                    $canonicalUuid = $stmt->fetchColumn();
+
+                    if($canonicalUuid === false)
+                    {
+                        $stmt = $connection->prepare("UPDATE entities SET host = :host, hash = :hash, updated = NOW() WHERE uuid = :uuid");
+                        $stmt->bindParam(':host', $canonicalHost);
+                        $stmt->bindParam(':hash', $canonicalHash);
+                        $stmt->bindParam(':uuid', $entity['uuid']);
+                        $stmt->execute();
+
+                        AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
+                            'Entity %s was replaced by %s because entity hosts no longer include a leading "www." label',
+                            $oldAddress, $newAddress
+                        ), $systemOperatorUuid, $entity['uuid']);
+                    }
+                    else
+                    {
+                        foreach(['UPDATE reports SET reporting_entity = :new WHERE reporting_entity = :old',
+                                 'UPDATE evidence SET entity = :new WHERE entity = :old',
+                                 'UPDATE blacklist SET entity = :new WHERE entity = :old',
+                                 'UPDATE audit_log SET entity = :new WHERE entity = :old',
+                                 // Prevent the canonical entity from ending up in a relationship with itself
+                                 'UPDATE entities SET relationship_entity = NULL, relationship_type = NULL WHERE uuid = :new AND relationship_entity = :old',
+                                 'UPDATE entities SET relationship_entity = :new WHERE relationship_entity = :old'] as $query)
+                        {
+                            $stmt = $connection->prepare($query);
+                            $stmt->bindParam(':new', $canonicalUuid);
+                            $stmt->bindParam(':old', $entity['uuid']);
+                            $stmt->execute();
+                        }
+
+                        $stmt = $connection->prepare("UPDATE entities SET reputation = reputation + :reputation, updated = NOW() WHERE uuid = :uuid");
+                        $stmt->bindParam(':reputation', $entity['reputation'], PDO::PARAM_INT);
+                        $stmt->bindParam(':uuid', $canonicalUuid);
+                        $stmt->execute();
+
+                        $stmt = $connection->prepare("DELETE FROM entities WHERE uuid = :uuid");
+                        $stmt->bindParam(':uuid', $entity['uuid']);
+                        $stmt->execute();
+
+                        AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
+                            'Entity %s (%s) was merged into %s because entity hosts no longer include a leading "www." label',
+                            $oldAddress, $entity['uuid'], $newAddress
+                        ), $systemOperatorUuid, $canonicalUuid);
+                    }
+
+                    $connection->commit();
+                }
+                catch (PDOException|DatabaseOperationException $e)
+                {
+                    if($connection->inTransaction())
+                    {
+                        $connection->rollBack();
+                    }
+
+                    throw new DatabaseOperationException(sprintf("Failed to migrate entity %s: %s", $oldAddress, $e->getMessage()), $e->getCode(), $e);
+                }
+
+                // A renamed subdomain host (www.sub.example.com -> sub.example.com) is now linked like any new one
+                if($canonicalUuid === false && $entity['id'] === null && $entity['relationship_entity'] === null &&
+                    Configuration::getServerConfiguration()->isLinkSubdomainEntitiesEnabled())
+                {
+                    self::assignParentDomain($entity['uuid'], $canonicalHost);
+                }
+
+                $migrated++;
+            }
+
+            // Cached records may still carry the old hosts, hashes and entity references
+            if($migrated > 0 && Configuration::getRedisConfiguration()->isEnabled())
+            {
+                foreach([self::CACHE_PREFIX, ReportManager::CACHE_PREFIX, EvidenceManager::CACHE_PREFIX,
+                         BlacklistManager::CACHE_PREFIX, AuditLogManager::CACHE_PREFIX] as $prefix)
+                {
+                    RedisConnection::clearRecords($prefix);
+                }
+            }
+
+            return $migrated;
         }
 
         /**

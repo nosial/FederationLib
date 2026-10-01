@@ -6,6 +6,7 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
+    use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -74,6 +75,20 @@
             catch (DatabaseOperationException|InvalidArgumentException $e)
             {
                 Logger::log()->critical('Failed to initialize/fix a required operator: ' . $e->getMessage(), $e);
+                return 1;
+            }
+
+            try
+            {
+                $migratedEntities = EntitiesManager::migrateNonCanonicalHosts();
+                if($migratedEntities > 0)
+                {
+                    Logger::log()->info(sprintf('Migrated %d entities with a leading "www." host label to their canonical host', $migratedEntities));
+                }
+            }
+            catch (DatabaseOperationException $e)
+            {
+                Logger::log()->critical('Failed to migrate non-canonical entity hosts: ' . $e->getMessage(), $e);
                 return 1;
             }
 
