@@ -131,9 +131,10 @@
          */
         public static function canonicalizeHost(string $host): string
         {
-            if(str_starts_with($host, 'www.') && self::getRegistrableDomain(substr($host, 4)) !== null)
+            // Repeated so the result is already canonical (www.www.example.com -> example.com)
+            while(str_starts_with($host, 'www.') && self::getRegistrableDomain(substr($host, 4)) !== null)
             {
-                return substr($host, 4);
+                $host = substr($host, 4);
             }
 
             return $host;
