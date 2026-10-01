@@ -34,7 +34,7 @@
         public static function handleRequest(): void
         {
             $authenticatedOperator = FederationServer::requireAuthenticatedOperator();
-            if(!$authenticatedOperator->hasOperatorPermissions())
+            if(!$authenticatedOperator->hasClientPermissions())
             {
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
@@ -114,7 +114,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Sets a relationship between two entities. Requires operator permissions.';
+            return 'Sets a relationship between two entities. Requires client permissions.';
         }
 
         /**
