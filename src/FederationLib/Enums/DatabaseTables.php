@@ -6,6 +6,7 @@
     {
         case AUDIT_LOG = 'audit_log.sql';
         case BLACKLIST = 'blacklist.sql';
+        case DATABASE_METADATA = 'database_metadata.sql';
         case ENTITIES = 'entities.sql';
         case EVIDENCE  = 'evidence.sql';
         case FILE_ATTACHMENTS = 'file_attachments.sql';
@@ -19,7 +20,6 @@
          */
         public function getPath(): string
         {
-            // Use dirname(__DIR__) to get the FederationLib directory, avoiding '..' which ncc doesn't resolve
             return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'Classes' . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . $this->value;
         }
 
@@ -34,6 +34,7 @@
             {
                 self::AUDIT_LOG => 'audit_log',
                 self::BLACKLIST => 'blacklist',
+                self::DATABASE_METADATA => 'database_metadata',
                 self::ENTITIES => 'entities',
                 self::EVIDENCE => 'evidence',
                 self::FILE_ATTACHMENTS => 'file_attachments',
@@ -50,6 +51,7 @@
         public static function getOrderedTables(): array
         {
             return [
+                self::DATABASE_METADATA,
                 self::OPERATORS,
                 self::ENTITIES,
                 self::REPORTS,
