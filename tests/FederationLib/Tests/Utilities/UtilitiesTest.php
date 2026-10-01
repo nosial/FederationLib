@@ -142,6 +142,19 @@
             $this->assertEquals('192.168.1.1', Utilities::canonicalizeHost('192.168.1.1'));
         }
 
+        public function testCanonicalizeHostStripsRepeatedWww(): void
+        {
+            $this->assertEquals('example.com', Utilities::canonicalizeHost('www.www.example.com'));
+            $this->assertEquals('www.com', Utilities::canonicalizeHost('www.www.com'));
+            $this->assertEquals('sub.www.example.com', Utilities::canonicalizeHost('www.sub.www.example.com'));
+
+            foreach(['www.www.example.com', 'www.www.com', 'www.example.co.uk'] as $host)
+            {
+                $canonical = Utilities::canonicalizeHost($host);
+                $this->assertEquals($canonical, Utilities::canonicalizeHost($canonical), "Canonicalizing $host twice should not change it");
+            }
+        }
+
         public function testCanonicalizeHostKeepsSubdomains(): void
         {
             $this->assertEquals('sub1.example.com', Utilities::canonicalizeHost('sub1.example.com'));
