@@ -154,25 +154,40 @@
             $this->client->clearEntityRelationship($freshEntity);
         }
 
-        public function testSecurityEntityRelationshipRequiresOperatorPermissions(): void
+        public function testSecurityEntityRelationshipRequiresClientPermissions(): void
         {
             $entityA = $this->createSecurityEntity();
             $entityB = $this->createSecurityEntity();
 
             $clientOnly = $this->createLimitedOperator('entity_rel_client', client: true);
             $managementOnly = $this->createLimitedOperator('entity_rel_management', management: true);
+            $operatorOnly = $this->createLimitedOperator('entity_rel_operator', operator: true);
 
+            // Client permissions authorize relationships, and management permissions inherit them.
+            $clientOnly->setEntityRelationship($entityA, $entityB, EntityRelationshipType::ALTERNATIVE);
+            $this->assertEquals($entityB, $this->client->getEntityRecord($entityA)->getRelationshipEntity());
+            $clientOnly->clearEntityRelationship($entityA);
+            $this->assertNull($this->client->getEntityRecord($entityA)->getRelationshipEntity());
+
+            $managementOnly->setEntityRelationship($entityA, $entityB, EntityRelationshipType::PROXY);
+            $this->assertEquals($entityB, $this->client->getEntityRecord($entityA)->getRelationshipEntity());
+            $managementOnly->clearEntityRelationship($entityA);
+            $this->assertNull($this->client->getEntityRecord($entityA)->getRelationshipEntity());
+
+            // Operator permissions do not inherit client permissions.
             $this->expectRequestFailure(
-                fn() => $clientOnly->setEntityRelationship($entityA, $entityB, EntityRelationshipType::ALTERNATIVE),
+                fn() => $operatorOnly->setEntityRelationship($entityA, $entityB, EntityRelationshipType::ALTERNATIVE),
                 [HttpResponseCode::FORBIDDEN->value],
-                'Client-only operator should not set entity relationships'
+                'Operator-only operator should not set entity relationships'
             );
 
+            $this->client->setEntityRelationship($entityA, $entityB, EntityRelationshipType::CHILD);
             $this->expectRequestFailure(
-                fn() => $managementOnly->setEntityRelationship($entityA, $entityB, EntityRelationshipType::ALTERNATIVE),
+                fn() => $operatorOnly->clearEntityRelationship($entityA),
                 [HttpResponseCode::FORBIDDEN->value],
-                'Management-only operator should not set entity relationships'
+                'Operator-only operator should not clear entity relationships'
             );
+            $this->assertEquals($entityB, $this->client->getEntityRecord($entityA)->getRelationshipEntity());
         }
 
         public function testSecurityDeleteEntityCascade(): void
