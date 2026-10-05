@@ -129,8 +129,8 @@
                 throw new RequestException(self::ERROR_ALREADY_CLOSED, HttpResponseCode::BAD_REQUEST);
             }
 
-            // Assign classifications before training. The conditional database update
-            // preserves immutable classifications and prevents duplicate training.
+            // Assign classifications before closing the report. The conditional database update
+            // preserves immutable classifications.
             $evidenceRecords = [];
             if($classificationFlag !== null)
             {
@@ -147,10 +147,8 @@
                 {
                     try
                     {
-                        if(!EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag))
-                        {
-                            continue;
-                        }
+                        // Evidence that is already classified keeps its classification
+                        EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag);
                     }
                     catch(InvalidArgumentException $e)
                     {
@@ -159,18 +157,6 @@
                     catch(DatabaseOperationException $e)
                     {
                         throw new RequestException(self::ERROR_FAILED_UPDATE_CLASSIFICATION, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-                    }
-
-                    if(($bayesianClient = FederationServer::getBayesianClient()) !== null && $evidenceRecord->getTextContent() !== null)
-                    {
-                        try
-                        {
-                            $bayesianClient->learn($evidenceRecord->getTextContent(), $classificationFlag->value);
-                        }
-                        catch(RequestException $e)
-                        {
-                            Logger::log()->warning('Bayesian learn failed: ' . $e->getMessage());
-                        }
                     }
                 }
             }
