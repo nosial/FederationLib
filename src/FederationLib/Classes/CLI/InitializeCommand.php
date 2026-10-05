@@ -2,17 +2,14 @@
 
     namespace FederationLib\Classes\CLI;
 
-    use FederationLib\Classes\BayesianClient;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\PluginManager;
-    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\PluginException;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\CommandLineInterface;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
