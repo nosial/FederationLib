@@ -5,6 +5,7 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\HttpResponseCode;
@@ -13,6 +14,7 @@
     use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use FederationLib\Objects\EntityQueryResult;
+    use FederationLib\Objects\Plugin\EntityQuery;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
 
@@ -78,9 +80,10 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_RETRIEVE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse(
-                new EntityQueryResult($entityRecord, $relatedEntities, $activeBlacklists)->toStandardArray(!self::omitEntityMetadata())
-            );
+            // Plugins may change the result or reject the request
+            $entityQuery = new EntityQuery($entityIdentifier, $entityRecord, $relatedEntities, $activeBlacklists, FederationServer::getAuthenticatedOperator());
+            PluginManager::dispatchQueryEntity($entityQuery);
+            self::successResponse($entityQuery->getResult()->toStandardArray(!self::omitEntityMetadata()));
         }
 
         /**
