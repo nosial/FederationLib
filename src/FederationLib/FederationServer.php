@@ -3,7 +3,6 @@
     namespace FederationLib;
 
     use Exception;
-    use FederationLib\Classes\BayesianClient;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
@@ -14,7 +13,7 @@
     use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
-    use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\Method;
@@ -22,11 +21,10 @@
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ServerInformation;
     use InvalidArgumentException;
+    use Throwable;
 
     class FederationServer extends RequestHandler
     {
-        private static ?BayesianClient $bayesianClient = null;
-
         /**
          * Handle incoming requests to the Federation Server.
          *
@@ -34,6 +32,8 @@
          */
         public static function handleRequest(): void
         {
+            $postRequestHandlers = [];
+
             try
             {
                 // Always call parent::handleRequest() to ensure the base request handling is done.
@@ -45,22 +45,47 @@
                     return;
                 }
 
+                // Import the configured plugins, a plugin that is not correctly configured fails the request.
+                $pluginRoute = PluginManager::matchRequest(self::getRequestMethod(), self::getPath());
+
                 // Execute the request method
                 $requestMethod = Method::matchHandle(self::getRequestMethod(), self::getPath());
-                if($requestMethod === null)
+                if($requestMethod === null && !$pluginRoute->hasHandler())
                 {
                     self::errorResponse('Invalid request method or path.', 400);
                     return;
                 }
 
-                // Create the BayesianClient if it's enabled
-                if(Configuration::getBayesianConfiguration()->isEnabled())
+                $postRequestHandlers = $pluginRoute->getPostRequestHandlers();
+
+                // PRE_REQUEST handlers prevent the request handler from executing by responding (or throwing)
+                foreach($pluginRoute->getPreRequestHandlers() as $preRequestHandler)
                 {
-                    self::$bayesianClient = new BayesianClient(Configuration::getBayesianConfiguration());
+                    PluginManager::execute($preRequestHandler);
+                    if(self::isResponseSent())
+                    {
+                        break;
+                    }
                 }
 
-                // Handle the request based on the matched method.
-                $requestMethod->handleRequest();
+                if(!self::isResponseSent())
+                {
+                    if($pluginRoute->getOverrideHandler() !== null)
+                    {
+                        // An OVERRIDE handler replaces the original request handler
+                        PluginManager::execute($pluginRoute->getOverrideHandler());
+                    }
+                    elseif($requestMethod !== null)
+                    {
+                        // Handle the request based on the matched method.
+                        $requestMethod->handleRequest();
+                    }
+                    else
+                    {
+                        // A route provided by a plugin
+                        PluginManager::execute($pluginRoute->getRequestHandler());
+                    }
+                }
             }
             catch(InvalidArgumentException $e)
             {
@@ -77,10 +102,30 @@
                 Logger::log()->critical('Uncaught Exception:' . $e->getMessage(), $e);
                 self::errorResponse('Internal Server Error');
             }
-            catch(\Throwable $e)
+            catch(Throwable $e)
             {
                 Logger::log()->critical('Uncaught Throwable:' . $e->getMessage(), $e);
                 self::errorResponse('Internal Server Error');
+            }
+
+            if(count($postRequestHandlers) === 0)
+            {
+                return;
+            }
+
+            // POST_REQUEST handlers execute after the response, so they can no longer write a response and their
+            // errors can only be logged.
+            self::markResponseSent();
+            foreach($postRequestHandlers as $postRequestHandler)
+            {
+                try
+                {
+                    PluginManager::execute($postRequestHandler);
+                }
+                catch(Throwable $e)
+                {
+                    Logger::log()->error(sprintf('POST_REQUEST handler %s of plugin %s failed: %s', $postRequestHandler->getDefinition()->getClass(), $postRequestHandler->getPlugin()->getPackage(), $e->getMessage()), $e);
+                }
             }
         }
 
@@ -336,16 +381,6 @@
             }
 
             return $types;
-        }
-
-        /**
-         * Returns the BayesianClient if BayesianServer is enabled
-         *
-         * @return BayesianClient|null The BayesianClient, null if BayesianServer is not configured
-         */
-        public static function getBayesianClient(): ?BayesianClient
-        {
-            return self::$bayesianClient;
         }
 
         /**
