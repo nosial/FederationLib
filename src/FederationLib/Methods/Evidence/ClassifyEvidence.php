@@ -2,7 +2,6 @@
 
     namespace FederationLib\Methods\Evidence;
 
-    use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
@@ -76,18 +75,6 @@
                     $classification->value,
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
-
-                if(($bayesianClient = FederationServer::getBayesianClient()) !== null && $evidenceRecord->getTextContent() !== null)
-                {
-                    try
-                    {
-                        $bayesianClient->learn($evidenceRecord->getTextContent(), $classification->value);
-                    }
-                    catch(RequestException $e)
-                    {
-                        Logger::log()->warning('Bayesian learn failed: ' . $e->getMessage());
-                    }
-                }
             }
             catch(InvalidArgumentException $e)
             {
@@ -122,7 +109,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Assigns an immutable classification to evidence and submits its text for Bayesian training when enabled. Requires management permissions.';
+            return 'Assigns an immutable classification to evidence. Requires management permissions.';
         }
 
         /**
