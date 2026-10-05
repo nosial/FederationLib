@@ -1,0 +1,100 @@
+source: src
+default_build: release
+assembly:
+  name: TestPlugin
+  package: net.nosial.test_plugin
+  version: 1.0.0
+# FederationLib is provided by the host at runtime, plugins do not need to depend on net.nosial.federation
+build_configurations:
+  -
+    name: debug
+    output: 'target/debug/${ASSEMBLY.PACKAGE}.ncc'
+    type: ncc
+    definitions:
+      NCC_DEBUG: true
+    options:
+      federationlib: &federationlib
+        request_handlers:
+          # New routes provided by the plugin
+          -
+            path: /test-plugin/ping
+            class: \TestPlugin\RequestHandlers\PingHandler::class
+            request_method: GET
+          -
+            path: /test-plugin/echo/{value}
+            class: \TestPlugin\RequestHandlers\EchoHandler::class
+            request_method: GET, POST
+          -
+            path: /test-plugin/whoami
+            class: \TestPlugin\RequestHandlers\WhoAmIHandler::class
+            request_method: GET
+          -
+            path: /test-plugin/error
+            class: \TestPlugin\RequestHandlers\ErrorHandler::class
+            request_method: GET
+          -
+            path: /test-plugin/post-stats
+            class: \TestPlugin\RequestHandlers\PostStatsHandler::class
+            request_method: GET, DELETE
+          -
+            path: /test-plugin/audit-log-events
+            class: \TestPlugin\RequestHandlers\AuditLogEventsHandler::class
+            request_method: GET, DELETE
+          -
+            path: /test-plugin/content-scan-events
+            class: \TestPlugin\RequestHandlers\ContentScanEventsHandler::class
+            request_method: GET, DELETE
+          -
+            path: /test-plugin/record-change-events
+            class: \TestPlugin\RequestHandlers\RecordChangeEventsHandler::class
+            request_method: GET, DELETE
+          # Executed before every route of the plugin (wildcard path)
+          -
+            path: /test-plugin/*
+            class: \TestPlugin\RequestHandlers\WildcardPreRequestHandler::class
+            request_method: GET, POST, DELETE
+            execution_priority: PRE_REQUEST
+          # Hooks into FederationLib's own routes
+          -
+            path: /info
+            class: \TestPlugin\RequestHandlers\InfoPreRequestHandler::class
+            request_method: GET
+            execution_priority: PRE_REQUEST
+          -
+            path: /info
+            class: \TestPlugin\RequestHandlers\InfoPostRequestHandler::class
+            request_method: GET
+            execution_priority: POST_REQUEST
+          -
+            path: /specification.json
+            class: \TestPlugin\RequestHandlers\SpecificationOverrideHandler::class
+            request_method: GET
+            execution_priority: OVERRIDE
+        event_handlers:
+          # Executed for every audit log entry
+          -
+            event: AUDIT_LOG
+            class: \TestPlugin\EventHandlers\AuditLogEventHandler::class
+          # Only executed for the given audit log types
+          -
+            event: AUDIT_LOG
+            class: \TestPlugin\EventHandlers\FilteredAuditLogEventHandler::class
+            filter: OPERATOR_DELETED
+          # Executed during every content scan, only acts on content containing its trigger words
+          -
+            event: CONTENT_SCAN
+            class: \TestPlugin\EventHandlers\ContentScanEventHandler::class
+          # Executed during every query entity request, only acts on entities whose host contains its trigger labels
+          -
+            event: QUERY_ENTITY
+            class: \TestPlugin\EventHandlers\QueryEntityEventHandler::class
+          # Executed for every change written to the database
+          -
+            event: RECORD_CHANGE
+            class: \TestPlugin\EventHandlers\RecordChangeEventHandler::class
+  -
+    name: release
+    output: 'target/release/${ASSEMBLY.PACKAGE}.ncc'
+    type: ncc
+    options:
+      federationlib: *federationlib
