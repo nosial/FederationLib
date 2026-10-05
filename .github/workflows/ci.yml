@@ -152,11 +152,19 @@ jobs:
           ncc project install --log-level debug -y
           ncc build --config=release --log-level debug
 
+      - name: Build TestPlugin
+        run: |
+          cd tests/TestPlugin
+          ncc build --config=release --log-level debug
+
       - name: Deploy Docker Compose environment
         run: |
           apt-get update -qq && apt-get install -y -qq docker.io docker-compose
           docker-php-ext-install sockets
-          docker compose up -d
+          # docker-compose.test.yml builds Dockerfile.test (BuildKit is required for Dockerfile.test.dockerignore), which
+          # contains the TestPlugin installed and enabled
+          export DOCKER_BUILDKIT=1
+          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
           echo "Waiting for server to be ready..."
           for i in $(seq 1 60); do
             if curl -s -o /dev/null -w "%{http_code}" http://172.17.0.1:7000/ | grep -q 200; then
