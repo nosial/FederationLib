@@ -17,6 +17,9 @@
          * @var BlacklistRecord[]
          */
         private array $activeBlacklists;
+        private bool $suggestionOverridden;
+        private ?SuggestedActionType $suggestedAction;
+        private ?int $suggestedLiftTimestamp;
 
         /**
          * @param EntityRecord $entityRecord The queried entity.
@@ -28,6 +31,24 @@
             $this->entityRecord = $entityRecord;
             $this->relatedEntities = array_values(array_filter($relatedEntities, fn($entity) => $entity instanceof EntityRecord));
             $this->activeBlacklists = array_values(array_filter($activeBlacklists, fn($blacklist) => $blacklist instanceof BlacklistRecord && !$blacklist->isLifted()));
+            $this->suggestionOverridden = false;
+            $this->suggestedAction = null;
+            $this->suggestedLiftTimestamp = null;
+        }
+
+        /**
+         * Overrides the suggested action and lift timestamp, which are otherwise derived from the active blacklists
+         * (eg; by a QUERY_ENTITY event handler of a plugin)
+         *
+         * @param SuggestedActionType|null $action The suggested action, null to suggest no action
+         * @param int|null $liftTimestamp The suggested lift timestamp
+         * @return void
+         */
+        public function overrideSuggestedAction(?SuggestedActionType $action, ?int $liftTimestamp): void
+        {
+            $this->suggestionOverridden = true;
+            $this->suggestedAction = $action;
+            $this->suggestedLiftTimestamp = $liftTimestamp;
         }
 
         /**
@@ -62,10 +83,16 @@
          * Returns the action suggested by active blacklist records.
          *
          * A permanent target blacklist permanently blocks the target. Any other
-         * active blacklist in the relationship group temporarily blocks the target.
+         * active blacklist in the relationship group temporarily blocks the target,
+         * unless the suggested action was overridden.
          */
         public function getSuggestedAction(): ?SuggestedActionType
         {
+            if($this->suggestionOverridden)
+            {
+                return $this->suggestedAction;
+            }
+
             $targetUuid = $this->entityRecord->getUuid();
             if (array_any($this->activeBlacklists, fn($blacklist) => $blacklist->getEntityUuid() === $targetUuid && $blacklist->getExpires() === null))
             {
@@ -83,6 +110,11 @@
          */
         public function getSuggestedLiftTimestamp(): ?int
         {
+            if($this->suggestionOverridden)
+            {
+                return $this->suggestedLiftTimestamp;
+            }
+
             if($this->getSuggestedAction() !== SuggestedActionType::TEMPORARILY_BLOCK_ENTITY)
             {
                 return null;
@@ -134,10 +166,23 @@
          */
         public static function fromArray(array $array): EntityQueryResult
         {
-            return new self(EntityRecord::fromArray($array['entity_record']),
+            $result = new self(EntityRecord::fromArray($array['entity_record']),
                 array_map(fn(array $entity) => EntityRecord::fromArray($entity), $array['related_entities'] ?? []),
                 array_map(fn(array $blacklist) => BlacklistRecord::fromArray($blacklist), $array['active_blacklists'] ?? [])
             );
+
+            // Keep the suggestion the server made when it differs from the derived one (eg; overridden by a plugin)
+            if(array_key_exists('suggested_action', $array) || array_key_exists('suggested_lift_timestamp', $array))
+            {
+                $action = isset($array['suggested_action']) ? SuggestedActionType::tryFrom($array['suggested_action']) : null;
+                $liftTimestamp = isset($array['suggested_lift_timestamp']) ? (int)$array['suggested_lift_timestamp'] : null;
+                if($action !== $result->getSuggestedAction() || $liftTimestamp !== $result->getSuggestedLiftTimestamp())
+                {
+                    $result->overrideSuggestedAction($action, $liftTimestamp);
+                }
+            }
+
+            return $result;
         }
 
         /**
