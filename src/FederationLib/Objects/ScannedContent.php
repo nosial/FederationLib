@@ -25,6 +25,13 @@
         private array $classifications;
 
         /**
+         * Additional scanning rules that are not built into FederationLib (eg; provided by plugins)
+         *
+         * @var array<string, float>
+         */
+        private array $additionalScanResults;
+
+        /**
          * Memoized result of getScanResults(); the object is immutable after construction
          *
          * @var array<string, float>|null
@@ -37,11 +44,25 @@
          * @param ResolvedEntity[] $resolvedEntities An array of resolved entities from the text content
          * @param ResolvedEntity|null $authorEntity Optional. The author entity of the submitted content
          * @param ContentClassification|ContentClassification[]|null $classification Optional. The classification information about the submitted content
+         * @param array<string, float|int> $additionalScanResults Optional. Additional scanning rules mapped to their points (eg; provided by plugins), built-in scanning rules are ignored
          */
-        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ContentClassification|array|null $classification=null)
+        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ContentClassification|array|null $classification=null, array $additionalScanResults=[])
         {
             $this->resolvedEntities = $resolvedEntities;
             $this->authorEntity = $authorEntity;
+            $this->additionalScanResults = [];
+
+            // Built-in scanning rules are always computed by FederationLib itself
+            $builtInRules = ScanningRules::newTable();
+            foreach($additionalScanResults as $rule => $points)
+            {
+                if(!is_string($rule) || isset($builtInRules[$rule]) || !is_numeric($points))
+                {
+                    continue;
+                }
+
+                $this->additionalScanResults[$rule] = (float)$points;
+            }
 
             if($classification === null)
             {
@@ -85,6 +106,16 @@
         public function getClassifications(): array
         {
             return $this->classifications;
+        }
+
+        /**
+         * Returns the additional scanning rules that are not built into FederationLib (eg; provided by plugins)
+         *
+         * @return array<string, float> The additional scanning rules mapped to their points
+         */
+        public function getAdditionalScanResults(): array
+        {
+            return $this->additionalScanResults;
         }
 
         /**
@@ -297,6 +328,11 @@
                 self::applyClassificationRules($scanningRules, $classification);
             }
 
+            foreach($this->additionalScanResults as $rule => $points)
+            {
+                $scanningRules[$rule] = $points;
+            }
+
             return $this->scanResults = $scanningRules;
         }
 
@@ -309,13 +345,8 @@
          */
         public function getRiskScore(): float
         {
-            $scanResults = $this->getScanResults();
-            $accumulatedPoints = 0.0;
-
-            foreach (ScanningRules::cases() as $rule)
-            {
-                $accumulatedPoints += ($scanResults[$rule->name] ?? 0.0);
-            }
+            // Every scanning rule contributes, the built-in rules and the additional rules (eg; provided by plugins)
+            $accumulatedPoints = array_sum($this->getScanResults());
 
             $neutralPoint = Configuration::getScanningConfiguration()->getRiskScoreNeutralPoint();
             $scalingFactor = Configuration::getScanningConfiguration()->getRiskScoreScalingFactor();
@@ -495,9 +526,16 @@
                 $authorEntity = ResolvedEntity::fromArray($array['author_entity']);
             }
 
+            // Built-in scanning rules are recomputed, only the additional scanning rules are taken from the results
+            $additionalScanResults = [];
+            if(isset($array['scan_results']) && (is_array($array['scan_results']) || is_object($array['scan_results'])))
+            {
+                $additionalScanResults = (array)$array['scan_results'];
+            }
+
             return new self(
                 array_map(fn($resolvedEntity) => ResolvedEntity::fromArray($resolvedEntity), $array['resolved_entities']),
-                $authorEntity, $classification
+                $authorEntity, $classification, $additionalScanResults
             );
         }
 
