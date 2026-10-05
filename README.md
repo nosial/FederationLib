@@ -8,7 +8,8 @@ The implementation is based of the [Open Federated Database](https://github.com/
 ## Features
  
  - Full implementation of the Federated Database standard for both the client-side and server-side implementation. (Batteries included!)
- - Full Bayesian classification support (Powered by [BayesianServer](https://github.com/nosial/BayesianServer))
+ - Extensible with [plugins](PLUGINS.md), eg; Bayesian content classification with BayesianPlugin (Powered by
+   [BayesianServer](https://github.com/nosial/BayesianServer))
  - Automatic report generation - The web service can automatically generate reports based off high-risk score content
    scan submissions by users/operators
  - Extremely configurable for different needs
@@ -24,15 +25,17 @@ The implementation is based of the [Open Federated Database](https://github.com/
     * [Library Usage](#library-usage)
       * [Client Usage](#client-usage)
     * [Server Usage](#server-usage)
+    * [Locally testing/development](#locally-testingdevelopment)
     * [Command-Line Interface](#command-line-interface)
   * [Configuration](#configuration)
     * [Server configuration](#server-configuration)
     * [Scanning Configuration](#scanning-configuration)
-    * [Bayesian Server Configuration](#bayesian-server-configuration)
     * [Database Configuration](#database-configuration)
     * [Redis/Caching configuration](#rediscaching-configuration)
     * [Search Configuration](#search-configuration)
     * [Maintenance Configuration](#maintenance-configuration)
+    * [Plugins Configuration](#plugins-configuration)
+  * [Plugins](#plugins)
 * [License](#license)
 <!-- TOC -->
 
@@ -120,7 +123,7 @@ image, in summary the image setups up the following components
  - `supervisord`: For managing services
  - PHP Extensions `redis`, `sockets` and `pdo_mysql`
  - [`LogLib2Server`](https://github.com/nosial/LogLib2Server): To make logging events visible in the docker container
- - [`BayesianServer`](https://github.com/nosial/BayesianServer): Allows support for text classification/learning
+ - [`BayesianServer`](https://github.com/nosial/BayesianServer): Text classification/learning, used by BayesianPlugin
 
 The resulting docker image can be deployed using `docker compose`, this container requires a MariaDB database to connect
 to and an optional redis or redis-compatible server to also connect to. FederationLib's server can be configured entirely
@@ -218,12 +221,29 @@ networks:
 The docker image is configured to store important files in the following paths
 
  - `/var/www/uploads`: The directory where all file uploads will be stored
- - `/var/www/bayesian_model`: The directory where the Bayesian model will be stored at
+ - `/var/www/bayesian_model`: The directory where BayesianServer stores the Bayesian model
  - `/var/www/archives`: The directory where no longer used records are archived at
 
 If everything is configured correctly, docker's entrypoint is designed to execute `federationlib init` before starting
 its services to ensure that the database is populated and contains the up-to-date schema structure. This process also
 initializes the default operators and fixes any potential misconfiguration issues that can be fixed during this stage.
+
+### Locally testing/development
+
+To locally deploy FederationLib quickly for running tests, you'd want to preform several steps each time you are ready
+to deploy. The included [Makefile](Makefile) makes the process easier if you have `docker`, `docker compose`, `ncc` and
+`phpunit` in your environment
+
+First run `make` or run `make clean` first if you already ran a build previously, then run `make test-env` to create
+the test environment in docker (this uses the test versions of the docker so that the test plugin is included), wait
+for the server to become available on port `7000` before running `make test`
+
+The reason for two builds, one locally and one for docker is so that FederationClient can be built and used locally while
+a live-server can be deployed to be used to against at.
+
+Test units are designed to test against a live server so that both the client capabilities and server capabilities can
+be tested under the same project. Most tests are designed to test against the server's logic and to test if it consists
+with specification requirements.
 
 ### Command-Line Interface
 
@@ -355,24 +375,10 @@ When an entity is blacklisted, its reputation is lowered, and so is the reputati
 it: the entity it references as its relationship target, and the entities that reference it. Both adjustments are
 clamped to `0` or below; `0` disables the adjustment.
 
-| Name                                    | Environment Variable                              | Type | Default | Description                                   |
-|-----------------------------------------|---------------------------------------------------|------|--------:|-----------------------------------------------|
-| `scanning.blacklist_reputation`         | `FEDERATION_SCANNING_BLACKLIST_REPUTATION`         | int  |   `-50` | Blacklisted entity adjustment                 |
-| `scanning.blacklist_related_reputation` | `FEDERATION_SCANNING_BLACKLIST_RELATED_REPUTATION` | int  |   `-10` | Adjustment for each directly related entity   |
-
-
-### Bayesian Server Configuration
-
-This configuration section is responsible for configuring the connection to [`BayesianServer`](https://github.com/nosial/BayesianServer)
-so that FederationLib can push training documents and classify unknown documents against the server.
-
-| Name                                            | Environment Variable                                         | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                 |
-|-------------------------------------------------|--------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------|
-| `bayesian.enabled`                              | `FEDERATION_BS_ENABLED`                                      | bool     | `true`                                                                                                                                                                                        | Yes      | Whether Bayesian filtering is enabled                       |
-| `bayesian.ssl`                                  | `FEDERATION_BS_SSL`                                          | bool     | `false`                                                                                                                                                                                       | Yes      | Whether to use SSL for BayesianServer connection            |
-| `bayesian.host`                                 | `FEDERATION_BS_HOST`                                         | string   | `127.0.0.1`                                                                                                                                                                                   | Yes      | BayesianServer host address                                 |
-| `bayesian.port`                                 | `FEDERATION_BS_PORT`                                         | int      | `6380`                                                                                                                                                                                        | Yes      | BayesianServer port                                         |
-| `bayesian.classify_known_tokens`                | `FEDERATION_BS_CLASSIFY_KNOWN_TOKENS`                        | bool     | `true`                                                                                                                                                                                        | Yes      | Only classify when majority of tokens are known             |
+| Name                                    | Environment Variable                               | Type | Default | Description                                 |
+|-----------------------------------------|----------------------------------------------------|------|--------:|---------------------------------------------|
+| `scanning.blacklist_reputation`         | `FEDERATION_SCANNING_BLACKLIST_REPUTATION`         | int  |   `-50` | Blacklisted entity adjustment               |
+| `scanning.blacklist_related_reputation` | `FEDERATION_SCANNING_BLACKLIST_RELATED_REPUTATION` | int  |   `-10` | Adjustment for each directly related entity |
 
 
 ### Database Configuration
@@ -465,6 +471,42 @@ records should be retained before they are considered eligible for cleanup
 | `maintenance.clean_entities`                    | `FEDERATION_MAINTENANCE_CLEAN_ENTITIES`                      | bool     | `false`                                                                                                                                                                                       | Yes      | Whether to clean expired entity records                     |
 | `maintenance.clean_entities_ttl`                | `FEDERATION_MAINTENANCE_CLEAN_ENTITIES_TTL`                  | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for entity records before cleanup in seconds            |
 
+
+### Plugins Configuration
+
+The `plugins` configuration is the list of plugins FederationLib loads, referenced by their ncc package name. Plugins
+are responsible for their own configuration (see [Plugins](#plugins) and [PLUGINS.md](PLUGINS.md)).
+
+```yaml
+plugins:
+    - net.nosial.test_plugin
+    - com.example.another_plugin
+```
+
+| Name      | Environment Variable | Type  | Default Value | Required | Description                                                                                  |
+|-----------|----------------------|-------|---------------|----------|----------------------------------------------------------------------------------------------|
+| `plugins` | `FEDERATION_PLUGINS` | array | `[]`          | No       | The package names of the plugins to load, the environment variable is a comma-separated list |
+
+
+## Plugins
+
+FederationLib can be extended with plugins, ncc packages that can add new API routes, hook into FederationLib's own
+routes, react to audit log entries and changes written to the database, take part in content scanning and change the
+results of entity queries.
+
+To use a plugin, install its package with ncc and add its package name to the [`plugins`](#plugins-configuration)
+configuration (`FEDERATION_PLUGINS`). With Docker, `REQUIRE_PLUGINS` installs plugins before the server starts:
+
+```yaml
+environment:
+  - REQUIRE_PLUGINS=nosial/plugin1@github # Installs the plugin
+  - FEDERATION_PLUGINS=net.nosial.plugin1 # Enables the plugin
+```
+
+`federationlib init` validates every enabled plugin and fails if any of them is not correctly configured. Each plugin
+has its own configuration, refer to the plugin's documentation.
+
+See [PLUGINS.md](PLUGINS.md) for how plugins work, how to use them and how to develop them.
 
 
 # License
