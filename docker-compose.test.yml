@@ -11,6 +11,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
+    ports:
+      # The bundled BayesianServer
+      - "6380:6380"
     environment:
       # Installed by docker-entrypoint.sh before `federationlib init`
       - REQUIRE_PLUGINS=/opt/federationlib/plugins/net.nosial.test_plugin.ncc

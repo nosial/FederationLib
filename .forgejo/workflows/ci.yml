@@ -166,7 +166,8 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
           echo "Waiting for server to be ready..."
           for i in $(seq 1 60); do
-            if curl -s -o /dev/null -w "%{http_code}" http://172.17.0.1:7000/ | grep -q 200; then
+            if curl -s -o /dev/null -w "%{http_code}" http://172.17.0.1:7000/ | grep -q 200 \
+              && curl -s -o /dev/null -w "%{http_code}" http://172.17.0.1:6380/health | grep -q 200; then
               echo "Server is ready!"
               exit 0
             fi
