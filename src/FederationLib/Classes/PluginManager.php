@@ -2,24 +2,27 @@
 
     namespace FederationLib\Classes;
 
-    use FederationLib\Classes\Managers\EvidenceManager;
-    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\EventType;
     use FederationLib\Enums\ExecutionPriority;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\Method;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\ContentScanRejectedException;
+    use FederationLib\Exceptions\EntityQueryRejectedException;
     use FederationLib\Exceptions\PluginException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\AuditLogEventHandlerInterface;
     use FederationLib\Interfaces\ContentScanEventHandlerInterface;
-    use FederationLib\Interfaces\EvidenceClassifiedEventHandlerInterface;
+    use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
+    use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Objects\AuditLog;
     use FederationLib\Objects\Plugin;
     use FederationLib\Objects\Plugin\ContentScan;
+    use FederationLib\Objects\Plugin\EntityQuery;
     use FederationLib\Objects\Plugin\MatchedRequestHandler;
     use FederationLib\Objects\Plugin\PluginRoute;
+    use FederationLib\Objects\Plugin\RecordChange;
     use Throwable;
 
     class PluginManager
@@ -28,6 +31,7 @@
         private static ?array $plugins = null;
         private static ?MatchedRequestHandler $currentHandler = null;
         private static bool $dispatchingAuditLog = false;
+        private static bool $dispatchingRecordChange = false;
 
         /**
          * Imports and loads all the plugins configured in the plugins configuration, plugins are only loaded once.
@@ -317,75 +321,66 @@
         }
 
         /**
-         * Dispatches a classified evidence record to the EVIDENCE_CLASSIFIED event handlers of the loaded plugins, in
-         * the order the plugins are configured. Event handlers can never affect the evidence record or the operation
-         * that classified it, any failure is logged.
+         * Dispatches a change that was written to the database to the RECORD_CHANGE event handlers of the loaded
+         * plugins, in the order the plugins are configured. The record is only retrieved when an event handler asks
+         * for it, and is shared between the event handlers. Event handlers can never affect the change or the
+         * operation that made it, any failure is logged. Changes made by an event handler are not dispatched again,
+         * which prevents event handlers from triggering each other endlessly.
          *
-         * @param string $evidenceUuid The UUID of the evidence record that was classified
-         * @param ClassificationFlag $classification The classification assigned to the evidence record
+         * @param RecordChangeType $type The type of the change
+         * @param string $uuid The UUID of the changed record
          * @return void
          */
-        public static function dispatchEvidenceClassified(string $evidenceUuid, ClassificationFlag $classification): void
+        public static function dispatchRecordChange(RecordChangeType $type, string $uuid): void
         {
+            if(self::$dispatchingRecordChange)
+            {
+                Logger::log()->debug(sprintf('Not dispatching the %s change of %s, it was made by a RECORD_CHANGE event handler', $type->value, $uuid));
+                return;
+            }
+
             try
             {
                 $plugins = self::loadPlugins();
             }
             catch(PluginException $e)
             {
-                Logger::log()->error(sprintf('Unable to dispatch the classified evidence %s to the plugins: %s', $evidenceUuid, $e->getMessage()), $e);
+                Logger::log()->error(sprintf('Unable to dispatch the %s change of %s to the plugins: %s', $type->value, $uuid, $e->getMessage()), $e);
                 return;
             }
 
-            $handlers = [];
-            foreach($plugins as $plugin)
-            {
-                foreach($plugin->getEventHandlers(EventType::EVIDENCE_CLASSIFIED) as $definition)
-                {
-                    if($definition->matches($classification->value))
-                    {
-                        $handlers[] = [$plugin, $definition];
-                    }
-                }
-            }
-
-            // The evidence record is only retrieved when there is an event handler to receive it
-            if(count($handlers) === 0)
-            {
-                return;
-            }
+            $change = new RecordChange($type, $uuid);
+            self::$dispatchingRecordChange = true;
 
             try
             {
-                $evidenceRecord = EvidenceManager::getEvidence($evidenceUuid);
-            }
-            catch(Throwable $e)
-            {
-                Logger::log()->error(sprintf('Unable to retrieve the classified evidence %s for the plugins: %s', $evidenceUuid, $e->getMessage()), $e);
-                return;
-            }
-
-            if($evidenceRecord === null)
-            {
-                Logger::log()->warning(sprintf('The classified evidence %s no longer exists, not dispatching it to the plugins', $evidenceUuid));
-                return;
-            }
-
-            /** @var Plugin $plugin */
-            foreach($handlers as [$plugin, $definition])
-            {
-                Logger::log()->debug(sprintf('Executing EVIDENCE_CLASSIFIED event handler %s of plugin %s for %s', $definition->getClass(), $plugin->getPackage(), $evidenceUuid));
-
-                try
+                foreach($plugins as $plugin)
                 {
-                    /** @var EvidenceClassifiedEventHandlerInterface $class */
-                    $class = $definition->getClass();
-                    $class::handleEvidenceClassified($evidenceRecord, $classification);
+                    foreach($plugin->getEventHandlers(EventType::RECORD_CHANGE) as $definition)
+                    {
+                        if(!$definition->matches($type->value))
+                        {
+                            continue;
+                        }
+
+                        Logger::log()->debug(sprintf('Executing RECORD_CHANGE event handler %s of plugin %s for the %s change of %s', $definition->getClass(), $plugin->getPackage(), $type->value, $uuid));
+
+                        try
+                        {
+                            /** @var RecordChangeEventHandlerInterface $class */
+                            $class = $definition->getClass();
+                            $class::handleRecordChange($change);
+                        }
+                        catch(Throwable $e)
+                        {
+                            Logger::log()->error(sprintf('The RECORD_CHANGE event handler %s of plugin %s failed for the %s change of %s: %s', $definition->getClass(), $plugin->getPackage(), $type->value, $uuid, $e->getMessage()), $e);
+                        }
+                    }
                 }
-                catch(Throwable $e)
-                {
-                    Logger::log()->error(sprintf('The EVIDENCE_CLASSIFIED event handler %s of plugin %s failed for %s: %s', $definition->getClass(), $plugin->getPackage(), $evidenceUuid, $e->getMessage()), $e);
-                }
+            }
+            finally
+            {
+                self::$dispatchingRecordChange = false;
             }
         }
 
@@ -440,6 +435,62 @@
 
                         // Discard the scanning rules and classifications the failed event handler may have added
                         $contentScan->restoreState($state);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Dispatches a query entity request to the QUERY_ENTITY event handlers of the loaded plugins, in the order the
+         * plugins are configured. Each event handler receives the same EntityQuery and may change the response or
+         * reject the request. A rejection (or any RequestException) stops the remaining event handlers and is thrown
+         * to the caller, any other failure of an event handler is logged and the response is sent without the
+         * changes that event handler made.
+         *
+         * @param EntityQuery $entityQuery The query entity request
+         * @return void
+         * @throws RequestException If an event handler rejected the request, or the plugins could not be loaded
+         */
+        public static function dispatchQueryEntity(EntityQuery $entityQuery): void
+        {
+            try
+            {
+                $plugins = self::loadPlugins();
+            }
+            catch(PluginException $e)
+            {
+                // Fail closed, a plugin that is meant to reject or change the result must never be skipped silently
+                throw new RequestException('Unable to query the entity, the plugins could not be loaded', HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
+            }
+
+            foreach($plugins as $plugin)
+            {
+                foreach($plugin->getEventHandlers(EventType::QUERY_ENTITY) as $definition)
+                {
+                    Logger::log()->debug(sprintf('Executing QUERY_ENTITY event handler %s of plugin %s', $definition->getClass(), $plugin->getPackage()));
+                    $state = $entityQuery->getState();
+
+                    try
+                    {
+                        /** @var QueryEntityEventHandlerInterface $class */
+                        $class = $definition->getClass();
+                        $class::handleQueryEntity($entityQuery);
+                    }
+                    catch(EntityQueryRejectedException $e)
+                    {
+                        Logger::log()->info(sprintf('The query entity request was rejected by the QUERY_ENTITY event handler %s of plugin %s: %s', $definition->getClass(), $plugin->getPackage(), $e->getMessage()));
+                        throw $e;
+                    }
+                    catch(RequestException $e)
+                    {
+                        throw $e;
+                    }
+                    catch(Throwable $e)
+                    {
+                        Logger::log()->error(sprintf('The QUERY_ENTITY event handler %s of plugin %s failed: %s', $definition->getClass(), $plugin->getPackage(), $e->getMessage()), $e);
+
+                        // Discard the changes the failed event handler may have made
+                        $entityQuery->restoreState($state);
                     }
                 }
             }
