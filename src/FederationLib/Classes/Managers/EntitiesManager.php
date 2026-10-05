@@ -1275,11 +1275,6 @@
          * Records a completed scan of authored content into the open reputation window of the author entity
          * and its parent entity, if any.
          *
-         * Scans never decrease reputation: a scan classified as suspicious or malicious, or authored by a
-         * blacklisted entity, only marks the window as flagged so that it closes without a gain. Negative
-         * adjustments are left to concluded reports. The caller is responsible for only recording scans from
-         * authenticated clients.
-         *
          * @param ScannedContent $scannedContent The fully constructed scan result
          */
         public static function recordScan(ScannedContent $scannedContent): void
@@ -1300,7 +1295,8 @@
             $scanResults = $scannedContent->getScanResults();
             $flagged = ($scanResults[ScanningRules::CLASSIFICATION_SUSPICIOUS->name] ?? 0.0) < 0
                 || ($scanResults[ScanningRules::CLASSIFICATION_MALICIOUS->name] ?? 0.0) < 0
-                || count($author->getActiveBlacklists()) > 0;
+                || count($author->getActiveBlacklists()) > 0
+                || array_any($scannedContent->getAdditionalScanResults(), fn(float $points) => $points < 0);
 
             $authorUuid = $author->getEntity()->getUuid();
             self::recordActivity($authorUuid, $flagged, $now, $redis);
