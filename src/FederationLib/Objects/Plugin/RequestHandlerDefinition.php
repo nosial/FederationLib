@@ -8,7 +8,7 @@
 
     class RequestHandlerDefinition
     {
-        public const array SUPPORTED_REQUEST_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+        public const array SUPPORTED_REQUEST_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'PUSH'];
 
         private string $path;
         private string $class;
