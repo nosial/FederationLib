@@ -26,6 +26,7 @@
         private static ?string $path = null;
         private static ?string $uri = null;
         private static ?array $parameters = null;
+        private static bool $responseSent = false;
 
         /**
          * Handle the incoming request.
@@ -161,6 +162,11 @@
          */
         protected static function successResponse(mixed $data = null, int|HttpResponseCode $responseCode=200): void
         {
+            if(!self::beginResponse())
+            {
+                return;
+            }
+
             if($responseCode instanceof HttpResponseCode)
             {
                 $responseCode = $responseCode->value;
@@ -227,6 +233,11 @@
          */
         protected static function errorResponse(string $message, int $code=500): void
         {
+            if(!self::beginResponse())
+            {
+                return;
+            }
+
             http_response_code($code);
             self::returnHeaders();
             print(json_encode(new ErrorResponse($code, $message)->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
@@ -243,9 +254,54 @@
          */
         protected static function throwableResponse(Throwable $e): void
         {
+            if(!self::beginResponse())
+            {
+                return;
+            }
+
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
             print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        }
+
+        /**
+         * Returns True if a response has already been sent for the current request
+         *
+         * @return bool True if a response has been sent
+         */
+        public static function isResponseSent(): bool
+        {
+            return self::$responseSent;
+        }
+
+        /**
+         * Marks the response of the current request as sent, request handlers that write their response directly
+         * (instead of using the response helpers) can use this to prevent any further response from being written,
+         * eg; a PRE_REQUEST plugin handler preventing the original request handler from executing.
+         *
+         * @return void
+         */
+        protected static function markResponseSent(): void
+        {
+            self::$responseSent = true;
+        }
+
+        /**
+         * Marks the response as sent, returns False if a response was already sent so that a second response is never
+         * appended to the first one.
+         *
+         * @return bool True if the response may be written
+         */
+        private static function beginResponse(): bool
+        {
+            if(self::$responseSent)
+            {
+                Logger::log()->warning(sprintf('Ignoring a response for [%s] %s, a response has already been sent', self::$requestMethod, self::$path));
+                return false;
+            }
+
+            self::$responseSent = true;
+            return true;
         }
 
         /**
