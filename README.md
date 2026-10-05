@@ -228,6 +228,14 @@ If everything is configured correctly, docker's entrypoint is designed to execut
 its services to ensure that the database is populated and contains the up-to-date schema structure. This process also
 initializes the default operators and fixes any potential misconfiguration issues that can be fixed during this stage.
 
+The entrypoint also accepts the following docker-only environment variables, processed in this order before
+`federationlib init`. The container does not start if either step fails.
+
+| Environment Variable | Description                                                                                                                                                                                  |
+|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `AUTOSTART`          | The path to a shell script executed on every container start, eg; to install additional services or dependencies required by plugins. Executed directly if executable, otherwise with `bash` |
+| `REQUIRE_PLUGINS`    | A comma-separated list of plugin packages to install or update, see [Plugins](#plugins)                                                                                                      |
+
 ### Locally testing/development
 
 To locally deploy FederationLib quickly for running tests, you'd want to preform several steps each time you are ready
