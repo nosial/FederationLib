@@ -5,6 +5,7 @@
     use FederationLib\Classes\Configuration\BayesianConfiguration;
     use FederationLib\Classes\Configuration\DatabaseConfiguration;
     use FederationLib\Classes\Configuration\MaintenanceConfiguration;
+    use FederationLib\Classes\Configuration\PluginsConfiguration;
     use FederationLib\Classes\Configuration\RedisConfiguration;
     use FederationLib\Classes\Configuration\ScanningConfiguration;
     use FederationLib\Classes\Configuration\SearchConfiguration;
@@ -22,6 +23,7 @@
         private static ?MaintenanceConfiguration $maintenanceConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
         private static ?SearchConfiguration $searchConfiguration = null;
+        private static ?PluginsConfiguration $pluginsConfiguration = null;
 
         /**
          * Initialize the configuration with default values.
@@ -136,6 +138,9 @@
             self::$configuration->setDefault('search.enable_audit_logs', true, 'FEDERATION_SEARCH_ENABLE_AUDIT_LOGS');
             self::$configuration->setDefault('search.enable_operators', true, 'FEDERATION_SEARCH_ENABLE_OPERATORS');
 
+            // The ncc package names of the plugins to load, plugins are responsible for their own configuration
+            self::$configuration->setDefault('plugins', [], 'FEDERATION_PLUGINS');
+
             // Database configuration
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
             self::$configuration->setDefault('database.port', 3306, 'FEDERATION_DATABASE_PORT');
@@ -191,6 +196,7 @@
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
             self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
             self::$searchConfiguration = new SearchConfiguration(self::$configuration->get('search'));
+            self::$pluginsConfiguration = new PluginsConfiguration(self::$configuration->get('plugins'));
         }
 
         /**
@@ -326,6 +332,21 @@
             }
 
             return self::$searchConfiguration;
+        }
+
+        /**
+         * Get the plugins configuration.
+         *
+         * @return PluginsConfiguration
+         */
+        public static function getPluginsConfiguration(): PluginsConfiguration
+        {
+            if(self::$pluginsConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$pluginsConfiguration;
         }
 
     }
