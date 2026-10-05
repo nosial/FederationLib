@@ -46,6 +46,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 
 COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
 RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
+RUN ncc install --package="nosial/BayesianPlugin@github" --yes
 
 COPY --from=builder /app/web_entry /var/www/html/index.php
 RUN mkdir -p /var/www/uploads /etc/configlib \
