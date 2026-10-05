@@ -5,6 +5,7 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
@@ -110,6 +111,18 @@
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+
+            PluginManager::dispatchAuditLog(new AuditLog([
+                'uuid' => $uuid,
+                'type' => $type,
+                'message' => $message,
+                'operator' => $operatorUuid,
+                'entity' => $entityUuid,
+                'blacklist' => $blacklistUuid,
+                'evidence' => $evidenceUuid,
+                'file_attachment' => $fileAttachmentUuid,
+                'timestamp' => time()
+            ]));
         }
 
         /**
