@@ -4,11 +4,13 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\Categories\OperatorCategory;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\OperatorOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\OperatorCreated;
@@ -97,6 +99,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_CREATED, $uuid);
             return new OperatorCreated($uuid, $accessToken);
         }
 
@@ -487,6 +490,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET disabled=1 WHERE uuid=:uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -509,6 +513,11 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_DISABLED, $uuid);
+            }
         }
 
         /**
@@ -530,6 +539,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET disabled=0 WHERE uuid=:uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -552,6 +562,11 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_ENABLED, $uuid);
+            }
         }
 
         /**
@@ -573,6 +588,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM operators WHERE uuid=:uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -594,6 +610,25 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            // The database also deletes the operator's evidence, submitted reports and blacklist records and clears the
+            // references to the operator, which may be cached even when operators are not
+            if(Configuration::getRedisConfiguration()->isEnabled())
+            {
+                RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'operator', $uuid);
+                RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'submitting_operator', $uuid);
+                RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'assigned_operator', $uuid);
+                RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'operator', $uuid);
+                RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'lifted_by', $uuid);
+                RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
+                RedisConnection::clearSearchCache(ReportManager::CACHE_PREFIX);
+                RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_DELETED, $uuid);
             }
         }
 
@@ -637,6 +672,7 @@
                 $stmt->bindValue(':access_token', self::secureAccessToken($accessToken));
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -656,6 +692,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
 
             return $accessToken;
@@ -682,6 +723,7 @@
                 $stmt->bindParam(':operator_permissions', $canManageOperators, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -703,6 +745,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
         }
 
@@ -727,6 +774,7 @@
                 $stmt->bindParam(':management_permissions', $canManage, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -748,6 +796,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
         }
 
@@ -772,6 +825,7 @@
                 $stmt->bindParam(':client_permissions', $isClient, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -793,6 +847,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
         }
 
@@ -817,6 +876,7 @@
                 $stmt->bindParam(':auto_assign', $autoAssign, PDO::PARAM_BOOL);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -838,6 +898,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
         }
 
@@ -974,6 +1039,7 @@
                 $stmt->bindParam(':name', $newName);
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -992,6 +1058,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
         }
 

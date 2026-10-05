@@ -5,6 +5,7 @@
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
@@ -14,6 +15,7 @@
     use FederationLib\Enums\Categories\EntityCategory;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EntityOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityRecord;
@@ -124,6 +126,8 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_CREATED, $uuid);
+
             if($id === null && Configuration::getServerConfiguration()->isLinkSubdomainEntitiesEnabled())
             {
                 self::assignParentDomain($uuid, $host);
@@ -219,6 +223,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entityUuid);
             return true;
         }
 
@@ -296,6 +301,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entityUuid);
             return true;
         }
 
@@ -349,6 +355,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entityUuid);
             return true;
         }
 
@@ -390,6 +397,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entityUuid);
             return true;
         }
 
@@ -862,6 +870,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE uuid = :uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -886,6 +895,21 @@
                     RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+
+                // The database also deletes the entity's evidence and the reports made by the entity, which may be
+                // cached even when entities are not
+                if(Configuration::getRedisConfiguration()->isEnabled())
+                {
+                    RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'entity', $uuid);
+                    RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'reporting_entity', $uuid);
+                    RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(ReportManager::CACHE_PREFIX);
+                }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_DELETED, $uuid);
             }
         }
 
@@ -1144,6 +1168,7 @@
                 $stmt->bindParam(':updated', $now);
                 $stmt->bindParam(':uuid', $entityUuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -1154,6 +1179,11 @@
             {
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entityUuid));
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_REPUTATION_UPDATED, $entityUuid);
             }
         }
 
@@ -1356,6 +1386,8 @@
                 $redis->del($windowKey);
                 $redis->sRem(self::REPUTATION_ACTIVE_SET, $uuid);
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_REPUTATION_UPDATED, $uuid);
 
             if($affectParent)
             {
@@ -1737,6 +1769,7 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entityUuid);
             return true;
         }
 

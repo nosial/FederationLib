@@ -4,12 +4,14 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\AttachmentCategory;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\AttachmentOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\FileAttachmentRecord;
@@ -63,6 +65,8 @@
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::ATTACHMENT_CREATED, $uuid);
         }
 
         /**
@@ -175,6 +179,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE uuid = :uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -200,6 +205,11 @@
             {
                 RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::ATTACHMENT_DELETED, $uuid);
             }
         }
 

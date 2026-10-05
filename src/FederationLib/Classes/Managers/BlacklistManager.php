@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
@@ -11,6 +12,7 @@
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\BlacklistOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\BlacklistRecord;
     use InvalidArgumentException;
@@ -94,6 +96,8 @@
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::BLACKLIST_CREATED, $uuid);
 
             // A blacklist is a deliberate operator decision, lower the reputation of the entity and its relatives
             self::applyBlacklistReputation($entityUuid);
@@ -211,6 +215,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE uuid = :blacklist_uuid");
                 $stmt->bindParam(':blacklist_uuid', $blacklistUuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -226,6 +231,11 @@
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::BLACKLIST_DELETED, $blacklistUuid);
             }
         }
 
@@ -276,6 +286,8 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::BLACKLIST_EXTENDED, $blacklistUuid);
         }
 
         /**
@@ -319,6 +331,8 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::BLACKLIST_LIFTED, $blacklistUuid);
         }
 
         /**

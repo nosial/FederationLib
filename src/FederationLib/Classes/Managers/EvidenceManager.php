@@ -4,12 +4,14 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\EvidenceCategory;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EvidenceOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EvidenceRecord;
     use InvalidArgumentException;
@@ -151,6 +153,12 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
+            PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_CREATED, $uuid);
+            if($classification !== null)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_CLASSIFIED, $uuid);
+            }
+
             return $uuid;
         }
 
@@ -179,6 +187,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM evidence WHERE uuid = :uuid");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -192,6 +201,11 @@
                     RedisConnection::deleteRecordsByField(FileAttachmentManager::CACHE_PREFIX, 'evidence', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_DELETED, $uuid);
             }
         }
 
@@ -718,6 +732,7 @@
                 $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -733,6 +748,11 @@
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_UPDATED, $evidenceUuid);
             }
         }
 
@@ -769,6 +789,7 @@
                 $stmt->bindParam(':tag', $tagName);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -784,6 +805,11 @@
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_UPDATED, $evidenceUuid);
             }
         }
 
@@ -811,7 +837,7 @@
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
 
-                return $stmt->rowCount() === 1;
+                $updated = $stmt->rowCount() === 1;
             }
             catch (PDOException $e)
             {
@@ -828,6 +854,13 @@
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
+
+            if($updated)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_CLASSIFIED, $evidence);
+            }
+
+            return $updated;
         }
 
         /**
@@ -874,6 +907,7 @@
                 $stmt->bindParam(':report', $reportUuid);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -889,6 +923,11 @@
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_UPDATED, $evidenceUuid);
             }
         }
 

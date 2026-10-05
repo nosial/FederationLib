@@ -4,12 +4,14 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\ReportCategory;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\ReportOrderType;
+    use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
@@ -82,6 +84,8 @@
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::REPORT_CREATED, $uuid);
 
             if($assignedOperator !== null)
             {
@@ -253,6 +257,7 @@
                 $stmt->bindParam(':assigned_operator', $operatorUuid);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -265,6 +270,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::REPORT_OPERATOR_ASSIGNED, $reportUuid);
             }
         }
 
@@ -297,6 +307,7 @@
                 $stmt->bindParam(':uuid', $reportUuid);
                 $stmt->bindParam(':updated', $now);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -309,6 +320,11 @@
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::REPORT_CLOSED, $reportUuid);
             }
         }
 
@@ -336,6 +352,7 @@
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM reports WHERE uuid = :uuid");
                 $stmt->bindParam(':uuid', $reportUuid);
                 $stmt->execute();
+                $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
@@ -352,6 +369,11 @@
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'report', $reportUuid);
                     RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
                 }
+            }
+
+            if($changed)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::REPORT_DELETED, $reportUuid);
             }
         }
 
