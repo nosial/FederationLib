@@ -1,0 +1,21 @@
+# Build context ignore rules for Dockerfile.test only (BuildKit uses <Dockerfile>.dockerignore over .dockerignore),
+# identical to .dockerignore except that the TestPlugin's sources are included.
+.git/
+.gitignore
+.forgejo/
+.github/
+.idea/
+.phpunit.result.cache
+CHANGELOG.md
+docker-compose.yml
+docker-compose.test.yml
+LICENSE
+Makefile
+phpdoc.dist.xml
+phpunit.xml
+README.md
+target/
+tests/*
+!tests/TestPlugin
+tests/TestPlugin/target/
+vendor/
