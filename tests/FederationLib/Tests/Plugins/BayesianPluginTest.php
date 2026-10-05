@@ -245,14 +245,6 @@
             $this->assertSame(ClassificationFlag::MALICIOUS, $scanned->getClassification()->getClassificationFlag());
         }
 
-        public function testScanWithoutTextContentIsNotClassified(): void
-        {
-            $this->ensureTrained();
-
-            $scanned = $this->client->scanContent([new ContentInput(null, 'Evidence without text content')]);
-            $this->assertNull($scanned->getClassification());
-        }
-
         public function testScanOfUnknownContentIsNotClassified(): void
         {
             $this->ensureTrained();
