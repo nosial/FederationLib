@@ -10,9 +10,9 @@
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
+    use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\AuditLogType;
-    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Enums\HttpResponseCode;
@@ -22,8 +22,8 @@
     use FederationLib\FederationServer;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
+    use FederationLib\Objects\Plugin\ContentScan;
     use FederationLib\Objects\ScannedContent;
-    use FederationLib\Objects\ScannedContent\ContentClassification;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use FederationLib\Interfaces\RequestSpecificationInterface;
@@ -123,7 +123,6 @@
 
             // Process each evidence record individually
             $allResolvedEntities = [];
-            $allClassifications = [];
 
             foreach($evidenceItems as $item)
             {
@@ -152,30 +151,27 @@
                         continue;
                     }
                 }
-
-                // Use BayesianServer to detect the content classification level
-                if(Configuration::getBayesianConfiguration()->isEnabled())
-                {
-                    try
-                    {
-                        $classification = self::classifyContent($textContent, $parsedThreshold, $parsedTopK);
-                        if($classification !== null)
-                        {
-                            $allClassifications[] = $classification;
-                        }
-                    }
-                    catch (RequestException $e)
-                    {
-                        Logger::log()->error('Classification Error: ' . $e->getMessage(), $e);
-                    }
-                }
             }
 
-            // Return the scanned content
+            // Let the plugins scan the content, they may classify it, add their own scanning rules or reject the
+            // request before anything about the scan is recorded
+            $contentScan = new ContentScan(
+                array_map(fn(array $item) => self::toContentInput($item), $evidenceItems),
+                is_string($authorIdentifier) && $authorIdentifier !== '' ? $authorIdentifier : null,
+                $authorRecord,
+                array_values($allResolvedEntities),
+                $authenticatedOperator,
+                $parsedTopK,
+                $parsedThreshold
+            );
+            PluginManager::dispatchContentScan($contentScan);
+
+            // Return the scanned content, including the classifications and scanning rules provided by the plugins
             $scannedContent = new ScannedContent(
                 array_values($allResolvedEntities),
                 $authorRecord,
-                $allClassifications
+                $contentScan->getAddedClassifications(),
+                $contentScan->getScanResults()
             );
 
             // Only authenticated clients contribute to reputation; anonymous scans must not affect it in any way
@@ -189,7 +185,7 @@
             {
                 try
                 {
-                    self::generateReport($scannedContent, $evidenceItems);
+                    self::generateReport($scannedContent, $evidenceItems, $contentScan);
                 }
                 catch (DatabaseOperationException $e)
                 {
@@ -198,75 +194,6 @@
             }
 
             self::successResponse($scannedContent->toStandardArray(!self::omitEntityMetadata()));
-        }
-
-        /**
-         * Classifies the content and returns the ContentClassification object if the classification succeeds
-         *
-         * @param string $content The content to classify
-         * @param float|null $threshold Optional. Confidence threshold
-         * @param int|null $topK Optional. The number of choices to limit to
-         * @return ContentClassification|null The classification result, null if the content cannot be classified at the moment
-         * @throws RequestException Thrown if BayesianClient fails to send a request to BayesianServer
-         */
-        private static function classifyContent(string $content, ?float $threshold, ?int $topK): ?ContentClassification
-        {
-            $serverStatus = FederationServer::getBayesianClient()->getStatus();
-
-            // If we have less than 10 training documents, we skip the classification
-            if($serverStatus->getModel()->getTotalDocuments() < 10)
-            {
-                Logger::log()->warning('Skipping classification, not enough training documents');
-                return null;
-            }
-
-            // Verify that we have all labels before running a classification call
-            foreach($serverStatus->getModel()->getLabels() as $labelStatistic)
-            {
-                $classificationFlag = ClassificationFlag::tryFrom($labelStatistic->getLabel());
-
-                // Avoid classifying on malformed models, could lead to massive incorrect predictions
-                if($classificationFlag === null)
-                {
-                    Logger::log()->error('Malformed Bayesian model, unknown label: ' . $labelStatistic->getLabel() . '. A new model needs to be created');
-                    return null;
-                }
-
-                // Allow for labels to have enough training documents to reasonably classify
-                if($labelStatistic->getDocumentCount() < 10)
-                {
-                    Logger::log()->warning('Skipping classification, not enough training documents for ' . $labelStatistic->getLabel());
-                    return null;
-                }
-            }
-
-            // Avoid classification if we didn't identify all labels yet
-            if($serverStatus->getModel()->getLabelCount() !== 3)
-            {
-                Logger::log()->warning('Skipping classification, not enough training data');
-                return null;
-            }
-
-            $bayesianClassification = FederationServer::getBayesianClient()->classify($content, $topK, $threshold);
-
-            // If we want to only classify content for known tokens
-            if(Configuration::getBayesianConfiguration()->classifyKnownTokens())
-            {
-                // Return null if the number of unknown tokens is greater than the recognized tokens
-                if($bayesianClassification->getUnknownTokenCount() > $bayesianClassification->getKnownTokens())
-                {
-                    Logger::log()->warning('Skipping classification, too many unknown tokens');
-                    return null;
-                }
-            }
-
-            // Use the classifier's probability for the top label, not the server's 'confidence' field which is the
-            // language detection confidence (always 1.0 for the top language) and says nothing about the label
-            return new ContentClassification(
-                ClassificationFlag::from($bayesianClassification->getTopLabel()),
-                $bayesianClassification->getTopProbability(),
-                $bayesianClassification->getLanguageCode()
-            );
         }
 
         /**
@@ -288,6 +215,23 @@
             }
 
             return [$evidenceInput];
+        }
+
+        /**
+         * Converts a validated evidence item into a ContentInput object
+         *
+         * @param array $item The evidence item
+         * @return ContentInput The evidence item as a ContentInput object
+         */
+        private static function toContentInput(array $item): ContentInput
+        {
+            return new ContentInput(
+                isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null,
+                isset($item['note']) && is_string($item['note']) ? $item['note'] : null,
+                isset($item['tag']) && is_string($item['tag']) ? $item['tag'] : null,
+                isset($item['confidential']) && (filter_var($item['confidential'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false),
+                isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null
+            );
         }
 
         /**
@@ -401,9 +345,10 @@
          *
          * @param ScannedContent $scannedContent The scanned content results
          * @param array<int, array> $evidenceItems The evidence items provided in the scan request
+         * @param ContentScan|null $contentScan Optional. The content scan with the classifications provided by the plugins
          * @throws DatabaseOperationException Thrown if there was a database operation error
          */
-        private static function generateReport(ScannedContent $scannedContent, array $evidenceItems): void
+        private static function generateReport(ScannedContent $scannedContent, array $evidenceItems, ?ContentScan $contentScan=null): void
         {
             // Do not generate if there's no author entity to blame
             if($scannedContent->getAuthorEntity() === null)
@@ -457,7 +402,7 @@
 
             // Create an evidence record for each provided evidence item
             $firstEvidenceUuid = null;
-            foreach($evidenceItems as $item)
+            foreach($evidenceItems as $evidenceIndex => $item)
             {
                 $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null;
                 if($textContent === null || strlen($textContent) === 0)
@@ -472,19 +417,8 @@
                     : false;
                 $metadata = isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null;
 
-                // Classify the individual content for the evidence tag/note
-                $itemClassification = null;
-                if(Configuration::getBayesianConfiguration()->isEnabled())
-                {
-                    try
-                    {
-                        $itemClassification = self::classifyContent($textContent, null, null);
-                    }
-                    catch (RequestException $e)
-                    {
-                        Logger::log()->error('Failed to classify evidence content: ' . $e->getMessage(), $e);
-                    }
-                }
+                // Describe the evidence with the classification a plugin made for this evidence item during the scan
+                $itemClassification = $contentScan?->getEvidenceClassifications($evidenceIndex)[0] ?? null;
 
                 $evidenceMessage = $itemClassification !== null
                     ? (string)$itemClassification : sprintf("Risk Score: %f", $scannedContent->getRiskScore());
@@ -538,7 +472,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Scans one or more content messages for entities, blacklist records, and classifies the content using Bayesian analysis. Requires client permissions if authenticated.';
+            return 'Scans one or more content messages for entities, blacklist records, and classifies the content using the enabled plugins. Requires client permissions if authenticated.';
         }
 
         /**
