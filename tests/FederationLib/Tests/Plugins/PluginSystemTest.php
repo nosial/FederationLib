@@ -87,6 +87,18 @@
             $this->assertTrue($definition->isLiteralPath());
         }
 
+        public function testDefinitionFromArrayWithPushMethod(): void
+        {
+            // PUSH is not a standard method, but is supported for plugins proxying services that use it (eg; BayesianServer)
+            $definition = RequestHandlerDefinition::fromArray([
+                'path' => '/foo/*',
+                'class' => 'TestPlugin\RequestHandlers\FooHandler',
+                'request_method' => 'GET, push',
+            ]);
+
+            $this->assertSame(['GET', 'PUSH'], $definition->getRequestMethods());
+        }
+
         public function testDefinitionFromArrayWithMethodListAndPriority(): void
         {
             $definition = RequestHandlerDefinition::fromArray([
