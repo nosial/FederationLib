@@ -17,11 +17,29 @@
          */
         public function __construct(array $configuration)
         {
-            $this->enabled = $configuration['enabled'] ?? false;
-            $this->ssl = $configuration['ssl'] ?? false;
+            $this->enabled = self::toBoolean($configuration['enabled'] ?? false, false);
+            $this->ssl = self::toBoolean($configuration['ssl'] ?? false, false);
             $this->host = $configuration['host'] ?? '127.0.0.1';
-            $this->port = $configuration['port'] ?? 6380;
-            $this->classifyKnownTokens = $configuration['classify_known_tokens'] ?? true;
+            $this->port = (int)($configuration['port'] ?? 6380);
+            $this->classifyKnownTokens = self::toBoolean($configuration['classify_known_tokens'] ?? true, true);
+        }
+
+        /**
+         * Converts a configuration value to a boolean, values set by environment variables are strings and a plain
+         * (bool) conversion would turn "false" into true
+         *
+         * @param mixed $value The configuration value
+         * @param bool $default The value to use if the value is not a boolean
+         * @return bool The boolean value
+         */
+        private static function toBoolean(mixed $value, bool $default): bool
+        {
+            if(is_bool($value))
+            {
+                return $value;
+            }
+
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $default;
         }
 
         /**
