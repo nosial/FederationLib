@@ -230,8 +230,7 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'entity search test', 'entity note', 'entity_tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $prefix = substr($entityUuid, 0, 8);
-            $results = $this->client->searchEvidence($prefix);
+            $results = $this->client->searchEvidence($entityUuid);
             $this->assertNotEmpty($results);
             foreach ($results as $result)
             {
