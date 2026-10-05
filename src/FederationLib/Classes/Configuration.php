@@ -2,7 +2,6 @@
 
     namespace FederationLib\Classes;
 
-    use FederationLib\Classes\Configuration\BayesianConfiguration;
     use FederationLib\Classes\Configuration\DatabaseConfiguration;
     use FederationLib\Classes\Configuration\MaintenanceConfiguration;
     use FederationLib\Classes\Configuration\PluginsConfiguration;
@@ -18,7 +17,6 @@
         private static ?\ConfigLib\Configuration $configuration = null;
         private static ?ServerConfiguration $serverConfiguration = null;
         private static ?ScanningConfiguration $scanningConfiguration = null;
-        private static ?BayesianConfiguration $bayesianConfiguration = null;
         private static ?DatabaseConfiguration $databaseConfiguration = null;
         private static ?MaintenanceConfiguration $maintenanceConfiguration = null;
         private static ?RedisConfiguration $redisConfiguration = null;
@@ -104,13 +102,6 @@
             self::$configuration->setDefault('scanning.risk_score_min_bound', 0.0, 'FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND');
             self::$configuration->setDefault('scanning.risk_score_max_bound', 100.0, 'FEDERATION_SCANNING_RISK_SCORE_MAX_BOUND');
 
-            // Bayesian filter configuration
-            self::$configuration->setDefault('bayesian.enabled', true, 'FEDERATION_BS_ENABLED');
-            self::$configuration->setDefault('bayesian.ssl', false, 'FEDERATION_BS_SSL');
-            self::$configuration->setDefault('bayesian.host', '127.0.0.1', 'FEDERATION_BS_HOST');
-            self::$configuration->setDefault('bayesian.port', 6380, 'FEDERATION_BS_PORT');
-            self::$configuration->setDefault('bayesian.classify_known_tokens', true, 'FEDERATION_BS_CLASSIFY_KNOWN_TOKENS');
-
             // Maintenance configuration
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
             self::$configuration->setDefault('maintenance.clean_audit_logs', true, 'FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS');
@@ -191,7 +182,6 @@
             // Initialize the configuration classes
             self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
             self::$scanningConfiguration = new ScanningConfiguration(self::$configuration->get('scanning'));
-            self::$bayesianConfiguration = new BayesianConfiguration(self::$configuration->get('bayesian'));
             self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
             self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
             self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
@@ -257,21 +247,6 @@
             }
 
             return self::$scanningConfiguration;
-        }
-
-        /**
-         * Get the BayesianServer configuration
-         *
-         * @return BayesianConfiguration
-         */
-        public static function getBayesianConfiguration(): BayesianConfiguration
-        {
-            if(self::$bayesianConfiguration === null)
-            {
-                self::initialize();
-            }
-
-            return self::$bayesianConfiguration;
         }
 
         /**
