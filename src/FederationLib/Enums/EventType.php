@@ -5,7 +5,8 @@
     use FederationLib\Interfaces\AuditLogEventHandlerInterface;
     use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\ContentScanEventHandlerInterface;
-    use FederationLib\Interfaces\EvidenceClassifiedEventHandlerInterface;
+    use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
+    use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
 
     enum EventType : string implements CaseSensitiveInterface
     {
@@ -21,10 +22,16 @@
         case CONTENT_SCAN = 'CONTENT_SCAN';
 
         /**
-         * Produced whenever an evidence record is assigned a classification, the handler receives the EvidenceRecord
-         * and the ClassificationFlag
+         * Produced during a query entity request, the handler receives the EntityQuery and may change the response
+         * or reject the request
          */
-        case EVIDENCE_CLASSIFIED = 'EVIDENCE_CLASSIFIED';
+        case QUERY_ENTITY = 'QUERY_ENTITY';
+
+        /**
+         * Produced whenever a change is written to the database (eg; a report is created or closed, an evidence
+         * record is classified or an entity is deleted), the handler receives the RecordChange
+         */
+        case RECORD_CHANGE = 'RECORD_CHANGE';
 
         /**
          * Returns the interface an event handler class must implement to handle the event
@@ -37,7 +44,8 @@
             {
                 self::AUDIT_LOG => AuditLogEventHandlerInterface::class,
                 self::CONTENT_SCAN => ContentScanEventHandlerInterface::class,
-                self::EVIDENCE_CLASSIFIED => EvidenceClassifiedEventHandlerInterface::class,
+                self::QUERY_ENTITY => QueryEntityEventHandlerInterface::class,
+                self::RECORD_CHANGE => RecordChangeEventHandlerInterface::class,
             };
         }
 
@@ -52,8 +60,8 @@
             return match($this)
             {
                 self::AUDIT_LOG => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases()),
-                self::CONTENT_SCAN => [],
-                self::EVIDENCE_CLASSIFIED => array_map(fn(ClassificationFlag $flag) => $flag->value, ClassificationFlag::cases()),
+                self::CONTENT_SCAN, self::QUERY_ENTITY => [],
+                self::RECORD_CHANGE => array_map(fn(RecordChangeType $type) => $type->value, RecordChangeType::cases()),
             };
         }
 
