@@ -1,7 +1,6 @@
 <?php
 
     namespace FederationLib\Methods\Evidence;
-    use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\RequestHandler;
@@ -101,18 +100,6 @@
                     'Evidence created by operator %s',
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $entityUuid, null, $evidenceUuid);
-
-                if($classification !== null && ($bayesianClient = FederationServer::getBayesianClient()) !== null && $textContent !== null)
-                {
-                    try
-                    {
-                        $bayesianClient->learn($textContent, $classification->value);
-                    }
-                    catch(RequestException $e)
-                    {
-                        Logger::log()->warning('Bayesian learn failed: ' . $e->getMessage());
-                    }
-                }
             }
             catch(InvalidArgumentException $e)
             {
@@ -187,7 +174,7 @@
                                         ],
                                         'classification' => [
                                             'type' => ['string', 'null'],
-                                            'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions and submits text for Bayesian training when enabled.',
+                                            'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions.',
                                             'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS', null],
                                         ],
                                     ],
