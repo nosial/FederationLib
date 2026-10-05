@@ -6,7 +6,6 @@ target/web/net.nosial.federation.ncc:
 target/debug/net.nosial.federation.ncc:
 	ncc build --configuration debug --log-level debug
 
-# The TestPlugin is only used by the test units, it is never part of FederationLib's build
 TEST_PLUGIN = tests/TestPlugin/target/release/net.nosial.test_plugin.ncc
 TEST_COMPOSE = docker compose -f docker-compose.yml -f docker-compose.test.yml
 
