@@ -7,6 +7,7 @@
         private bool $enabled;
         private bool $publicSearch;
         private int $maxLimit;
+        private bool $extendedSearch;
         private bool $enableEntities;
         private bool $enableEvidence;
         private bool $enableBlacklist;
@@ -25,6 +26,7 @@
             $this->enabled = $configuration['enabled'] ?? true;
             $this->publicSearch = $configuration['public_search'] ?? false;
             $this->maxLimit = $configuration['max_limit'] ?? 50;
+            $this->extendedSearch = $configuration['extended_search'] ?? true;
             $this->enableEntities = $configuration['enable_entities'] ?? true;
             $this->enableEvidence = $configuration['enable_evidence'] ?? true;
             $this->enableBlacklist = $configuration['enable_blacklist'] ?? true;
@@ -63,6 +65,18 @@
         public function getMaxLimit(): int
         {
             return $this->maxLimit;
+        }
+
+        /**
+         * Checks if searches made by authenticated operators also match the columns of the extended search, such as
+         * entity metadata. These columns are not indexed, so the extended search is never used for unauthenticated
+         * requests.
+         *
+         * @return bool True if authenticated operators use the extended search, false otherwise
+         */
+        public function isExtendedSearchEnabled(): bool
+        {
+            return $this->extendedSearch;
         }
 
         /**

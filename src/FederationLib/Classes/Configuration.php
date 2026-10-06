@@ -121,6 +121,7 @@
             self::$configuration->setDefault('search.enabled', true, 'FEDERATION_SEARCH_ENABLED');
             self::$configuration->setDefault('search.public_search', false, 'FEDERATION_SEARCH_PUBLIC');
             self::$configuration->setDefault('search.max_limit', 50, 'FEDERATION_SEARCH_MAX_LIMIT');
+            self::$configuration->setDefault('search.extended_search', true, 'FEDERATION_SEARCH_EXTENDED');
             self::$configuration->setDefault('search.enable_entities', true, 'FEDERATION_SEARCH_ENABLE_ENTITIES');
             self::$configuration->setDefault('search.enable_evidence', true, 'FEDERATION_SEARCH_ENABLE_EVIDENCE');
             self::$configuration->setDefault('search.enable_blacklist', true, 'FEDERATION_SEARCH_ENABLE_BLACKLIST');
