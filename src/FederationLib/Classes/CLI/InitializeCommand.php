@@ -97,6 +97,20 @@
                 return 1;
             }
 
+            try
+            {
+                $linkedEntities = EntitiesManager::linkUnlinkedSubdomainEntities();
+                if($linkedEntities > 0)
+                {
+                    Logger::log()->info(sprintf('Linked %d unlinked subdomain entities to the entity of their registrable domain', $linkedEntities));
+                }
+            }
+            catch (DatabaseOperationException $e)
+            {
+                Logger::log()->critical('Failed to link unlinked subdomain entities: ' . $e->getMessage(), $e);
+                return 1;
+            }
+
             return 0;
         }
 
