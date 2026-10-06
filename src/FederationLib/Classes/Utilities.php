@@ -290,4 +290,15 @@
             return null;
         }
 
+        /**
+         * Builds an SQL condition that matches the :q LIKE pattern against any of the given columns, treating a
+         * backslash in the pattern as the escape character.
+         *
+         * @param string[] $columns The columns to match the pattern against
+         * @return string The parenthesized condition
+         */
+        public static function buildLikeCondition(array $columns): string
+        {
+            return '(' . implode(' OR ', array_map(fn(string $column) => "$column LIKE :q ESCAPE '\\\\'", $columns)) . ')';
+        }
     }
