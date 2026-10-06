@@ -732,17 +732,9 @@
             $evidenceUuid = $this->client->submitEvidence($entityUuid, 'actual text content', $noteText, 'note_tag');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $results = $this->client->searchEvidence($noteText);
-            $found = false;
-            foreach ($results as $result)
-            {
-                if ($result->getUuid() === $evidenceUuid)
-                {
-                    $found = true;
-                    Logger::getLogger()->info('Note text matched in search result — server may include notes in search');
-                }
-            }
-            $this->assertFalse($found, 'Note text should NOT be searchable via evidence text_content search');
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $this->assertFalse($this->containsUuid($anonymousClient->searchEvidence($noteText), $evidenceUuid),
+                'Note text should NOT be searchable via evidence text_content search');
         }
 
         public function testSearchEvidenceTextContentMultipleSharedSubstring(): void
