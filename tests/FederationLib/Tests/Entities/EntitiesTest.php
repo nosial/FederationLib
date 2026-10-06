@@ -199,6 +199,73 @@
             $this->assertEquals($parentRecord->getUuid(), $this->client->pushEntity('subdomain-parent-test.com'));
         }
 
+        public function testPushParentDomainLinksExistingSubdomainEntities(): void
+        {
+            $parentHost = uniqid('reverse-parent-test-') . '.com';
+            $subdomain1Uuid = $this->client->pushEntity('sub1.' . $parentHost);
+            $this->createdEntities[] = $subdomain1Uuid;
+            $subdomain2Uuid = $this->client->pushEntity('deep.sub2.' . $parentHost);
+            $this->createdEntities[] = $subdomain2Uuid;
+
+            // Deleting the parent domain leaves the subdomains unlinked, as if they were registered before it
+            $this->client->deleteEntity($this->client->getEntityRecord($parentHost)->getUuid());
+            foreach([$subdomain1Uuid, $subdomain2Uuid] as $subdomainUuid)
+            {
+                $this->assertNull($this->client->getEntityRecord($subdomainUuid)->getRelationshipEntity());
+            }
+
+            // Registering the parent domain afterwards links the existing subdomains to it
+            $parentUuid = $this->client->pushEntity($parentHost);
+            $this->createdEntities[] = $parentUuid;
+            $this->assertNull($this->client->getEntityRecord($parentUuid)->getRelationshipEntity());
+
+            foreach([$subdomain1Uuid, $subdomain2Uuid] as $subdomainUuid)
+            {
+                $subdomainRecord = $this->client->getEntityRecord($subdomainUuid);
+                $this->assertEquals($parentUuid, $subdomainRecord->getRelationshipEntity());
+                $this->assertEquals(EntityRelationshipType::CHILD, $subdomainRecord->getRelationshipType());
+            }
+        }
+
+        public function testPushParentDomainKeepsExistingSubdomainRelationships(): void
+        {
+            $parentHost = uniqid('reverse-keep-test-') . '.com';
+            $subdomainUuid = $this->client->pushEntity('sub.' . $parentHost);
+            $this->createdEntities[] = $subdomainUuid;
+            $this->client->deleteEntity($this->client->getEntityRecord($parentHost)->getUuid());
+
+            // A relationship assigned by an operator is not replaced by the parent domain
+            $targetUuid = $this->client->pushEntity(uniqid('reverse-keep-target-') . '.com');
+            $this->createdEntities[] = $targetUuid;
+            $this->client->setEntityRelationship($subdomainUuid, $targetUuid, EntityRelationshipType::PROXY);
+
+            $parentUuid = $this->client->pushEntity($parentHost);
+            $this->createdEntities[] = $parentUuid;
+
+            $subdomainRecord = $this->client->getEntityRecord($subdomainUuid);
+            $this->assertEquals($targetUuid, $subdomainRecord->getRelationshipEntity());
+            $this->assertEquals(EntityRelationshipType::PROXY, $subdomainRecord->getRelationshipType());
+        }
+
+        public function testPushParentDomainDoesNotLinkOtherDomainsOrNamedEntities(): void
+        {
+            $parentHost = uniqid('reverse-scope-test-') . '.com';
+
+            // Shares the suffix of the parent host, but belongs to a different registrable domain
+            $otherDomainUuid = $this->client->pushEntity('other' . $parentHost);
+            $this->createdEntities[] = $otherDomainUuid;
+
+            // Named entities are never linked to a parent domain
+            $namedEntityUuid = $this->client->pushEntity('sub.' . $parentHost, 'john123');
+            $this->createdEntities[] = $namedEntityUuid;
+
+            $parentUuid = $this->client->pushEntity($parentHost);
+            $this->createdEntities[] = $parentUuid;
+
+            $this->assertNull($this->client->getEntityRecord($otherDomainUuid)->getRelationshipEntity());
+            $this->assertNull($this->client->getEntityRecord($namedEntityUuid)->getRelationshipEntity());
+        }
+
         public function testPushRegistrableDomainEntityHasNoParent(): void
         {
             $entityUuid = $this->client->pushEntity('no-parent-test.co.uk');
