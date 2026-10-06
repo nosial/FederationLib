@@ -80,7 +80,7 @@
 
             try
             {
-                $results = EvidenceManager::searchEvidence($likePattern, $limit, $page, $authenticatedOperator !== null && $authenticatedOperator->hasManagementPermissions(), $category, $by, $order);
+                $results = EvidenceManager::searchEvidence($likePattern, $limit, $page, $authenticatedOperator !== null && $authenticatedOperator->hasManagementPermissions(), $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches evidence by UUID, text content, tag, or entity.';
+            return 'Searches evidence by UUID, text content, tag, or entity. Authenticated operators also match the note and the UUIDs of the associated report and submitting operator, unless the host disabled the extended search.';
         }
 
         /**

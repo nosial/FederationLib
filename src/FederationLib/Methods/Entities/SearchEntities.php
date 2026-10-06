@@ -80,7 +80,7 @@
 
             try
             {
-                $results = EntitiesManager::searchEntities($likePattern, $limit, $page, $category, $by, $order);
+                $results = EntitiesManager::searchEntities($likePattern, $limit, $page, $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches entities by UUID, host, or ID.';
+            return 'Searches entities by UUID, host, or ID. Authenticated operators also match the entity metadata and the UUID of the related entity, unless the host disabled the extended search.';
         }
 
         /**

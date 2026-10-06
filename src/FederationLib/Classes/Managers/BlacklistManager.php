@@ -7,6 +7,7 @@
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\BlacklistCategory;
     use FederationLib\Enums\IncidentType;
@@ -653,15 +654,17 @@
         }
 
         /**
-         * Searches blacklist records by a LIKE pattern across uuid and entity columns.
+         * Searches blacklist records by a LIKE pattern across the uuid and entity columns and the host and id of the
+         * blacklisted entity, and with the extended search also the operator, report, lifted_by, and type columns.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return BlacklistRecord[] An array of matching BlacklistRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchBlacklist(string $likePattern, int $limit, int $page, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchBlacklist(string $likePattern, int $limit, int $page, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -678,7 +681,13 @@
 
             try
             {
-                $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE (b.uuid LIKE :q ESCAPE '\\\\' OR b.entity LIKE :q ESCAPE '\\\\' OR e.host LIKE :q ESCAPE '\\\\' OR e.id LIKE :q ESCAPE '\\\\')";
+                $columns = ['b.uuid', 'b.entity', 'e.host', 'e.id'];
+                if ($extended)
+                {
+                    array_push($columns, 'b.operator', 'b.report', 'b.lifted_by', 'b.type');
+                }
+
+                $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE " . Utilities::buildLikeCondition($columns);
 
                 $categoryCondition = $category?->toCondition() ?? '';
                 if ($categoryCondition !== '')

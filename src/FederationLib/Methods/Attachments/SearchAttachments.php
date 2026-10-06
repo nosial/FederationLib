@@ -80,7 +80,7 @@
 
             try
             {
-                $results = FileAttachmentManager::searchAttachments($likePattern, $limit, $page, true, $category, $by, $order);
+                $results = FileAttachmentManager::searchAttachments($likePattern, $limit, $page, true, $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches file attachments by UUID, file name, or associated evidence.';
+            return 'Searches file attachments by UUID, file name, or associated evidence. Authenticated operators also match the MIME type, unless the host disabled the extended search.';
         }
 
         /**

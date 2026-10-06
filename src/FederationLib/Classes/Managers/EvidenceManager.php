@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\EvidenceCategory;
     use FederationLib\Enums\ClassificationFlag;
@@ -1037,16 +1038,18 @@
         }
 
         /**
-         * Searches evidence by a LIKE pattern across uuid, text_content, tag, and entity columns.
+         * Searches evidence by a LIKE pattern across uuid, text_content, tag, and entity columns, and with the extended
+         * search also the note, report, and operator columns.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
          * @param bool $includeConfidential if True, confidential records are included in the search results
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return EvidenceRecord[] An array of matching EvidenceRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchEvidence(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchEvidence(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?EvidenceCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -1063,7 +1066,13 @@
 
             try
             {
-                $sql = "SELECT * FROM evidence WHERE (uuid LIKE :q ESCAPE '\\\\' OR text_content LIKE :q ESCAPE '\\\\' OR tag LIKE :q ESCAPE '\\\\' OR entity LIKE :q ESCAPE '\\\\')";
+                $columns = ['uuid', 'text_content', 'tag', 'entity'];
+                if ($extended)
+                {
+                    array_push($columns, 'note', 'report', 'operator');
+                }
+
+                $sql = "SELECT * FROM evidence WHERE " . Utilities::buildLikeCondition($columns);
 
                 if (!$includeConfidential)
                 {

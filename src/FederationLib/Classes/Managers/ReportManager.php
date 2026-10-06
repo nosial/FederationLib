@@ -6,6 +6,7 @@
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\ReportCategory;
     use FederationLib\Enums\IncidentType;
@@ -792,15 +793,17 @@
         }
 
         /**
-         * Searches reports by a LIKE pattern across uuid, message, and reporting_entity columns.
+         * Searches reports by a LIKE pattern across uuid, message, and reporting_entity columns, and with the extended
+         * search also the submitting_operator, assigned_operator, and incident_type columns.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return ReportRecord[] An array of matching ReportRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchReports(string $likePattern, int $limit, int $page, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchReports(string $likePattern, int $limit, int $page, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -817,7 +820,13 @@
 
             try
             {
-                $sql = "SELECT * FROM reports WHERE (uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\' OR reporting_entity LIKE :q ESCAPE '\\\\')";
+                $columns = ['uuid', 'message', 'reporting_entity'];
+                if ($extended)
+                {
+                    array_push($columns, 'submitting_operator', 'assigned_operator', 'incident_type');
+                }
+
+                $sql = "SELECT * FROM reports WHERE " . Utilities::buildLikeCondition($columns);
 
                 $categoryCondition = $category?->toCondition() ?? '';
                 if ($categoryCondition !== '')

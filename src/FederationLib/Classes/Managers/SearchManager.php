@@ -25,6 +25,8 @@
         {
             $results = [];
             $searchAll = $types === null || $types === [];
+            // The extended search matches columns that are not indexed, so it is limited to authenticated operators
+            $extended = $operator !== null && Configuration::getSearchConfiguration()->isExtendedSearchEnabled();
 
             if (($searchAll || in_array(RecordType::ENTITY->value, $types, true)) && Configuration::getSearchConfiguration()->isEntitiesEnabled())
             {
@@ -32,7 +34,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::ENTITY, $r),
-                        EntitiesManager::searchEntities($query, $limit, $page)
+                        EntitiesManager::searchEntities($query, $limit, $page, extended: $extended)
                     ));
                 }
             }
@@ -43,7 +45,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::EVIDENCE, $r),
-                        EvidenceManager::searchEvidence($query, $limit, $page, $operator !== null && $operator->hasManagementPermissions())
+                        EvidenceManager::searchEvidence($query, $limit, $page, $operator !== null && $operator->hasManagementPermissions(), extended: $extended)
                     ));
                 }
             }
@@ -54,7 +56,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::BLACKLIST, $r),
-                        BlacklistManager::searchBlacklist($query, $limit, $page)
+                        BlacklistManager::searchBlacklist($query, $limit, $page, extended: $extended)
                     ));
                 }
             }
@@ -65,7 +67,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::REPORT, $r),
-                        ReportManager::searchReports($query, $limit, $page)
+                        ReportManager::searchReports($query, $limit, $page, extended: $extended)
                     ));
                 }
             }
@@ -76,7 +78,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::ATTACHMENT, $r),
-                        FileAttachmentManager::searchAttachments($query, $limit, $page, $operator !== null && $operator->hasManagementPermissions())
+                        FileAttachmentManager::searchAttachments($query, $limit, $page, $operator !== null && $operator->hasManagementPermissions(), extended: $extended)
                     ));
                 }
             }
@@ -87,7 +89,7 @@
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::AUDIT_LOG, $r),
-                        AuditLogManager::searchAuditLogs($query, $limit, $page, $operator !== null)
+                        AuditLogManager::searchAuditLogs($query, $limit, $page, $operator !== null, extended: $extended)
                     ));
                 }
             }

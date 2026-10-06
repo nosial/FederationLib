@@ -7,6 +7,7 @@
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\Categories\AuditLogCategory;
@@ -561,16 +562,18 @@
         }
 
         /**
-         * Searches audit logs by a LIKE pattern across uuid and message columns.
+         * Searches audit logs by a LIKE pattern across uuid and message columns, and with the extended search also the
+         * type column and the operator, entity, blacklist, evidence, and file_attachment columns of the related records.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
          * @param bool $public True to view search results only available to the public
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return AuditLog[] An array of matching AuditLog objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchAuditLogs(string $likePattern, int $limit, int $page, bool $public=false, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchAuditLogs(string $likePattern, int $limit, int $page, bool $public=false, ?AuditLogCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -587,7 +590,13 @@
 
             try
             {
-                $sql = "SELECT * FROM audit_log WHERE (uuid LIKE :q ESCAPE '\\\\' OR message LIKE :q ESCAPE '\\\\')";
+                $columns = ['uuid', 'message'];
+                if ($extended)
+                {
+                    array_push($columns, 'type', 'operator', 'entity', 'blacklist', 'evidence', 'file_attachment');
+                }
+
+                $sql = "SELECT * FROM audit_log WHERE " . Utilities::buildLikeCondition($columns);
 
                 if (!$public)
                 {

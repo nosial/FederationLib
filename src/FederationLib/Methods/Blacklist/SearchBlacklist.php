@@ -80,7 +80,7 @@
 
             try
             {
-                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page, $category, $by, $order);
+                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page, $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches blacklist records by UUID or entity.';
+            return 'Searches blacklist records by UUID or entity. Authenticated operators also match the incident type and the UUIDs of the creating operator, the supporting report, and the lifting operator, unless the host disabled the extended search.';
         }
 
         /**

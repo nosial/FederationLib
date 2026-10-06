@@ -122,7 +122,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches across entities, evidence, blacklist records, reports, attachments, audit logs, and operators. Results are filtered based on the authenticated operator\'s permissions and server configuration.';
+            return 'Searches across entities, evidence, blacklist records, reports, attachments, audit logs, and operators. Results are filtered based on the authenticated operator\'s permissions and server configuration. Authenticated operators also match additional record members, such as entity metadata, unless the host disabled the extended search.';
         }
 
         /**

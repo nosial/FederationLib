@@ -7,6 +7,7 @@
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\AttachmentCategory;
     use FederationLib\Enums\OrderType;
@@ -414,16 +415,18 @@
         }
 
         /**
-         * Searches file attachments by a LIKE pattern across uuid, file_name, and evidence columns.
+         * Searches file attachments by a LIKE pattern across uuid, file_name, and evidence columns, and with the extended
+         * search also the file_mime column.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
          * @param bool $includeConfidential if True, confidential records are included in the search results
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return FileAttachmentRecord[] An array of matching FileAttachmentRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?AttachmentCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchAttachments(string $likePattern, int $limit, int $page, bool $includeConfidential=false, ?AttachmentCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -447,7 +450,13 @@
                     $sql .= " LEFT JOIN evidence e ON fa.evidence = e.uuid";
                 }
 
-                $sql .= " WHERE (fa.uuid LIKE :q ESCAPE '\\\\' OR fa.file_name LIKE :q ESCAPE '\\\\' OR fa.evidence LIKE :q ESCAPE '\\\\')";
+                $columns = ['fa.uuid', 'fa.file_name', 'fa.evidence'];
+                if ($extended)
+                {
+                    $columns[] = 'fa.file_mime';
+                }
+
+                $sql .= " WHERE " . Utilities::buildLikeCondition($columns);
 
                 if (!$includeConfidential)
                 {

@@ -1669,15 +1669,17 @@
         }
 
         /**
-         * Searches entities by a LIKE pattern across uuid, host, and id columns.
+         * Searches entities by a LIKE pattern across uuid, host, and id columns, and with the extended search also
+         * the metadata and relationship_entity columns.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
+         * @param bool $extended True to also match the columns of the extended search, available to operators
          * @return EntityRecord[] An array of matching EntityRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -1694,7 +1696,13 @@
 
             try
             {
-                $sql = "SELECT * FROM entities WHERE (uuid LIKE :q ESCAPE '\\\\' OR host LIKE :q ESCAPE '\\\\' OR id LIKE :q ESCAPE '\\\\')";
+                $columns = ['uuid', 'host', 'id'];
+                if ($extended)
+                {
+                    array_push($columns, 'metadata', 'relationship_entity');
+                }
+
+                $sql = "SELECT * FROM entities WHERE " . Utilities::buildLikeCondition($columns);
 
                 $categoryCondition = $category?->toCondition() ?? '';
                 if ($categoryCondition !== '')

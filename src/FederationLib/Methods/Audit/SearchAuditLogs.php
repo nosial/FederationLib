@@ -80,7 +80,7 @@
 
             try
             {
-                $results = AuditLogManager::searchAuditLogs($likePattern, $limit, $page, $authenticatedOperator !== null, $category, $by, $order);
+                $results = AuditLogManager::searchAuditLogs($likePattern, $limit, $page, $authenticatedOperator !== null, $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches audit logs by UUID or message.';
+            return 'Searches audit logs by UUID or message. Authenticated operators also match the entry type and the UUIDs of the related operator, entity, blacklist record, evidence, and file attachment, unless the host disabled the extended search.';
         }
 
         /**

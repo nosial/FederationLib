@@ -80,7 +80,7 @@
 
             try
             {
-                $results = ReportManager::searchReports($likePattern, $limit, $page, $category, $by, $order);
+                $results = ReportManager::searchReports($likePattern, $limit, $page, $category, $by, $order, self::useExtendedSearch());
             }
             catch (DatabaseOperationException $e)
             {
@@ -111,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Searches reports by UUID, message, or reporting entity.';
+            return 'Searches reports by UUID, message, or reporting entity. Authenticated operators also match the incident type and the UUIDs of the submitting and assigned operators, unless the host disabled the extended search.';
         }
 
         /**
