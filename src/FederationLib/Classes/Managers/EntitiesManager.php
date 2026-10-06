@@ -1144,8 +1144,9 @@
 
         /**
          * Updates the reputation score for an entity atomically. The delta is added to the existing
-         * reputation and clamped to the configured bounds. The reputation cache is invalidated
-         * after the update so subsequent reads fetch the fresh value.
+         * reputation and clamped to the configured bounds. Whitelisted entities are excluded and their
+         * reputation is left untouched. The reputation cache is invalidated after the update so subsequent
+         * reads fetch the fresh value.
          *
          * @param string $entityUuid The UUID of the entity to update
          * @param int $delta The amount to add to the current reputation (positive or negative)
@@ -1160,7 +1161,7 @@
                 $maxBound = Configuration::getScanningConfiguration()->getReputationMaxBound();
                 $now = date('Y-m-d H:i:s');
                 $stmt = DatabaseConnection::getConnection()->prepare(
-                    "UPDATE entities SET reputation = GREATEST(:minBound, LEAST(:maxBound, reputation + :delta)), reputation_last_updated = :updated WHERE uuid = :uuid"
+                    "UPDATE entities SET reputation = GREATEST(:minBound, LEAST(:maxBound, reputation + :delta)), reputation_last_updated = :updated WHERE uuid = :uuid AND whitelisted = 0"
                 );
                 $stmt->bindParam(':minBound', $minBound, PDO::PARAM_INT);
                 $stmt->bindParam(':maxBound', $maxBound, PDO::PARAM_INT);
