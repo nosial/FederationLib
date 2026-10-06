@@ -5,6 +5,7 @@
 
     namespace FederationLib\Tests\Search;
 
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
@@ -2261,4 +2262,108 @@
             $this->assertTrue($foundEvidence, 'EVIDENCE must be present when filtering to ENTITY+EVIDENCE');
         }
 
+        public function testSearchEntitiesMatchesMetadataForOperatorsOnly(): void
+        {
+            $marker = 'meta_marker_' . uniqid();
+            $entityUuid = $this->client->pushEntity(uniqid('extended-meta-') . '.com', null, ['source' => $marker]);
+            $this->createdEntities[] = $entityUuid;
+
+            $this->assertTrue($this->containsUuid($this->client->searchEntities($marker), $entityUuid),
+                'Authenticated operators must find entities by their metadata');
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $this->assertFalse($this->containsUuid($anonymousClient->searchEntities($marker), $entityUuid),
+                'Unauthenticated requests must not search entity metadata');
+        }
+
+        public function testSearchEntitiesMatchesRelationshipEntityForOperatorsOnly(): void
+        {
+            $targetUuid = $this->client->pushEntity(uniqid('extended-target-') . '.com');
+            $this->createdEntities[] = $targetUuid;
+            $entityUuid = $this->client->pushEntity(uniqid('extended-related-') . '.com');
+            $this->createdEntities[] = $entityUuid;
+            $this->client->setEntityRelationship($entityUuid, $targetUuid, EntityRelationshipType::ALTERNATIVE);
+
+            $this->assertTrue($this->containsUuid($this->client->searchEntities($targetUuid), $entityUuid),
+                'Authenticated operators must find entities by the UUID of their related entity');
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $this->assertFalse($this->containsUuid($anonymousClient->searchEntities($targetUuid), $entityUuid),
+                'Unauthenticated requests must not search the related entity');
+        }
+
+        public function testGlobalSearchMatchesEntityMetadataForOperators(): void
+        {
+            $marker = 'global_meta_marker_' . uniqid();
+            $entityUuid = $this->client->pushEntity(uniqid('extended-global-') . '.com', null, ['source' => $marker]);
+            $this->createdEntities[] = $entityUuid;
+
+            $records = array_map(fn(SearchResult $result) => $result->getRecord(), $this->client->search($marker, [RecordType::ENTITY->value]));
+            $this->assertTrue($this->containsUuid($records, $entityUuid), 'The global search must match entity metadata for operators');
+        }
+
+        public function testSearchEvidenceMatchesNoteForOperatorsOnly(): void
+        {
+            $entityUuid = $this->client->pushEntity(uniqid('extended-note-') . '.com');
+            $this->createdEntities[] = $entityUuid;
+            $marker = 'note_marker_' . uniqid();
+            $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Evidence content', $marker);
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $this->assertTrue($this->containsUuid($this->client->searchEvidence($marker), $evidenceUuid),
+                'Authenticated operators must find evidence by its note');
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $this->assertFalse($this->containsUuid($anonymousClient->searchEvidence($marker), $evidenceUuid),
+                'Unauthenticated requests must not search evidence notes');
+        }
+
+        public function testSearchEvidenceMatchesReportForOperators(): void
+        {
+            $entityUuid = $this->client->pushEntity(uniqid('extended-evidence-report-') . '.com');
+            $this->createdEntities[] = $entityUuid;
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Report evidence'], IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $evidenceUuid = $submission->getEvidence()[0]->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $evidenceUuid;
+
+            $this->assertTrue($this->containsUuid($this->client->searchEvidence($reportUuid), $evidenceUuid),
+                'Authenticated operators must find evidence by the UUID of its report');
+        }
+
+        public function testSearchBlacklistMatchesReportForOperatorsOnly(): void
+        {
+            $entityUuid = $this->client->pushEntity(uniqid('extended-blacklist-') . '.com');
+            $this->createdEntities[] = $entityUuid;
+            $submission = $this->client->submitReport($entityUuid, ['text_content' => 'Blacklist evidence'], IncidentType::SPAM);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            $this->assertTrue($this->containsUuid($this->client->searchBlacklist($reportUuid), $blacklistUuid),
+                'Authenticated operators must find blacklist records by the UUID of their report');
+
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $this->assertFalse($this->containsUuid($anonymousClient->searchBlacklist($reportUuid), $blacklistUuid),
+                'Unauthenticated requests must not search the report of blacklist records');
+        }
+
+        /**
+         * Checks whether a list of records contains a record with the given UUID
+         */
+        private function containsUuid(array $records, string $uuid): bool
+        {
+            foreach ($records as $record)
+            {
+                if ($record->getUuid() === $uuid)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
