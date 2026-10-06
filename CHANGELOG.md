@@ -5,11 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.14] - Ongoing
+## [1.0.14] - 2026-10-06
 
-This is an ongoing update
+This update introduces the new plugin system, the removal of the hard-coded Bayesian scanning implementation in-favor
+for a separate plugin entirely called [BayesianPlugin](https://github.com/nosial/BayesianPlugin) instead. FederationLib's
+functionality remains the same with the included BayesianServer functionality, but developers can now extend FederationLib's
+capabilities and accuracy with the use of custom plugins.
 
+### Added
+ - Plugin system: plugins are ncc packages that can add new routes, hook into existing routes (`PRE_REQUEST`,
+   `POST_REQUEST`, `OVERRIDE`) and react to events (`AUDIT_LOG`, `CONTENT_SCAN`, `QUERY_ENTITY`, `RECORD_CHANGE`),
+   configured with the `plugins` option (`FEDERATION_PLUGINS`). See `PLUGINS.md` for details
+ - Plugin routes can use the non-standard `PUSH` request method, eg; to proxy services that use it like BayesianServer
+ - `federationlib init` validates every configured plugin and fails if any is misconfigured
+ - Docker-only `REQUIRE_PLUGINS` environment variable to install or update plugin packages on startup
+ - Docker-only `AUTOSTART` environment variable, the path to a shell script executed on every container start before
+   plugins are installed and FederationLib is initialized (eg; to set up services or dependencies required by plugins)
+ - The docker image installs BayesianPlugin (`nosial/BayesianPlugin@github`) and always enables it as the first plugin
+   in `FEDERATION_PLUGINS`
+ - `tests/TestPlugin` with `Dockerfile.test`, `docker-compose.test.yml` and new Makefile targets; tests and CI now run
+   against `Dockerfile.test`
+ - Extended search for authenticated operators: searches also match entity metadata and related entity, evidence
+   notes, report and operator UUIDs, incident types, attachment MIME types and the related records of audit log
+   entries. These columns are not indexed, so unauthenticated requests never use the extended search, and hosts can
+   disable it with `search.extended_search` (`FEDERATION_SEARCH_EXTENDED`)
+   ([#10](https://github.com/nosial/FederationLib/issues/10))
 
+### Changed
+ - Content scans and entity queries can include results from plugins (extra scanning rules, classifications and
+   suggested actions)
+ - Deleting an entity or operator now also clears the related cached records (evidence, reports and blacklist records)
+ - `RequestHandler` ignores and logs responses written after a response was already sent, instead of sending a second
+   JSON document
+
+### Fixed
+ - Whitelisted entities no longer have their reputation adjusted by blacklists (of the entity or a related entity),
+   report classifications or reputation windows ([#8](https://github.com/nosial/FederationLib/issues/8))
+ - Registering a domain entity (eg; `example.com`) now links its existing unlinked subdomain host entities
+   (eg; `foo.example.com`) to it as a `CHILD`, matching the behavior when the domain is registered first.
+   `federationlib init` links the unlinked subdomain entities of existing databases, registering their domain entity
+   when needed ([#9](https://github.com/nosial/FederationLib/issues/9))
+ - Deleting an entity now also clears the cached records of entities that had a relationship with it
+
+### Removed
+ - The built-in Bayesian implementation and its `bayesian` configuration (`FEDERATION_BS_*`), now provided by
+   BayesianPlugin. The docker image still bundles BayesianServer
+
+   
 ## [1.0.13] - 2026-10-01
 
 This update follows version `v1.0-R4` of the OFD Specification.
