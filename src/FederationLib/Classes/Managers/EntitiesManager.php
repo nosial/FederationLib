@@ -131,6 +131,7 @@
             if($id === null && Configuration::getServerConfiguration()->isLinkSubdomainEntitiesEnabled())
             {
                 self::assignParentDomain($uuid, $host);
+                self::adoptSubdomainEntities($uuid, $host);
             }
 
             return $uuid;
@@ -163,6 +164,67 @@
             {
                 Logger::log()->warning(sprintf('Failed to assign parent domain %s to entity %s: %s', $parentHost, $host, $e->getMessage()), $e);
             }
+        }
+
+        /**
+         * Links subdomain host entities that were registered without a relationship to their registrable domain
+         * (e.g. registered before subdomain linking was enabled) to the entity of that domain as a CHILD,
+         * registering the domain entity when it does not exist yet. This is what would have happened had the
+         * subdomain entities been registered with subdomain linking enabled.
+         *
+         * Once every subdomain entity has been linked, running this again has no effect. Does nothing when
+         * subdomain linking is disabled.
+         *
+         * @return int The number of subdomain entities that were linked
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function linkUnlinkedSubdomainEntities(): int
+        {
+            if(!Configuration::getServerConfiguration()->isLinkSubdomainEntitiesEnabled())
+            {
+                return 0;
+            }
+
+            try
+            {
+                // A subdomain of a registrable domain has at least three labels
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT host FROM entities WHERE id IS NULL AND relationship_entity IS NULL AND host LIKE '%.%.%'"
+                );
+                $stmt->execute();
+                $hosts = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            }
+            catch(PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve unlinked subdomain entities: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            $parentHosts = [];
+            foreach($hosts as $host)
+            {
+                $parentHost = Utilities::getRegistrableDomain($host);
+                if($parentHost !== null && $parentHost !== $host)
+                {
+                    $parentHosts[$parentHost] = true;
+                }
+            }
+
+            $linked = 0;
+            foreach(array_keys($parentHosts) as $parentHost)
+            {
+                $parentUuid = self::getEntity($parentHost)?->getUuid();
+                if($parentUuid === null)
+                {
+                    // Registering the domain entity links its existing subdomain entities
+                    $parentUuid = self::registerEntity($parentHost);
+                    $linked += count(self::getEntitiesByRelationshipEntity($parentUuid));
+                    continue;
+                }
+
+                $linked += self::adoptSubdomainEntities($parentUuid, $parentHost);
+            }
+
+            return $linked;
         }
 
         /**
@@ -889,8 +951,7 @@
                     }
 
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    
-                    // Handle cascading cache deletions for data that should be deleted with entity
+                    RedisConnection::deleteRecordsByField(self::CACHE_PREFIX, 'relationship_entity', $uuid);
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
@@ -1812,5 +1873,62 @@
 
             $secondaryDirection = $direction === 'ASC' ? 'ASC' : 'DESC';
             return "ORDER BY $column $direction, uuid $secondaryDirection";
+        }
+
+        /**
+         * Links the existing subdomain host entities of a newly registered registrable domain entity to it as a
+         * CHILD, so that sub.example.com registered before example.com ends up linked the same way as when
+         * example.com was registered first. Only host entities without a relationship are linked, and hosts that
+         * are not a registrable domain are left alone. Failures are logged rather than thrown, since the domain
+         * entity itself has already been registered.
+         *
+         * @param string $entityUuid The UUID of the registrable domain entity
+         * @param string $host The canonical host of the registrable domain entity
+         * @return int The number of subdomain entities that were linked
+         */
+        private static function adoptSubdomainEntities(string $entityUuid, string $host): int
+        {
+            if(Utilities::getRegistrableDomain($host) !== $host)
+            {
+                return 0;
+            }
+
+            try
+            {
+                $pattern = '%.' . str_replace(['%', '_'], ['\\%', '\\_'], $host);
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT uuid, host FROM entities WHERE id IS NULL AND relationship_entity IS NULL AND host LIKE :pattern ESCAPE '\\\\'"
+                );
+                $stmt->bindParam(':pattern', $pattern);
+                $stmt->execute();
+                $subdomainEntities = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch(PDOException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to retrieve subdomain entities of %s: %s', $host, $e->getMessage()), $e);
+                return 0;
+            }
+
+            $linked = 0;
+            foreach($subdomainEntities as $subdomainEntity)
+            {
+                // Hosts such as sub.example.com.au also end with ".com.au", only link those under this exact domain
+                if(Utilities::getRegistrableDomain($subdomainEntity['host']) !== $host)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    self::assignEntityRelationship($subdomainEntity['uuid'], $entityUuid, EntityRelationshipType::CHILD);
+                    $linked++;
+                }
+                catch(DatabaseOperationException|InvalidArgumentException $e)
+                {
+                    Logger::log()->warning(sprintf('Failed to assign parent domain %s to entity %s: %s', $host, $subdomainEntity['host'], $e->getMessage()), $e);
+                }
+            }
+
+            return $linked;
         }
     }
