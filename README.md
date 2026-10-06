@@ -445,18 +445,19 @@ response performance
 This configuration is responsible for configuring the global search functionality, dictating which resource types
 are searchable and whether unauthenticated users are allowed to perform searches.
 
-| Name                        | Environment Variable                   | Type | Default Value | Required | Description                                                    |
-|-----------------------------|----------------------------------------|------|---------------|----------|----------------------------------------------------------------|
-| `search.enabled`            | `FEDERATION_SEARCH_ENABLED`            | bool | `true`        | Yes      | Whether the search functionality is enabled                    |
-| `search.public_search`      | `FEDERATION_SEARCH_PUBLIC`             | bool | `false`       | Yes      | Whether search is publicly accessible without authentication   |
-| `search.max_limit`          | `FEDERATION_SEARCH_MAX_LIMIT`          | int  | `50`          | Yes      | Maximum number of results returned per resource type           |
-| `search.enable_entities`    | `FEDERATION_SEARCH_ENABLE_ENTITIES`    | bool | `true`        | Yes      | Whether entity records are included in search results          |
-| `search.enable_evidence`    | `FEDERATION_SEARCH_ENABLE_EVIDENCE`    | bool | `true`        | Yes      | Whether evidence records are included in search results        |
-| `search.enable_blacklist`   | `FEDERATION_SEARCH_ENABLE_BLACKLIST`   | bool | `true`        | Yes      | Whether blacklist records are included in search results       |
-| `search.enable_reports`     | `FEDERATION_SEARCH_ENABLE_REPORTS`     | bool | `true`        | Yes      | Whether report records are included in search results          |
-| `search.enable_attachments` | `FEDERATION_SEARCH_ENABLE_ATTACHMENTS` | bool | `false`       | Yes      | Whether file attachment records are included in search results |
-| `search.enable_audit_logs`  | `FEDERATION_SEARCH_ENABLE_AUDIT_LOGS`  | bool | `true`        | Yes      | Whether audit log entries are included in search results       |
-| `search.enable_operators`   | `FEDERATION_SEARCH_ENABLE_OPERATORS`   | bool | `true`        | Yes      | Whether operator records are included in search results        |
+| Name                        | Environment Variable                   | Type | Default Value | Required | Description                                                                                                                                                 |
+|-----------------------------|----------------------------------------|------|---------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `search.enabled`            | `FEDERATION_SEARCH_ENABLED`            | bool | `true`        | Yes      | Whether the search functionality is enabled                                                                                                                 |
+| `search.public_search`      | `FEDERATION_SEARCH_PUBLIC`             | bool | `false`       | Yes      | Whether search is publicly accessible without authentication                                                                                                |
+| `search.max_limit`          | `FEDERATION_SEARCH_MAX_LIMIT`          | int  | `50`          | Yes      | Maximum number of results returned per resource type                                                                                                        |
+| `search.extended_search`    | `FEDERATION_SEARCH_EXTENDED`           | bool | `true`        | Yes      | Whether searches by authenticated operators also match extended record members such as entity metadata (unindexed, never used for unauthenticated requests) |
+| `search.enable_entities`    | `FEDERATION_SEARCH_ENABLE_ENTITIES`    | bool | `true`        | Yes      | Whether entity records are included in search results                                                                                                       |
+| `search.enable_evidence`    | `FEDERATION_SEARCH_ENABLE_EVIDENCE`    | bool | `true`        | Yes      | Whether evidence records are included in search results                                                                                                     |
+| `search.enable_blacklist`   | `FEDERATION_SEARCH_ENABLE_BLACKLIST`   | bool | `true`        | Yes      | Whether blacklist records are included in search results                                                                                                    |
+| `search.enable_reports`     | `FEDERATION_SEARCH_ENABLE_REPORTS`     | bool | `true`        | Yes      | Whether report records are included in search results                                                                                                       |
+| `search.enable_attachments` | `FEDERATION_SEARCH_ENABLE_ATTACHMENTS` | bool | `false`       | Yes      | Whether file attachment records are included in search results                                                                                              |
+| `search.enable_audit_logs`  | `FEDERATION_SEARCH_ENABLE_AUDIT_LOGS`  | bool | `true`        | Yes      | Whether audit log entries are included in search results                                                                                                    |
+| `search.enable_operators`   | `FEDERATION_SEARCH_ENABLE_OPERATORS`   | bool | `true`        | Yes      | Whether operator records are included in search results                                                                                                     |
 
 ### Maintenance Configuration
 
