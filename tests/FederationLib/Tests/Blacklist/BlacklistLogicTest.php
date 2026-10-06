@@ -2,6 +2,7 @@
 
     namespace FederationLib\Tests\Blacklist;
 
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\RequestException;
@@ -563,4 +564,61 @@
             $this->assertNull($extendedRecord->getLiftedBy());
         }
 
+        public function testBlacklistReducesReputationOfEntityAndRelatedEntities(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $relatedUuid = $this->createSecurityEntity();
+            $this->client->setEntityRelationship($relatedUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE);
+
+            $entityBefore = $this->client->getEntityRecord($entityUuid)->getReputation();
+            $relatedBefore = $this->client->getEntityRecord($relatedUuid)->getReputation();
+
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'Blacklist reputation test');
+            $this->createdBlacklistRecords[] = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
+
+            // Default configuration: blacklisted entity -50, related entities -10
+            $this->assertEquals(-50, $this->client->getEntityRecord($entityUuid)->getReputation() - $entityBefore);
+            $this->assertEquals(-10, $this->client->getEntityRecord($relatedUuid)->getReputation() - $relatedBefore);
+        }
+
+        public function testBlacklistDoesNotAffectWhitelistedEntityReputation(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $this->client->setEntityWhitelist($entityUuid, true);
+            $before = $this->client->getEntityRecord($entityUuid)->getReputation();
+
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'Whitelisted blacklist reputation test');
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            // Whitelisting does not prevent an operator from blacklisting the entity
+            $this->assertNotEmpty($blacklistUuid);
+            $this->assertEquals($before, $this->client->getEntityRecord($entityUuid)->getReputation(), 'Whitelisted entity reputation must not change when blacklisted');
+        }
+
+        public function testBlacklistDoesNotAffectWhitelistedRelatedEntityReputation(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $whitelistedChildUuid = $this->createSecurityEntity();
+            $childUuid = $this->createSecurityEntity();
+            $whitelistedParentUuid = $this->createSecurityEntity();
+
+            // Related entities in both directions: entities referencing the blacklisted entity, and its own relationship target
+            $this->client->setEntityRelationship($whitelistedChildUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE);
+            $this->client->setEntityRelationship($childUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE);
+            $this->client->setEntityRelationship($entityUuid, $whitelistedParentUuid, EntityRelationshipType::PROXY);
+            $this->client->setEntityWhitelist($whitelistedChildUuid, true);
+            $this->client->setEntityWhitelist($whitelistedParentUuid, true);
+
+            $whitelistedChildBefore = $this->client->getEntityRecord($whitelistedChildUuid)->getReputation();
+            $childBefore = $this->client->getEntityRecord($childUuid)->getReputation();
+            $whitelistedParentBefore = $this->client->getEntityRecord($whitelistedParentUuid)->getReputation();
+
+            $reportUuid = $this->createReportForEntity($entityUuid, null, 'Whitelisted related reputation test');
+            $this->createdBlacklistRecords[] = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
+
+            $this->assertEquals($whitelistedChildBefore, $this->client->getEntityRecord($whitelistedChildUuid)->getReputation(), 'Whitelisted referencing entity reputation must not change');
+            $this->assertEquals($whitelistedParentBefore, $this->client->getEntityRecord($whitelistedParentUuid)->getReputation(), 'Whitelisted relationship target reputation must not change');
+            $this->assertEquals(-10, $this->client->getEntityRecord($childUuid)->getReputation() - $childBefore, 'Non-whitelisted related entity must still be affected');
+        }
     }

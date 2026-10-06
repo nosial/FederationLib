@@ -535,6 +535,37 @@
             $this->assertEquals(-10, $this->client->getEntityRecord($entityUuid)->getReputation() - $before);
         }
 
+        public function testClosingReportDoesNotAffectWhitelistedReportedEntityReputation(): void
+        {
+            foreach([ClassificationFlag::NORMAL, ClassificationFlag::SUSPICIOUS, ClassificationFlag::MALICIOUS] as $classificationFlag)
+            {
+                $entityUuid = $this->createSecurityEntity();
+                $this->client->setEntityWhitelist($entityUuid, true);
+                $before = $this->client->getEntityRecord($entityUuid)->getReputation();
+
+                $this->submitAndCloseReport($entityUuid, 'Whitelisted reputation test for ' . $classificationFlag->value, $classificationFlag);
+
+                $this->assertEquals($before, $this->client->getEntityRecord($entityUuid)->getReputation(), 'Whitelisted entity reputation must not change for ' . $classificationFlag->value);
+            }
+        }
+
+        public function testClosingReportDoesNotAffectWhitelistedMentionedEntityReputation(): void
+        {
+            $reportedUuid = $this->createSecurityEntity();
+            $mentionedHost = uniqid('mentioned-whitelisted-') . '.com';
+            $mentionedUuid = $this->client->pushEntity($mentionedHost);
+            $this->createdEntities[] = $mentionedUuid;
+            $this->client->setEntityWhitelist($mentionedUuid, true);
+
+            $reportedBefore = $this->client->getEntityRecord($reportedUuid)->getReputation();
+            $mentionedBefore = $this->client->getEntityRecord($mentionedUuid)->getReputation();
+
+            $this->submitAndCloseReport($reportedUuid, "Claim your prize at https://$mentionedHost/login now", ClassificationFlag::MALICIOUS);
+
+            $this->assertEquals(-20, $this->client->getEntityRecord($reportedUuid)->getReputation() - $reportedBefore, 'Non-whitelisted reported entity must still be affected');
+            $this->assertEquals($mentionedBefore, $this->client->getEntityRecord($mentionedUuid)->getReputation(), 'Whitelisted mentioned entity reputation must not change');
+        }
+
         public function testNonIllegalContentReportRespectsConfidentialFlag(): void
         {
             $entityUuid = $this->createSecurityEntity();
