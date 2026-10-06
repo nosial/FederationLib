@@ -432,5 +432,17 @@
         {
             return !Configuration::getServerConfiguration()->isEntityMetadataPublic() && self::getAuthenticatedOperator() === null;
         }
+
+        /**
+         * Checks whether a search should also match the columns of the extended search, which is limited to
+         * authenticated operators for performance reasons.
+         *
+         * @return bool True if the extended search should be used, false otherwise.
+         * @throws RequestException Thrown if there was an authentication error
+         */
+        protected static function useExtendedSearch(): bool
+        {
+            return Configuration::getSearchConfiguration()->isExtendedSearchEnabled() && self::getAuthenticatedOperator() !== null;
+        }
     }
 
