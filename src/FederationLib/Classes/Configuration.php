@@ -140,6 +140,7 @@
             self::$configuration->setDefault('bayesian_model.start_script', '/usr/local/bin/temporary_start_bayesian.sh', 'FEDERATION_BAYESIAN_MODEL_START_SCRIPT');
             self::$configuration->setDefault('bayesian_model.stop_script', '/usr/local/bin/stop_temporary_bayesian.sh', 'FEDERATION_BAYESIAN_MODEL_STOP_SCRIPT');
             self::$configuration->setDefault('bayesian_model.model_path', '/var/www/bayesian_model/model', 'FEDERATION_BAYESIAN_MODEL_PATH');
+            self::$configuration->setDefault('bayesian_model.archive_path', '/var/www/bayesian_model/archive.csv', 'FEDERATION_BAYESIAN_MODEL_ARCHIVE_PATH');
             self::$configuration->setDefault('bayesian_model.backup_path', '/var/www/bayesian_model/backups', 'FEDERATION_BAYESIAN_MODEL_BACKUP_PATH');
             self::$configuration->setDefault('bayesian_model.minimum_evidence', 20, 'FEDERATION_BAYESIAN_MODEL_MINIMUM_EVIDENCE');
             self::$configuration->setDefault('bayesian_model.learning_timeout', 600, 'FEDERATION_BAYESIAN_MODEL_LEARNING_TIMEOUT');

@@ -389,43 +389,84 @@
         }
 
         /**
-         * Moves the model directory to a timestamped directory in the backup directory and creates an empty model
-         * directory in its place, an empty model directory is not backed up
+         * Moves the model directory and the archive to a timestamped directory in the backup directory and creates an
+         * empty model directory in its place. The archive is backed up with the model because the new model is
+         * trained with the evidence records again, which the archive already contains. An empty model directory and
+         * an archive without any documents are not backed up.
          *
          * @param BayesianModelConfiguration $configuration The configuration
          * @return void
-         * @throws RuntimeException If the model directory could not be backed up or created
+         * @throws RuntimeException If the model directory or the archive could not be backed up, or if the model
+         *                          directory could not be created
          */
         private static function backupModel(BayesianModelConfiguration $configuration): void
         {
             $modelPath = $configuration->getModelPath();
+            $archivePath = $configuration->getArchivePath();
+            $backupModel = is_dir($modelPath) && count(array_diff(scandir($modelPath) ?: [], ['.', '..'])) > 0;
+            $backupArchive = self::hasArchivedDocuments($archivePath);
 
-            if(is_dir($modelPath) && count(array_diff(scandir($modelPath) ?: [], ['.', '..'])) > 0)
+            if($backupModel || $backupArchive)
             {
                 $backupPath = $configuration->getBackupPath();
-                if(!is_dir($backupPath) && !mkdir($backupPath, 0755, true) && !is_dir($backupPath))
-                {
-                    throw new RuntimeException(sprintf('Failed to create the backup directory %s', $backupPath));
-                }
-
                 $destination = $backupPath . DIRECTORY_SEPARATOR . date('Y-m-d_H-i-s');
                 for($i = 1; file_exists($destination); $i++)
                 {
                     $destination = sprintf('%s%s%s_%d', $backupPath, DIRECTORY_SEPARATOR, date('Y-m-d_H-i-s'), $i);
                 }
 
-                if(!rename($modelPath, $destination))
+                if(!mkdir($destination, 0755, true) && !is_dir($destination))
+                {
+                    throw new RuntimeException(sprintf('Failed to create the backup directory %s', $destination));
+                }
+
+                if($backupModel && !rename($modelPath, $destination . DIRECTORY_SEPARATOR . basename($modelPath)))
                 {
                     throw new RuntimeException(sprintf('Failed to move the Bayesian model %s to %s', $modelPath, $destination));
                 }
 
-                Logger::log()->info(sprintf('Moved the Bayesian model to %s', $destination));
+                // BayesianServer creates a new archive when it's started
+                if($backupArchive && !rename($archivePath, $destination . DIRECTORY_SEPARATOR . basename($archivePath)))
+                {
+                    throw new RuntimeException(sprintf('Failed to move the Bayesian archive %s to %s', $archivePath, $destination));
+                }
+
+                Logger::log()->info(sprintf('Backed up the Bayesian %s to %s', $backupModel && $backupArchive ? 'model and archive' : ($backupModel ? 'model' : 'archive'), $destination));
             }
 
             if(!is_dir($modelPath) && !mkdir($modelPath, 0755, true) && !is_dir($modelPath))
             {
                 throw new RuntimeException(sprintf('Failed to create the Bayesian model directory %s', $modelPath));
             }
+        }
+
+        /**
+         * Returns True if the archive contains at least one document, an archive that only contains the header row
+         * (labels,content) is empty
+         *
+         * @param string $archivePath The path of the archive
+         * @return bool True if the archive contains documents
+         */
+        private static function hasArchivedDocuments(string $archivePath): bool
+        {
+            if(!is_file($archivePath))
+            {
+                return false;
+            }
+
+            $handle = fopen($archivePath, 'r');
+            if($handle === false)
+            {
+                // An archive that can't be read is backed up all the same
+                return true;
+            }
+
+            // The header row, followed by the first document
+            fgets($handle);
+            $document = fgets($handle);
+            fclose($handle);
+
+            return $document !== false && trim($document) !== '';
         }
 
         /**

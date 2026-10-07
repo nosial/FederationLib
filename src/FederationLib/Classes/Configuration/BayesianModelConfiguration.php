@@ -8,6 +8,7 @@
         private string $startScript;
         private string $stopScript;
         private string $modelPath;
+        private string $archivePath;
         private string $backupPath;
         private int $minimumEvidence;
         private int $learningTimeout;
@@ -23,6 +24,7 @@
             $this->startScript = (string)($configuration['start_script'] ?? '/usr/local/bin/temporary_start_bayesian.sh');
             $this->stopScript = (string)($configuration['stop_script'] ?? '/usr/local/bin/stop_temporary_bayesian.sh');
             $this->modelPath = rtrim((string)($configuration['model_path'] ?? '/var/www/bayesian_model/model'), '/');
+            $this->archivePath = (string)($configuration['archive_path'] ?? '/var/www/bayesian_model/archive.csv');
             $this->backupPath = rtrim((string)($configuration['backup_path'] ?? '/var/www/bayesian_model/backups'), '/');
             $this->minimumEvidence = max(1, (int)($configuration['minimum_evidence'] ?? 20));
             $this->learningTimeout = max(1, (int)($configuration['learning_timeout'] ?? 600));
@@ -70,8 +72,18 @@
         }
 
         /**
-         * Returns the directory where the model directory is moved to (in a timestamped directory) before the model is
-         * rebuilt
+         * Returns the training archive of BayesianServer (its --archive option)
+         *
+         * @return string The path of the archive
+         */
+        public function getArchivePath(): string
+        {
+            return $this->archivePath;
+        }
+
+        /**
+         * Returns the directory where the model directory and the archive are moved to (in a timestamped directory)
+         * before the model is rebuilt
          *
          * @return string The backup directory
          */
