@@ -26,7 +26,9 @@ ENV LOGLIB_CONSOLE_ENABLED=false \
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY bayesian_recovery/supervisord.bayesian.conf /etc/supervisor/bayesian.conf
+COPY bayesian_recovery/supervisord.temporary.conf /etc/supervisor/temporary_bayesian.conf
+COPY docker-entrypoint.sh bayesian_recovery/temporary_start_bayesian.sh bayesian_recovery/stop_temporary_bayesian.sh /usr/local/bin/
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/* \
@@ -36,7 +38,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && pecl install redis && docker-php-ext-enable redis \
     && curl -sL "https://github.com/nosial/LogLib2Server/releases/latest/download/LogLib2Server-linux-x86_64" -o /usr/bin/ll2s \
     && curl -sL "https://github.com/nosial/BayesianServer/releases/latest/download/bayesian-server.jar" -o /usr/bin/bayesian.jar \
-    && chmod +x /usr/bin/ll2s /usr/bin/bayesian.jar /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/bin/ll2s /usr/bin/bayesian.jar /usr/local/bin/docker-entrypoint.sh /usr/local/bin/temporary_start_bayesian.sh /usr/local/bin/stop_temporary_bayesian.sh \
     && echo "upload_max_filesize = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini \
