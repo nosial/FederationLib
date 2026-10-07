@@ -35,6 +35,7 @@ The implementation is based of the [Open Federated Database](https://github.com/
     * [Search Configuration](#search-configuration)
     * [Maintenance Configuration](#maintenance-configuration)
     * [Plugins Configuration](#plugins-configuration)
+    * [Bayesian Model Configuration](#bayesian-model-configuration)
   * [Plugins](#plugins)
 * [License](#license)
 <!-- TOC -->
@@ -221,12 +222,39 @@ networks:
 The docker image is configured to store important files in the following paths
 
  - `/var/www/uploads`: The directory where all file uploads will be stored
- - `/var/www/bayesian_model`: The directory where BayesianServer stores the Bayesian model
+ - `/var/www/bayesian_model`: The directory of BayesianServer's data, which contains:
+   - `model/`: The Bayesian model
+   - `archive.csv`: The archive of every document the model was trained with
+   - `backups/`: The backups of broken models that were replaced by `federationlib init`, one timestamped directory
+     per backup
  - `/var/www/archives`: The directory where no longer used records are archived at
+
+Volumes created before the `model/` directory was introduced store the model directly in `/var/www/bayesian_model`,
+the entrypoint moves those files into `model/` on the first start.
 
 If everything is configured correctly, docker's entrypoint is designed to execute `federationlib init` before starting
 its services to ensure that the database is populated and contains the up-to-date schema structure. This process also
 initializes the default operators and fixes any potential misconfiguration issues that can be fixed during this stage.
+
+When BayesianPlugin is enabled (the default), `federationlib init` also checks the Bayesian model before the services
+are started, which allows the container to repair the model on its own:
+
+ - BayesianServer is started temporarily with `temporary_start_bayesian.sh`, which starts the server with a dedicated
+   supervisord instance (without any of the other services) and only exits once the server is reachable
+ - The model is broken if the server does not become reachable (eg; the model can't be loaded), if the server does
+   not respond correctly, if the model's statistics are invalid, if the model contains labels that are not
+   classification flags or if a classification fails. An empty model is not broken, but it's rebuilt if there are at
+   least 20 (see `bayesian_model.minimum_evidence`) classified evidence records with text content to train it with
+ - A broken model is rebuilt: the server is stopped, the `model/` directory is moved to `backups/<timestamp>/`, the
+   server is started again with a new model, which is then trained with every classified evidence record from the
+   oldest to the newest (the same way BayesianPlugin trains the model when evidence is classified) if there are enough
+   of them
+ - The temporary server is stopped with `stop_temporary_bayesian.sh`, saving the model, before the services
+   (including BayesianServer) are started
+
+The container does not start if the model is broken and could not be repaired. The check is skipped if BayesianPlugin
+is not enabled or if the scripts are not available (eg; outside the docker image), see
+[Bayesian Model Configuration](#bayesian-model-configuration).
 
 The entrypoint also accepts the following docker-only environment variables, processed in this order before
 `federationlib init`. The container does not start if either step fails.
@@ -259,17 +287,17 @@ Deployments that do not use the bundled docker entrypoint can manage the server 
 utility, run `federationlib --help` for usage details and `federationlib --help <command>` for command-specific
 documentation.
 
-| Command                                        | Description                                                       |
-|------------------------------------------------|-------------------------------------------------------------------|
-| `federationlib init`                           | Initializes FederationLib's database schema and default operators |
-| `federationlib create-operator`                | Creates a new operator with specified permissions                 |
-| `federationlib edit-operator`                  | Edits an operator's permissions and status                        |
-| `federationlib get-operator`                   | Retrieves information about a specific operator by UUID           |
-| `federationlib list-operators`                 | Lists all operators with pagination support                       |
-| `federationlib delete-operator`                | Deletes an operator by UUID                                       |
-| `federationlib generate-operator-access-token` | Generates a new access token for an operator                      |
-| `federationlib list-audit`                     | Lists audit log entries                                           |
-| `federationlib maintenance`                    | Runs maintenance tasks to clean up expired records                |
+| Command                                        | Description                                                                                      |
+|------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `federationlib init`                           | Initializes FederationLib's database schema and default operators, and checks the Bayesian model |
+| `federationlib create-operator`                | Creates a new operator with specified permissions                                                |
+| `federationlib edit-operator`                  | Edits an operator's permissions and status                                                       |
+| `federationlib get-operator`                   | Retrieves information about a specific operator by UUID                                          |
+| `federationlib list-operators`                 | Lists all operators with pagination support                                                      |
+| `federationlib delete-operator`                | Deletes an operator by UUID                                                                      |
+| `federationlib generate-operator-access-token` | Generates a new access token for an operator                                                     |
+| `federationlib list-audit`                     | Lists audit log entries                                                                          |
+| `federationlib maintenance`                    | Runs maintenance tasks to clean up expired records                                               |
 
 ## Configuration
 
@@ -495,6 +523,27 @@ plugins:
 | Name      | Environment Variable | Type  | Default Value | Required | Description                                                                                  |
 |-----------|----------------------|-------|---------------|----------|----------------------------------------------------------------------------------------------|
 | `plugins` | `FEDERATION_PLUGINS` | array | `[]`          | No       | The package names of the plugins to load, the environment variable is a comma-separated list |
+
+### Bayesian Model Configuration
+
+This configuration is responsible for the Bayesian model check of `federationlib init` (see
+[Server Usage](#server-usage)), which only runs if BayesianPlugin (`net.nosial.bayesian_plugin`) is enabled and both
+scripts exist. The defaults match the docker image.
+
+| Name                              | Environment Variable                         | Type   | Default Value                                | Required | Description                                                                                                    |
+|-----------------------------------|----------------------------------------------|--------|----------------------------------------------|----------|----------------------------------------------------------------------------------------------------------------|
+| `bayesian_model.enabled`          | `FEDERATION_BAYESIAN_MODEL_ENABLED`          | bool   | `true`                                       | Yes      | Whether `federationlib init` checks the Bayesian model and rebuilds it when it's broken                        |
+| `bayesian_model.start_script`     | `FEDERATION_BAYESIAN_MODEL_START_SCRIPT`     | string | `/usr/local/bin/temporary_start_bayesian.sh` | Yes      | The script that starts BayesianServer temporarily, it must only exit once the server is reachable              |
+| `bayesian_model.stop_script`      | `FEDERATION_BAYESIAN_MODEL_STOP_SCRIPT`      | string | `/usr/local/bin/stop_temporary_bayesian.sh`  | Yes      | The script that stops the temporarily started BayesianServer                                                   |
+| `bayesian_model.model_path`       | `FEDERATION_BAYESIAN_MODEL_PATH`             | string | `/var/www/bayesian_model/model`              | Yes      | BayesianServer's model directory                                                                               |
+| `bayesian_model.backup_path`      | `FEDERATION_BAYESIAN_MODEL_BACKUP_PATH`      | string | `/var/www/bayesian_model/backups`            | Yes      | The directory the model directory is moved to (in a timestamped directory) before the model is rebuilt         |
+| `bayesian_model.minimum_evidence` | `FEDERATION_BAYESIAN_MODEL_MINIMUM_EVIDENCE` | int    | `20`                                         | Yes      | The minimum number of classified evidence records with text content required to train a new or empty model     |
+| `bayesian_model.learning_timeout` | `FEDERATION_BAYESIAN_MODEL_LEARNING_TIMEOUT` | int    | `600`                                        | Yes      | The maximum number of seconds to wait for BayesianServer to accept and process the training of a rebuilt model |
+
+The scripts of the docker image also accept `BAYESIAN_START_TIMEOUT` (default `300`), the number of seconds to wait for
+BayesianServer to become reachable before the model is considered broken, and `BAYESIAN_STOP_TIMEOUT` (default `180`),
+the number of seconds to wait for BayesianServer to save the model and stop before it's killed. Increase them for large
+models.
 
 
 ## Plugins

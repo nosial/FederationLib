@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.15] - Ongoing
+## [1.0.15] - 2026-10-07
 
-This is an ongoing update
+This update introduces a new recovery feature for production environments and a logging fix.
+
+### Added
+ - `federationlib init` checks the Bayesian model when BayesianPlugin is enabled, a broken model is backed up and
+   rebuilt from the classified evidence records (configured with `bayesian_model`)
+ - `bayesian_recovery/` scripts to start and stop BayesianServer temporarily during `federationlib init`
+
+### Changed
+ - Client request errors (4xx) are now logged as debug events instead of errors, only server request errors (5xx)
+   are logged as errors
+ - BayesianServer's model moved to `/var/www/bayesian_model/model`, existing volumes are migrated on the first start
 
 
 
