@@ -225,8 +225,8 @@ The docker image is configured to store important files in the following paths
  - `/var/www/bayesian_model`: The directory of BayesianServer's data, which contains:
    - `model/`: The Bayesian model
    - `archive.csv`: The archive of every document the model was trained with
-   - `backups/`: The backups of broken models that were replaced by `federationlib init`, one timestamped directory
-     per backup
+   - `backups/`: The backups of the models (and their archives) that were replaced by `federationlib init`, one
+     timestamped directory per backup
  - `/var/www/archives`: The directory where no longer used records are archived at
 
 Volumes created before the `model/` directory was introduced store the model directly in `/var/www/bayesian_model`,
@@ -245,8 +245,9 @@ are started, which allows the container to repair the model on its own:
    not respond correctly, if the model's statistics are invalid, if the model contains labels that are not
    classification flags or if a classification fails. An empty model is not broken, but it's rebuilt if there are at
    least 20 (see `bayesian_model.minimum_evidence`) classified evidence records with text content to train it with
- - A broken model is rebuilt: the server is stopped, the `model/` directory is moved to `backups/<timestamp>/`, the
-   server is started again with a new model, which is then trained with every classified evidence record from the
+ - A broken model is rebuilt: the server is stopped, the `model/` directory and `archive.csv` are moved to
+   `backups/<timestamp>/` (the archive would otherwise contain every document twice), the server is started again
+   with a new model and archive, which is then trained with every classified evidence record from the
    oldest to the newest (the same way BayesianPlugin trains the model when evidence is classified) if there are enough
    of them
  - The temporary server is stopped with `stop_temporary_bayesian.sh`, saving the model, before the services
@@ -536,7 +537,8 @@ scripts exist. The defaults match the docker image.
 | `bayesian_model.start_script`     | `FEDERATION_BAYESIAN_MODEL_START_SCRIPT`     | string | `/usr/local/bin/temporary_start_bayesian.sh` | Yes      | The script that starts BayesianServer temporarily, it must only exit once the server is reachable              |
 | `bayesian_model.stop_script`      | `FEDERATION_BAYESIAN_MODEL_STOP_SCRIPT`      | string | `/usr/local/bin/stop_temporary_bayesian.sh`  | Yes      | The script that stops the temporarily started BayesianServer                                                   |
 | `bayesian_model.model_path`       | `FEDERATION_BAYESIAN_MODEL_PATH`             | string | `/var/www/bayesian_model/model`              | Yes      | BayesianServer's model directory                                                                               |
-| `bayesian_model.backup_path`      | `FEDERATION_BAYESIAN_MODEL_BACKUP_PATH`      | string | `/var/www/bayesian_model/backups`            | Yes      | The directory the model directory is moved to (in a timestamped directory) before the model is rebuilt         |
+| `bayesian_model.archive_path`     | `FEDERATION_BAYESIAN_MODEL_ARCHIVE_PATH`     | string | `/var/www/bayesian_model/archive.csv`        | Yes      | BayesianServer's training archive, backed up with the model                                                    |
+| `bayesian_model.backup_path`      | `FEDERATION_BAYESIAN_MODEL_BACKUP_PATH`      | string | `/var/www/bayesian_model/backups`            | Yes      | The directory the model and archive are moved to (in a timestamped directory) before the model is rebuilt      |
 | `bayesian_model.minimum_evidence` | `FEDERATION_BAYESIAN_MODEL_MINIMUM_EVIDENCE` | int    | `20`                                         | Yes      | The minimum number of classified evidence records with text content required to train a new or empty model     |
 | `bayesian_model.learning_timeout` | `FEDERATION_BAYESIAN_MODEL_LEARNING_TIMEOUT` | int    | `600`                                        | Yes      | The maximum number of seconds to wait for BayesianServer to accept and process the training of a rebuilt model |
 
