@@ -67,8 +67,55 @@ fi
 export FEDERATION_PLUGINS="$PLUGINS_LIST"
 echo "Enabled plugins: $FEDERATION_PLUGINS"
 
+# BayesianServer stores its model in the "model" directory of the volume, next to the archive (archive.csv) and the
+# backups of the model made by `federationlib init` (backups/). Volumes from before this layout contain the model files
+# directly, those are moved into the model directory once.
+BAYESIAN_DATA="/var/www/bayesian_model"
+if [ ! -d "$BAYESIAN_DATA/model" ]; then
+    mkdir -p "$BAYESIAN_DATA/model"
+    for ENTRY in "$BAYESIAN_DATA"/*; do
+        case "$(basename "$ENTRY")" in
+            model|backups|archive.csv|\*) continue ;;
+        esac
+
+        echo "Moving $ENTRY to the Bayesian model directory"
+        mv "$ENTRY" "$BAYESIAN_DATA/model/"
+    done
+fi
+
+# `federationlib init` starts BayesianServer temporarily to check the Bayesian model, the temporary server is always
+# stopped (even if init failed) so that it can't conflict with the BayesianServer of the services
 echo "Initializing FederationLib"
-env -u LOGLIB_CONSOLE_ENABLED /usr/local/bin/federationlib init
+if ! env -u LOGLIB_CONSOLE_ENABLED /usr/local/bin/federationlib init; then
+    /usr/local/bin/stop_temporary_bayesian.sh || true
+    echo "FederationLib failed to initialize, aborting" >&2
+    exit 1
+fi
+
+if ! /usr/local/bin/stop_temporary_bayesian.sh; then
+    echo "Failed to stop the temporary BayesianServer, aborting" >&2
+    exit 1
+fi
+
+# I wanted to include this cool thumbs up ASCII art
+# I don't know who the author is, but good job.
+echo "⠀⠀⠀⠀⠀⡠⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⠀⢸⠁⢹⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⠀⢸⣇⡀⠳⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⠀⠀⠻⣯⣢⡈⠓⠦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⠀⠀⠀⠈⠻⣿⣦⠤⡄⠹⢦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⠀⠀⠀⠀⠀⣻⣿⣷⡥⠀⠀⠙⢤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⣠⣴⡖⠖⡟⣿⣿⠋⢹⡃⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠸⣿⣻⢿⣦⣌⣷⣿⣷⣀⣧⠀⠀⠀⠀⠀⠀⠈⠳⢄⣀⣀⣀⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⣹⡿⠾⠿⢿⡿⣿⣿⡿⣿⣦⣦⡄⠀⠀⠀⢂⢠⠈⠙⠛⠛⠒⠓⠒⠶⠒⠤⠦⠤⠤⢤⢤⣀⣀⡀⠀⠀⠀⠀⠀⠀⢀⡀⣀⣀⣀⡀⡀⠀⠠⠤⠠⠤"
+echo "⠸⣟⣙⠋⡙⠂⢀⣸⣿⡿⢿⣿⣏⢿⣦⠀⠀⡨⠟⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠄⠀⠀⠙⠛⠋⠉⠉⠛⠉⠋⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⢨⣿⣻⣟⠻⠛⢋⣹⣿⡦⠽⠻⠟⠾⠥⠌⠀⠀⠀⣧⡀⠀⠀⠀⠂⠤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠙⣿⣥⣤⣤⡶⠾⣿⣿⠁⠉⠀⠁⠀⠀⠀⠀⠀⠀⣹⢷⣦⠁⠓⢂⠲⢤⡄⣀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"
+echo "⠀⠀⠀⣼⡝⢃⣠⣴⡿⢻⠀⠀⠀⢀⣀⠀⣀⣈⣡⣀⣿⣦⣿⣸⣹⣶⢏⣿⡼⣷⢯⣿⣆⣶⣆⣠⡠⣀⣄⠈⣀⠀⡀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠂⢨⣹"
+echo "⠀⠀⠀⠈⠛⠿⠿⠯⠷⠾⠾⢶⣶⣿⡿⠿⠟⠛⠉⠉⠉⠉⠉⠙⠛⠛⠛⠛⠻⠿⠿⠿⣿⣿⣿⣽⣷⣽⣭⣳⣤⢣⠔⡣⢆⡰⢄⡒⣌⠰⢹⣀⠾⠷⣾"
+echo "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠛⠛⠿⠿⢿⣷⣯⣶⣧⣻⣬⡻⣵⣺⣷⣾⣿"
+echo "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠛⠛⠻⠷⠿⣿⣿⣿"
+echo "Everything appears is OK to run"
 
 echo "Starting services with supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
