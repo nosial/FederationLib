@@ -952,6 +952,68 @@
         }
 
         /**
+         * Counts the evidence records that can be used to train a classifier, evidence records with a classification
+         * and text content (confidential evidence records included)
+         *
+         * @return int The number of classified evidence records with text content
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function countClassifiedEvidence(): int
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->query("SELECT COUNT(*) FROM evidence WHERE classification_flag IS NOT NULL AND LENGTH(text_content) > 0");
+                return (int)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to count classified evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
+         * Retrieves the evidence records that can be used to train a classifier, evidence records with a
+         * classification and text content (confidential evidence records included), from the oldest to the newest.
+         * The cache is bypassed as every record is only read once.
+         *
+         * @param int $limit The maximum number of records to return
+         * @param int $page The page number for pagination
+         * @return EvidenceRecord[] The classified evidence records with text content, the oldest first
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws InvalidArgumentException If the limit or page parameters are invalid.
+         */
+        public static function getClassifiedEvidence(int $limit=100, int $page=1): array
+        {
+            if($limit <= 0)
+            {
+                throw new InvalidArgumentException('Limit must be 1 or greater');
+            }
+
+            if($page <= 0)
+            {
+                throw new InvalidArgumentException('Page must be greater than 0');
+            }
+
+            $offset = ($page - 1) * $limit;
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM evidence WHERE classification_flag IS NOT NULL AND LENGTH(text_content) > 0 ORDER BY created ASC, uuid ASC LIMIT :limit OFFSET :offset"
+                );
+                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                return array_map(fn(array $data) => new EvidenceRecord($data), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve classified evidence records: " . $e->getMessage(), $e->getCode(), $e);
+            }
+        }
+
+        /**
          * Retrieves evidence records older than the specified TTL.
          *
          * @param int $ttl The TTL in seconds to look back

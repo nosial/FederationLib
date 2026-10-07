@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Classes\Configuration\BayesianModelConfiguration;
     use FederationLib\Classes\Configuration\DatabaseConfiguration;
     use FederationLib\Classes\Configuration\MaintenanceConfiguration;
     use FederationLib\Classes\Configuration\PluginsConfiguration;
@@ -22,6 +23,7 @@
         private static ?RedisConfiguration $redisConfiguration = null;
         private static ?SearchConfiguration $searchConfiguration = null;
         private static ?PluginsConfiguration $pluginsConfiguration = null;
+        private static ?BayesianModelConfiguration $bayesianModelConfiguration = null;
 
         /**
          * Initialize the configuration with default values.
@@ -133,6 +135,15 @@
             // The ncc package names of the plugins to load, plugins are responsible for their own configuration
             self::$configuration->setDefault('plugins', [], 'FEDERATION_PLUGINS');
 
+            // Bayesian model check of `federationlib init`, the defaults match the layout of the docker image
+            self::$configuration->setDefault('bayesian_model.enabled', true, 'FEDERATION_BAYESIAN_MODEL_ENABLED');
+            self::$configuration->setDefault('bayesian_model.start_script', '/usr/local/bin/temporary_start_bayesian.sh', 'FEDERATION_BAYESIAN_MODEL_START_SCRIPT');
+            self::$configuration->setDefault('bayesian_model.stop_script', '/usr/local/bin/stop_temporary_bayesian.sh', 'FEDERATION_BAYESIAN_MODEL_STOP_SCRIPT');
+            self::$configuration->setDefault('bayesian_model.model_path', '/var/www/bayesian_model/model', 'FEDERATION_BAYESIAN_MODEL_PATH');
+            self::$configuration->setDefault('bayesian_model.backup_path', '/var/www/bayesian_model/backups', 'FEDERATION_BAYESIAN_MODEL_BACKUP_PATH');
+            self::$configuration->setDefault('bayesian_model.minimum_evidence', 20, 'FEDERATION_BAYESIAN_MODEL_MINIMUM_EVIDENCE');
+            self::$configuration->setDefault('bayesian_model.learning_timeout', 600, 'FEDERATION_BAYESIAN_MODEL_LEARNING_TIMEOUT');
+
             // Database configuration
             self::$configuration->setDefault('database.host', '127.0.0.1', 'FEDERATION_DATABASE_HOST');
             self::$configuration->setDefault('database.port', 3306, 'FEDERATION_DATABASE_PORT');
@@ -188,6 +199,7 @@
             self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
             self::$searchConfiguration = new SearchConfiguration(self::$configuration->get('search'));
             self::$pluginsConfiguration = new PluginsConfiguration(self::$configuration->get('plugins'));
+            self::$bayesianModelConfiguration = new BayesianModelConfiguration(self::$configuration->get('bayesian_model'));
         }
 
         /**
@@ -323,6 +335,21 @@
             }
 
             return self::$pluginsConfiguration;
+        }
+
+        /**
+         * Get the configuration of the Bayesian model check.
+         *
+         * @return BayesianModelConfiguration
+         */
+        public static function getBayesianModelConfiguration(): BayesianModelConfiguration
+        {
+            if(self::$bayesianModelConfiguration === null)
+            {
+                self::initialize();
+            }
+
+            return self::$bayesianModelConfiguration;
         }
 
     }

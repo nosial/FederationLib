@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes\CLI;
 
+    use FederationLib\Classes\BayesianModelRecovery;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\Logger;
@@ -111,6 +112,13 @@
                 return 1;
             }
 
+            // Checks the bundled BayesianServer's model (rebuilding it if needed) before the services are started
+            if(!BayesianModelRecovery::run())
+            {
+                Logger::log()->critical('The Bayesian model is broken and could not be repaired');
+                return 1;
+            }
+
             return 0;
         }
 
@@ -169,7 +177,7 @@
          */
         public static function getShortHelp(): string
         {
-            return "Validates the configured plugins and initializes FederationLib's database";
+            return "Validates the configured plugins, initializes FederationLib's database and checks the Bayesian model";
         }
 
         /**
