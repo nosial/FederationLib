@@ -89,12 +89,20 @@
             }
             catch(InvalidArgumentException $e)
             {
-                Logger::log()->warning($e->getMessage(), $e);
+                Logger::log()->debug('Request Error: ' . $e->getMessage());
                 self::throwableResponse(new RequestException($e->getMessage(), 400, $e));
             }
             catch (RequestException $e)
             {
-                Logger::log()->error('Request Error: ' . $e->getMessage(), $e);
+                if($e->getCode() >= 500)
+                {
+                    Logger::log()->error('Request Error: ' . $e->getMessage(), $e);
+                }
+                else
+                {
+                    Logger::log()->debug('Request Error: ' . $e->getMessage());
+                }
+
                 self::throwableResponse($e);
             }
             catch(Exception $e)
