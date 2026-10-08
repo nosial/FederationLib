@@ -5,9 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.16] - Ongoing
+## [1.0.16] - 2026-10-08
 
-This is an ongoing update
+This update introduces a fix to the docker image
+
+### Fixed
+ - The storage directory (`FEDERATION_STORAGE_PATH`) is now owned by `www-data` on every container start, uploads
+   failed with "Storage directory is not writable" when it was a bind mounted host directory owned by root
 
 
 
