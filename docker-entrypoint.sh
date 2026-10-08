@@ -67,6 +67,13 @@ fi
 export FEDERATION_PLUGINS="$PLUGINS_LIST"
 echo "Enabled plugins: $FEDERATION_PLUGINS"
 
+STORAGE_PATH="${FEDERATION_STORAGE_PATH:-/var/www/uploads}"
+mkdir -p "$STORAGE_PATH"
+if ! chown www-data:www-data "$STORAGE_PATH"; then
+    echo "Failed to change the ownership of the storage directory $STORAGE_PATH, aborting" >&2
+    exit 1
+fi
+
 # BayesianServer stores its model in the "model" directory of the volume, next to the archive (archive.csv) and the
 # backups of the model made by `federationlib init` (backups/). Volumes from before this layout contain the model files
 # directly, those are moved into the model directory once.
