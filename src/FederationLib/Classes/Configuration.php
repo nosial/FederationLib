@@ -37,6 +37,9 @@
             self::$configuration->setDefault('server.access_token', Utilities::generateString(), 'FEDERATION_ACCESS_TOKEN');
             self::$configuration->setDefault('server.max_upload_size', 52428800, 'FEDERATION_MAX_UPLOAD_SIZE'); // 50MB default
             self::$configuration->setDefault('server.storage_path', '/var/www/uploads', 'FEDERATION_STORAGE_PATH');
+            self::$configuration->setDefault('server.url_uploads', true, 'FEDERATION_URL_UPLOADS');
+            self::$configuration->setDefault('server.url_upload_timeout', 30, 'FEDERATION_URL_UPLOAD_TIMEOUT');
+            self::$configuration->setDefault('server.url_upload_allow_private', false, 'FEDERATION_URL_UPLOAD_ALLOW_PRIVATE');
             self::$configuration->setDefault('server.list_audit_logs_max_items', 100, 'FEDERATION_LIST_AUDIT_LOGS_MAX_ITEMS');
             self::$configuration->setDefault('server.list_entities_max_items', 100, 'FEDERATION_LIST_ENTITIES_MAX_ITEMS');
             self::$configuration->setDefault('server.list_operators_max_items', 100, 'FEDERATION_LIST_OPERATORS_MAX_ITEMS');
