@@ -2601,6 +2601,35 @@
         }
 
         /**
+         * Uploads a file attachment by providing a URL, the federation server retrieves the file from the URL itself
+         * instead of the file being uploaded by the client. Unlike uploadFileAttachmentFromUrl(), which downloads the
+         * file locally and uploads it, the URL must be reachable by the server and permitted by its configuration
+         *
+         * @param string $evidenceUuid The UUID of the evidence record to attach the file to
+         * @param string $url The HTTP or HTTPS URL of the file to retrieve
+         * @return UploadResult The upload result containing UUID and download URL
+         * @throws RequestException If the request fails, or the server rejects or fails to retrieve the URL
+         * @throws InvalidArgumentException If the evidence UUID is empty or the URL is not a valid HTTP or HTTPS URL
+         */
+        public function uploadFileAttachmentByUrl(string $evidenceUuid, string $url): UploadResult
+        {
+            if (empty($evidenceUuid))
+            {
+                throw new InvalidArgumentException('Evidence UUID cannot be empty');
+            }
+
+            $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+            if (filter_var($url, FILTER_VALIDATE_URL) === false || !in_array($scheme, ['http', 'https']))
+            {
+                throw new InvalidArgumentException('URL must be a valid HTTP or HTTPS URL: ' . $url);
+            }
+
+            return UploadResult::fromArray($this->makeRequest('POST', 'attachments', ['evidence_uuid' => $evidenceUuid, 'url' => $url], [HttpResponseCode::CREATED],
+                sprintf('Failed to upload attachment from URL %s', $url)
+            ));
+        }
+
+        /**
          * Uploads a note as a .txt file attachment in-memory without creating a physical file
          *
          * @param string $evidenceUuid The UUID of the evidence record to attach the file to
