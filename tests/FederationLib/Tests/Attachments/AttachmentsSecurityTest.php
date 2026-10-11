@@ -263,6 +263,78 @@
             $this->client->uploadFileAttachmentFromUrl($evidenceUuid, 'not-a-valid-url');
         }
 
+        public function testSecurityUploadAttachmentByUrlRejectsNonHttpUrl(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->uploadFileAttachmentByUrl($evidenceUuid, 'file:///etc/passwd');
+        }
+
+        public function testSecurityUploadAttachmentByUrlRejectsNonPublicAddresses(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $urls = [
+                'http://127.0.0.1/',
+                'http://localhost:7000/',
+                'http://10.0.0.1/',
+                'http://169.254.169.254/latest/meta-data/',
+                'http://[::1]/',
+                'http://[::ffff:127.0.0.1]/',
+            ];
+
+            foreach ($urls as $url)
+            {
+                try
+                {
+                    $uploadResult = $this->client->uploadFileAttachmentByUrl($evidenceUuid, $url);
+                    $this->createdAttachments[] = $uploadResult->getUuid();
+                    $this->fail(sprintf('URL upload from non-public address %s should be rejected', $url));
+                }
+                catch (RequestException $e)
+                {
+                    $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $e->getCode(), sprintf('URL upload from %s should be rejected with HTTP 400', $url));
+                }
+            }
+        }
+
+        public function testSecurityUploadAttachmentByUrlRejectsCredentials(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+
+            $this->expectException(RequestException::class);
+            $this->expectExceptionCode(HttpResponseCode::BAD_REQUEST->value);
+            $this->client->uploadFileAttachmentByUrl($evidenceUuid, 'http://user:password@example.com/file.txt');
+        }
+
+        public function testSecurityUploadAttachmentWithFileAndUrlIsRejected(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $testFilePath = $this->createTestFile('file_and_url.txt', 'File and URL content');
+
+            $ch = curl_init(rtrim(getenv('SERVER_ENDPOINT'), '/') . '/attachments');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $this->client->getAccessToken()],
+                CURLOPT_POSTFIELDS => [
+                    'evidence_uuid' => $evidenceUuid,
+                    'url' => 'https://example.com/file.txt',
+                    'file' => new \CURLFile($testFilePath, 'text/plain', 'file_and_url.txt'),
+                ],
+            ]);
+            curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $code, 'Upload with both a file and a URL should be rejected');
+        }
+
         public function testAttachmentConfidentialityFollowsEvidence(): void
         {
             $entityUuid = $this->createSecurityEntity();
