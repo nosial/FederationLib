@@ -11,6 +11,9 @@
         private ?string $accessToken;
         private int $maxUploadSize;
         private string $storagePath;
+        private bool $urlUploads;
+        private int $urlUploadTimeout;
+        private bool $urlUploadAllowPrivate;
         private int $listAuditLogsMaxItems;
         private int $listEntitiesMaxItems;
         private int $listOperatorsMaxItems;
@@ -47,6 +50,9 @@
             $this->accessToken = $config['access_token'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
             $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
+            $this->urlUploads = $config['url_uploads'] ?? true;
+            $this->urlUploadTimeout = $config['url_upload_timeout'] ?? 30;
+            $this->urlUploadAllowPrivate = $config['url_upload_allow_private'] ?? false;
             $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
             $this->listEntitiesMaxItems = $config['list_entities_max_items'] ?? 100;
             $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
@@ -117,6 +123,39 @@
         public function getStoragePath(): string
         {
             return $this->storagePath;
+        }
+
+        /**
+         * Checks if attachments may be uploaded by providing a URL that the server retrieves the file from, instead
+         * of uploading the file directly.
+         *
+         * @return bool True if URL uploads are enabled, false otherwise
+         */
+        public function isUrlUploadsEnabled(): bool
+        {
+            return $this->urlUploads;
+        }
+
+        /**
+         * Get the maximum number of seconds the server spends retrieving a file from a URL, including redirects.
+         *
+         * @return int The timeout in seconds
+         */
+        public function getUrlUploadTimeout(): int
+        {
+            return $this->urlUploadTimeout;
+        }
+
+        /**
+         * Checks if URL uploads may retrieve files from hosts that resolve to private, loopback, link-local or other
+         * addresses that aren't publicly routable. This should only be enabled in trusted environments, as it allows
+         * operators with client permissions to make the server send requests to internal services.
+         *
+         * @return bool True if non-public addresses are allowed, false otherwise
+         */
+        public function isUrlUploadPrivateAllowed(): bool
+        {
+            return $this->urlUploadAllowPrivate;
         }
 
         /**
