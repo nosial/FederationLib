@@ -7,16 +7,16 @@
 
     enum ReportOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case INCIDENT_TYPE = 'incident_type';
-        case CREATED = 'created';
-        case UPDATED = 'updated';
+        case INCIDENT_TYPE = 'INCIDENT_TYPE';
+        case CREATED = 'CREATED';
+        case UPDATED = 'UPDATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?ReportOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -24,6 +24,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

@@ -7,18 +7,18 @@
 
     enum EntityOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case HOST = 'host';
-        case ID = 'id';
-        case REPUTATION = 'reputation';
-        case CREATED = 'created';
-        case UPDATED = 'updated';
+        case HOST = 'HOST';
+        case ID = 'ID';
+        case REPUTATION = 'REPUTATION';
+        case CREATED = 'CREATED';
+        case UPDATED = 'UPDATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?EntityOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -26,6 +26,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

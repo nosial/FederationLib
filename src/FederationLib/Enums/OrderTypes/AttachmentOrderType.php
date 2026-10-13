@@ -7,17 +7,17 @@
 
     enum AttachmentOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case FILE_NAME = 'file_name';
-        case FILE_MIME = 'file_mime';
-        case FILE_SIZE = 'file_size';
-        case CREATED = 'created';
+        case FILE_NAME = 'FILE_NAME';
+        case FILE_MIME = 'FILE_MIME';
+        case FILE_SIZE = 'FILE_SIZE';
+        case CREATED = 'CREATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?AttachmentOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -25,6 +25,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

@@ -7,15 +7,15 @@
 
     enum AuditLogOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case TYPE = 'type';
-        case TIMESTAMP = 'timestamp';
+        case TYPE = 'TYPE';
+        case TIMESTAMP = 'TIMESTAMP';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?AuditLogOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -23,6 +23,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

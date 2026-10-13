@@ -7,16 +7,16 @@
 
     enum OperatorOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case NAME = 'name';
-        case CREATED = 'created';
-        case UPDATED = 'updated';
+        case NAME = 'NAME';
+        case CREATED = 'CREATED';
+        case UPDATED = 'UPDATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?OperatorOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -24,6 +24,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

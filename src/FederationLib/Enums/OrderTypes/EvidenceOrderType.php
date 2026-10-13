@@ -7,17 +7,17 @@
 
     enum EvidenceOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case TAG = 'tag';
-        case CLASSIFICATION_FLAG = 'classification_flag';
-        case CREATED = 'created';
-        case UPDATED = 'updated';
+        case TAG = 'TAG';
+        case CLASSIFICATION_FLAG = 'CLASSIFICATION_FLAG';
+        case CREATED = 'CREATED';
+        case UPDATED = 'UPDATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?EvidenceOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -25,6 +25,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }

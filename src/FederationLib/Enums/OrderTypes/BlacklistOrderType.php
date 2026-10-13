@@ -7,16 +7,16 @@
 
     enum BlacklistOrderType : string implements SortableDatabaseInterface, CaseSensitiveInterface
     {
-        case TYPE = 'type';
-        case EXPIRES = 'expires';
-        case CREATED = 'created';
+        case TYPE = 'TYPE';
+        case EXPIRES = 'EXPIRES';
+        case CREATED = 'CREATED';
 
         /**
          * @inheritDoc
          */
         public static function tryFromCaseInsensitive(string $value): ?BlacklistOrderType
         {
-            return self::tryFrom(strtolower($value));
+            return self::tryFrom(strtoupper($value));
         }
 
         /**
@@ -24,6 +24,6 @@
          */
         public function toColumn(): string
         {
-            return $this->value;
+            return strtolower($this->value);
         }
     }
