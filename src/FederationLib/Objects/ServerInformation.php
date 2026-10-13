@@ -50,7 +50,7 @@
         public function __construct(array $config)
         {
             $this->serverName = $config['server_name'] ?? 'Federation Server';
-            $this->apiVersion = '1.0'; // ALWAYS '1.0' for now, as this is the version of the server API we are using.
+            $this->apiVersion = '1.1';
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
