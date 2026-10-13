@@ -7,6 +7,7 @@ create table audit_log
     blacklist       varchar(36)                             null comment 'Optional. The blacklist record related to this action',
     evidence        varchar(36)                             null comment 'Optional. The evidence record related to this action',
     file_attachment varchar(36)                             null comment 'Optional. The file attachment related to this action',
+    report          varchar(36)                             null comment 'Optional. The report related to this action',
     type            varchar(36)                             not null comment 'The audit action type',
     message         text                                    not null comment 'The log message',
     timestamp       timestamp   default current_timestamp() not null comment 'The timestamp for when this log event was created',
@@ -24,6 +25,9 @@ create table audit_log
             on update cascade on delete set null,
     constraint audit_log_operators_uuid_fk
         foreign key (operator) references operators (uuid)
+            on update cascade on delete set null,
+    constraint audit_log_reports_uuid_fk
+        foreign key (report) references reports (uuid)
             on update cascade on delete set null
 )
     comment 'The table for housing audit logs';
