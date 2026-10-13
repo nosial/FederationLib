@@ -370,7 +370,8 @@
             try
             {
                 $conditions = [];
-                if (!$includeLifted)
+                // The LIFTED category always selects lifted records, regardless of $includeLifted
+                if (!$includeLifted && $category !== BlacklistCategory::LIFTED)
                 {
                     $conditions[] = 'lifted=0';
                 }
