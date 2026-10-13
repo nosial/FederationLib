@@ -34,9 +34,10 @@
          * @param string|null $blacklistUuid The UUID of the blacklist record related to this action, or null if not applicable.
          * @param string|null $evidenceUuid The UUID of the evidence record related to this action, or null if not applicable.
          * @param string|null $fileAttachmentUuid The UUID of the file attachment related to this action, or null if not applicable.
+         * @param string|null $reportUuid The UUID of the report related to this action, or null if not applicable.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function createEntry(AuditLogType $type, string $message, ?string $operatorUuid=null, ?string $entityUuid=null, ?string $blacklistUuid=null, ?string $evidenceUuid=null, ?string $fileAttachmentUuid=null): void
+        public static function createEntry(AuditLogType $type, string $message, ?string $operatorUuid=null, ?string $entityUuid=null, ?string $blacklistUuid=null, ?string $evidenceUuid=null, ?string $fileAttachmentUuid=null, ?string $reportUuid=null): void
         {
             if(strlen($message) === 0)
             {
@@ -68,6 +69,11 @@
                 throw new InvalidArgumentException("File attachment UUID must be valid.");
             }
 
+            if($reportUuid !== null && !Validate::uuid($reportUuid))
+            {
+                throw new InvalidArgumentException("Report UUID must be valid.");
+            }
+
             if($operatorUuid !== null && $entityUuid !== null)
             {
                 Logger::log()->info(sprintf("[%s] %s by %s on %s", $type->value, $message, $operatorUuid, $entityUuid));
@@ -91,7 +97,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (uuid, type, message, operator, entity, blacklist, evidence, file_attachment) VALUES (:uuid, :type, :message, :operator, :entity, :blacklist, :evidence, :file_attachment)");
+                $stmt = DatabaseConnection::getConnection()->prepare("INSERT INTO audit_log (uuid, type, message, operator, entity, blacklist, evidence, file_attachment, report) VALUES (:uuid, :type, :message, :operator, :entity, :blacklist, :evidence, :file_attachment, :report)");
                 $stmt->bindParam(':uuid', $uuid);
                 $stmt->bindParam(':type', $type);
                 $stmt->bindParam(':message', $message);
@@ -100,6 +106,7 @@
                 $stmt->bindParam(':blacklist', $blacklistUuid);
                 $stmt->bindParam(':evidence', $evidenceUuid);
                 $stmt->bindParam(':file_attachment', $fileAttachmentUuid);
+                $stmt->bindParam(':report', $reportUuid);
 
                 $stmt->execute();
             }
@@ -122,6 +129,7 @@
                 'blacklist' => $blacklistUuid,
                 'evidence' => $evidenceUuid,
                 'file_attachment' => $fileAttachmentUuid,
+                'report' => $reportUuid,
                 'timestamp' => time()
             ]));
         }
@@ -563,7 +571,7 @@
 
         /**
          * Searches audit logs by a LIKE pattern across uuid and message columns, and with the extended search also the
-         * type column and the operator, entity, blacklist, evidence, and file_attachment columns of the related records.
+         * type column and the operator, entity, blacklist, evidence, file_attachment, and report columns of the related records.
          *
          * @param string $likePattern The SQL LIKE pattern to search with.
          * @param int $limit The maximum number of results to return.
@@ -593,7 +601,7 @@
                 $columns = ['uuid', 'message'];
                 if ($extended)
                 {
-                    array_push($columns, 'type', 'operator', 'entity', 'blacklist', 'evidence', 'file_attachment');
+                    array_push($columns, 'type', 'operator', 'entity', 'blacklist', 'evidence', 'file_attachment', 'report');
                 }
 
                 $sql = "SELECT * FROM audit_log WHERE " . Utilities::buildLikeCondition($columns);
