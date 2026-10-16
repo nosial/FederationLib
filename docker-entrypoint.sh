@@ -126,7 +126,7 @@ if [ "$BAYESIAN_ENABLED" = true ] && [ ! -d "$BAYESIAN_DATA/model" ]; then
     mkdir -p "$BAYESIAN_DATA/model"
     for ENTRY in "$BAYESIAN_DATA"/*; do
         case "$(basename "$ENTRY")" in
-            model|backups|archive.csv|\*) continue ;;
+            model|backups|embedding|archive.csv|datalog.csv|\*) continue ;;
         esac
 
         echo "Moving $ENTRY to the Bayesian model directory"
