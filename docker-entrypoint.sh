@@ -64,17 +64,18 @@ if ! /usr/bin/supercronic -test "$CRONTAB"; then
     exit 1
 fi
 
-# BAYESIAN_DISABLED disables everything related to Bayesian classification when true (true, 1, yes or on): the bundled
+# BAYESIAN_DISABLED disables everything related to Bayesian classification when true (see parse_bool): the bundled
 # BayesianServer is not started, BayesianPlugin is not enabled (even if listed in FEDERATION_PLUGINS) and the Bayesian
 # model is neither migrated nor checked by `federationlib init`
-case "${BAYESIAN_DISABLED:-false}" in
-    [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) BAYESIAN_ENABLED=false ;;
-    [Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|"") BAYESIAN_ENABLED=true ;;
-    *)
-        echo "Invalid BAYESIAN_DISABLED '$BAYESIAN_DISABLED', expected true or false, aborting" >&2
-        exit 1
-        ;;
-esac
+if ! BAYESIAN_DISABLED_VALUE="$(parse_bool BAYESIAN_DISABLED)"; then
+    echo "Invalid BAYESIAN_DISABLED '$BAYESIAN_DISABLED', expected true or false, aborting" >&2
+    exit 1
+fi
+
+BAYESIAN_ENABLED=true
+if [ "$BAYESIAN_DISABLED_VALUE" = true ]; then
+    BAYESIAN_ENABLED=false
+fi
 
 # BayesianServer is one of the services (supervisord.conf includes the programs in /etc/supervisor/services) only when
 # Bayesian classification is enabled, the healthcheck checks it only then
