@@ -120,7 +120,7 @@ fi
 # backups of the model made by `federationlib init` (backups/). Volumes from before this layout contain the model files
 # directly, those are moved into the model directory once.
 BAYESIAN_DATA="/var/www/bayesian_model"
-if [ ! -d "$BAYESIAN_DATA/model" ]; then
+if [ "$BAYESIAN_ENABLED" = true ] && [ ! -d "$BAYESIAN_DATA/model" ]; then
     mkdir -p "$BAYESIAN_DATA/model"
     for ENTRY in "$BAYESIAN_DATA"/*; do
         case "$(basename "$ENTRY")" in
