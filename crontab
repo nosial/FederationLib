@@ -1,0 +1,2 @@
+# Clean up expired records every hour, does nothing if maintenance is disabled (FEDERATION_MAINTENANCE_ENABLED)
+0 * * * * nice -n 10 ionice -c3 /usr/local/bin/federationlib maintenance
