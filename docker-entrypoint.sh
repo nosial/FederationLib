@@ -50,9 +50,14 @@ if [ -n "${REQUIRE_PLUGINS:-}" ]; then
 fi
 
 # BayesianPlugin is installed in the image alongside the bundled BayesianServer, it's always enabled as the first plugin
-# in FEDERATION_PLUGINS, before any plugins configured by the server host (a duplicate entry is dropped)
+# in FEDERATION_PLUGINS, before any plugins configured by the server host (a duplicate entry is dropped). With Bayesian
+# classification disabled it's never enabled.
 BAYESIAN_PLUGIN="net.nosial.bayesian_plugin"
-PLUGINS_LIST="$BAYESIAN_PLUGIN"
+PLUGINS_LIST=""
+if [ "$BAYESIAN_ENABLED" = true ]; then
+    PLUGINS_LIST="$BAYESIAN_PLUGIN"
+fi
+
 if [ -n "${FEDERATION_PLUGINS:-}" ]; then
     IFS=',' read -ra CONFIGURED_PLUGINS <<< "$FEDERATION_PLUGINS"
     for PLUGIN in "${CONFIGURED_PLUGINS[@]}"; do
@@ -61,11 +66,11 @@ if [ -n "${FEDERATION_PLUGINS:-}" ]; then
             continue
         fi
 
-        PLUGINS_LIST="$PLUGINS_LIST,$PLUGIN"
+        PLUGINS_LIST="${PLUGINS_LIST:+$PLUGINS_LIST,}$PLUGIN"
     done
 fi
 export FEDERATION_PLUGINS="$PLUGINS_LIST"
-echo "Enabled plugins: $FEDERATION_PLUGINS"
+echo "Enabled plugins: ${FEDERATION_PLUGINS:-none}"
 
 STORAGE_PATH="${FEDERATION_STORAGE_PATH:-/var/www/uploads}"
 mkdir -p "$STORAGE_PATH"
