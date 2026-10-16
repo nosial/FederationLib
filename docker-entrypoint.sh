@@ -136,12 +136,15 @@ fi
 # stopped (even if init failed) so that it can't conflict with the BayesianServer of the services
 echo "Initializing FederationLib"
 if ! env -u LOGLIB_CONSOLE_ENABLED /usr/local/bin/federationlib init; then
-    /usr/local/bin/stop_temporary_bayesian.sh || true
+    if [ "$BAYESIAN_ENABLED" = true ]; then
+        /usr/local/bin/stop_temporary_bayesian.sh || true
+    fi
+
     echo "FederationLib failed to initialize, aborting" >&2
     exit 1
 fi
 
-if ! /usr/local/bin/stop_temporary_bayesian.sh; then
+if [ "$BAYESIAN_ENABLED" = true ] && ! /usr/local/bin/stop_temporary_bayesian.sh; then
     echo "Failed to stop the temporary BayesianServer, aborting" >&2
     exit 1
 fi
