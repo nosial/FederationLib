@@ -134,6 +134,33 @@ if [ "$BAYESIAN_ENABLED" = true ] && [ ! -d "$BAYESIAN_DATA/model" ]; then
     done
 fi
 
+# BAYESIAN_EMBEDDINGS adds a sentence embedding model to the bundled BayesianServer (see start_bayesian.sh), it's
+# downloaded once into the "embedding" directory of the volume (about 490 MB, from BAYESIAN_EMBEDDING_URL, by default
+# multilingual-e5-small). The container still starts without it if the download fails, and tries again on the next start.
+if ! parse_bool BAYESIAN_EMBEDDINGS >/dev/null; then
+    echo "Invalid BAYESIAN_EMBEDDINGS '$BAYESIAN_EMBEDDINGS', expected true or false, aborting" >&2
+    exit 1
+fi
+
+if [ "$BAYESIAN_ENABLED" = true ] && is_true BAYESIAN_EMBEDDINGS; then
+    EMBEDDING_DIR="$BAYESIAN_DATA/embedding"
+    EMBEDDING_URL="${BAYESIAN_EMBEDDING_URL:-https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/onnx}"
+    mkdir -p "$EMBEDDING_DIR"
+    for FILE in model.onnx tokenizer.json; do
+        if [ -s "$EMBEDDING_DIR/$FILE" ]; then
+            continue
+        fi
+
+        echo "Downloading the embedding model file $FILE from $EMBEDDING_URL"
+        if curl -fL --retry 3 -o "$EMBEDDING_DIR/$FILE.download" "$EMBEDDING_URL/$FILE"; then
+            mv "$EMBEDDING_DIR/$FILE.download" "$EMBEDDING_DIR/$FILE"
+        else
+            rm -f "$EMBEDDING_DIR/$FILE.download"
+            echo "Failed to download the embedding model file $FILE, BayesianServer starts without embeddings" >&2
+        fi
+    done
+fi
+
 # `federationlib init` starts BayesianServer temporarily to check the Bayesian model, the temporary server is always
 # stopped (even if init failed) so that it can't conflict with the BayesianServer of the services
 echo "Initializing FederationLib"
