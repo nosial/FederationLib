@@ -49,6 +49,43 @@ if [ -n "${REQUIRE_PLUGINS:-}" ]; then
     done
 fi
 
+# CRONTAB is the path to the crontab of the scheduled jobs run by supercronic, replacing the bundled crontab
+# (/etc/federation/crontab) which runs `federationlib maintenance` every hour. The jobs run with the environment of the
+# container. The container does not start if the crontab is missing or invalid.
+export CRONTAB="${CRONTAB:-/etc/federation/crontab}"
+if [ ! -f "$CRONTAB" ]; then
+    echo "The crontab $CRONTAB does not exist, aborting" >&2
+    exit 1
+fi
+
+if ! /usr/bin/supercronic -test "$CRONTAB"; then
+    echo "The crontab $CRONTAB is invalid, aborting" >&2
+    exit 1
+fi
+
+# BAYESIAN_DISABLED disables everything related to Bayesian classification when true (true, 1, yes or on): the bundled
+# BayesianServer is not started, BayesianPlugin is not enabled (even if listed in FEDERATION_PLUGINS) and the Bayesian
+# model is neither migrated nor checked by `federationlib init`
+case "${BAYESIAN_DISABLED:-false}" in
+    [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) BAYESIAN_ENABLED=false ;;
+    [Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|"") BAYESIAN_ENABLED=true ;;
+    *)
+        echo "Invalid BAYESIAN_DISABLED '$BAYESIAN_DISABLED', expected true or false, aborting" >&2
+        exit 1
+        ;;
+esac
+
+# BayesianServer is one of the services (supervisord.conf includes the programs in /etc/supervisor/services) only when
+# Bayesian classification is enabled, the healthcheck checks it only then
+mkdir -p /etc/supervisor/services
+if [ "$BAYESIAN_ENABLED" = true ]; then
+    ln -sf /etc/supervisor/bayesian.conf /etc/supervisor/services/bayesian.conf
+else
+    rm -f /etc/supervisor/services/bayesian.conf
+    export FEDERATION_BAYESIAN_MODEL_ENABLED=false
+    echo "Bayesian classification is disabled, BayesianServer and BayesianPlugin are not started"
+fi
+
 # BayesianPlugin is installed in the image alongside the bundled BayesianServer, it's always enabled as the first plugin
 # in FEDERATION_PLUGINS, before any plugins configured by the server host (a duplicate entry is dropped). With Bayesian
 # classification disabled it's never enabled.
