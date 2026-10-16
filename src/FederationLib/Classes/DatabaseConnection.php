@@ -11,7 +11,7 @@
 
     class DatabaseConnection
     {
-        public const string SCHEMA_VERSION = '1.0';
+        public const string SCHEMA_VERSION = '1.1';
         private const string BASELINE_SCHEMA_VERSION = '1.0';
         private const string SCHEMA_VERSION_KEY = 'version';
 
@@ -196,7 +196,14 @@
          */
         private static function getMigrations(): array
         {
-            return [];
+            return [
+                // OFD 1.1 added the report member to the AuditLog object
+                '1.1' => function(PDO $pdo): void
+                {
+                    $pdo->exec("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS report varchar(36) null comment 'Optional. The report related to this action' AFTER file_attachment");
+                    $pdo->exec('ALTER TABLE audit_log ADD CONSTRAINT audit_log_reports_uuid_fk FOREIGN KEY IF NOT EXISTS (report) REFERENCES reports (uuid) ON UPDATE CASCADE ON DELETE SET NULL');
+                }
+            ];
         }
 
         /**
