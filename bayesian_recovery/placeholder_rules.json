@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "name": "telegram_invite",
+      "pattern": "(?i)(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/(?:\\+|joinchat/)[\\w-]+",
+      "placeholder": "xtginvitex"
+    },
+    {
+      "name": "telegram_link",
+      "pattern": "(?i)(?:https?://)?(?:t\\.me|telegram\\.me)/[\\w/?=&-]+",
+      "placeholder": "xtglinkx"
+    }
+  ]
+}
