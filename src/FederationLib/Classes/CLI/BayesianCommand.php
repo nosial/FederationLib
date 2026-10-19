@@ -14,13 +14,20 @@
     use FederationLib\Classes\PluginManager;
     use FederationLib\Interfaces\CommandLineInterface;
 
-    class BayesianSyncCommand implements CommandLineInterface
+    class BayesianCommand implements CommandLineInterface
     {
         /**
          * @inheritDoc
          */
-        public static function handle(array $args): int
+        public static function handle(array $tokens): int
         {
+            $arguments = Arguments::parse($tokens);
+            if($arguments->get(0) !== 'sync' || $arguments->count() > 1)
+            {
+                print(self::getHelp());
+                return $arguments->wantsHelp() ? 0 : 1;
+            }
+
             if(!in_array(BayesianModelRecovery::PLUGIN_PACKAGE, Configuration::getPluginsConfiguration()->getPlugins(), true))
             {
                 print("BayesianPlugin is not enabled, nothing to do.\n");
@@ -52,7 +59,7 @@
 
             try
             {
-                $position = isset($args['full']) ? null : BayesianSync::getPosition();
+                $position = $arguments->has('full') ? null : BayesianSync::getPosition();
                 print($position === null ? "Learning every classification\n" : sprintf("Learning the classifications made after %s\n", $position[0]));
 
                 $client = BayesianPlugin::getClient();
@@ -92,7 +99,7 @@
         public static function getHelp(): string
         {
             return "Usage:\n" .
-                "  federationlib bayesian-sync [--full]\n" .
+                "  federationlib bayesian sync [--full]\n" .
                 "\nDescription:\n" .
                 "  Teaches BayesianServer the evidence classifications made since the last sync, so it learns\n" .
                 "  classifications it missed (eg; while it was unavailable or its learning queue was full).\n" .
@@ -115,7 +122,7 @@
         public static function getExamples(): ?string
         {
             return "Example:\n" .
-                "  federationlib bayesian-sync\n" .
-                "  federationlib bayesian-sync --full\n";
+                "  federationlib bayesian sync\n" .
+                "  federationlib bayesian sync --full\n";
         }
     }
