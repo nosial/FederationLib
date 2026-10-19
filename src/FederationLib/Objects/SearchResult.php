@@ -47,14 +47,14 @@
         /**
          * @inheritDoc
          */
-        public function toArray(bool $includeMetadata=false): array
+        public function toArray(bool $includeMetadata=false, ?OperatorRecord $viewer=null): array
         {
             return [
                 'type' => $this->type->value,
                 'record' => match(true)
                 {
                     $this->record instanceof EntityRecord => $this->record->toArray($includeMetadata),
-                    // Standard representation omits sensitive members such as operator access tokens
+                    $this->record instanceof OperatorRecord => $this->record->toStandardArray($viewer),
                     $this->record instanceof StandardObjectInterface => $this->record->toStandardArray(),
                     default => $this->record->toArray(),
                 }
