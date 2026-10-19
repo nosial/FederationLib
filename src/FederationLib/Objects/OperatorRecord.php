@@ -5,6 +5,8 @@
     use DateTime;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\StandardObjectInterface;
+    use FederationLib\Objects\OperatorRecord\OperatorConfiguration;
+    use FederationLib\Objects\OperatorRecord\OperatorPermissions;
 
     class OperatorRecord implements StandardObjectInterface, ObjectSpecificationInterface
     {
@@ -12,10 +14,8 @@
         private ?string $accessToken;
         private string $name;
         private bool $disabled;
-        private bool $clientPermissions;
-        private bool $managementPermissions;
-        private bool $operatorPermissions;
-        private bool $autoAssign;
+        private OperatorPermissions $permissions;
+        private ?OperatorConfiguration $configuration;
         private int $created;
         private int $updated;
 
@@ -30,10 +30,40 @@
             $this->accessToken = $data['access_token'] ?? '';
             $this->name = $data['name'] ?? '';
             $this->disabled = (bool)($data['disabled'] ?? false);
-            $this->clientPermissions = (bool)($data['client_permissions'] ?? false);
-            $this->managementPermissions = (bool)($data['management_permissions'] ?? false);
-            $this->operatorPermissions = (bool)($data['operator_permissions'] ?? false);
-            $this->autoAssign = (bool)($data['auto_assign'] ?? false);
+
+            // A record carries the OperatorPermissions and OperatorConfiguration objects of the OFD OperatorRecord object
+            // (a response of a host), or their flat columns (a database row or a cached record)
+            if(is_array($data['permissions'] ?? null))
+            {
+                $this->permissions = OperatorPermissions::fromArray($data['permissions']);
+            }
+            else
+            {
+                $this->permissions = new OperatorPermissions(
+                    (bool)($data['client_permissions'] ?? false),
+                    (bool)($data['management_permissions'] ?? false),
+                    (bool)($data['operator_permissions'] ?? false)
+                );
+            }
+
+            // A host only returns the configuration to the operator itself and to operators with operator permissions,
+            // to anyone else it is null and therefore unknown
+            if(is_array($data['configuration'] ?? null))
+            {
+                $this->configuration = OperatorConfiguration::fromArray($data['configuration']);
+            }
+            elseif(array_key_exists('configuration', $data))
+            {
+                $this->configuration = null;
+            }
+            else
+            {
+                $this->configuration = new OperatorConfiguration(
+                    (bool)($data['auto_assign_reports'] ?? false),
+                    (bool)($data['auto_assign_automated_reports'] ?? false),
+                    (bool)($data['is_bot'] ?? false)
+                );
+            }
 
             // Parse SQL datetime string to timestamp if necessary for created
             if (isset($data['created']) && is_string($data['created']))
@@ -126,7 +156,7 @@
          */
         public function hasClientPermissions(): bool
         {
-            return $this->clientPermissions || $this->managementPermissions;
+            return $this->permissions->hasClient();
         }
 
         /**
@@ -136,7 +166,7 @@
          */
         public function hasManagementPermissions(): bool
         {
-            return $this->managementPermissions;
+            return $this->permissions->hasManagement();
         }
 
         /**
@@ -146,17 +176,80 @@
          */
         public function hasOperatorPermissions(): bool
         {
-            return $this->operatorPermissions;
+            return $this->permissions->hasOperator();
         }
 
         /**
-         * Check if the operator can receive reports automatically
+         * Check if the operator opts in to the automatic assignment of any kind of report
          *
-         * @return bool
+         * @return bool True if the operator opts in to ordinary or automated reports, false if the configuration is unknown
          */
         public function isAutoAssigned(): bool
         {
-            return $this->autoAssign;
+            return $this->isAutoAssignReports() || $this->isAutoAssignAutomatedReports();
+        }
+
+        /**
+         * Check if the operator opts in to the automatic assignment of reports that are not automated
+         *
+         * @return bool False if the configuration is unknown
+         */
+        public function isAutoAssignReports(): bool
+        {
+            return $this->configuration?->isAutoAssignReports() ?? false;
+        }
+
+        /**
+         * Check if the operator opts in to the automatic assignment of automated reports
+         *
+         * @return bool False if the configuration is unknown
+         */
+        public function isAutoAssignAutomatedReports(): bool
+        {
+            return $this->configuration?->isAutoAssignAutomatedReports() ?? false;
+        }
+
+        /**
+         * Check if the operator is a bot, the evidence and reports it submits are automated and its evidence is created
+         * confidential (OFD "Automated Records")
+         *
+         * @return bool False if the configuration is unknown
+         */
+        public function isBot(): bool
+        {
+            return $this->configuration?->isBot() ?? false;
+        }
+
+        /**
+         * Returns the permission groups of the operator, with client permissions in effect
+         *
+         * @return OperatorPermissions The permissions
+         */
+        public function getPermissions(): OperatorPermissions
+        {
+            return $this->permissions;
+        }
+
+        /**
+         * Returns the configuration of the operator
+         *
+         * @return OperatorConfiguration|null The configuration, null if the host did not disclose it to the requester
+         */
+        public function getConfiguration(): ?OperatorConfiguration
+        {
+            return $this->configuration;
+        }
+
+        /**
+         * Checks whether the given operator may see the configuration of this operator: the operator itself and
+         * operators with operator permissions may, anyone else may not (OFD "Visibility Rules")
+         *
+         * @param OperatorRecord|null $viewer The operator making the request, null if the request is anonymous
+         * @return bool True if the viewer may see the configuration
+         */
+        public function isConfigurationVisibleTo(?OperatorRecord $viewer): bool
+        {
+            return $viewer !== null && ($viewer->getUuid() === $this->uuid || $viewer->hasOperatorPermissions());
         }
 
         /**
@@ -189,10 +282,12 @@
                 'access_token' => $this->accessToken,
                 'name' => $this->name,
                 'disabled' => $this->disabled,
-                'client_permissions' => $this->clientPermissions,
-                'management_permissions' => $this->managementPermissions,
-                'operator_permissions' => $this->operatorPermissions,
-                'auto_assign' => $this->autoAssign,
+                'client_permissions' => $this->permissions->hasClient(),
+                'management_permissions' => $this->permissions->hasManagement(),
+                'operator_permissions' => $this->permissions->hasOperator(),
+                'auto_assign_reports' => $this->isAutoAssignReports(),
+                'auto_assign_automated_reports' => $this->isAutoAssignAutomatedReports(),
+                'is_bot' => $this->isBot(),
                 'created' => $this->created,
                 'updated' => $this->updated
             ];
@@ -200,17 +295,17 @@
 
         /**
          * @inheritDoc
+         * @param OperatorRecord|null $viewer The operator making the request, the configuration is only included when
+         *                                    it is this operator or holds operator permissions, and is null otherwise
          */
-        public function toStandardArray(): array
+        public function toStandardArray(?OperatorRecord $viewer=null): array
         {
             return [
                 'uuid' => $this->uuid,
                 'name' => $this->name,
                 'disabled' => $this->disabled,
-                'client_permissions' => $this->clientPermissions,
-                'management_permissions' => $this->managementPermissions,
-                'operator_permissions' => $this->operatorPermissions,
-                'auto_assign' => $this->autoAssign,
+                'permissions' => $this->permissions->toArray(),
+                'configuration' => $this->isConfigurationVisibleTo($viewer) ? $this->configuration?->toArray() : null,
                 'created' => $this->created,
                 'updated' => $this->updated
             ];
@@ -266,10 +361,11 @@
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the operator'],
                 'name' => ['type' => 'string', 'description' => 'Display name of the operator'],
                 'disabled' => ['type' => 'boolean', 'description' => 'Whether the operator account is disabled'],
-                'client_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has client-level permissions'],
-                'management_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has management-level permissions'],
-                'operator_permissions' => ['type' => 'boolean', 'description' => 'Whether the operator has operator-level permissions'],
-                'auto_assign' => ['type' => 'boolean', 'description' => 'Whether the operator can automatically receive reports'],
+                'permissions' => ['$ref' => OperatorPermissions::getReference(), 'description' => 'The permission groups the operator holds'],
+                'configuration' => [
+                    'anyOf' => [['$ref' => OperatorConfiguration::getReference()], ['type' => 'null']],
+                    'description' => 'The configuration of the operator, null unless the requester is the operator itself or holds operator permissions',
+                ],
                 'created' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was created'],
                 'updated' => ['type' => 'integer', 'description' => 'Unix timestamp when the operator was last updated'],
             ];
@@ -280,7 +376,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['uuid', 'name', 'disabled', 'client_permissions', 'management_permissions', 'operator_permissions',  'auto_assign', 'created', 'updated'];
+            return ['uuid', 'name', 'disabled', 'permissions', 'configuration', 'created', 'updated'];
         }
 
         /**
