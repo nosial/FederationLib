@@ -13,6 +13,7 @@
     use FederationLib\Exceptions\PluginException;
     use FederationLib\Interfaces\CommandLineInterface;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\Plugin\Startup;
     use InvalidArgumentException;
 
     class InitializeCommand implements CommandLineInterface
@@ -21,7 +22,7 @@
         /**
          * @inheritDoc
          */
-        public static function handle(array $args): int
+        public static function handle(array $tokens): int
         {
             // Plugins are validated first so that a misconfigured plugin is reported before anything else is done
             if(!self::validatePlugins())
@@ -41,6 +42,12 @@
             }
 
             Logger::log()->info('Database OK');
+
+            $rootAccessToken = Configuration::getServerConfiguration()->getAccessToken();
+            if($rootAccessToken !== null && preg_match('/^[A-Za-z0-9\-._~+\/]{32}$/', $rootAccessToken) !== 1)
+            {
+                Logger::log()->warning('The configured root access token (server.access_token) must be exactly 32 characters of letters, digits or -._~+/, it cannot authenticate the root operator');
+            }
 
             try
             {
@@ -116,6 +123,13 @@
             if(!BayesianModelRecovery::run())
             {
                 Logger::log()->critical('The Bayesian model is broken and could not be repaired');
+                return 1;
+            }
+
+            // Plugins set themselves up last, once the database is ready, before the services are started
+            if(!PluginManager::dispatchStartup(new Startup(time(), DatabaseConnection::wasDatabaseCreated(), DatabaseConnection::getMigratedFrom())))
+            {
+                Logger::log()->critical('A plugin failed to start, see the STARTUP event handler errors above');
                 return 1;
             }
 
