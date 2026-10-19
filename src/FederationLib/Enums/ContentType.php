@@ -179,7 +179,12 @@
         {
             foreach($context as $key => $value)
             {
-                if(!is_string($key) || strlen($key) < 1 || strlen($key) > 64)
+                if(!is_string($key))
+                {
+                    throw new InvalidArgumentException('The context must be an object');
+                }
+
+                if(strlen($key) < 1 || strlen($key) > 64)
                 {
                     throw new InvalidArgumentException('Context keys must be 1 to 64 bytes long');
                 }
