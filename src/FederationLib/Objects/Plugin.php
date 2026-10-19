@@ -22,6 +22,7 @@
         private array $requestHandlers;
         /** @var EventHandlerDefinition[] */
         private array $eventHandlers;
+        private bool $collectsScanContent;
 
         /**
          * Plugin constructor.
@@ -35,6 +36,15 @@
         {
             $this->package = $package;
             $this->version = $version;
+
+            // A plugin that stores the content submitted for scanning declares it, so that the server publishes
+            // collects_public_scan_content correctly (OFD "Content Scanning")
+            $collectsScanContent = $properties['collects_scan_content'] ?? false;
+            if(!is_bool($collectsScanContent))
+            {
+                throw new PluginException(sprintf('The plugin "%s" has an invalid "collects_scan_content" property, expected a boolean', $package));
+            }
+            $this->collectsScanContent = $collectsScanContent;
 
             $requestHandlers = $properties['request_handlers'] ?? [];
             if(!is_array($requestHandlers))
@@ -180,6 +190,16 @@
         public function getVersion(): ?string
         {
             return $this->version;
+        }
+
+        /**
+         * Returns whether the plugin stores the content submitted for scanning, or records derived from it
+         *
+         * @return bool True if the plugin declares that it stores scanned content
+         */
+        public function collectsScanContent(): bool
+        {
+            return $this->collectsScanContent;
         }
 
         /**
