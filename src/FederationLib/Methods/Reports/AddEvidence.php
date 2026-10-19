@@ -83,7 +83,7 @@
                     $evidenceUuid,
                     $reportUuid,
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
+                ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid, null, $reportUuid);
             }
             catch(InvalidArgumentException $e)
             {
