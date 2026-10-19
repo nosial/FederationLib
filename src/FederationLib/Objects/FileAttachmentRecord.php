@@ -10,7 +10,7 @@
     class FileAttachmentRecord implements SerializableInterface, ObjectSpecificationInterface
     {
         private string $uuid;
-        private string $evidenceUuid;
+        private ?string $evidenceUuid;
         private string $fileName;
         private int $fileSize;
         private string $fileMime;
@@ -24,7 +24,7 @@
         public function __construct(array $data)
         {
             $this->uuid = $data['uuid'] ?? '';
-            $this->evidenceUuid = $data['evidence'] ?? '';
+            $this->evidenceUuid = $data['evidence'] ?? null;
             $this->fileName = $data['file_name'] ?? '';
             $this->fileSize = isset($data['file_size']) ? (int)$data['file_size'] : 0;
             $this->fileMime = $data['file_mime'] ?? '';
@@ -58,11 +58,12 @@
         }
 
         /**
-         * Get the UUID of the associated evidence record.
+         * Get the UUID of the associated evidence record, null when the server no longer associates the attachment
+         * with an evidence record.
          *
-         * @return string
+         * @return string|null
          */
-        public function getEvidenceUuid(): string
+        public function getEvidenceUuid(): ?string
         {
             return $this->evidenceUuid;
         }
@@ -170,7 +171,7 @@
         {
             return [
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the file attachment'],
-                'evidence' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the evidence this file is attached to'],
+                'evidence' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the evidence this file is attached to, null when it is no longer associated with an evidence record'],
                 'file_name' => ['type' => 'string', 'description' => 'Original filename of the attachment'],
                 'file_size' => ['type' => 'integer', 'description' => 'Size of the file in bytes'],
                 'file_mime' => ['type' => 'string', 'description' => 'MIME type of the file'],
