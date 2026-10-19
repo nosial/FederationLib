@@ -4,6 +4,7 @@
 
     use Exception;
     use FederationLib\Classes\Configuration;
+    use FederationLib\Classes\DnsDetails;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\BlacklistManager;
@@ -11,36 +12,58 @@
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\ReportManager;
+    use FederationLib\Classes\PluginManager;
+    use FederationLib\Classes\Validate;
+    use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Interfaces\CommandLineInterface;
+    use FederationLib\Objects\Plugin\Maintenance;
+    use RuntimeException;
 
     class MaintenanceCommand implements CommandLineInterface
     {
-        private const int PAGE_SIZE = 1000;
+        private const int BATCH_SIZE = 1000;
+
+        /**
+         * The maximum number of domain entities resolved per maintenance run
+         */
+        private const int DNS_REFRESH_LIMIT = 500;
 
         /**
          * @inheritDoc
          */
-        public static function handle(array $args): int
+        public static function handle(array $tokens): int
         {
-            if(!Configuration::getMaintenanceConfiguration()->isEnabled())
+            $arguments = Arguments::parse($tokens, ['archive']);
+            $startedAt = time();
+
+            $configuration = Configuration::getMaintenanceConfiguration();
+            if(!$configuration->isEnabled())
             {
-                print("Maintenance mode is not enabled.\n");
-                return 1;
+                // Nothing to clean is not a failure, the command is run on a schedule regardless of the configuration;
+                // plugins still do their own periodic work
+                print("Maintenance is not enabled, nothing to clean.\n");
+                return PluginManager::dispatchMaintenance(new Maintenance($startedAt, false, null, [])) ? 0 : 1;
             }
 
             $archivePath = null;
-            if(isset($args['archive']) && is_string($args['archive']))
+            if($arguments->has('archive'))
             {
-                $archivePath = rtrim($args['archive'], DIRECTORY_SEPARATOR);
-                print("Archive directory: $archivePath\n");
+                $archive = $arguments->option('archive');
+                if($archive === null || trim($archive) === '')
+                {
+                    print("Error: --archive requires a directory\n");
+                    return 1;
+                }
 
+                $archivePath = rtrim($archive, DIRECTORY_SEPARATOR);
                 if(!is_dir($archivePath))
                 {
-                    if(!@mkdir($archivePath, 0755, true))
+                    if(!@mkdir($archivePath, 0755, true) && !is_dir($archivePath))
                     {
                         print("Error: Failed to create archive directory: $archivePath\n");
                         return 1;
                     }
+
                     print("Created archive directory: $archivePath\n");
                 }
 
@@ -49,500 +72,285 @@
                     print("Error: Archive directory is not writable: $archivePath\n");
                     return 1;
                 }
+
+                print("Archiving removed records to: $archivePath\n");
             }
 
-            // Process file attachments first (leaf node, depends on evidence)
-            if(Configuration::getMaintenanceConfiguration()->isCleanFileAttachmentsEnabled())
+            // Each task runs even if a previous one failed, a record is only removed after the records depending on it
+            // were removed by their own task (eg; an entity is only removed once it has no evidence, reports or
+            // blacklist records left), so a failed task can't cause the removal of records it should have kept
+            $tasks = [
+                'file attachment' => [$configuration->isCleanFileAttachmentsEnabled(), $configuration->getCleanFileAttachmentsTtl(), self::cleanFileAttachments(...)],
+                'evidence' => [$configuration->isCleanEvidenceEnabled(), $configuration->getCleanEvidenceTtl(), self::cleanEvidence(...)],
+                'report' => [$configuration->isCleanReportsEnabled(), $configuration->getCleanReportsTtl(), self::cleanReports(...)],
+                'blacklist' => [$configuration->isCleanBlacklistEnabled(), $configuration->getCleanBlacklistTtl(), self::cleanBlacklist(...)],
+                'entity' => [$configuration->isCleanEntitiesEnabled(), $configuration->getCleanEntitiesTtl(), self::cleanEntities(...)],
+                'audit log' => [$configuration->isCleanAuditLogsEnabled(), $configuration->getCleanAuditLogsTtl(), self::cleanAuditLogs(...)],
+            ];
+
+            $exitCode = 0;
+            $removed = [];
+            foreach($tasks as $name => [$enabled, $ttl, $task])
             {
-                $exitCode = self::cleanFileAttachments($archivePath);
-                if($exitCode !== 0)
+                if(!$enabled)
                 {
-                    return $exitCode;
+                    continue;
+                }
+
+                if($ttl <= 0)
+                {
+                    print("Error: The TTL of $name records must be greater than zero, skipping\n");
+                    $exitCode = 1;
+                    continue;
+                }
+
+                // The same point in time is used to find and delete the old records of a task
+                $before = time() - $ttl;
+                print(sprintf("Cleaning %s records older than %s...\n", $name, date('Y-m-d H:i:s', $before)));
+
+                try
+                {
+                    $cleaned = $task($before, $archivePath);
+                    $removed[$name] = $cleaned;
+                    print(sprintf("Cleaned %d %s record(s)\n", $cleaned, $name));
+                }
+                catch(Exception $e)
+                {
+                    Logger::log()->error(sprintf('Failed to clean %s records: %s', $name, $e->getMessage()), $e);
+                    print(sprintf("Error: Failed to clean %s records: %s\n", $name, $e->getMessage()));
+                    $exitCode = 1;
                 }
             }
 
-            // Process evidence (depends on entities, has FK to reports SET NULL)
-            if(Configuration::getMaintenanceConfiguration()->isCleanEvidenceEnabled())
+            // The DNS details of the domain entities that remain are refreshed once their interval passed
+            if($configuration->isDnsRefreshEnabled())
             {
-                $exitCode = self::cleanEvidence($archivePath);
-                if($exitCode !== 0)
+                $before = time() - $configuration->getDnsRefresh();
+                print(sprintf("Refreshing the DNS details of domain entities resolved before %s...\n", date('Y-m-d H:i:s', $before)));
+
+                try
                 {
-                    return $exitCode;
+                    [$refreshed, $remaining] = self::refreshDnsDetails($before);
+                    print(sprintf("Refreshed the DNS details of %d domain entit%s%s\n", $refreshed, $refreshed === 1 ? 'y' : 'ies',
+                        $remaining ? ', more remain for the next run' : ''));
+                }
+                catch(Exception $e)
+                {
+                    Logger::log()->error(sprintf('Failed to refresh the DNS details of domain entities: %s', $e->getMessage()), $e);
+                    print(sprintf("Error: Failed to refresh the DNS details of domain entities: %s\n", $e->getMessage()));
+                    $exitCode = 1;
                 }
             }
 
-            // Process reports (depends on entities)
-            if(Configuration::getMaintenanceConfiguration()->isCleanReportsEnabled())
+            // Plugins do their own periodic work after FederationLib cleaned its records
+            if(!PluginManager::dispatchMaintenance(new Maintenance($startedAt, true, $archivePath, $removed)))
             {
-                $exitCode = self::cleanReports($archivePath);
-                if($exitCode !== 0)
-                {
-                    return $exitCode;
-                }
+                print("Error: A plugin failed its maintenance, see the logs for details\n");
+                $exitCode = 1;
             }
 
-            // Process blacklist (depends on entities, reports)
-            if(Configuration::getMaintenanceConfiguration()->isCleanBlacklistEnabled())
-            {
-                $exitCode = self::cleanBlacklist($archivePath);
-                if($exitCode !== 0)
-                {
-                    return $exitCode;
-                }
-            }
-
-            // Process entities (disabled by default, depends on no other table)
-            if(Configuration::getMaintenanceConfiguration()->isCleanEntitiesEnabled())
-            {
-                $exitCode = self::cleanEntities($archivePath);
-                if($exitCode !== 0)
-                {
-                    return $exitCode;
-                }
-            }
-
-            // Process audit logs (no FK dependencies for deletion)
-            if(Configuration::getMaintenanceConfiguration()->isCleanAuditLogsEnabled())
-            {
-                $exitCode = self::cleanAuditLogs($archivePath);
-                if($exitCode !== 0)
-                {
-                    return $exitCode;
-                }
-            }
-
-            return 0;
-        }
-
-        private static function cleanFileAttachments(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanFileAttachmentsTtl();
-            print("Cleaning file attachments older than threshold...\n");
-
-            try
-            {
-                $page = 1;
-
-                do
-                {
-                    $records = FileAttachmentManager::getOldRecords($ttl, self::PAGE_SIZE, $page);
-                    if(empty($records))
-                    {
-                        break;
-                    }
-
-                    if($archivePath !== null)
-                    {
-                        foreach($records as $record)
-                        {
-                            self::archiveRecord($archivePath, 'file_attachments', $record);
-                        }
-                    }
-
-                    $page++;
-                }
-                while(count($records) === self::PAGE_SIZE);
-
-                $cleaned = FileAttachmentManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned file attachment(s).\n");
-                }
-                else
-                {
-                    print("No file attachments were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean file attachments: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean file attachments. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
+            return $exitCode;
         }
 
         /**
-         * Archives old evidence records to CSV and removes them.
-         * Also archives associated file attachments.
-         */
-        private static function cleanEvidence(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanEvidenceTtl();
-            print("Cleaning evidence records older than threshold...\n");
-
-            try
-            {
-                $page = 1;
-                $evidenceUuids = [];
-
-                do
-                {
-                    $records = EvidenceManager::getOldRecords($ttl, self::PAGE_SIZE, $page);
-                    if(empty($records))
-                    {
-                        break;
-                    }
-
-                    if($archivePath !== null)
-                    {
-                        foreach($records as $record)
-                        {
-                            $evidenceUuids[] = $record['uuid'];
-                            self::archiveRecord($archivePath, 'evidence', $record);
-                        }
-                    }
-
-                    $page++;
-                }
-                while(count($records) === self::PAGE_SIZE);
-
-                if($archivePath !== null && !empty($evidenceUuids))
-                {
-                    // Archive file attachments that will be cascade-deleted when their parent evidence is removed.
-                    foreach($evidenceUuids as $evUuid)
-                    {
-                        $attachments = FileAttachmentManager::getRecordsByEvidence($evUuid);
-                        foreach($attachments as $attachment)
-                        {
-                            self::archiveRecord($archivePath, 'file_attachments', $attachment->toArray());
-                        }
-                    }
-                }
-
-                $cleaned = EvidenceManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned evidence record(s).\n");
-                }
-                else
-                {
-                    print("No evidence records were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean evidence records: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean evidence records. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
-        }
-
-        /**
-         * Archives old report records to CSV and removes them.
-         */
-        private static function cleanReports(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanReportsTtl();
-            print("Cleaning reports older than threshold...\n");
-
-            try
-            {
-                $page = 1;
-
-                do
-                {
-                    $records = ReportManager::getOldRecords($ttl, self::PAGE_SIZE, $page);
-                    if(empty($records))
-                    {
-                        break;
-                    }
-
-                    if($archivePath !== null)
-                    {
-                        foreach($records as $record)
-                        {
-                            self::archiveRecord($archivePath, 'reports', $record);
-                        }
-                    }
-
-                    $page++;
-                }
-                while(count($records) === self::PAGE_SIZE);
-
-                $cleaned = ReportManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned report(s).\n");
-                }
-                else
-                {
-                    print("No reports were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean reports: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean reports. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
-        }
-
-        /**
-         * Archives old blacklist entries to CSV and removes them.
-         */
-        private static function cleanBlacklist(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanBlacklistTtl();
-            print("Cleaning blacklist entries older than threshold...\n");
-
-            try
-            {
-                if($archivePath !== null)
-                {
-                    // Fetch old records before deletion for archiving
-                    $page = 1;
-                    do
-                    {
-                        $records = BlacklistManager::getEntries(self::PAGE_SIZE, $page, true);
-                        if(empty($records))
-                        {
-                            break;
-                        }
-
-                        $threshold = time() - $ttl;
-                        foreach($records as $record)
-                        {
-                            $recordCreated = $record->getCreated();
-                            $recordExpires = $record->getExpires();
-                            $isExpired = ($recordExpires !== null && $recordExpires < $threshold) ||
-                                         ($recordExpires === null && $recordCreated < $threshold);
-                            if($isExpired)
-                            {
-                                self::archiveRecord($archivePath, 'blacklist', $record->toArray());
-                            }
-                        }
-
-                        $page++;
-                    }
-                    while(count($records) === self::PAGE_SIZE);
-                }
-
-                $cleaned = BlacklistManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned blacklist entrie(s).\n");
-                }
-                else
-                {
-                    print("No blacklist entries were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean blacklist entries: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean blacklist entries. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
-        }
-
-        /**
-         * Archives old entity records to CSV and removes them.
-         */
-        private static function cleanEntities(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanEntitiesTtl();
-            print("Cleaning entity records older than threshold...\n");
-
-            try
-            {
-                $page = 1;
-                $entityUuids = [];
-
-                do
-                {
-                    $records = EntitiesManager::getOldRecords($ttl, self::PAGE_SIZE, $page);
-                    if(empty($records))
-                    {
-                        break;
-                    }
-
-                    if($archivePath !== null)
-                    {
-                        foreach($records as $record)
-                        {
-                            $entityUuids[] = $record['uuid'];
-                            self::archiveRecord($archivePath, 'entities', $record);
-                        }
-                    }
-
-                    $page++;
-                }
-                while(count($records) === self::PAGE_SIZE);
-
-                if($archivePath !== null && !empty($entityUuids))
-                {
-                    // Archive child records that will be cascade-deleted when their parent entity is removed.
-                    foreach($entityUuids as $entUuid)
-                    {
-                        // Archive reports
-                        $reportPage = 1;
-                        do
-                        {
-                            $reports = ReportManager::getReportsByReportingEntity($entUuid, self::PAGE_SIZE, $reportPage);
-                            foreach($reports as $report)
-                            {
-                                self::archiveRecord($archivePath, 'reports', $report->toArray());
-                            }
-                            $reportPage++;
-                        }
-                        while(count($reports) === self::PAGE_SIZE);
-
-                        // Archive evidence and their file attachments
-                        $evPage = 1;
-                        do
-                        {
-                            $evidenceRecords = EvidenceManager::getEvidenceByEntity($entUuid, self::PAGE_SIZE, $evPage, true);
-                            foreach($evidenceRecords as $evRecord)
-                            {
-                                // Archive file attachments for this evidence before the evidence is cascade-deleted
-                                $attachments = FileAttachmentManager::getRecordsByEvidence($evRecord->getUuid());
-                                foreach($attachments as $attachment)
-                                {
-                                    self::archiveRecord($archivePath, 'file_attachments', $attachment->toArray());
-                                }
-
-                                self::archiveRecord($archivePath, 'evidence', $evRecord->toArray());
-                            }
-                            $evPage++;
-                        }
-                        while(count($evidenceRecords) === self::PAGE_SIZE);
-
-                        // Archive blacklist records
-                        $blPage = 1;
-                        do
-                        {
-                            $blacklistEntries = BlacklistManager::getEntriesByEntity($entUuid, self::PAGE_SIZE, $blPage, true);
-                            foreach($blacklistEntries as $entry)
-                            {
-                                self::archiveRecord($archivePath, 'blacklist', $entry->toArray());
-                            }
-                            $blPage++;
-                        }
-                        while(count($blacklistEntries) === self::PAGE_SIZE);
-                    }
-                }
-
-                $cleaned = EntitiesManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned entitie(s).\n");
-                }
-                else
-                {
-                    print("No entity records were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean entity records: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean entity records. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
-        }
-
-        /**
-         * Archives old audit log entries to CSV and removes them.
-         */
-        private static function cleanAuditLogs(?string $archivePath): int
-        {
-            $ttl = Configuration::getMaintenanceConfiguration()->getCleanAuditLogsTtl();
-            print("Cleaning audit logs older than threshold...\n");
-
-            try
-            {
-                if($archivePath !== null)
-                {
-                    // Fetch old entries before deletion for archiving
-                    $page = 1;
-                    do
-                    {
-                        $records = AuditLogManager::getEntries(self::PAGE_SIZE, $page);
-                        if(empty($records))
-                        {
-                            break;
-                        }
-
-                        $threshold = time() - $ttl;
-                        foreach($records as $record)
-                        {
-                            if($record->getTimestamp() < $threshold)
-                            {
-                                self::archiveRecord($archivePath, 'audit_log', $record->toArray());
-                            }
-                        }
-
-                        $page++;
-                    }
-                    while(count($records) === self::PAGE_SIZE);
-                }
-
-                $cleaned = AuditLogManager::cleanEntries($ttl);
-
-                if($cleaned > 0)
-                {
-                    print("Cleaned $cleaned audit log entrie(s).\n");
-                }
-                else
-                {
-                    print("No audit log entries were cleaned.\n");
-                }
-            }
-            catch(Exception $e)
-            {
-                Logger::log()->error('Failed to clean audit logs: ' . $e->getMessage(), $e);
-                print("Error: Failed to clean audit logs. See logs for details.\n");
-                return 1;
-            }
-
-            return 0;
-        }
-
-        /**
-         * Appends a record to a CSV archive file.
+         * Resolves the domain entities whose DNS details are missing or were resolved before the given time, and stores
+         * the details in their metadata (see DnsDetails). At most DNS_REFRESH_LIMIT names are resolved per run, as each
+         * lookup may wait on the resolver; the remaining entities are refreshed by the next runs, those never
+         * resolved first.
          *
-         * The file is named <table>_YYYY-MM-DD.csv and is created in the archive directory.
-         * If the file does not exist, the header row is written first.
-         *
-         * @param string $archivePath The directory to store archive files in
-         * @param string $table The database table name (used for the filename prefix)
-         * @param array $record The record data as an associative array
+         * @param int $before The Unix timestamp before which DNS details are refreshed
+         * @return array{0: int, 1: bool} The number of refreshed entities, and whether more entities are due
+         * @throws DatabaseOperationException If the entities cannot be retrieved or updated
          */
-        private static function archiveRecord(string $archivePath, string $table, array $record): void
+        private static function refreshDnsDetails(int $before): array
         {
-            $date = date('Y-m-d');
-            $filename = $archivePath . DIRECTORY_SEPARATOR . $table . '_' . $date . '.csv';
-            $isNewFile = !file_exists($filename);
+            $entities = EntitiesManager::getDnsRefreshCandidates($before, self::DNS_REFRESH_LIMIT + 1);
+            $remaining = count($entities) > self::DNS_REFRESH_LIMIT;
 
-            $handle = fopen($filename, 'a');
-            if($handle === false)
+            $refreshed = 0;
+            foreach(array_slice($entities, 0, self::DNS_REFRESH_LIMIT) as $entity)
             {
-                Logger::log()->error("Failed to open archive file for writing: $filename");
-                print("Error: Failed to open archive file for writing: $filename\n");
+                // Hosts are canonical, but only DNS names are resolved
+                if(!Validate::dnsName($entity->getHost()))
+                {
+                    continue;
+                }
+
+                if(EntitiesManager::setDnsDetails($entity, DnsDetails::lookup($entity->getHost())))
+                {
+                    $refreshed++;
+                    continue;
+                }
+
+                Logger::log()->warning(sprintf('The metadata of entity %s has no room for its DNS details', $entity->getUuid()));
+            }
+
+            return [$refreshed, $remaining];
+        }
+
+        /**
+         * Removes old records in batches, each batch is archived (when archiving) before it's deleted. A batch that
+         * can't be archived is not deleted.
+         *
+         * @param callable(): array[] $fetch Returns the next batch of old records as raw record data
+         * @param callable(array[]): void $archive Archives a batch of records
+         * @param callable(string[]): int $purge Deletes the records with the given UUIDs and returns how many it deleted
+         * @return int The number of deleted records
+         */
+        private static function cleanInBatches(callable $fetch, callable $archive, callable $purge): int
+        {
+            $cleaned = 0;
+            while(!empty($records = $fetch()))
+            {
+                $archive($records);
+                $purged = $purge(array_column($records, 'uuid'));
+                $cleaned += $purged;
+
+                // The records of the batch changed since they were retrieved and are no longer old, they would be
+                // retrieved again. The remaining records are cleaned up by the next run.
+                if($purged === 0)
+                {
+                    break;
+                }
+            }
+
+            return $cleaned;
+        }
+
+        /**
+         * Removes file attachments created before the given time, along with their stored files.
+         */
+        private static function cleanFileAttachments(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => FileAttachmentManager::getOldRecords($before, self::BATCH_SIZE),
+                fn(array $records) => self::archiveRecords($archivePath, 'file_attachments', $records),
+                fn(array $uuids) => FileAttachmentManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Removes evidence created before the given time, the file attachments of the evidence are removed with it.
+         */
+        private static function cleanEvidence(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => EvidenceManager::getOldRecords($before, self::BATCH_SIZE),
+                function(array $records) use ($archivePath)
+                {
+                    self::archiveRecords($archivePath, 'evidence', $records);
+                    if($archivePath !== null)
+                    {
+                        self::archiveRecords($archivePath, 'file_attachments', FileAttachmentManager::getRawRecordsByEvidence(array_column($records, 'uuid')));
+                    }
+                },
+                fn(array $uuids) => EvidenceManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Removes closed reports last changed before the given time.
+         */
+        private static function cleanReports(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => ReportManager::getOldRecords($before, self::BATCH_SIZE),
+                fn(array $records) => self::archiveRecords($archivePath, 'reports', $records),
+                fn(array $uuids) => ReportManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Removes blacklist records no longer in effect since before the given time.
+         */
+        private static function cleanBlacklist(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => BlacklistManager::getOldRecords($before, self::BATCH_SIZE),
+                fn(array $records) => self::archiveRecords($archivePath, 'blacklist', $records),
+                fn(array $uuids) => BlacklistManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Removes entities last changed before the given time that have no evidence, reports or blacklist records.
+         */
+        private static function cleanEntities(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => EntitiesManager::getOldRecords($before, self::BATCH_SIZE),
+                fn(array $records) => self::archiveRecords($archivePath, 'entities', $records),
+                fn(array $uuids) => EntitiesManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Removes audit log entries created before the given time.
+         */
+        private static function cleanAuditLogs(int $before, ?string $archivePath): int
+        {
+            return self::cleanInBatches(
+                fn() => AuditLogManager::getOldRecords($before, self::BATCH_SIZE),
+                fn(array $records) => self::archiveRecords($archivePath, 'audit_log', $records),
+                fn(array $uuids) => AuditLogManager::purgeRecords($uuids, $before)
+            );
+        }
+
+        /**
+         * Appends raw database records to the CSV archive file of their table, named <table>_YYYY-MM-DD.csv in the
+         * archive directory. The header row (the column names) is written when the file is created. Does nothing
+         * when not archiving.
+         *
+         * @param string|null $archivePath The directory to store archive files in, null when not archiving
+         * @param string $table The database table of the records (the filename prefix)
+         * @param array[] $records The raw records as associative arrays of their columns
+         * @throws RuntimeException If the records could not be written, the records must not be deleted then
+         */
+        private static function archiveRecords(?string $archivePath, string $table, array $records): void
+        {
+            if($archivePath === null || empty($records))
+            {
                 return;
             }
 
-            if($isNewFile)
+            $filename = $archivePath . DIRECTORY_SEPARATOR . $table . '_' . date('Y-m-d') . '.csv';
+            $handle = @fopen($filename, 'a');
+            if($handle === false)
             {
-                fputcsv($handle, array_keys($record));
+                throw new RuntimeException("Failed to open archive file for writing: $filename");
             }
 
-            fputcsv($handle, array_values($record));
-            fclose($handle);
+            try
+            {
+                $rows = [];
+                // fstat() rather than filesize(), which is cached and would repeat the header for every batch
+                if(fstat($handle)['size'] === 0)
+                {
+                    $rows[] = array_keys($records[0]);
+                }
+
+                foreach($records as $record)
+                {
+                    $rows[] = array_values($record);
+                }
+
+                foreach($rows as $row)
+                {
+                    if(fputcsv($handle, $row, escape: '') === false)
+                    {
+                        throw new RuntimeException("Failed to write to archive file: $filename");
+                    }
+                }
+
+                if(!fflush($handle))
+                {
+                    throw new RuntimeException("Failed to write to archive file: $filename");
+                }
+            }
+            finally
+            {
+                fclose($handle);
+            }
         }
 
         /**
@@ -551,16 +359,20 @@
         public static function getHelp(): string
         {
             return "Usage:\n" .
-                "  federationserver maintenance [--archive <directory>]\n" .
+                "  federationlib maintenance [--archive <directory>]\n" .
                 "\nDescription:\n" .
-                "  Runs maintenance tasks such as cleaning old records based on configuration.\n" .
-                "  When --archive is provided, removed records are saved as CSV files in the\n" .
-                "  specified directory before deletion. The directory will be created if it\n" .
-                "  does not exist.\n" .
+                "  Removes records that are older than their configured retention (see the maintenance\n" .
+                "  configuration): file attachments (and their files), evidence, closed reports, blacklist\n" .
+                "  records no longer in effect, entities without any evidence, reports or blacklist records,\n" .
+                "  and audit log entries. Blacklist records in effect, open reports and whitelisted entities\n" .
+                "  are never removed. Then resolves the domain entities whose DNS details are missing or older\n" .
+                "  than maintenance.dns_refresh (90 days by default) and stores their A, AAAA, CNAME, MX and NS\n" .
+                "  records in their metadata (dns_* keys), at most " . self::DNS_REFRESH_LIMIT . " per run. Does nothing if maintenance\n" .
+                "  is disabled.\n" .
                 "\nOptions:\n" .
-                "  --archive <directory>  Archive removed records as CSV files in the given\n" .
-                "                         directory. Each table gets its own file named\n" .
-                "                         <table>_YYYY-MM-DD.csv.\n";
+                "  --archive <directory>  Archive removed records as CSV files in the given directory before\n" .
+                "                         they are removed, the directory is created if it does not exist.\n" .
+                "                         Each table gets its own file named <table>_YYYY-MM-DD.csv.\n";
         }
 
         /**
@@ -568,7 +380,7 @@
          */
         public static function getShortHelp(): string
         {
-            return "Runs maintenance tasks such as cleaning old records if enabled in the configuration.";
+            return "Removes records older than their configured retention and refreshes the DNS details of domain entities.";
         }
 
         /**
@@ -577,8 +389,8 @@
         public static function getExamples(): ?string
         {
             return "Example:\n" .
-                "  federationserver maintenance\n" .
-                "  federationserver maintenance --archive /var/backups/federation\n" .
-                "\nThe --archive flag saves removed records as CSV files before deletion.\n";
+                "  federationlib maintenance\n" .
+                "  federationlib maintenance --archive /var/backups/federation\n" .
+                "\nThe --archive option saves removed records as CSV files before they are removed.\n";
         }
     }
