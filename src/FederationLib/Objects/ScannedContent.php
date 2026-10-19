@@ -4,11 +4,13 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\ScanningRules;
     use FederationLib\Enums\SuggestedActionType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\StandardObjectInterface;
     use FederationLib\Objects\ScannedContent\ContentClassification;
+    use FederationLib\Objects\ScannedContent\Detection;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
 
     class ScannedContent implements StandardObjectInterface, ObjectSpecificationInterface
@@ -18,22 +20,23 @@
          */
         private array $resolvedEntities;
         private ?ResolvedEntity $authorEntity;
-
         /**
          * @var ContentClassification[]
          */
         private array $classifications;
-
         /**
-         * Additional scanning rules that are not built into FederationLib (eg; provided by plugins)
-         *
          * @var array<string, float>
          */
         private array $additionalScanResults;
-
         /**
-         * Memoized result of getScanResults(); the object is immutable after construction
-         *
+         * @var Detection[]
+         */
+        private array $detections;
+        /**
+         * @var IncidentType[]|null
+         */
+        private ?array $concerns;
+        /**
          * @var array<string, float>|null
          */
         private ?array $scanResults = null;
@@ -45,12 +48,17 @@
          * @param ResolvedEntity|null $authorEntity Optional. The author entity of the submitted content
          * @param ContentClassification|ContentClassification[]|null $classification Optional. The classification information about the submitted content
          * @param array<string, float|int> $additionalScanResults Optional. Additional scanning rules mapped to their points (eg; provided by plugins), built-in scanning rules are ignored
+         * @param Detection[] $detections Optional. The detections made with respect to the effective concerns
+         * @param IncidentType[]|null $concerns Optional. The effective concerns of the request, null considers every blacklist record
          */
-        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ContentClassification|array|null $classification=null, array $additionalScanResults=[])
+        public function __construct(array $resolvedEntities, ?ResolvedEntity $authorEntity=null, ContentClassification|array|null $classification=null, array $additionalScanResults=[],
+            array $detections=[], ?array $concerns=null)
         {
             $this->resolvedEntities = $resolvedEntities;
             $this->authorEntity = $authorEntity;
             $this->additionalScanResults = [];
+            $this->detections = array_values(array_filter($detections, fn($detection) => $detection instanceof Detection));
+            $this->concerns = $concerns !== null ? array_values($concerns) : null;
 
             // Built-in scanning rules are always computed by FederationLib itself
             $builtInRules = ScanningRules::newTable();
@@ -119,6 +127,46 @@
         }
 
         /**
+         * Returns the detections made with respect to the effective concerns of the request
+         *
+         * @return Detection[] The detections
+         */
+        public function getDetections(): array
+        {
+            return $this->detections;
+        }
+
+        /**
+         * Returns the effective concerns of the request
+         *
+         * @return IncidentType[]|null The effective concerns, null if every blacklist record is considered
+         */
+        public function getConcerns(): ?array
+        {
+            return $this->concerns;
+        }
+
+        /**
+         * Returns the active blacklist records of a resolved entity whose incident type is an effective concern of the
+         * request; an active blacklist record of any other type affects neither the scan results nor the suggested
+         * action, although it is still returned with the entity (OFD "Concerns")
+         *
+         * @param ResolvedEntity $entity The resolved entity
+         * @return BlacklistRecord[] The relevant active blacklist records
+         */
+        public function getRelevantBlacklists(ResolvedEntity $entity): array
+        {
+            if($this->concerns === null)
+            {
+                return $entity->getActiveBlacklists();
+            }
+
+            return array_values(array_filter($entity->getActiveBlacklists(),
+                fn(BlacklistRecord $blacklistRecord) => in_array($blacklistRecord->getType(), $this->concerns, true)
+            ));
+        }
+
+        /**
          * Returns the aggregate content classification result.
          * If multiple classifications are present, the worst flag is returned with the average confidence.
          *
@@ -177,11 +225,12 @@
          */
         public function getSuggestedAction(): ?SuggestedActionType
         {
-            // If the author contains one or more active blacklists, the author should be blocked
-            if($this->authorEntity !== null && count($this->authorEntity->getActiveBlacklists()) > 0)
+            // If the author contains one or more active blacklists of an effective concern, the author should be blocked
+            $authorBlacklists = $this->authorEntity !== null ? $this->getRelevantBlacklists($this->authorEntity) : [];
+            if(count($authorBlacklists) > 0)
             {
                 // If any of the blacklist records is permanent, the entity should be blocked permanently
-                if (array_any($this->authorEntity->getActiveBlacklists(), fn($blacklistRecord) => $blacklistRecord->getExpires() === null))
+                if (array_any($authorBlacklists, fn($blacklistRecord) => $blacklistRecord->getExpires() === null))
                 {
                     return SuggestedActionType::PERMANENTLY_BLOCK_ENTITY;
                 }
@@ -229,7 +278,7 @@
             }
 
             $longestActiveBlacklist = 0;
-            foreach($this->authorEntity->getActiveBlacklists() as $activeBlacklistRecord)
+            foreach($this->getRelevantBlacklists($this->authorEntity) as $activeBlacklistRecord)
             {
                 if($activeBlacklistRecord->getExpires() === null)
                 {
@@ -271,7 +320,7 @@
 
             if($this->authorEntity !== null)
             {
-                self::applyWhitelistBlacklistRules($scanningRules, $this->authorEntity,
+                $this->applyWhitelistBlacklistRules($scanningRules, $this->authorEntity,
                     ScanningRules::AUTHOR_WHITELISTED, ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED, ScanningRules::AUTHOR_BLACKLISTED,
                     $config->getModifierAuthorWhitelisted(), $config->getModifierAuthorPermanentlyBlacklisted(), $config->getModifierAuthorBlacklisted()
                 );
@@ -284,7 +333,7 @@
                 $authorParent = $this->authorEntity->getParentEntity();
                 if($authorParent !== null)
                 {
-                    self::applyWhitelistBlacklistRules($scanningRules, $authorParent,
+                    $this->applyWhitelistBlacklistRules($scanningRules, $authorParent,
                         ScanningRules::AUTHOR_PARENT_WHITELISTED, ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED, ScanningRules::AUTHOR_PARENT_BLACKLISTED,
                         $config->getModifierAuthorParentWhitelisted(), $config->getModifierAuthorParentPermanentlyBlacklisted(), $config->getModifierAuthorParentBlacklisted()
                     );
@@ -298,7 +347,7 @@
 
             foreach($this->resolvedEntities as $resolvedEntity)
             {
-                self::applyWhitelistBlacklistRules($scanningRules, $resolvedEntity,
+                $this->applyWhitelistBlacklistRules($scanningRules, $resolvedEntity,
                     ScanningRules::NAMED_ENTITY_WHITELISTED, ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED, ScanningRules::NAMED_ENTITY_BLACKLISTED,
                     $config->getModifierNamedEntityWhitelisted(), $config->getModifierNamedEntityPermanentlyBlacklisted(), $config->getModifierNamedEntityBlacklisted()
                 );
@@ -311,7 +360,7 @@
                 $entityParent = $resolvedEntity->getParentEntity();
                 if($entityParent !== null)
                 {
-                    self::applyWhitelistBlacklistRules($scanningRules, $entityParent,
+                    $this->applyWhitelistBlacklistRules($scanningRules, $entityParent,
                         ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED, ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED, ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED,
                         $config->getModifierNamedEntityParentWhitelisted(), $config->getModifierNamedEntityParentPermanentlyBlacklisted(), $config->getModifierNamedEntityParentBlacklisted()
                     );
@@ -368,7 +417,7 @@
          * @param float $permBlacklistedPoints The Permanently Blacklisted points
          * @param float $blacklistedPoints The Blacklisted points
          */
-        private static function applyWhitelistBlacklistRules(array &$scanningRules, ResolvedEntity $entity,
+        private function applyWhitelistBlacklistRules(array &$scanningRules, ResolvedEntity $entity,
             ScanningRules $whitelistedRule, ScanningRules $permBlacklistedRule, ScanningRules $blacklistedRule,
             float $whitelistedPoints, float $permBlacklistedPoints, float $blacklistedPoints,
         ): void
@@ -377,9 +426,9 @@
             {
                 $scanningRules[$whitelistedRule->name] += $whitelistedPoints;
             }
-            elseif(count($entity->getActiveBlacklists()) > 0)
+            elseif(count($this->getRelevantBlacklists($entity)) > 0)
             {
-                foreach($entity->getActiveBlacklists() as $blacklistRecord)
+                foreach($this->getRelevantBlacklists($entity) as $blacklistRecord)
                 {
                     if($blacklistRecord->getExpires() === null)
                     {
@@ -496,16 +545,17 @@
         /**
          * @inheritDoc
          */
-        public function toStandardArray(bool $includeMetadata=false): array
+        public function toStandardArray(bool $includeMetadata=false, bool $hideTelephone=false): array
         {
             return [
-                'author_entity' => $this->authorEntity?->toArray($includeMetadata) ?? null,
-                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata), $this->resolvedEntities),
+                'author_entity' => $this->authorEntity?->toArray($includeMetadata, $hideTelephone) ?? null,
+                'resolved_entities' => array_map(fn($resolvedEntity) => $resolvedEntity->toArray($includeMetadata, $hideTelephone), $this->resolvedEntities),
                 'suggested_action' => $this->getSuggestedAction()?->value ?? null,
                 'suggested_lift_timestamp' => $this->getSuggestedLiftTimestamp(),
                 'classification' => $this->getClassification()?->toArray() ?? null,
                 'scan_results' => (object) $this->getScanResults(),
-                'risk_score' => $this->getRiskScore()
+                'risk_score' => $this->getRiskScore(),
+                'detections' => array_map(fn(Detection $detection) => $detection->toArray(), $this->detections)
             ];
         }
 
@@ -533,9 +583,13 @@
                 $additionalScanResults = (array)$array['scan_results'];
             }
 
+            $detections = array_map(fn($detection) => Detection::fromArray($detection),
+                isset($array['detections']) && is_array($array['detections']) ? $array['detections'] : []
+            );
+
             return new self(
                 array_map(fn($resolvedEntity) => ResolvedEntity::fromArray($resolvedEntity), $array['resolved_entities']),
-                $authorEntity, $classification, $additionalScanResults
+                $authorEntity, $classification, $additionalScanResults, $detections
             );
         }
 
@@ -581,6 +635,11 @@
                     'description' => 'Host-defined mapping of scanning rule names to their contribution to the risk score',
                 ],
                 'risk_score' => ['type' => 'number', 'format' => 'float', 'description' => 'The calculated content risk score'],
+                'detections' => [
+                    'type' => 'array',
+                    'items' => ['$ref' => Detection::getReference()],
+                    'description' => 'The detections the host made with respect to the concerns of the request',
+                ],
             ];
         }
 
