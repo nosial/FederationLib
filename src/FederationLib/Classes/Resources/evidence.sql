@@ -5,11 +5,15 @@ create table evidence
     entity              varchar(36)                                not null comment 'The UUID of the entity that this evidence is related to',
     operator            varchar(36)                                not null comment 'The operator that submitted the evidence',
     confidential        tinyint(1)  default 0                      not null comment 'Default: 0, 1=The evidence and all of it''s attachments is confidential and only operators can view this, 0=The evidence is available for public view',
+    automated           tinyint(1)  default 0                      not null comment 'Default: 0, 1=The evidence was created by the host itself or submitted by a bot operator',
     text_content        mediumtext                                 null comment 'Optional. the text content with the evidence',
+    content_type        enum ('TEXT', 'EMAIL', 'SMS', 'WEB_PAGE', 'HOSTNAME', 'URL') default 'TEXT' not null comment 'The content type of the text content, how it is interpreted',
+    context             TEXT                                       null comment 'Optional. The JSON-encoded context of the content as the client observed it, its keys depend on the content type',
     metadata            TEXT                                       null comment 'Optional. Metadata attached with the evidence record including abritrary JSON-encoded data',
     tag                 varchar(32)                                null comment 'Optional. Abstract tag name related to the evidence',
     report              varchar(36)                                null comment 'Optional. The UUID of the report that this evidence is associated with',
     classification_flag enum ('MALICIOUS', 'SUSPICIOUS', 'NORMAL') null comment 'Optional. The classification flag assigned to the evidence''s text content. This is used for content filtering',
+    classified          timestamp                                  null comment 'Optional. The Timestamp for when the classification flag was assigned',
     note                text                                       null comment 'Optional note by the operator that submitted the evidence',
     created             timestamp   default current_timestamp()    not null comment 'The timestamp of the evidence',
     updated             timestamp                                  null comment 'Optional. The Timestamp for when the record was last updated',
@@ -27,6 +31,9 @@ create table evidence
 
 create index evidence_created_index
     on evidence (created, uuid);
+
+create index evidence_classified_uuid_index
+    on evidence (classified, uuid);
 
 create index evidence_entity_created_index
     on evidence (entity asc, created desc);
