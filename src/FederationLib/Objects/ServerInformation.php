@@ -3,6 +3,8 @@
     namespace FederationLib\Objects;
 
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\ContentType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\RecordType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
@@ -18,8 +20,23 @@
         private bool $publicReports;
         private bool $publicEntityMetadata;
         private bool $publicScanContent;
+        private bool $collectsPublicScanContent;
         private bool $publicQueryEntity;
         private bool $allowIllegalContent;
+        private bool $allowUrlUploads;
+        private bool $publicTelephoneEntities;
+        /**
+         * @var ContentType[]
+         */
+        private array $scanContentTypes;
+        /**
+         * @var IncidentType[]|null
+         */
+        private ?array $concerns;
+        /**
+         * @var IncidentType[]
+         */
+        private array $defaultConcerns;
         private bool $searchEnabled;
         private bool $publicSearch;
         /**
@@ -49,16 +66,31 @@
          */
         public function __construct(array $config)
         {
-            $this->serverName = $config['server_name'] ?? 'Federation Server';
-            $this->apiVersion = '1.1';
+            $this->serverName = $config['name'] ?? $config['server_name'] ?? 'Federation Server';
+            $this->apiVersion = $config['api_version'] ?? '2.0';
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
             $this->publicEntities = $config['public_entities'] ?? true;
             $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
             $this->publicScanContent = $config['public_scan_content'] ?? false;
+            $this->collectsPublicScanContent = $config['collects_public_scan_content'] ?? true;
             $this->publicQueryEntity = $config['public_query_entity'] ?? true;
             $this->allowIllegalContent = $config['allow_illegal_content'] ?? true;
+            $this->allowUrlUploads = $config['allow_url_uploads'] ?? false;
+            $this->publicTelephoneEntities = $config['public_telephone_entities'] ?? false;
+            $scanContentTypes = [ContentType::TEXT->value => ContentType::TEXT];
+            foreach($config['scan_content_types'] ?? [] as $type)
+            {
+                $type = $type instanceof ContentType ? $type : (is_string($type) ? ContentType::tryFromCaseInsensitive($type) : null);
+                if($type !== null)
+                {
+                    $scanContentTypes[$type->value] = $type;
+                }
+            }
+            $this->scanContentTypes = array_values($scanContentTypes);
+            $this->concerns = isset($config['concerns']) && is_array($config['concerns']) ? self::parseConcerns($config['concerns']) : null;
+            $this->defaultConcerns = isset($config['default_concerns']) && is_array($config['default_concerns']) ? self::parseConcerns($config['default_concerns']) : [];
             $this->searchEnabled = $config['search_enabled'] ?? true;
             $this->publicSearch = $config['public_search'] ?? false;
             $this->searchTypes = isset($config['search_types']) ? array_map(
@@ -81,6 +113,73 @@
             $this->fileAttachmentRecords = $config['file_attachment_records'] ?? 0;
             $this->operators = $config['operators'] ?? 0;
             $this->reports = $config['reports'] ?? 0;
+        }
+
+        /**
+         * Parses a list of concerns published by a host, ignoring values this version does not recognize
+         *
+         * @param array $values The concern values
+         * @return IncidentType[] The concerns
+         */
+        private static function parseConcerns(array $values): array
+        {
+            return array_values(array_filter(array_map(
+                fn($value) => $value instanceof IncidentType ? $value : (is_string($value) ? IncidentType::tryFromCaseInsensitive($value) : null),
+                $values
+            ), fn($concern) => $concern !== null));
+        }
+
+        /**
+         * Returns whether the host may store content submitted for scanning by unauthenticated requests, or records
+         * derived from it such as automated reports and evidence. True when the host does not publish it.
+         *
+         * @return bool True if content submitted by unauthenticated requests may be stored
+         */
+        public function isCollectsPublicScanContent(): bool
+        {
+            return $this->collectsPublicScanContent;
+        }
+
+        /**
+         * Returns whether telephone entities are exposed to unauthenticated requests like other entities
+         *
+         * @return bool True if telephone entities are public, false if they are hidden
+         */
+        public function isPublicTelephoneEntities(): bool
+        {
+            return $this->publicTelephoneEntities;
+        }
+
+        /**
+         * Returns the content types that the Scan Content method interprets according to their type, always including
+         * TEXT. A client must not scan content of a type the host does not list.
+         *
+         * @return ContentType[] The content types
+         */
+        public function getScanContentTypes(): array
+        {
+            return $this->scanContentTypes;
+        }
+
+        /**
+         * Returns the concerns the host can assess, null when the host does not publish them, in which case a client
+         * must not supply concerns
+         *
+         * @return IncidentType[]|null The concerns, null if not published
+         */
+        public function getConcerns(): ?array
+        {
+            return $this->concerns;
+        }
+
+        /**
+         * Returns the concerns the host assesses when a request names none
+         *
+         * @return IncidentType[] The default concerns
+         */
+        public function getDefaultConcerns(): array
+        {
+            return $this->defaultConcerns;
         }
 
         /**
@@ -180,6 +279,17 @@
         public function isAllowIllegalContent(): bool
         {
             return $this->allowIllegalContent;
+        }
+
+        /**
+         * Returns whether the server accepts URL uploads through the Upload Attachment method, treated as false when
+         * the server does not publish it (servers implementing an interface version earlier than 1.1).
+         *
+         * @return bool True if URL uploads are accepted, false otherwise.
+         */
+        public function isAllowUrlUploads(): bool
+        {
+            return $this->allowUrlUploads;
         }
 
         /**
@@ -329,8 +439,14 @@
                 'public_reports' => $this->publicReports,
                 'public_entity_metadata' => $this->publicEntityMetadata,
                 'public_scan_content' => $this->publicScanContent,
+                'collects_public_scan_content' => $this->collectsPublicScanContent,
                 'public_query_entity' => $this->publicQueryEntity,
                 'allow_illegal_content' => $this->allowIllegalContent,
+                'allow_url_uploads' => $this->allowUrlUploads,
+                'public_telephone_entities' => $this->publicTelephoneEntities,
+                'scan_content_types' => array_map(fn(ContentType $type) => $type->value, $this->scanContentTypes),
+                'concerns' => $this->concerns !== null ? array_map(fn(IncidentType $type) => $type->value, $this->concerns) : [],
+                'default_concerns' => array_map(fn(IncidentType $type) => $type->value, $this->defaultConcerns),
                 'search_enabled' => $this->searchEnabled,
                 'public_search' => $this->publicSearch,
                 'search_types' => array_map(fn(RecordType $type) => $type->value, $this->searchTypes),
@@ -372,7 +488,7 @@
         {
             return [
                 'name' => ['type' => 'string', 'description' => 'Name of the federation server'],
-                'api_version' => ['type' => 'string', 'description' => 'Version of the API'],
+                'api_version' => ['type' => 'string', 'description' => 'The OFD interface version implemented by the server, in the form MAJOR.MINOR'],
                 'public_audit_logs' => ['type' => 'boolean', 'description' => 'Whether audit logs are publicly accessible'],
                 'public_evidence' => ['type' => 'boolean', 'description' => 'Whether evidence is publicly accessible'],
                 'public_blacklist' => ['type' => 'boolean', 'description' => 'Whether the blacklist is publicly accessible'],
@@ -380,8 +496,26 @@
                 'public_reports' => ['type' => 'boolean', 'description' => 'Whether reports are publicly accessible'],
                 'public_entity_metadata' => ['type' => 'boolean', 'description' => 'Whether entity metadata is publicly included in responses'],
                 'public_scan_content' => ['type' => 'boolean', 'description' => 'Whether content scanning is publicly accessible'],
+                'collects_public_scan_content' => ['type' => 'boolean', 'description' => 'Whether the server may store content submitted for scanning by unauthenticated requests, or records derived from it such as automated reports and evidence'],
                 'public_query_entity' => ['type' => 'boolean', 'description' => 'Whether entity relationship queries are publicly accessible'],
                 'allow_illegal_content' => ['type' => 'boolean', 'description' => 'Whether the server accepts reports with the ILLEGAL_CONTENT incident type'],
+                'allow_url_uploads' => ['type' => 'boolean', 'description' => 'Whether the server accepts attachments uploaded from a URL it retrieves itself'],
+                'public_telephone_entities' => ['type' => 'boolean', 'description' => 'Whether telephone entities (number@e164.arpa) are exposed to unauthenticated requests like other entities, rather than hidden from requests that do not already know the number'],
+                'scan_content_types' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(ContentType $type) => $type->value, ContentType::cases())],
+                    'description' => 'The content types that content scanning interprets according to their type, always including TEXT',
+                ],
+                'concerns' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases())],
+                    'description' => 'The concerns (incident types) the server can assess when scanning content or querying an entity',
+                ],
+                'default_concerns' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases())],
+                    'description' => 'The concerns the server assesses when a request names none, a subset of concerns',
+                ],
                 'search_enabled' => ['type' => 'boolean', 'description' => 'Whether search functionality is enabled'],
                 'public_search' => ['type' => 'boolean', 'description' => 'Whether the global search endpoint is publicly accessible'],
                 'search_types' => [
@@ -424,8 +558,14 @@
                 'public_reports',
                 'public_entity_metadata',
                 'public_scan_content',
+                'collects_public_scan_content',
                 'public_query_entity',
                 'allow_illegal_content',
+                'allow_url_uploads',
+                'public_telephone_entities',
+                'scan_content_types',
+                'concerns',
+                'default_concerns',
                 'search_enabled',
                 'public_search',
                 'search_types',
