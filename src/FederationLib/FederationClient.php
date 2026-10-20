@@ -2306,11 +2306,12 @@
          * @param string|null $by The field to sort by
          * @param string|null $order The sort direction (ASC or DESC)
          * @param string|null $category Optional category filter
+         * @param IncidentType[]|string[]|null $types Optional. Only blacklist records of one of these incident types are returned
          * @return BlacklistRecord[] An array of matching BlacklistRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the query is too short or parameters are invalid
          */
-        public function searchBlacklist(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null): array
+        public function searchBlacklist(string $query, int $page = 1, int $limit = 10, ?string $category = null, ?string $by = null, ?string $order = null, ?array $types = null): array
         {
             if(strlen($query) < 2)
             {
@@ -2341,8 +2342,6 @@
                 )
             );
         }
-
-        // ATTACHMENT METHODS
 
         /**
          * Returns the FileAttachmentRecord of an existing attachment without downloading the file
