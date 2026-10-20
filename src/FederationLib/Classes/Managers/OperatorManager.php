@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
@@ -417,7 +418,7 @@
                 if($cachedUuid !== false && strlen($cachedUuid) > 0)
                 {
                     $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
-                    if($data !== null)
+                    if($data !== null && hash_equals((string)($data['access_token'] ?? ''), $storedAccessToken))
                     {
                         return new OperatorRecord($data);
                     }
@@ -501,16 +502,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -550,16 +542,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -630,16 +613,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove Access Token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -766,16 +740,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -817,16 +782,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -868,16 +824,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -997,16 +944,7 @@
                 // Invalidate cache entries for this operator
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        // Remove access token pointer
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    // Remove main cache entry
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -1178,14 +1116,7 @@
             {
                 if(self::isCachingEnabled())
                 {
-                    $cachedOperator = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    if($cachedOperator !== null)
-                    {
-                        $operatorRecord = new OperatorRecord($cachedOperator);
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()));
-                    }
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    self::forgetCachedOperator($uuid);
                 }
             }
 
@@ -1424,6 +1355,42 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isOperatorCacheEnabled();
+        }
+
+        /**
+         * Removes a cached operator record and its Access Token pointer, and invalidates the cached operator listings.
+         * Only the Access Token of the cached record is read, and both keys are removed in a single command.
+         *
+         * @param string $uuid The UUID of the operator
+         * @return void
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        private static function forgetCachedOperator(string $uuid): void
+        {
+            $cacheKey = sprintf("%s%s", self::CACHE_PREFIX, $uuid);
+
+            try
+            {
+                $redis = RedisConnection::getConnection();
+                $keys = [$cacheKey];
+                $accessToken = $redis->hGet($cacheKey, 'access_token');
+                if(is_string($accessToken) && $accessToken !== '')
+                {
+                    $keys[] = sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $accessToken);
+                }
+
+                $redis->del($keys);
+            }
+            catch(RedisException $e)
+            {
+                Logger::log()->error(sprintf("Failed to remove the cached operator '%s': %s", $uuid, $e->getMessage()), $e);
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException(sprintf("Failed to remove the cached operator '%s'", $uuid), $e->getCode(), $e);
+                }
+            }
+
+            RedisConnection::clearSearchCache(self::CACHE_PREFIX);
         }
 
         /**
