@@ -6,7 +6,6 @@
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
-    use FederationLib\Enums\AuditLogType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -27,7 +26,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isAuditLogsPublic());
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 401);
