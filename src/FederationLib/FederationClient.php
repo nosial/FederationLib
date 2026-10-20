@@ -802,14 +802,7 @@
          */
         public function setManagementPermissions(string $operatorUuid, bool $hasManagementPermissions): void
         {
-            if(empty($operatorUuid))
-            {
-                throw new InvalidArgumentException('Operator UUID cannot be empty');
-            }
-
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/management-permissions', ['enabled' => $hasManagementPermissions], [HttpResponseCode::OK],
-                sprintf('Failed to %s operator\'s management permission', ($hasManagementPermissions ? 'enable' : 'disable'))
-            );
+            $this->updateOperatorPermissions($operatorUuid, management: $hasManagementPermissions);
         }
 
         /**
