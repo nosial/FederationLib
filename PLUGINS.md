@@ -396,6 +396,11 @@ about the scan is recorded or returned. The `ContentScan` provides the request a
 | `getAddedClassifications()`    | The classifications added by the handlers executed before                                                           |
 | `getScanResults()`             | The scanning rules added by the handlers executed before                                                            |
 
+Every contribution relates to a concern (an `IncidentType`, `SPAM` unless given). Only the concerns the client asked
+for, or the server's default concerns, may affect the result, so a contribution for any other concern is silently
+discarded: a service that only asked about spam is never affected by an advertising filter list. The context of an
+evidence item (`getContext()`) is what the client asserts, not something the server verified.
+
 The handler may optionally:
 
  - **Classify the content** with `addClassification(ContentClassification $classification, ?int $evidenceIndex)`. The
