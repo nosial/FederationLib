@@ -822,10 +822,8 @@
          */
         public function setAutoAssign(string $operatorUuid, bool $autoAssign): void
         {
-            if(empty($operatorUuid))
-            {
-                throw new InvalidArgumentException('Operator UUID cannot be empty');
-            }
+            $this->updateOperatorConfiguration($operatorUuid, $autoAssign, $autoAssign);
+        }
 
         /**
          * Sets whether an operator is a bot, whose evidence and reports are automated and whose evidence is created
