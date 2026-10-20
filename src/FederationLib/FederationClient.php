@@ -2616,7 +2616,9 @@
         /**
          * Uploads a file attachment by providing a URL, the federation server retrieves the file from the URL itself
          * instead of the file being uploaded by the client. Unlike uploadFileAttachmentFromUrl(), which downloads the
-         * file locally and uploads it, the URL must be reachable by the server and permitted by its configuration
+         * file locally and uploads it, the URL must be reachable by the server and permitted by its configuration.
+         * Only use this method with a server that publishes ServerInformation::isAllowUrlUploads() as true, otherwise
+         * fall back to uploadFileAttachmentFromUrl()
          *
          * @param string $evidenceUuid The UUID of the evidence record to attach the file to
          * @param string $url The HTTP or HTTPS URL of the file to retrieve
