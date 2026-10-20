@@ -17,6 +17,7 @@
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EntityOrderType;
     use FederationLib\Enums\RecordChangeType;
+    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
@@ -28,6 +29,7 @@
     class EntitiesManager
     {
         public const string CACHE_PREFIX = 'entity:';
+        private const string MISSING_CACHE_PREFIX = 'entity_missing:';
 
         /**
          * SQL condition that excludes telephone entities, which are hidden from requests that do not already know the
@@ -110,6 +112,7 @@
             {
                 if($e->getCode() == 23000)
                 {
+                    self::clearMissingCache();
                     $existingEntity = self::getEntity($host, $id);
                     if($existingEntity === null)
                     {
@@ -130,6 +133,7 @@
             if(self::isCachingEnabled())
             {
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                self::clearMissingCache();
             }
 
             PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_CREATED, $uuid);
@@ -490,18 +494,38 @@
                 throw new InvalidArgumentException('A valid Entity UUID must be provided');
             }
 
+            // Every query of an entity looks up its relationship group, the result is cached in the entity search
+            // namespace, which every change to an entity invalidates
+            $cacheKey = null;
+            if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
+            {
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['relationship_entity', $entityUuid]);
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn(array $data) => new EntityRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare('SELECT * FROM entities WHERE relationship_entity = :relationship_entity');
                 $stmt->bindParam(':relationship_entity', $entityUuid);
                 $stmt->execute();
 
-                return array_map(fn(array $entity) => new EntityRecord($entity), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $results = array_map(fn(array $entity) => new EntityRecord($entity), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch(PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve entities by relationship target: ' . $e->getMessage(), $e->getCode(), $e);
             }
+
+            if($cacheKey !== null)
+            {
+                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EntityRecord $entity) => $entity->toArray(), $results));
+            }
+
+            return $results;
         }
 
         /**
@@ -536,65 +560,7 @@
                 throw new InvalidArgumentException("Host cannot exceed 255 characters.");
             }
 
-            // Try cache first
-            $hash = Utilities::hashEntity($host, $id);
-
-            if(self::isCachingEnabled())
-            {
-                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                if($cachedUuid !== false && strlen($cachedUuid) > 0)
-                {
-                    $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
-                    if($data !== null)
-                    {
-                        return new EntityRecord($data);
-                    }
-                    else
-                    {
-                        // Hash pointer exists but entity record is missing from cache
-                        // Remove the stale hash pointer to prevent future inconsistencies
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                    }
-                }
-            }
-
-            try
-            {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash=:hash");
-                $stmt->bindParam(':hash', $hash);
-                $stmt->execute();
-
-                $data = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if(!$data)
-                {
-                    return null;
-                }
-
-                $data = new EntityRecord($data);
-            }
-            catch (PDOException $e)
-            {
-                throw new DatabaseOperationException("Failed to retrieve entity by domain: " . $e->getMessage(), $e->getCode(), $e);
-            }
-
-            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
-            {
-                RedisConnection::setRecord(
-                    record: $data, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $data->getUuid()),
-                    ttl: Configuration::getRedisConfiguration()->getEntitiesCacheTtl() ?? 0,
-                );
-
-                // Create a pointer from hash to UUID for quick lookups
-                // Only set the hash pointer if the entity record was successfully cached
-                RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::CACHE_PREFIX, $hash),
-                    expire: Configuration::getRedisConfiguration()->getEntitiesCacheTtl(),
-                    value: $data->getUuid()
-                );
-            }
-
-            return $data;
+            return self::getEntityByHash(Utilities::hashEntity($host, $id));
         }
 
         /**
@@ -679,9 +645,10 @@
 
             if(self::isCachingEnabled())
             {
+                $cached = RedisConnection::getRecords(array_map(fn(string $uuid) => sprintf("%s%s", self::CACHE_PREFIX, $uuid), $uuids));
                 foreach($uuids as $uuid)
                 {
-                    $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    $data = $cached[sprintf("%s%s", self::CACHE_PREFIX, $uuid)] ?? null;
                     if($data !== null)
                     {
                         $entities[$uuid] = new EntityRecord($data);
@@ -717,17 +684,22 @@
                 $entities[$entity->getUuid()] = $entity;
             }
 
-            if(self::isCachingEnabled() && count($loaded) > 0 && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
+            if(self::isCachingEnabled() && count($loaded) > 0)
             {
+                // The records are cached in one round trip up to the cache limit, and then the hash pointers of the
+                // records that were cached in another
                 $ttl = Configuration::getRedisConfiguration()->getEntitiesCacheTtl();
-                foreach($loaded as $entity)
+                $cachedCount = RedisConnection::setRecords(
+                    records: $loaded, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getEntitiesCacheLimit(), ttl: $ttl
+                );
+
+                $pointers = [];
+                foreach(array_slice($loaded, 0, $cachedCount) as $entity)
                 {
-                    RedisConnection::setRecord(record: $entity, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $entity->getUuid()), ttl: $ttl);
-                    if($ttl > 0)
-                    {
-                        RedisConnection::getConnection()->setex(sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($entity->getHost(), $entity->getId())), $ttl, $entity->getUuid());
-                    }
+                    $pointers[sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($entity->getHost(), $entity->getId()))] = $entity->getUuid();
                 }
+                RedisConnection::setPointers($pointers, $ttl);
             }
 
             return $entities;
@@ -812,6 +784,13 @@
                 }
             }
 
+            // Most names extracted from scanned content have no entity, a hash known to be missing is not queried again
+            $missingCacheKey = self::getMissingCacheKey($hash);
+            if($missingCacheKey !== null && RedisConnection::getCachedSearchResults($missingCacheKey) !== null)
+            {
+                return null;
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash = :hash");
@@ -821,6 +800,11 @@
 
                 if(!$data)
                 {
+                    if($missingCacheKey !== null)
+                    {
+                        RedisConnection::cacheSearchResults($missingCacheKey, []);
+                    }
+
                     return null;
                 }
 
@@ -1040,6 +1024,7 @@
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
                 }
 
                 // The database also deletes the entity's evidence and the reports made by the entity, which may be
@@ -1190,7 +1175,10 @@
                          BlacklistManager::CACHE_PREFIX, AuditLogManager::CACHE_PREFIX] as $prefix)
                 {
                     RedisConnection::clearRecords($prefix);
+                    RedisConnection::clearSearchCache($prefix);
                 }
+
+                self::clearMissingCache();
             }
 
             return $migrated;
@@ -1863,6 +1851,38 @@
         private static function isCachingEnabled(): bool
         {
             return Configuration::getRedisConfiguration()->isEnabled() && Configuration::getRedisConfiguration()->isEntitiesCacheEnabled();
+        }
+
+        /**
+         * Returns the cache key marking an entity hash as having no entity, the key is versioned so that a lookup that
+         * started before the entity was registered never marks it as missing afterwards
+         *
+         * @param string $hash The entity hash
+         * @return string|null The cache key, null if missing entities are not cached
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        private static function getMissingCacheKey(string $hash): ?string
+        {
+            if(!self::isCachingEnabled() || RedisConnection::getResultCacheTtl() <= 0)
+            {
+                return null;
+            }
+
+            return RedisConnection::getSearchCacheKey(self::MISSING_CACHE_PREFIX, [$hash]);
+        }
+
+        /**
+         * Invalidates every entity hash marked as having no entity (see getMissingCacheKey())
+         *
+         * @return void
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        private static function clearMissingCache(): void
+        {
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::clearSearchCache(self::MISSING_CACHE_PREFIX);
+            }
         }
 
         /**
