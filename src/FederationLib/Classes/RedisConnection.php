@@ -355,59 +355,6 @@
             return null;
         }
 
-        /**
-         * Retrieves all records matching a given prefix and field value.
-         *
-         * @param string $prefix The prefix to match keys against.
-         * @param string $field The field name to filter records by.
-         * @param mixed $value The value to match in the specified field.
-         * @return array An array of matching records.
-         * @throws CacheOperationException If there is an error during the operation.
-         */
-        public static function getRecordsByField(string $prefix, string $field, mixed $value): array
-        {
-            $redis = self::getConnection();
-
-            if ($redis === null)
-            {
-                return [];
-            }
-
-            $pattern = $prefix . '*';
-            $iterator = null;
-            $matchingRecords = [];
-
-            try
-            {
-                // Use SCAN to iterate through keys and find matching records
-                do
-                {
-                    $keys = $redis->scan($iterator, $pattern, 100);
-                    if ($keys !== false && count($keys) > 0)
-                    {
-                        foreach ($keys as $key)
-                        {
-                            $record = $redis->hGetAll($key);
-                            if (isset($record[$field]) && $record[$field] == $value)
-                            {
-                                $matchingRecords[] = $record;
-                            }
-                        }
-                    }
-                }
-                while ($iterator !== 0);
-            }
-            catch (RedisException $e)
-            {
-                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
-                {
-                    throw new CacheOperationException(sprintf("Failed to retrieve records by field '%s' from the cache", $field), $e->getCode(), $e);
-                }
-            }
-
-            return $matchingRecords;
-        }
-
         private const string SEARCH_CACHE_PREFIX = 'search:';
         private const string SEARCH_CACHE_VERSION_PREFIX = 'search:version:';
 
