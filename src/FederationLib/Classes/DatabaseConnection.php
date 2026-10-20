@@ -2,20 +2,29 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Classes\Managers\AuditLogManager;
+    use FederationLib\Classes\Managers\BlacklistManager;
+    use FederationLib\Classes\Managers\EntitiesManager;
+    use FederationLib\Classes\Managers\EvidenceManager;
+    use FederationLib\Classes\Managers\FileAttachmentManager;
+    use FederationLib\Classes\Managers\OperatorManager;
+    use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Enums\DatabaseTables;
     use FederationLib\Exceptions\DatabaseOperationException;
     use PDO;
     use Pdo\Mysql;
     use PDOException;
     use RuntimeException;
+    use Throwable;
 
     class DatabaseConnection
     {
-        public const string SCHEMA_VERSION = '1.1';
+        public const string SCHEMA_VERSION = '1.4';
         private const string BASELINE_SCHEMA_VERSION = '1.0';
         private const string SCHEMA_VERSION_KEY = 'version';
-
         private static ?PDO $pdo = null;
+        private static bool $databaseCreated = false;
+        private static ?string $migratedFrom = null;
 
         /**
          * Get the PDO connection instance. If it does not exist, create it using the configuration.
@@ -108,7 +117,28 @@
                 }
             }
 
+            self::$databaseCreated = !$existingDatabase;
             self::migrateSchema($existingDatabase);
+        }
+
+        /**
+         * Returns whether the latest initialization created the database tables, rather than finding them
+         *
+         * @return bool True if the database was created by the latest initialization
+         */
+        public static function wasDatabaseCreated(): bool
+        {
+            return self::$databaseCreated;
+        }
+
+        /**
+         * Returns the schema version the latest initialization migrated the database from
+         *
+         * @return string|null The previous schema version, null if no migration was run
+         */
+        public static function getMigratedFrom(): ?string
+        {
+            return self::$migratedFrom;
         }
 
         /**
@@ -144,6 +174,8 @@
 
             $migrations = self::getMigrations();
             uksort($migrations, 'version_compare');
+            $migrated = false;
+            $previousVersion = $currentVersion;
 
             foreach($migrations as $version => $migration)
             {
@@ -165,6 +197,14 @@
 
                 self::setMetadata(self::SCHEMA_VERSION_KEY, $version);
                 $currentVersion = $version;
+                $migrated = true;
+            }
+
+            // Records cached before the migration have the shape of the previous schema
+            if($migrated)
+            {
+                self::$migratedFrom = $previousVersion;
+                self::clearCachedRecords();
             }
 
             if($currentVersion !== self::SCHEMA_VERSION)
@@ -175,6 +215,40 @@
             }
 
             Logger::log()->info("Database schema version $currentVersion");
+        }
+
+        /**
+         * Removes the records cached in Redis after the schema was migrated, so that no record cached with the shape of
+         * the previous schema (eg; an operator without its configuration columns) is served afterwards, along with the
+         * keys of the reputation windows of earlier releases. A cache failure is logged, the migration itself succeeded.
+         *
+         * @return void
+         */
+        private static function clearCachedRecords(): void
+        {
+            if(!Configuration::getRedisConfiguration()->isEnabled())
+            {
+                return;
+            }
+
+            try
+            {
+                foreach([EntitiesManager::CACHE_PREFIX, OperatorManager::CACHE_PREFIX, OperatorManager::ACCESS_TOKEN_POINTER_PREFIX,
+                         EvidenceManager::CACHE_PREFIX, BlacklistManager::CACHE_PREFIX, ReportManager::CACHE_PREFIX,
+                         FileAttachmentManager::CACHE_PREFIX, AuditLogManager::CACHE_PREFIX] as $prefix)
+                {
+                    RedisConnection::clearRecords($prefix);
+                    RedisConnection::clearSearchCache($prefix);
+                }
+
+                // Reputation is settled from the database since 2.0.0, the reputation windows are no longer read
+                RedisConnection::clearRecords('reputation_window:');
+                Logger::log()->info('Cleared the records cached before the database schema was migrated');
+            }
+            catch(Throwable $e)
+            {
+                Logger::log()->warning('Failed to clear the records cached before the database schema was migrated, flush the Redis database if records are served with missing members: ' . $e->getMessage(), $e);
+            }
         }
 
         /**
@@ -197,11 +271,58 @@
         private static function getMigrations(): array
         {
             return [
-                // OFD 1.1 added the report member to the AuditLog object
+                // OFD 2.0 added the report member to the AuditLog object
                 '1.1' => function(PDO $pdo): void
                 {
                     $pdo->exec("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS report varchar(36) null comment 'Optional. The report related to this action' AFTER file_attachment");
-                    $pdo->exec('ALTER TABLE audit_log ADD CONSTRAINT audit_log_reports_uuid_fk FOREIGN KEY IF NOT EXISTS (report) REFERENCES reports (uuid) ON UPDATE CASCADE ON DELETE SET NULL');
+                    $pdo->exec('SET SESSION foreign_key_checks = 0');
+                    try
+                    {
+                        $pdo->exec('ALTER TABLE audit_log ADD CONSTRAINT audit_log_reports_uuid_fk FOREIGN KEY IF NOT EXISTS (report) REFERENCES reports (uuid) ON UPDATE CASCADE ON DELETE SET NULL');
+                    }
+                    finally
+                    {
+                        $pdo->exec('SET SESSION foreign_key_checks = 1');
+                    }
+                },
+                // When evidence was classified, so plugins can learn the classifications they missed in the order they
+                // were made (eg; BayesianPlugin while BayesianServer was unavailable)
+                '1.2' => function(PDO $pdo): void
+                {
+                    $pdo->exec("ALTER TABLE evidence ADD COLUMN IF NOT EXISTS classified timestamp null comment 'Optional. The Timestamp for when the classification flag was assigned' AFTER classification_flag");
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS evidence_classified_uuid_index ON evidence (classified, uuid)');
+                    $pdo->exec('UPDATE evidence SET classified = COALESCE(updated, created) WHERE classification_flag IS NOT NULL AND classified IS NULL');
+                },
+                // OFD 2.0 added content types and their context to evidence, and the ADVERTISING and TRACKING incident types;
+                // the incident types are appended to the enums, which MariaDB changes in place without copying the tables
+                '1.3' => function(PDO $pdo): void
+                {
+                    $pdo->exec("ALTER TABLE evidence ADD COLUMN IF NOT EXISTS content_type enum ('TEXT', 'EMAIL', 'SMS', 'WEB_PAGE', 'HOSTNAME', 'URL') default 'TEXT' not null comment 'The content type of the text content, how it is interpreted' AFTER text_content");
+                    $pdo->exec("ALTER TABLE evidence ADD COLUMN IF NOT EXISTS context TEXT null comment 'Optional. The JSON-encoded context of the content as the client observed it, its keys depend on the content type' AFTER content_type");
+                    $pdo->exec("ALTER TABLE blacklist MODIFY COLUMN type enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER', 'ADVERTISING', 'TRACKING') not null comment 'The incident type'");
+                    $pdo->exec("ALTER TABLE reports MODIFY COLUMN incident_type enum ('SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'CSAM', 'OTHER', 'ADVERTISING', 'TRACKING') default 'OTHER' not null comment 'The incident type for the report'");
+                    // OFD 2.0 allows the report supporting a blacklist record to concern another entity, only the comment changes
+                    $pdo->exec("ALTER TABLE blacklist MODIFY COLUMN report varchar(36) null comment 'Optional. The UUID of the report supporting the blacklist, which may concern another entity'");
+                },
+                // OFD 2.0 split the auto assign opt-in by the kind of report, added bot operators and automated evidence
+                '1.4' => function(PDO $pdo): void
+                {
+                    // The previous opt-in covered every report, so it carries over to both kinds
+                    $hasAutoAssign = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'operators' AND COLUMN_NAME = 'auto_assign'")->fetchColumn() > 0;
+                    if($hasAutoAssign)
+                    {
+                        $pdo->exec("ALTER TABLE operators CHANGE COLUMN auto_assign auto_assign_reports tinyint(1) default 0 not null comment 'Default: 0, 1=The operator opts in to the automatic assignment of reports that are not automated'");
+                    }
+                    else
+                    {
+                        $pdo->exec("ALTER TABLE operators ADD COLUMN IF NOT EXISTS auto_assign_reports tinyint(1) default 0 not null comment 'Default: 0, 1=The operator opts in to the automatic assignment of reports that are not automated' AFTER operator_permissions");
+                    }
+
+                    $pdo->exec("ALTER TABLE operators ADD COLUMN IF NOT EXISTS auto_assign_automated_reports tinyint(1) default 0 not null comment 'Default: 0, 1=The operator opts in to the automatic assignment of automated reports' AFTER auto_assign_reports");
+                    $pdo->exec('UPDATE operators SET auto_assign_automated_reports = auto_assign_reports');
+                    $pdo->exec("ALTER TABLE operators ADD COLUMN IF NOT EXISTS is_bot tinyint(1) default 0 not null comment 'Default: 0, 1=The operator is a bot, the evidence and reports it submits are automated and its evidence is created confidential' AFTER auto_assign_automated_reports");
+                    $pdo->exec("ALTER TABLE evidence ADD COLUMN IF NOT EXISTS automated tinyint(1) default 0 not null comment 'Default: 0, 1=The evidence was created by the host itself or submitted by a bot operator' AFTER confidential");
+                    $pdo->exec("UPDATE evidence SET automated = 1 WHERE operator IN (SELECT uuid FROM operators WHERE name = 'system')");
                 }
             ];
         }
