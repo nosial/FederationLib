@@ -26,15 +26,15 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isBlacklistPublic());
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $includeLifted = filter_var(FederationServer::getParameter('include_lifted') ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
+            $includeLifted = FederationServer::getBooleanParameter('include_lifted') ?? false;
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
             {
