@@ -90,7 +90,7 @@
                     $state = $whitelisted ? 'whitelisted' : 'unwhitelisted';
                     AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                         'Entity %s %s by operator %s',
-                        $entityRecord->getAddress(),
+                        $entityRecord->getLoggableAddress(),
                         $state,
                         $authenticatedOperator->getName()
                     ), $authenticatedOperator->getUuid(), $entityUuid);
