@@ -192,7 +192,7 @@
             {
                 RedisConnection::setRecord(
                     record: $result, cacheKey: self::CACHE_PREFIX . $result->getUuid(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTtl()
                 );
             }
 
@@ -423,7 +423,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTtl()
                 );
             }
 
@@ -483,7 +483,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTtl()
                 );
             }
 
@@ -560,7 +560,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTtl()
                 );
             }
 
@@ -799,7 +799,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getBlacklistCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getBlacklistCacheTtl()
                 );
             }
 
