@@ -959,7 +959,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest('DELETE', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+            $this->makeRequest('DELETE', 'entities/' . rawurlencode($entityIdentifier), null, [HttpResponseCode::OK],
                 sprintf('Failed to delete the entity %s', $entityIdentifier)
             );
         }
