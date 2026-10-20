@@ -782,14 +782,7 @@
          */
         public function setClientPermissions(string $operatorUuid, bool $hasClientPermissions): void
         {
-            if(empty($operatorUuid))
-            {
-                throw new InvalidArgumentException('Operator UUID cannot be empty');
-            }
-
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/client-permissions', ['enabled' => $hasClientPermissions], [HttpResponseCode::OK],
-                sprintf('Failed to %s the operator\'s client permissions', ($hasClientPermissions ? 'enable' : 'disable'))
-            );
+            $this->updateOperatorPermissions($operatorUuid, client: $hasClientPermissions);
         }
 
         /**
