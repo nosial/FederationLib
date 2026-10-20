@@ -16,6 +16,38 @@
         public const string ENTITY_IDENTIFIER_SEGMENT = '(?!(?:search|top-threats)(?:/|$))([a-zA-Z0-9._%+:@-]+)';
 
         /**
+         * The entity host of telephone entities, the namespace of international telephone numbers (OFD "Telephone
+         * Entities"), eg; 15550123456@e164.arpa
+         */
+        public const string TELEPHONE_ENTITY_HOST = 'e164.arpa';
+
+        /**
+         * Returns whether the given entity host is the namespace of telephone entities
+         *
+         * @param string $host The entity host
+         * @return bool True if entities of the host are telephone entities
+         */
+        public static function isTelephoneHost(string $host): bool
+        {
+            return $host === self::TELEPHONE_ENTITY_HOST;
+        }
+
+        /**
+         * Converts a telephone number, such as "+1 650-253-0000", to the canonical local part of its telephone entity
+         * ("16502530000"). A number in national format is interpreted with the given region, without one only numbers
+         * in international format are accepted. Only numbers that are valid for their region, according to the
+         * numbering plans of libphonenumber, are converted.
+         *
+         * @param string $number The telephone number as written
+         * @param string|null $region Optional. The ISO 3166-1 alpha-2 code of the region the number was received in
+         * @return string|null The canonical local part, or null if the number is not a valid telephone number
+         */
+        public static function canonicalizeTelephoneNumber(string $number, ?string $region=null): ?string
+        {
+            return TelephoneNumbers::canonicalize($number, $region);
+        }
+
+        /**
          * Matches a path of the form /entities/{identifier}{suffix} and returns the identifier segment.
          *
          * @param string $path The request path
@@ -300,5 +332,23 @@
         public static function buildLikeCondition(array $columns): string
         {
             return '(' . implode(' OR ', array_map(fn(string $column) => "$column LIKE :q ESCAPE '\\\\'", $columns)) . ')';
+        }
+
+        /**
+         * Builds the named placeholders of an SQL IN list for the given values.
+         *
+         * @param array $values The values of the list, at least one
+         * @param string $prefix The prefix of the placeholder names
+         * @return array{0: string, 1: array<string, mixed>} The comma-separated placeholders and their parameters
+         */
+        public static function getInPlaceholders(array $values, string $prefix='v'): array
+        {
+            $parameters = [];
+            foreach(array_values($values) as $index => $value)
+            {
+                $parameters[sprintf(':%s%d', $prefix, $index)] = $value;
+            }
+
+            return [implode(',', array_keys($parameters)), $parameters];
         }
     }
