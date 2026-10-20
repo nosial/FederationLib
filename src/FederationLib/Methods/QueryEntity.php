@@ -9,6 +9,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -25,13 +26,15 @@
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to query entity relationships';
         private const string ERROR_NOT_FOUND = 'Entity not found';
+        private const string ERROR_CONCERNS_INVALID = 'Concerns must be a comma-separated list of concerns this server can assess';
 
         /**
          * @inheritDoc
          */
         public static function handleRequest(): void
         {
-            if(!Configuration::getServerConfiguration()->isQueryEntityPublic() && FederationServer::getAuthenticatedOperator() === null)
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isQueryEntityPublic());
+            if(!Configuration::getServerConfiguration()->isQueryEntityPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, HttpResponseCode::UNAUTHORIZED);
             }
@@ -40,6 +43,18 @@
             if(!$entityIdentifier)
             {
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
+            }
+
+            // The concerns of Query Entity are a comma-separated list, defaulting to the default concerns of the host
+            $concerns = Configuration::getScanningConfiguration()->getDefaultConcerns();
+            $concernsInput = FederationServer::getParameter('concerns');
+            if($concernsInput !== null)
+            {
+                $concerns = is_string($concernsInput) ? IncidentType::parseList($concernsInput) : null;
+                if(empty($concerns) || array_any($concerns, fn(IncidentType $concern) => !in_array($concern, Configuration::getScanningConfiguration()->getConcerns(), true)))
+                {
+                    throw new RequestException(self::ERROR_CONCERNS_INVALID, HttpResponseCode::BAD_REQUEST);
+                }
             }
 
             try
@@ -59,6 +74,9 @@
                     {
                         $relatedEntities[] = $parentEntity;
                     }
+
+                    // The relationship group always includes the entities that reference the queried entity
+                    array_push($relatedEntities, ...EntitiesManager::getEntitiesByRelationshipEntity($entityRecord->getUuid()));
                 }
 
                 $relatedEntities = array_values(array_filter($relatedEntities,
@@ -81,9 +99,9 @@
             }
 
             // Plugins may change the result or reject the request
-            $entityQuery = new EntityQuery($entityIdentifier, $entityRecord, $relatedEntities, $activeBlacklists, FederationServer::getAuthenticatedOperator());
+            $entityQuery = new EntityQuery($entityIdentifier, $entityRecord, $relatedEntities, $activeBlacklists, $authenticatedOperator, $concerns);
             PluginManager::dispatchQueryEntity($entityQuery);
-            self::successResponse($entityQuery->getResult()->toStandardArray(!self::omitEntityMetadata()));
+            self::successResponse($entityQuery->getResult()->toStandardArray(!self::omitEntityMetadata(), self::hideTelephoneEntities()));
         }
 
         /**
@@ -129,6 +147,12 @@
                 'description' => 'UUID, SHA-256 hash, or entity address of the entity',
                 'required' => true,
                 'schema' => ['type' => 'string'],
+            ], [
+                'name' => 'concerns',
+                'in' => 'query',
+                'description' => 'A comma-separated list of concerns whose blacklist records determine the suggested action. Defaults to the default concerns of the server',
+                'required' => false,
+                'schema' => ['type' => 'string'],
             ]];
         }
 
@@ -155,7 +179,7 @@
                     ]
                 ],
                 '400' => [
-                    'description' => self::ERROR_INVALID_IDENTIFIER,
+                    'description' => self::ERROR_INVALID_IDENTIFIER . ', or ' . lcfirst(self::ERROR_CONCERNS_INVALID),
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()]
