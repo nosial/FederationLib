@@ -570,6 +570,34 @@
         }
 
         /**
+         * Checks whether an operator created any evidence, reports or blacklist records, which the database deletes
+         * along with the operator.
+         *
+         * @param string $uuid The UUID of the operator
+         * @return bool True if the operator created any such record
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function hasCreatedRecords(string $uuid): bool
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT EXISTS(SELECT 1 FROM evidence WHERE operator=:evidence_operator) OR EXISTS(SELECT 1 FROM reports WHERE submitting_operator=:report_operator) OR EXISTS(SELECT 1 FROM blacklist WHERE operator=:blacklist_operator)"
+                );
+                $stmt->bindParam(':evidence_operator', $uuid);
+                $stmt->bindParam(':report_operator', $uuid);
+                $stmt->bindParam(':blacklist_operator', $uuid);
+                $stmt->execute();
+
+                return (bool)$stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException(sprintf("Failed to check the records of operator with UUID '%s'", $uuid), 0, $e);
+            }
+        }
+
+        /**
          * Delete an operator by their UUID.
          *
          * @param string $uuid The UUID of the operator.
@@ -582,6 +610,9 @@
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
+
+            // The database deletes the attachments of the operator's evidence, but not their stored files
+            $attachmentUuids = FileAttachmentManager::getUuidsByEvidenceColumn('operator', $uuid);
 
             try
             {
@@ -628,6 +659,7 @@
 
             if($changed)
             {
+                FileAttachmentManager::forgetDeletedRecords($attachmentUuids);
                 PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_DELETED, $uuid);
             }
         }
@@ -856,7 +888,7 @@
         }
 
         /**
-         * Set the auto assign flag for an operator.
+         * Sets whether an operator opts in to the automatic assignment of reports, both ordinary and automated ones.
          *
          * @param string $uuid The UUID of the operator.
          * @param bool $autoAssign True if the operator should automatically receive assigned reports, false otherwise.
@@ -865,22 +897,100 @@
          */
         public static function setAutoAssign(string $uuid, bool $autoAssign): void
         {
+            self::updateConfiguration($uuid, $autoAssign, $autoAssign);
+        }
+
+        /**
+         * Grants or revokes the permission groups of an operator in a single update, leaving the permission groups
+         * given as null unchanged (OFD "Update Operator Permissions").
+         *
+         * @param string $uuid The UUID of the operator.
+         * @param bool|null $client Optional. Whether the operator holds client permissions.
+         * @param bool|null $management Optional. Whether the operator holds management permissions.
+         * @param bool|null $operator Optional. Whether the operator holds operator permissions.
+         * @return bool True if the operator record was changed.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function updatePermissions(string $uuid, ?bool $client=null, ?bool $management=null, ?bool $operator=null): bool
+        {
+            return self::updateFlags($uuid, array_filter([
+                'client_permissions' => $client,
+                'management_permissions' => $management,
+                'operator_permissions' => $operator,
+            ], fn($value) => $value !== null));
+        }
+
+        /**
+         * Changes the configuration of an operator in a single update, leaving the settings given as null unchanged
+         * (OFD "Update Operator Configuration").
+         *
+         * @param string $uuid The UUID of the operator.
+         * @param bool|null $autoAssignReports Optional. Whether the operator opts in to the automatic assignment of
+         *                                     reports that are not automated.
+         * @param bool|null $autoAssignAutomatedReports Optional. Whether the operator opts in to the automatic
+         *                                              assignment of automated reports.
+         * @param bool|null $isBot Optional. Whether the operator is a bot, whose evidence and reports are automated.
+         * @return bool True if the operator record was changed.
+         * @throws InvalidArgumentException If the UUID is empty.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        public static function updateConfiguration(string $uuid, ?bool $autoAssignReports=null, ?bool $autoAssignAutomatedReports=null, ?bool $isBot=null): bool
+        {
+            return self::updateFlags($uuid, array_filter([
+                'auto_assign_reports' => $autoAssignReports,
+                'auto_assign_automated_reports' => $autoAssignAutomatedReports,
+                'is_bot' => $isBot,
+            ], fn($value) => $value !== null));
+        }
+
+        /**
+         * Updates boolean columns of an operator record in a single statement, invalidating its cache entries.
+         *
+         * @param string $uuid The UUID of the operator.
+         * @param array<string, bool> $flags The columns to update, each one of the permission or configuration columns.
+         * @return bool True if the operator record was changed.
+         * @throws InvalidArgumentException If the UUID is empty or a column is not a permission or configuration column.
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        private static function updateFlags(string $uuid, array $flags): bool
+        {
             if(empty($uuid))
             {
                 throw new InvalidArgumentException('Operator UUID cannot be empty.');
             }
 
+            if(count($flags) === 0)
+            {
+                return false;
+            }
+
+            $columns = ['client_permissions', 'management_permissions', 'operator_permissions', 'auto_assign_reports', 'auto_assign_automated_reports', 'is_bot'];
+            $assignments = [];
+            foreach(array_keys($flags) as $column)
+            {
+                if(!in_array($column, $columns, true))
+                {
+                    throw new InvalidArgumentException(sprintf("'%s' is not an operator permission or configuration column", $column));
+                }
+
+                $assignments[] = sprintf('%s=:%s', $column, $column);
+            }
+
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE operators SET auto_assign=:auto_assign, updated=NOW() WHERE uuid=:uuid");
-                $stmt->bindParam(':auto_assign', $autoAssign, PDO::PARAM_BOOL);
-                $stmt->bindParam(':uuid', $uuid);
+                $stmt = DatabaseConnection::getConnection()->prepare(sprintf('UPDATE operators SET %s, updated=NOW() WHERE uuid=:uuid', implode(', ', $assignments)));
+                foreach($flags as $column => $value)
+                {
+                    $stmt->bindValue(':' . $column, $value, PDO::PARAM_BOOL);
+                }
+                $stmt->bindValue(':uuid', $uuid);
                 $stmt->execute();
                 $changed = $stmt->rowCount() > 0;
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException(sprintf("Failed to set auto assign for operator with UUID '%s'", $uuid), 0, $e);
+                throw new DatabaseOperationException(sprintf("Failed to update operator with UUID '%s'", $uuid), 0, $e);
             }
             finally
             {
@@ -904,28 +1014,33 @@
             {
                 PluginManager::dispatchRecordChange(RecordChangeType::OPERATOR_UPDATED, $uuid);
             }
+
+            return $changed;
         }
 
         /**
-         * Retrieve the next operator that has auto assign enabled and management permissions.
+         * Retrieve the next operator that opts in to the automatic assignment of reports of the given kind and holds
+         * management permissions, so that it can close the report.
          *
          * When the cache layer is enabled, eligible operators are selected in a round-robin order driven by an
          * atomic counter in Redis, so reports are distributed evenly across all eligible operators and across
          * all server workers. If the cache layer is disabled or unavailable, an eligible operator is selected
          * at random instead.
          *
+         * @param bool $automated True to select an operator for an automated report, false for any other report
          * @return OperatorRecord|null The selected operator record, null if no eligible operators exist.
          * @throws DatabaseOperationException If there is an error during the database operation.
          * @throws CacheOperationException If the cache operation fails and the cache layer is configured to throw on errors.
          */
-        public static function getNextAutoAssignOperator(): ?OperatorRecord
+        public static function getNextAutoAssignOperator(bool $automated=false): ?OperatorRecord
         {
             try
             {
                 // Ordered by UUID so every worker sees the same stable rotation order
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM operators WHERE auto_assign=1 AND management_permissions=1 ORDER BY uuid"
-                );
+                $stmt = DatabaseConnection::getConnection()->prepare(sprintf(
+                    "SELECT * FROM operators WHERE %s=1 AND management_permissions=1 AND disabled=0 ORDER BY uuid",
+                    self::getAutoAssignColumn($automated)
+                ));
                 $stmt->execute();
 
                 $operators = $stmt->fetchAll();
@@ -945,23 +1060,25 @@
                 return new OperatorRecord($operators[0]);
             }
 
-            $index = self::nextAutoAssignIndex(count($operators)) ?? random_int(0, count($operators) - 1);
+            $index = self::nextAutoAssignIndex(count($operators), $automated) ?? random_int(0, count($operators) - 1);
             return new OperatorRecord($operators[$index]);
         }
 
         /**
          * Determine whether at least one operator is eligible for automatic report assignment.
          *
-         * @return bool True if an operator with auto assign enabled and management permissions exists, false otherwise.
+         * @param bool $automated True to check for automated reports, false for any other report
+         * @return bool True if an operator that opts in to reports of the kind and holds management permissions exists
          * @throws DatabaseOperationException If there is an error during the database operation.
          */
-        public static function autoAssignOperatorExists(): bool
+        public static function autoAssignOperatorExists(bool $automated=false): bool
         {
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT 1 FROM operators WHERE auto_assign=1 AND management_permissions=1 LIMIT 1"
-                );
+                $stmt = DatabaseConnection::getConnection()->prepare(sprintf(
+                    "SELECT 1 FROM operators WHERE %s=1 AND management_permissions=1 AND disabled=0 LIMIT 1",
+                    self::getAutoAssignColumn($automated)
+                ));
                 $stmt->execute();
 
                 return $stmt->fetchColumn() !== false;
@@ -973,13 +1090,25 @@
         }
 
         /**
+         * Returns the column of the auto assign opt-in for reports of the given kind
+         *
+         * @param bool $automated True for automated reports, false for any other report
+         * @return string The column name
+         */
+        private static function getAutoAssignColumn(bool $automated): string
+        {
+            return $automated ? 'auto_assign_automated_reports' : 'auto_assign_reports';
+        }
+
+        /**
          * Advance the shared round-robin counter for automatic report assignment and return the next index.
          *
          * @param int $operatorCount The number of currently eligible operators.
+         * @param bool $automated Whether the rotation of automated reports is advanced, each kind has its own rotation
          * @return int|null The index of the next operator to assign, null if the cache layer is disabled or failed.
          * @throws CacheOperationException If the cache operation fails and the cache layer is configured to throw on errors.
          */
-        private static function nextAutoAssignIndex(int $operatorCount): ?int
+        private static function nextAutoAssignIndex(int $operatorCount, bool $automated=false): ?int
         {
             if(!Configuration::getRedisConfiguration()->isEnabled())
             {
@@ -988,7 +1117,7 @@
 
             try
             {
-                $counter = RedisConnection::getConnection()->incr(self::AUTO_ASSIGN_COUNTER_KEY);
+                $counter = RedisConnection::getConnection()->incr(self::AUTO_ASSIGN_COUNTER_KEY . ($automated ? ':automated' : ''));
             }
             catch (RedisException $e)
             {
