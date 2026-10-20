@@ -8,6 +8,8 @@
         case BLACKLIST = 'blacklist.sql';
         case DATABASE_METADATA = 'database_metadata.sql';
         case ENTITIES = 'entities.sql';
+        case ENTITY_ACTIVITY = 'entity_activity.sql';
+        case ENTITY_MENTION_AUTHORS = 'entity_mention_authors.sql';
         case EVIDENCE  = 'evidence.sql';
         case FILE_ATTACHMENTS = 'file_attachments.sql';
         case OPERATORS = 'operators.sql';
@@ -36,6 +38,8 @@
                 self::BLACKLIST => 'blacklist',
                 self::DATABASE_METADATA => 'database_metadata',
                 self::ENTITIES => 'entities',
+                self::ENTITY_ACTIVITY => 'entity_activity',
+                self::ENTITY_MENTION_AUTHORS => 'entity_mention_authors',
                 self::EVIDENCE => 'evidence',
                 self::FILE_ATTACHMENTS => 'file_attachments',
                 self::OPERATORS => 'operators',
@@ -54,6 +58,8 @@
                 self::DATABASE_METADATA,
                 self::OPERATORS,
                 self::ENTITIES,
+                self::ENTITY_ACTIVITY,
+                self::ENTITY_MENTION_AUTHORS,
                 self::REPORTS,
                 self::EVIDENCE,
                 self::FILE_ATTACHMENTS,
