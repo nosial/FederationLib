@@ -15,10 +15,13 @@
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Enums\ContentType;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\Method;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\Plugin;
     use FederationLib\Objects\ServerInformation;
     use InvalidArgumentException;
     use Throwable;
@@ -45,11 +48,7 @@
                     return;
                 }
 
-                // Import the configured plugins, a plugin that is not correctly configured fails the request.
                 $pluginRoute = PluginManager::matchRequest(self::getRequestMethod(), self::getPath());
-
-                // CORS preflight requests are answered without authentication and are not processed further, an
-                // OPTIONS request that is not a preflight is left to a plugin route that handles it
                 if(self::getRequestMethod() === 'OPTIONS' && (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD']) || !$pluginRoute->hasHandler()))
                 {
                     self::preflightResponse();
