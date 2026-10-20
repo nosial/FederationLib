@@ -309,13 +309,13 @@
                 RedisConnection::setRecord(
                     record: $operatorRecord, 
                     cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $uuid),
-                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                 );
 
                 // Create Access Token pointer for quick lookups
                 RedisConnection::getConnection()->setex(
                     key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()),
-                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
                     value: $uuid
                 );
             }
@@ -456,14 +456,14 @@
                 RedisConnection::setRecord(
                     record: $operatorRecord,
                     cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operatorRecord->getUuid()),
-                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                    ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                 );
 
                 // Create a pointer from Access Token to UUID for quick lookups
                 // Only set the Access Token pointer if the operator record was successfully cached
                 RedisConnection::getConnection()->setex(
                     key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken),
-                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
                     value: $operatorRecord->getUuid()
                 );
             }
@@ -1265,13 +1265,13 @@
                         RedisConnection::setRecord(
                             record: $operator,
                             cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
-                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                         );
 
                         // Create access token pointer for quick lookups
                         RedisConnection::getConnection()->setex(
                             key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
-                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
                             value: $operator->getUuid()
                         );
                     }
@@ -1399,12 +1399,12 @@
                         RedisConnection::setRecord(
                             record: $operator,
                             cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
-                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0
+                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                         );
 
                         RedisConnection::getConnection()->setex(
                             key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
-                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTTL() ?? 0,
+                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
                             value: $operator->getUuid()
                         );
                     }
