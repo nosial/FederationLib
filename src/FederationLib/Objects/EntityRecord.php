@@ -288,6 +288,32 @@
         }
 
         /**
+         * Returns whether the entity is a telephone entity, a named entity of the e164.arpa namespace
+         *
+         * @return bool True if the entity is a telephone entity
+         */
+        public function isTelephone(): bool
+        {
+            return Utilities::isTelephoneHost($this->host);
+        }
+
+        /**
+         * Returns how the entity is referred to in audit log messages: its address, except for a telephone entity whose
+         * address must never appear in an audit log message (OFD "Telephone Entities"), which is referred to by UUID.
+         *
+         * @return string The address, or a reference to the telephone entity by UUID
+         */
+        public function getLoggableAddress(): string
+        {
+            if($this->isTelephone())
+            {
+                return sprintf('telephone entity %s', $this->uuid);
+            }
+
+            return $this->getAddress();
+        }
+
+        /**
          * @inheritDoc
          */
         public function toArray(bool $includeMetadata=true): array
