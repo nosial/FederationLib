@@ -7,6 +7,7 @@
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Interfaces\SerializableInterface;
     use FederationLib\Interfaces\StandardObjectInterface;
@@ -41,9 +42,40 @@
         {
             self::$requestMethod = $_SERVER['REQUEST_METHOD'] ?? '';
             self::$uri = $_SERVER['REQUEST_URI'] ?? '/';
-            self::$path = parse_url(self::$uri, PHP_URL_PATH) ?? '/';
-            self::$inputContent = file_get_contents('php://input') ?: '';
+            $segments = array_map('rawurldecode', explode('/', parse_url(self::$uri, PHP_URL_PATH) ?? '/'));
+            foreach($segments as $segment)
+            {
+                if(str_contains($segment, '/'))
+                {
+                    throw new RequestException('Invalid path segment', 400);
+                }
+            }
+
+            self::$path = implode('/', $segments);
             self::$decodedContent = null;
+            self::$parameters = [];
+
+            // PHP only parses the form-encoded and multipart bodies of POST requests into $_POST and $_FILES, the body
+            // of any other request is parsed here before it is read as php://input
+            $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+            $bodyParameters = [];
+            if(self::$requestMethod === 'POST')
+            {
+                $bodyParameters = $_POST;
+            }
+            elseif(str_contains($contentType, 'multipart/form-data') || str_contains($contentType, 'application/x-www-form-urlencoded'))
+            {
+                try
+                {
+                    [$bodyParameters, $_FILES] = request_parse_body();
+                }
+                catch(\RequestParseBodyException $e)
+                {
+                    throw new RequestException('Invalid request body', 400, $e);
+                }
+            }
+
+            self::$inputContent = file_get_contents('php://input') ?: '';
 
             // Decode the input content if it's JSON
             if (self::$inputContent && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json'))
@@ -55,30 +87,19 @@
                 }
             }
 
-            // Parse parameters from the URI, POST data, or query string
-            self::$parameters = [];
+            parse_str((string)parse_url(self::$uri, PHP_URL_QUERY), self::$parameters);
+            self::$parameters = array_merge(self::$parameters, $bodyParameters);
+        }
 
-            if (self::$uri)
-            {
-                $query = parse_url(self::$uri, PHP_URL_QUERY);
-                parse_str((string)$query, self::$parameters);
-            }
-
-            if (self::$inputContent && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/x-www-form-urlencoded'))
-            {
-                parse_str((string)self::$inputContent, $postParams);
-                self::$parameters = array_merge(self::$parameters, $postParams);
-            }
-
-            if (self::$requestMethod === 'GET' && !empty($_GET))
-            {
-                self::$parameters = array_merge(self::$parameters, $_GET);
-            }
-
-            if (self::$requestMethod === 'POST' && !empty($_POST))
-            {
-                self::$parameters = array_merge(self::$parameters, $_POST);
-            }
+        /**
+         * Get the parameters of the query string and of a form-encoded or multipart request body, the body taking
+         * precedence over the query string.
+         *
+         * @return array The request parameters
+         */
+        protected static function getRequestParameters(): array
+        {
+            return self::$parameters ?? [];
         }
 
         /**
@@ -135,12 +156,95 @@
         {
             try
             {
-                return EntitiesManager::getEntityByIdentifier($identifier);
+                $entityRecord = EntitiesManager::getEntityByIdentifier($identifier);
             }
             catch (InvalidArgumentException $e)
             {
                 throw new RequestException($invalidIdentifierMessage, HttpResponseCode::BAD_REQUEST, $e);
             }
+
+            // The UUIDs of entities appear in other records, so a hidden telephone entity identified by its UUID is
+            // treated as though it did not exist; only its address or SHA-256 identifier, which require knowing the
+            // number, resolve it (OFD "Telephone Entities")
+            if($entityRecord !== null && $entityRecord->isTelephone() && Utilities::isUuid($identifier) && self::hideTelephoneEntities())
+            {
+                return null;
+            }
+
+            return $entityRecord;
+        }
+
+        /**
+         * Parses a request whose parameters are a set of optional boolean members, of which at least one is supplied
+         * (eg; a partial OperatorPermissions object). A JSON body may only contain the given members, each a JSON
+         * boolean; form-encoded or query parameters carry booleans as the strings true and false (OFD "Data Formats").
+         *
+         * @param array|null $body The decoded JSON request body, null when the parameters are not JSON
+         * @param string[] $members The members that may be supplied
+         * @param string $errorMessage The error message of the client error when the request is invalid
+         * @return array<string, bool> The supplied members and their values
+         * @throws RequestException If no member is supplied, or a member is unknown or not a boolean
+         */
+        protected static function parseBooleanMembers(?array $body, array $members, string $errorMessage): array
+        {
+            $values = [];
+            if($body !== null)
+            {
+                if(array_is_list($body) && count($body) > 0)
+                {
+                    throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
+                }
+
+                foreach($body as $member => $value)
+                {
+                    if(!in_array($member, $members, true) || !is_bool($value))
+                    {
+                        throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
+                    }
+
+                    $values[$member] = $value;
+                }
+            }
+            else
+            {
+                foreach($members as $member)
+                {
+                    $value = FederationServer::getParameter($member);
+                    if($value === null)
+                    {
+                        continue;
+                    }
+
+                    $value = is_string($value) ? filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
+                    if($value === null)
+                    {
+                        throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
+                    }
+
+                    $values[$member] = $value;
+                }
+            }
+
+            if(count($values) === 0)
+            {
+                throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
+            }
+
+            return $values;
+        }
+
+        /**
+         * Checks whether telephone entities are hidden from the current request: they are hidden from unauthenticated
+         * requests unless the host exposes them (OFD "Telephone Entities"). A hidden telephone entity is returned only
+         * to a request that identifies it by its address or SHA-256 identifier, or submits it for scanning, and its
+         * metadata is never returned.
+         *
+         * @return bool True if telephone entities are hidden from the current request
+         * @throws RequestException Thrown if there was an authentication error
+         */
+        protected static function hideTelephoneEntities(): bool
+        {
+            return !Configuration::getServerConfiguration()->isTelephoneEntitiesPublic() && self::getAuthenticatedOperator(true) === null;
         }
 
         /**
@@ -261,7 +365,7 @@
 
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
-            print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         /**
@@ -315,10 +419,38 @@
         protected static function returnHeaders(): void
         {
             header('Content-Type: application/json; charset=utf-8');
+            self::returnCorsHeaders();
+        }
 
+        /**
+         * Responds to a CORS preflight (OPTIONS) request with HTTP 204 No Content and the CORS headers, preflight
+         * requests carry no access token and are never authenticated.
+         *
+         * @return void
+         */
+        protected static function preflightResponse(): void
+        {
+            if(!self::beginResponse())
+            {
+                return;
+            }
+
+            http_response_code(204);
+            self::returnCorsHeaders();
+        }
+
+        /**
+         * Set the CORS headers of the response, cross-origin requests are permitted only from origins whose host name
+         * equals the host name of the configured base URL.
+         *
+         * @return void
+         */
+        private static function returnCorsHeaders(): void
+        {
             $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
             $baseUrl = Configuration::getServerConfiguration()->getBaseUrl();
-            $allowedOrigin = $baseUrl;
+            // Without a matching Origin, the origin of the base URL is used, which is the base URL without its path
+            $allowedOrigin = self::getOrigin($baseUrl) ?? $baseUrl;
 
             if ($origin !== null)
             {
@@ -341,21 +473,73 @@
         }
 
         /**
+         * Returns the origin of a URL, which is its scheme, host and port without its path.
+         *
+         * @param string $url The URL
+         * @return string|null The origin of the URL, or null if the URL has no scheme or host
+         */
+        private static function getOrigin(string $url): ?string
+        {
+            $scheme = parse_url($url, PHP_URL_SCHEME);
+            $host = parse_url($url, PHP_URL_HOST);
+            if(!is_string($scheme) || !is_string($host))
+            {
+                return null;
+            }
+
+            $port = parse_url($url, PHP_URL_PORT);
+            return strtolower($scheme) . '://' . $host . ($port !== null ? ':' . $port : '');
+        }
+
+        /**
          * Get the authenticated operator based on the Access Token provided in the request.
          *
          * This method retrieves the Access Token from the request headers or query parameters,
          * validates it, and returns the corresponding OperatorRecord object if found and enabled.
          *
+         * A request to a method that does not require authentication ignores a token that does not authenticate an
+         * operator, so a malformed, unknown or disabled token is processed as an unauthenticated request instead of
+         * being rejected, a valid token still authenticates the operator for information returned only to operators.
+         *
+         * @param bool $public True if the method is publicly accessible and does not require authentication
          * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if not found or disabled.
          * @throws RequestException If the Access Token is missing, invalid, or the operator is disabled.
          */
-        protected static function getAuthenticatedOperator(): ?OperatorRecord
+        protected static function getAuthenticatedOperator(bool $public=false): ?OperatorRecord
+        {
+            if(!$public)
+            {
+                return self::authenticateOperator();
+            }
+
+            try
+            {
+                return self::authenticateOperator();
+            }
+            catch(RequestException $e)
+            {
+                if($e->getCode() >= 500)
+                {
+                    throw $e;
+                }
+
+                return null;
+            }
+        }
+
+        /**
+         * Validates the Access Token provided in the request and returns the operator it authenticates.
+         *
+         * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if no token was given.
+         * @throws RequestException If the Access Token is invalid, or the operator is disabled.
+         */
+        private static function authenticateOperator(): ?OperatorRecord
         {
             $accessToken = null;
             if (isset($_SERVER['HTTP_AUTHORIZATION']))
             {
                 $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
-                if (preg_match('/^Bearer\s+(\S+)$/', $authHeader, $matches))
+                if (preg_match('/^Bearer\s+(\S+)$/i', $authHeader, $matches))
                 {
                     $accessToken = $matches[1];
 
@@ -406,7 +590,7 @@
                 // Even though we checked before, we're still checking here for sanity’s sake
                 if($operator->getAccessToken() === 'none' || $operator->getName() === 'system')
                 {
-                    throw new RequestException('Operator access not allowed');
+                    throw new RequestException('Operator access not allowed', 403);
                 }
             }
             catch (DatabaseOperationException $e)
@@ -430,7 +614,7 @@
          */
         protected static function omitEntityMetadata(): bool
         {
-            return !Configuration::getServerConfiguration()->isEntityMetadataPublic() && self::getAuthenticatedOperator() === null;
+            return !Configuration::getServerConfiguration()->isEntityMetadataPublic() && self::getAuthenticatedOperator(true) === null;
         }
 
         /**
@@ -442,7 +626,7 @@
          */
         protected static function useExtendedSearch(): bool
         {
-            return Configuration::getSearchConfiguration()->isExtendedSearchEnabled() && self::getAuthenticatedOperator() !== null;
+            return Configuration::getSearchConfiguration()->isExtendedSearchEnabled() && self::getAuthenticatedOperator(true) !== null;
         }
     }
 
