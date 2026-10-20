@@ -60,7 +60,9 @@
 
             $uuid = Uuid::v7()->toRfc4122();
             $incidentType = $type->value;
-            $assignedOperator = OperatorManager::getNextAutoAssignOperator();
+            // Automated reports go to operators that opt in to automated reports, any other report to operators that
+            // opt in to ordinary reports (OFD "Reports")
+            $assignedOperator = OperatorManager::getNextAutoAssignOperator($automated);
 
             try
             {
@@ -706,79 +708,69 @@
         }
 
         /**
-         * Retrieves report records older than the specified TTL.
+         * Retrieves the oldest report records that are eligible for cleanup, as raw record data.
          *
-         * @param int $ttl The TTL in seconds to look back
+         * Only closed reports are cleaned up, a report is old when it was last changed (eg; closed) before the given
+         * time.
+         *
+         * @param int $before The Unix timestamp before which a record is old
          * @param int $limit The maximum number of records to return
-         * @param int $page The page number for pagination
-         * @return array[] An array of raw report record data
+         * @return array[] An array of raw report record data, oldest first
+         * @throws InvalidArgumentException If the limit is out of range
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        public static function getOldRecords(int $before, int $limit=1000): array
         {
-            if($ttl <= 0)
-            {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
-            }
-
             if($limit < 1 || $limit > 10000)
             {
                 throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
 
-            if($page < 1)
-            {
-                throw new InvalidArgumentException('Page must be greater than zero.');
-            }
-
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
-            $offset = ($page - 1) * $limit;
-
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM reports WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
-                );
-                $stmt->bindParam(':timestamp', $timestamp);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM reports WHERE opened = 0 AND COALESCE(updated, created) < :before ORDER BY created ASC, uuid ASC LIMIT :limit");
+                $stmt->bindValue(':before', date('Y-m-d H:i:s', $before));
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
                 return $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to retrieve old report records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to retrieve old report records: " . $e->getMessage(), 0, $e);
             }
         }
 
         /**
-         * Deletes report records older than the specified TTL.
-         * Related evidence and blacklist records have their report FK set to NULL by the database.
+         * Deletes the given report records that are still eligible for cleanup (see getOldRecords()), a record that
+         * changed since it was retrieved is kept. No record changes are dispatched for the deleted records.
+         * The database sets the report of the evidence, blacklist and audit log records that refer to a deleted
+         * report to null.
          *
-         * @param int $ttl The TTL in seconds after which report records are considered old
+         * @param string[] $uuids The UUIDs of the report records to delete
+         * @param int $before The Unix timestamp that was given to getOldRecords()
          * @return int The number of deleted records
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function cleanEntries(int $ttl): int
+        public static function purgeRecords(array $uuids, int $before): int
         {
-            if($ttl <= 0)
+            if(empty($uuids))
             {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
+                return 0;
             }
 
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($uuids);
+            $parameters[':before'] = date('Y-m-d H:i:s', $before);
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM reports WHERE created < :timestamp");
-                $stmt->bindParam(':timestamp', $timestamp);
-                $stmt->execute();
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM reports WHERE uuid IN ($placeholders) AND opened = 0 AND COALESCE(updated, created) < :before");
+                $stmt->execute($parameters);
                 return $stmt->rowCount();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to clean report records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to purge report records: " . $e->getMessage(), 0, $e);
             }
             finally
             {
@@ -786,8 +778,11 @@
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(EvidenceManager::CACHE_PREFIX);
+                    RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
                     RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
+                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                 }
             }
         }
