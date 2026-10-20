@@ -34,19 +34,25 @@
             }
 
             $query = FederationServer::getParameter('q');
-            if (empty($query))
+            if (empty($query) || !is_string($query))
             {
                 throw new RequestException(self::ERROR_QUERY_REQUIRED, 400);
             }
 
             $query = trim($query);
-            if (strlen($query) < 2)
+            // The query must contain at least two non-whitespace characters
+            if (mb_strlen(preg_replace('/\s+/u', '', $query) ?? '') < 2)
             {
                 throw new RequestException(self::ERROR_QUERY_TOO_SHORT, 400);
             }
 
             $typeParam = FederationServer::getParameter('type');
             $types = null;
+
+            if ($typeParam !== null && !is_string($typeParam))
+            {
+                throw new RequestException(self::ERROR_TYPE_INVALID, 400);
+            }
 
             if ($typeParam !== null)
             {
@@ -63,8 +69,8 @@
                 }
             }
 
-            $limit = (int)(FederationServer::getParameter('limit') ?? 10);
-            $page = (int)(FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? 10);
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
             $maxLimit = Configuration::getSearchConfiguration()->getMaxLimit();
 
             if ($limit < 1)
@@ -81,7 +87,7 @@
                 $page = 1;
             }
 
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getSearchConfiguration()->isPublicSearch());
             if (!Configuration::getSearchConfiguration()->isPublicSearch() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTH_REQUIRED, HttpResponseCode::UNAUTHORIZED);
@@ -98,7 +104,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_SEARCH, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse(array_map(fn(SearchResult $r) => $r->toArray(!self::omitEntityMetadata()), $searchResults));
+            self::successResponse(array_map(fn(SearchResult $r) => $r->toArray(!self::omitEntityMetadata(), $authenticatedOperator), $searchResults));
         }
 
         /**
