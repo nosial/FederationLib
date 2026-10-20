@@ -15,6 +15,7 @@
         private ?string $blacklistUuid;
         private ?string $evidenceUuid;
         private ?string $fileAttachmentUuid;
+        private ?string $reportUuid;
         private AuditLogType $type;
         private string $message;
         private int $timestamp;
@@ -32,6 +33,7 @@
             $this->blacklistUuid = $data['blacklist'] ?? null;
             $this->evidenceUuid = $data['evidence'] ?? null;
             $this->fileAttachmentUuid = $data['file_attachment'] ?? null;
+            $this->reportUuid = $data['report'] ?? null;
             if(isset($data['type']))
             {
                 if($data['type'] instanceof AuditLogType)
@@ -125,6 +127,16 @@
         }
 
         /**
+         * Get the report UUID associated with the audit log record.
+         *
+         * @return string|null
+         */
+        public function getReportUuid(): ?string
+        {
+            return $this->reportUuid;
+        }
+
+        /**
          * Get the type of the audit log record.
          *
          * @return AuditLogType
@@ -166,6 +178,7 @@
                 'blacklist' => $this->blacklistUuid,
                 'evidence' => $this->evidenceUuid,
                 'file_attachment' => $this->fileAttachmentUuid,
+                'report' => $this->reportUuid,
                 'type' => $this->type->value,
                 'message' => $this->message,
                 'timestamp' => $this->timestamp,
@@ -217,6 +230,7 @@
                 'blacklist' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related blacklist record'],
                 'evidence' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related evidence'],
                 'file_attachment' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related file attachment'],
+                'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the related report'],
                 'type' => [
                     'type' => 'string',
                     'enum' => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases()),
