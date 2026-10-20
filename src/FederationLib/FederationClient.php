@@ -793,7 +793,7 @@
         }
 
         /**
-         * Sets the management permissions for an operator.
+         * Grants or revokes the management permissions of an operator.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
          * @param bool $hasManagementPermissions True to enable the permission, false to disable it
