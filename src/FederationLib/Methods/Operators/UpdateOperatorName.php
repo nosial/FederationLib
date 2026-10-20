@@ -14,6 +14,7 @@
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\SuccessResponse;
+    use PDOException;
 
     class UpdateOperatorName extends RequestHandler implements RequestSpecificationInterface
     {
@@ -24,6 +25,7 @@
         private const string ERROR_CANNOT_MODIFY_BUILTIN = 'Cannot modify name of a builtin operator';
         private const string ERROR_NAME_EXISTS = 'Operator name is already in use';
         private const string ERROR_NAME_TOO_LONG = 'Operator name cannot exceed 32 characters';
+        private const string ERROR_NAME_RESERVED = 'Operator name is reserved';
         private const string ERROR_UNABLE_TO_UPDATE = 'Unable to update operator name';
 
         /**
@@ -48,7 +50,7 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, HttpResponseCode::BAD_REQUEST);
             }
 
-            $name = FederationServer::getParameter('name');
+            $name = FederationServer::getStringParameter('name');
             if($name === null || empty($name))
             {
                 throw new RequestException(self::ERROR_MISSING_PARAMETERS, HttpResponseCode::BAD_REQUEST);
@@ -57,6 +59,11 @@
             if(strlen($name) > 32)
             {
                 throw new RequestException(self::ERROR_NAME_TOO_LONG, HttpResponseCode::BAD_REQUEST);
+            }
+
+            if(strtolower($name) === 'root' || strtolower($name) === 'system')
+            {
+                throw new RequestException(self::ERROR_NAME_RESERVED, HttpResponseCode::BAD_REQUEST);
             }
 
             try
@@ -87,6 +94,11 @@
             }
             catch(DatabaseOperationException $e)
             {
+                if($e->getPrevious() instanceof PDOException && $e->getPrevious()->getCode() == 23000)
+                {
+                    throw new RequestException(self::ERROR_NAME_EXISTS, HttpResponseCode::CONFLICT, $e);
+                }
+
                 throw new RequestException(self::ERROR_UNABLE_TO_UPDATE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
