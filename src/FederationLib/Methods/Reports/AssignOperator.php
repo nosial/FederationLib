@@ -7,6 +7,7 @@
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
+    use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -26,6 +27,8 @@
         private const string ERROR_FAILED_TO_GET_OPERATOR = 'Failed to get operator';
         private const string ERROR_FAILED_TO_GET_REPORT = 'Failed to get report';
         private const string ERROR_FAILED_TO_ASSIGN = 'Failed to assign operator to the report';
+        private const string ERROR_INVALID_OPERATOR_UUID = 'Invalid operator UUID';
+        private const string ERROR_REPORT_CLOSED = 'A closed report cannot be assigned';
 
         /**
          * @inheritDoc
@@ -53,6 +56,10 @@
             if(empty($assignedOperator))
             {
                 $assignedOperator = $authenticatedOperator->getUuid();
+            }
+            elseif(!is_string($assignedOperator) || !Validate::uuid($assignedOperator))
+            {
+                throw new RequestException(self::ERROR_INVALID_OPERATOR_UUID, HttpResponseCode::BAD_REQUEST);
             }
 
             // Resolve the operator record
@@ -93,9 +100,15 @@
             // Get the report
             try
             {
-                if(!ReportManager::reportExists($reportUuid))
+                $reportRecord = ReportManager::getReport($reportUuid);
+                if($reportRecord === null)
                 {
                     throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                }
+
+                if(!$reportRecord->isOpened())
+                {
+                    throw new RequestException(self::ERROR_REPORT_CLOSED, HttpResponseCode::BAD_REQUEST);
                 }
             }
             catch(DatabaseOperationException $e)
@@ -113,14 +126,16 @@
                 {
                     AuditLogManager::createEntry(AuditLogType::REPORT_OPERATOR_ASSIGNED,
                         message: sprintf('Report %s assigned to operator %s', $reportUuid, $assignedOperator->getName()),
-                        operatorUuid: $assignedOperator->getUuid()
+                        operatorUuid: $assignedOperator->getUuid(),
+                        reportUuid: $reportUuid
                     );
                 }
                 else
                 {
                     AuditLogManager::createEntry(AuditLogType::REPORT_OPERATOR_ASSIGNED,
                         message: sprintf('Report %s assigned to operator %s by %s', $reportUuid, $assignedOperator->getName(), $authenticatedOperator->getName()),
-                        operatorUuid: $assignedOperator->getUuid()
+                        operatorUuid: $assignedOperator->getUuid(),
+                        reportUuid: $reportUuid
                     );
                 }
             }
@@ -220,7 +235,7 @@
                     ],
                 ],
                 '400' => [
-                    'description' => self::ERROR_OPERATOR_DISABLED,
+                    'description' => self::ERROR_OPERATOR_DISABLED . ', ' . self::ERROR_INVALID_OPERATOR_UUID . ', or ' . self::ERROR_REPORT_CLOSED,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
