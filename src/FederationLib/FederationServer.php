@@ -48,6 +48,14 @@
                 // Import the configured plugins, a plugin that is not correctly configured fails the request.
                 $pluginRoute = PluginManager::matchRequest(self::getRequestMethod(), self::getPath());
 
+                // CORS preflight requests are answered without authentication and are not processed further, an
+                // OPTIONS request that is not a preflight is left to a plugin route that handles it
+                if(self::getRequestMethod() === 'OPTIONS' && (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD']) || !$pluginRoute->hasHandler()))
+                {
+                    self::preflightResponse();
+                    return;
+                }
+
                 // Execute the request method
                 $requestMethod = Method::matchHandle(self::getRequestMethod(), self::getPath());
                 if($requestMethod === null && !$pluginRoute->hasHandler())
