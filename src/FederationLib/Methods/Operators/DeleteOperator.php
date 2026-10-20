@@ -22,7 +22,9 @@
         private const string ERROR_INVALID_UUID = 'A valid operator UUID is required';
         private const string ERROR_NOT_FOUND = 'Operator not found';
         private const string ERROR_CANNOT_DELETE_BUILTIN_OPERATOR = 'Cannot delete the builtin operator';
+        private const string ERROR_CANNOT_DELETE_SELF = 'An operator cannot delete itself';
         private const string ERROR_UNABLE_TO_DELETE = 'Unable to delete operator';
+        private const string ERROR_RECORDS_REQUIRE_MANAGEMENT = 'Management permissions are required to delete an operator whose evidence, reports or blacklist records would be deleted with it';
 
         /**
          * @inheritDoc
@@ -48,6 +50,12 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, HttpResponseCode::BAD_REQUEST);
             }
 
+            // Deleting itself could leave the server without an operator able to manage operators
+            if(strtolower($operatorUuid) === strtolower($authenticatedOperator->getUuid()))
+            {
+                throw new RequestException(self::ERROR_CANNOT_DELETE_SELF, HttpResponseCode::BAD_REQUEST);
+            }
+
             try
             {
                 $existingOperator = OperatorManager::getOperator($operatorUuid);
@@ -59,6 +67,13 @@
                 if(OperatorManager::isRootOperator($operatorUuid) || OperatorManager::isSystemOperator($operatorUuid))
                 {
                     throw new RequestException(self::ERROR_CANNOT_DELETE_BUILTIN_OPERATOR, HttpResponseCode::FORBIDDEN);
+                }
+
+                // The database deletes the operator's evidence, reports and blacklist records with it, deleting them is
+                // otherwise reserved to management permissions (OFD "Delete Operator")
+                if(!$authenticatedOperator->hasManagementPermissions() && OperatorManager::hasCreatedRecords($existingOperator->getUuid()))
+                {
+                    throw new RequestException(self::ERROR_RECORDS_REQUIRE_MANAGEMENT, HttpResponseCode::FORBIDDEN);
                 }
 
                 OperatorManager::deleteOperator($operatorUuid);
@@ -163,7 +178,7 @@
                     ],
                 ],
                 '403' => [
-                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'description' => 'The operator lacks operator permissions, the target is a builtin operator, or the target created evidence, reports or blacklist records and the operator lacks management permissions',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
