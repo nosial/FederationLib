@@ -265,6 +265,95 @@
         }
 
         /**
+         * Deletes the records registered for cleanup, dependent records first, and clears the collections. Failures are
+         * logged, a record may already have been removed by the test or along with the record it depended on.
+         */
+        private function cleanupRecords(): void
+        {
+            $collections = [
+                'blacklist record' => [&$this->createdBlacklistRecords, fn(string $uuid) => $this->client->deleteBlacklistRecord($uuid)],
+                'report' => [&$this->createdReports, fn(string $uuid) => $this->client->deleteReport($uuid)],
+                'evidence record' => [&$this->createdEvidenceRecords, fn(string $uuid) => $this->client->deleteEvidence($uuid)],
+                'entity' => [&$this->createdEntities, fn(string $uuid) => $this->client->deleteEntity($uuid)],
+                'operator' => [&$this->createdOperators, fn(string $uuid) => $this->client->deleteOperator($uuid)],
+            ];
+
+            foreach($collections as $name => [&$uuids, $delete])
+            {
+                foreach(array_reverse($uuids) as $uuid)
+                {
+                    try
+                    {
+                        $delete($uuid);
+                    }
+                    catch (RequestException $e)
+                    {
+                        Logger::getLogger()->warning(sprintf('Failed to delete %s %s: %s', $name, $uuid, $e->getMessage()));
+                    }
+                }
+
+                $uuids = [];
+            }
+
+            foreach($this->tempFiles as $path)
+            {
+                @unlink($path);
+            }
+
+            $this->tempFiles = [];
+        }
+
+        /**
+         * Performs a raw HTTP request and decodes its JSON response
+         *
+         * @return array{0: int, 1: mixed} The HTTP status code and the decoded response
+         */
+        private function jsonRequest(string $method, string $path, ?string $token = null, ?array $body = null): array
+        {
+            [$code, $response] = $this->rawRequest($method, $path, $token, $body !== null ? json_encode($body) : null);
+            return [$code, json_decode($response, true)];
+        }
+
+        /**
+         * Returns the access token of the root operator
+         */
+        private function rootToken(): string
+        {
+            return (string)getenv('SERVER_ACCESS_TOKEN');
+        }
+
+        /**
+         * Returns a unique telephone entity local part of a valid number (+1 650-NXX-XXXX), so that it is found in
+         * content by libphonenumber. The exchange never ends in 11 and is never 555.
+         */
+        private function uniqueTelephoneNumber(): string
+        {
+            do
+            {
+                $exchange = random_int(2, 8) * 100 + random_int(20, 99);
+            }
+            while($exchange === 555);
+
+            return '1650' . $exchange . str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+        }
+
+        /**
+         * Formats a telephone entity local part of uniqueTelephoneNumber() as written in a message, eg; +1 650-253-0000
+         */
+        private function formatTelephoneNumber(string $localPart): string
+        {
+            return sprintf('+1 %s-%s-%s', substr($localPart, 1, 3), substr($localPart, 4, 3), substr($localPart, 7));
+        }
+
+        /**
+         * Returns a unique host that does not exist
+         */
+        private function uniqueHost(string $prefix = 'test'): string
+        {
+            return strtolower(uniqid($prefix . '-')) . '.com';
+        }
+
+        /**
          * Removes a UUID from a cleanup collection.
          */
         private function removeFromCleanup(array &$collection, string $uuid): void
