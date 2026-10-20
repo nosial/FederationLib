@@ -75,28 +75,33 @@
 
         /**
          * @inheritDoc
+         * @param bool $includeMetadata Whether entity metadata is included
+         * @param bool $hideTelephone Whether telephone entities are hidden from the requester: the metadata of a
+         *                            telephone entity is then never included, and a telephone parent entity is omitted,
+         *                            since only the entity submitted for scanning may be returned (OFD "Telephone Entities")
          */
-        public function toArray(bool $includeMetadata=false): array
+        public function toArray(bool $includeMetadata=false, bool $hideTelephone=false): array
         {
+            $parentEntity = $this->parentEntity;
+            if($hideTelephone && $parentEntity !== null && $parentEntity->getEntity()->isTelephone())
+            {
+                $parentEntity = null;
+            }
+
             return [
-                'entity' => $this->entity->toArray($includeMetadata),
+                'entity' => $this->entity->toArray($includeMetadata && !($hideTelephone && $this->entity->isTelephone())),
                 'entity_position' => $this->entityPosition?->toArray(),
                 'active_blacklists' => array_map(fn($activeBlacklist) => $activeBlacklist->toArray(), $this->activeBlacklists),
-                'parent_entity' => $this->parentEntity?->toArray($includeMetadata)
+                'parent_entity' => $parentEntity?->toArray($includeMetadata, $hideTelephone)
             ];
         }
 
         /**
          * @inheritDoc
          */
-        public function toStandardArray(bool $includeMetadata=false): array
+        public function toStandardArray(bool $includeMetadata=false, bool $hideTelephone=false): array
         {
-            return [
-                'entity' => $this->entity->toArray($includeMetadata),
-                'entity_position' => $this->entityPosition?->toArray(),
-                'active_blacklists' => array_map(fn($activeBlacklist) => $activeBlacklist->toArray(), $this->activeBlacklists),
-                'parent_entity' => $this->parentEntity?->toStandardArray($includeMetadata)
-            ];
+            return $this->toArray($includeMetadata, $hideTelephone);
         }
 
         /**
