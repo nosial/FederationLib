@@ -2,15 +2,18 @@
 
     namespace FederationLib\Interfaces;
 
+    use FederationLib\Classes\CLI\Arguments;
+
     interface CommandLineInterface
     {
         /**
          * Handles the execution of the command-line command
          *
-         * @param array $args The parsed arguments (OptsLib) to the command handler
+         * @param string[] $tokens The arguments that follow the command name, as passed on the command line; the
+         *                        command parses them with Arguments::parse(), declaring the options that take a value
          * @return int The exit code
          */
-        public static function handle(array $args): int;
+        public static function handle(array $tokens): int;
 
         /**
          * Returns a string message of the help message for this command
