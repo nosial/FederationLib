@@ -34,26 +34,27 @@
                 throw new RequestException(self::ERROR_SEARCH_DISABLED, 404);
             }
 
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isReportsPublic());
             if (!Configuration::getServerConfiguration()->isReportsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTH_REQUIRED, 401);
             }
 
             $query = FederationServer::getParameter('q');
-            if (empty($query))
+            if (empty($query) || !is_string($query))
             {
                 throw new RequestException(self::ERROR_QUERY_REQUIRED, 400);
             }
 
             $query = trim($query);
-            if (strlen($query) < 2)
+            // The query must contain at least two non-whitespace characters
+            if (mb_strlen(preg_replace('/\s+/u', '', $query) ?? '') < 2)
             {
                 throw new RequestException(self::ERROR_QUERY_TOO_SHORT, 400);
             }
 
-            $limit = (int)(FederationServer::getParameter('limit') ?? 10);
-            $page = (int)(FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? 10);
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
             $maxLimit = $searchConfig->getMaxLimit();
 
             if ($limit < 1)
@@ -72,10 +73,10 @@
 
             $likePattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $query) . '%';
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? ReportCategory::tryFromCaseInsensitive($categoryInput) : null;
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
