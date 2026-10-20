@@ -6,6 +6,7 @@
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\ContentType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
@@ -21,9 +22,12 @@
         private const string ERROR_ENTITY_IDENTIFIER_REQUIRED = 'Entity identifier is required';
         private const string ERROR_METADATA_INVALID = 'Metadata must be an object';
         private const string ERROR_INVALID_CLASSIFICATION = 'Invalid classification flag';
+        private const string ERROR_INVALID_CONTENT_TYPE = 'Invalid content type';
+        private const string ERROR_CONTEXT_INVALID = 'Context must be an object';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_ENTITY_NOT_FOUND = 'Entity not found';
         private const string ERROR_FAILED_TO_CREATE = 'Failed to create evidence';
+        private const string ERROR_UNKNOWN_MEMBER = 'Unknown evidence member "%s"';
 
         /**
          * @inheritDoc
@@ -36,19 +40,50 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            $entityIdentifier = FederationServer::getParameter('entity_identifier');
+            // The body is a ContentInput object extended with entity_identifier and classification, it must not contain
+            // other members (OFD "ContentInput object")
+            $body = self::getDecodedContent();
+            if($body !== null)
+            {
+                foreach(array_keys($body) as $member)
+                {
+                    if(!in_array($member, [...ContentInput::MEMBERS, 'entity_identifier', 'classification'], true))
+                    {
+                        throw new RequestException(sprintf(self::ERROR_UNKNOWN_MEMBER, $member), HttpResponseCode::BAD_REQUEST);
+                    }
+                }
+            }
+
+            $entityIdentifier = FederationServer::getStringParameter('entity_identifier');
             if($entityIdentifier === null)
             {
                 throw new RequestException(self::ERROR_ENTITY_IDENTIFIER_REQUIRED, 400);
             }
 
-            $textContent = FederationServer::getParameter('text_content') ?? null;
-            $note = FederationServer::getParameter('note') ?? null;
-            $tag = FederationServer::getParameter('tag') ?? null;
-            $confidential = filter_var(FederationServer::getParameter('confidential') ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+            $textContent = FederationServer::getStringParameter('text_content') ?? null;
+            $note = FederationServer::getStringParameter('note') ?? null;
+            $tag = FederationServer::getStringParameter('tag') ?? null;
+            $confidential = FederationServer::getBooleanParameter('confidential') ?? false;
             $metadata = FederationServer::getParameter('metadata');
-            $classificationValue = FederationServer::getParameter('classification');
+            $classificationValue = FederationServer::getStringParameter('classification');
             $classification = null;
+
+            $contentType = ContentType::TEXT;
+            $contentTypeValue = FederationServer::getStringParameter('content_type');
+            if($contentTypeValue !== null)
+            {
+                $contentType = is_string($contentTypeValue) ? ContentType::tryFromCaseInsensitive($contentTypeValue) : null;
+                if($contentType === null)
+                {
+                    throw new RequestException(self::ERROR_INVALID_CONTENT_TYPE, HttpResponseCode::BAD_REQUEST);
+                }
+            }
+
+            $context = FederationServer::getParameter('context');
+            if($context !== null && !is_array($context))
+            {
+                throw new RequestException(self::ERROR_CONTEXT_INVALID, HttpResponseCode::BAD_REQUEST);
+            }
 
             if($classificationValue !== null)
             {
@@ -94,7 +129,11 @@
                     tag: $tag,
                     confidential: $confidential,
                     metadata: $metadata,
-                    classification: $classification
+                    classification: $classification,
+                    contentType: $contentType,
+                    context: $context,
+                    // Evidence submitted by a bot operator is automated, and therefore confidential
+                    automated: $authenticatedOperator->isBot()
                 );
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_SUBMITTED, sprintf(
                     'Evidence created by operator %s',
@@ -174,7 +213,7 @@
                                         ],
                                         'classification' => [
                                             'type' => ['string', 'null'],
-                                            'description' => 'Optional immutable classification assigned to the evidence. Requires management permissions.',
+                                            'description' => 'Optional classification assigned to the evidence. Requires management permissions.',
                                             'enum' => ['NORMAL', 'SUSPICIOUS', 'MALICIOUS', null],
                                         ],
                                     ],
