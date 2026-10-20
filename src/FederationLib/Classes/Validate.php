@@ -36,10 +36,7 @@
          */
         public static function host(string $host): bool
         {
-            // Trim whitespace
-            $host = trim($host);
-
-            // Check if it's empty or contains whitespace
+            // Check if it's empty or contains whitespace, a canonical entity host is never trimmed
             if (empty($host) || preg_match('/\s/', $host))
             {
                 return false;
@@ -115,6 +112,143 @@
         public static function url(string $url): bool
         {
             return filter_var($url, FILTER_VALIDATE_URL) !== false;
+        }
+
+        /**
+         * Validates if the given string is an absolute URL (RFC 3986): a scheme followed by ':' and a hierarchical or
+         * opaque part, without whitespace. Any scheme is accepted.
+         *
+         * @param string $url The URL to validate
+         * @return bool True if valid, False otherwise
+         */
+        public static function absoluteUrl(string $url): bool
+        {
+            if(preg_match('/^[A-Za-z][A-Za-z0-9+.\-]*:[^\s]+$/', $url) !== 1 || preg_match('/[\x00-\x20\x7f]/', $url) === 1)
+            {
+                return false;
+            }
+
+            return parse_url($url) !== false;
+        }
+
+        /**
+         * Validates if the given string is an absolute HTTP or HTTPS URL with a host
+         *
+         * @param string $url The URL to validate
+         * @return bool True if valid, False otherwise
+         */
+        public static function httpUrl(string $url): bool
+        {
+            if(!self::absoluteUrl($url))
+            {
+                return false;
+            }
+
+            $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+            $host = parse_url($url, PHP_URL_HOST);
+            return in_array($scheme, ['http', 'https'], true) && is_string($host) && $host !== '';
+        }
+
+        /**
+         * Validates if the given string is a DNS name (RFC 1034) in lowercase A-label form, as carried by the HOSTNAME
+         * content type: dot-separated labels of 1 to 63 letters, digits, hyphens or underscores, at most 253 bytes in
+         * total. IP address literals are not DNS names.
+         *
+         * @param string $name The DNS name to validate
+         * @return bool True if valid, False otherwise
+         */
+        public static function dnsName(string $name): bool
+        {
+            if($name === '' || strlen($name) > 253 || $name !== strtolower($name))
+            {
+                return false;
+            }
+
+            if(filter_var($name, FILTER_VALIDATE_IP) !== false || str_contains($name, ':'))
+            {
+                return false;
+            }
+
+            // Four dot-separated numbers are an IPv4 address in any notation, never a name
+            if(preg_match('/^[0-9]+(\.[0-9]+){3}$/', $name) === 1)
+            {
+                return false;
+            }
+
+            foreach(explode('.', $name) as $label)
+            {
+                if(preg_match('/^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/', $label) !== 1)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /**
+         * Validates the local part of a telephone entity (OFD "Telephone Entities"): the E.164 international number
+         * as 1 to 15 ASCII digits whose first digit is not 0, without a leading '+' or any separators.
+         *
+         * @param string $localPart The local part to validate
+         * @return bool True if valid, False otherwise
+         */
+        public static function telephoneNumber(string $localPart): bool
+        {
+            return preg_match('/^[1-9][0-9]{0,14}$/', $localPart) === 1;
+        }
+
+        /**
+         * Validates the entity host and optional local part of an entity address beyond their individual forms: a
+         * telephone entity must have a canonical E.164 local part, the telephone numbering namespace e164.arpa is
+         * not itself a host entity, and no entity host is a subdomain of it, such as the ENUM domain of a number
+         * (OFD "Telephone Entities").
+         *
+         * @param string $host The entity host
+         * @param string|null $id The local part, null for a host entity
+         * @return bool True if valid, False otherwise
+         */
+        public static function entityAddress(string $host, ?string $id): bool
+        {
+            if(str_ends_with($host, '.' . Utilities::TELEPHONE_ENTITY_HOST))
+            {
+                return false;
+            }
+
+            if($host !== Utilities::TELEPHONE_ENTITY_HOST)
+            {
+                return true;
+            }
+
+            return $id !== null && self::telephoneNumber($id);
+        }
+
+        /**
+         * Validates that an entity identifier that denotes the telephone numbering namespace is a canonical telephone
+         * entity (OFD "Telephone Entities"): its entity host is e164.arpa, written in lowercase without a trailing
+         * dot, and its local part is the E.164 number as 1 to 15 digits without a leading '+' or separators. An
+         * entity host under e164.arpa, such as the ENUM domain of a number, never passes. Any other identifier,
+         * including a UUID or SHA-256 identifier, is not a telephone address and passes.
+         *
+         * @param string $identifier The entity identifier
+         * @return bool False if the identifier denotes the telephone namespace without being a canonical telephone entity
+         */
+        public static function telephoneAddress(string $identifier): bool
+        {
+            $separator = strrpos($identifier, '@');
+            $host = $separator === false ? $identifier : substr($identifier, $separator + 1);
+            $normalizedHost = rtrim(strtolower($host), '.');
+            if(str_ends_with($normalizedHost, '.' . Utilities::TELEPHONE_ENTITY_HOST))
+            {
+                return false;
+            }
+
+            if($normalizedHost !== Utilities::TELEPHONE_ENTITY_HOST)
+            {
+                return true;
+            }
+
+            return $separator !== false && $host === Utilities::TELEPHONE_ENTITY_HOST && self::telephoneNumber(substr($identifier, 0, $separator));
         }
 
         /**
