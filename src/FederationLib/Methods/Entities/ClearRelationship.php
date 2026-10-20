@@ -51,9 +51,9 @@
                 EntitiesManager::clearEntityRelationship($entityRecord->getUuid());
                 AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                     'Relationship cleared for entity %s by %s',
-                    $entityRecord->getAddress(),
+                    $entityRecord->getLoggableAddress(),
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid());
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid());
             }
             catch(InvalidArgumentException $e)
             {
