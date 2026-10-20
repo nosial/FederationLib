@@ -2,77 +2,80 @@
 
     namespace FederationLib;
 
-    use FederationLib\Classes\CLI\CreateOperator;
     use FederationLib\Enums\CliCommands;
-    use OptsLib\Parse;
 
     class Program
     {
         /**
-         * The main entry point for the FederationLib command-line interface program
+         * The main entry point for the FederationLib command-line interface program. Commands are written in the style
+         * of docker: `federationlib <command> [<arguments>...]`, eg; `federationlib operators ls` or
+         * `federationlib operators <uuid> set --bot true`.
          *
-         * @param array $args Raw arguments passed on from the command line.
+         * @param array $args Raw arguments passed on from the command line, optionally starting with the program path
          * @return int Exit code indicating the success or failure of the operation.
          */
         public static function main(array $args): int
         {
-            $args = Parse::parseArgument($args);
-            if(isset($args['help']))
+            $tokens = array_values(array_map('strval', $args));
+            if(count($tokens) > 0 && self::isProgramPath($tokens[0]))
             {
-                if($args['help'] === true)
-                {
-                    return self::displayHelp();
-                }
+                array_shift($tokens);
+            }
 
-                $command = CliCommands::tryFrom($args['help']);
-                if($command === null)
+            $name = $tokens[0] ?? null;
+            if($name === null || in_array($name, ['help', '--help', '-h'], true))
+            {
+                // `help <command>` shows the help of a command
+                $command = isset($tokens[1]) ? CliCommands::tryFrom($tokens[1]) : null;
+                if(isset($tokens[1]) && $command === null)
                 {
-                    print(sprintf("Unknown command: %s\n", $command));
+                    print(sprintf("Unknown command: %s\n\n", $tokens[1]));
+                    self::displayHelp();
                     return 1;
                 }
 
-                print(sprintf("%s - %s\n\n%s\n\n%s", $command->value, $command->getShortHelp(), $command->getHelp(), $command->getExamples()));
-                return 0;
+                return $command !== null ? self::displayCommandHelp($command) : self::displayHelp();
             }
 
-            if(isset($args[CliCommands::CREATE_OPERATOR->value]))
+            $command = CliCommands::tryFrom($name);
+            if($command === null)
             {
-                return CreateOperator::handle($args);
-            }
-            elseif(isset($args[CliCommands::DELETE_OPERATOR->value]))
-            {
-                return CliCommands::DELETE_OPERATOR->handle($args);
-            }
-            elseif(isset($args[CliCommands::GET_OPERATOR->value]))
-            {
-                return CliCommands::GET_OPERATOR->handle($args);
-            }
-            elseif(isset($args[CliCommands::EDIT_OPERATOR->value]))
-            {
-                return CliCommands::EDIT_OPERATOR->handle($args);
-            }
-            if(isset($args[CliCommands::INITIALIZE->value]))
-            {
-                return CliCommands::INITIALIZE->handle($args);
-            }
-            elseif(isset($args[CliCommands::LIST_AUDIT_LOGS->value]))
-            {
-                return CliCommands::LIST_AUDIT_LOGS->handle($args);
-            }
-            elseif(isset($args[CliCommands::LIST_OPERATORS->value]))
-            {
-                return CliCommands::LIST_OPERATORS->handle($args);
-            }
-            elseif(isset($args[CliCommands::MAINTENANCE->value]))
-            {
-                return CliCommands::MAINTENANCE->handle($args);
-            }
-            elseif(isset($args[CliCommands::GENERATE_OPERATOR_ACCESS_TOKEN->value]))
-            {
-                return CliCommands::GENERATE_OPERATOR_ACCESS_TOKEN->handle($args);
+                print(sprintf("Unknown command: %s\n\n", $name));
+                self::displayHelp();
+                return 1;
             }
 
-            return self::displayHelp();
+            $commandTokens = array_slice($tokens, 1);
+            if(in_array($command, [CliCommands::INITIALIZE, CliCommands::MAINTENANCE], true) && array_intersect($commandTokens, ['--help', '-h']) !== [])
+            {
+                return self::displayCommandHelp($command);
+            }
+
+            return $command->handle($commandTokens);
+        }
+
+        /**
+         * Returns whether an argument is the path of the program rather than a command
+         *
+         * @param string $argument The first argument
+         * @return bool True if the argument is the program path
+         */
+        private static function isProgramPath(string $argument): bool
+        {
+            return CliCommands::tryFrom($argument) === null && !in_array($argument, ['help', '--help', '-h'], true)
+                && (str_contains($argument, DIRECTORY_SEPARATOR) || str_ends_with($argument, '.ncc') || $argument === 'federationlib' || $argument === 'main');
+        }
+
+        /**
+         * Prints the help of a command
+         *
+         * @param CliCommands $command The command
+         * @return int The exit code, always 0
+         */
+        private static function displayCommandHelp(CliCommands $command): int
+        {
+            print(sprintf("%s - %s\n\n%s\n%s", $command->value, $command->getShortHelp(), $command->getHelp(), $command->getExamples() ?? ''));
+            return 0;
         }
 
         /**
@@ -82,25 +85,15 @@
          */
         private static function displayHelp(): int
         {
-            print("FederationLib Command-Line Interface\n");
-            print("Usage: federationserver [command] [options]\n\n");
-            print("Available commands:\n");
-            print("  help - Displays help information about a command\n");
+            print("FederationLib Command-Line Interface\n\n");
+            print("Usage: federationlib <command> [<arguments>...]\n\n");
+            print("Commands:\n");
             foreach(CliCommands::cases() as $command)
             {
-                print(sprintf("  %s - %s\n", $command->value, $command->getShortHelp()));
+                print(sprintf("  %-12s %s\n", $command->value, $command->getShortHelp()));
             }
 
-            print("\nExample Usage:\n");
-            print("help [command] - Displays help information about the given command\n\n");
-            foreach(CliCommands::cases() as $command)
-            {
-                if($command->getExamples() !== null)
-                {
-                    print(sprintf("%s\n%s\n\n", $command->value, $command->getExamples()));
-                }
-            }
-
+            print("\nRun 'federationlib help <command>' or 'federationlib <command> --help' for the usage of a command.\n");
             return 0;
         }
     }
