@@ -14,6 +14,7 @@
     use FederationLib\Objects\OperatorCreated;
     use InvalidArgumentException;
     use FederationLib\Interfaces\RequestSpecificationInterface;
+    use PDOException;
 
     class CreateOperator extends RequestHandler implements RequestSpecificationInterface
     {
@@ -35,17 +36,17 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            if(!FederationServer::getParameter('name'))
+            if(!FederationServer::getStringParameter('name'))
             {
                 throw new RequestException(self::ERROR_NAME_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }
 
-            if(strtolower(FederationServer::getParameter('name')) === 'root' || strtolower(FederationServer::getParameter('name')) === 'system')
+            if(strtolower(FederationServer::getStringParameter('name')) === 'root' || strtolower(FederationServer::getStringParameter('name')) === 'system')
             {
                 throw new RequestException(self::ERROR_NAME_RESERVED, HttpResponseCode::BAD_REQUEST);
             }
 
-            $name = FederationServer::getParameter('name');
+            $name = FederationServer::getStringParameter('name');
 
             if(OperatorManager::operatorNameExists($name))
             {
@@ -56,7 +57,7 @@
             {
                 $operatorCreated = OperatorManager::createOperator($name);
                 AuditLogManager::createEntry(AuditLogType::OPERATOR_CREATED, sprintf('Operator %s (%s) created by %s',
-                    FederationServer::getParameter('name'),
+                    FederationServer::getStringParameter('name'),
                     $operatorCreated->getUuid(),
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
@@ -67,12 +68,15 @@
             }
             catch(DatabaseOperationException $e)
             {
+                // A concurrent request may have taken the name after it was checked, the unique name is the conflict
+                if($e->getPrevious() instanceof PDOException && $e->getPrevious()->getCode() == 23000)
+                {
+                    throw new RequestException('Operator name already exists', HttpResponseCode::CONFLICT, $e);
+                }
+
                 throw new RequestException(self::ERROR_UNABLE_TO_CREATE, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            // Respond with the operator's UUID and raw Access Token.
-            // The raw token is only ever returned here (and by the refresh endpoint),
-            // never after the operator has been persisted.
             self::successResponse($operatorCreated, HttpResponseCode::CREATED);
         }
 
