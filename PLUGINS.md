@@ -66,6 +66,13 @@ The other two events let a plugin react to what already happened, without being 
    blacklisted.
  - `AUDIT_LOG` happens after an audit log entry is created.
 
+Two more events let a plugin do work of its own outside of requests:
+
+ - `STARTUP` happens once every time the server starts (`federationlib init`, run by the docker entrypoint), after the
+   database is ready and before requests are served, eg; to create the plugin's own tables.
+ - `MAINTENANCE` happens on every maintenance run (`federationlib maintenance`, hourly in the docker image), eg; to remove
+   the plugin's old records or to sync with an external service.
+
 Plugins are not limited to what their handlers receive. They run in FederationLib's process and can use its managers,
 database, cache and configuration, so a plugin can also act on its own: register and blacklist entities, submit
 evidence, keep its own tables or talk to other FederationLib servers. This also means a plugin has the same access as
