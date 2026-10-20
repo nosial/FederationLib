@@ -138,9 +138,10 @@
         }
 
         /**
-         * Get a parameter from the request, checking POST, GET, and decoded JSON content.
+         * Get a parameter from the request, checking the form-encoded or multipart body, the query string, and the
+         * decoded JSON content.
          *
-         * This method retrieves a parameter by name from the POST data, GET parameters,
+         * This method retrieves a parameter by name from the form-encoded or multipart body, the query string,
          * or decoded JSON content if available. Values are returned as-is so that whitespace
          * content is preserved exactly.
          *
@@ -149,16 +150,10 @@
          */
         public static function getParameter(string $name): mixed
         {
-            // Check if the parameter exists in the POST data.
-            if (isset($_POST[$name]) && is_string($_POST[$name]))
+            $parameters = self::getRequestParameters();
+            if (isset($parameters[$name]) && is_string($parameters[$name]))
             {
-                return $_POST[$name];
-            }
-
-            // If not found in POST, check the GET parameters.
-            if (isset($_GET[$name]) && is_string($_GET[$name]))
-            {
-                return $_GET[$name];
+                return $parameters[$name];
             }
 
             $decodedContent = self::getDecodedContent();
