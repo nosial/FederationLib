@@ -15,11 +15,14 @@
     use FederationLib\Objects\FileAttachmentRecord;
     use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\OperatorRecord\OperatorConfiguration;
+    use FederationLib\Objects\OperatorRecord\OperatorPermissions;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
     use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\SearchResult;
     use FederationLib\Objects\ScannedContent\ContentClassification;
+    use FederationLib\Objects\ScannedContent\Detection;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use FederationLib\Objects\ServerInformation;
@@ -145,6 +148,7 @@
                 'BlacklistRecord' => BlacklistRecord::class,
                 'ContentClassification' => ContentClassification::class,
                 'ContentInput' => ContentInput::class,
+                'Detection' => Detection::class,
                 'EntityRecord' => EntityRecord::class,
                 'EntityQueryResult' => EntityQueryResult::class,
                 'ErrorResponse' => ErrorResponse::class,
@@ -152,6 +156,8 @@
                 'FileAttachmentRecord' => FileAttachmentRecord::class,
                 'OperatorCreated' => OperatorCreated::class,
                 'OperatorRecord' => OperatorRecord::class,
+                'OperatorPermissions' => OperatorPermissions::class,
+                'OperatorConfiguration' => OperatorConfiguration::class,
                 'ReportRecord' => ReportRecord::class,
                 'ReportSubmission' => ReportSubmission::class,
                 'ResolvedEntity' => ResolvedEntity::class,
