@@ -12,7 +12,6 @@
     use FederationLib\FederationServer;
     use FederationLib\Objects\ErrorResponse;
     use InvalidArgumentException;
-    use Throwable;
     use FederationLib\Interfaces\RequestSpecificationInterface;
 
     class DownloadAttachment extends RequestHandler implements RequestSpecificationInterface
@@ -21,7 +20,6 @@
         private const string ERROR_ATTACHMENT_UUID_REQUIRED = 'Attachment UUID is required';
         private const string ERROR_INVALID_ATTACHMENT_UUID = 'Invalid attachment UUID';
         private const string ERROR_ATTACHMENT_NOT_FOUND = 'Attachment not found';
-        private const string ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND = 'Associated evidence not found';
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to view confidential evidence';
         private const string ERROR_INTERNAL_SERVER_ERROR = 'Internal server error while retrieving attachment';
 
@@ -30,7 +28,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEvidencePublic());
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_UNAUTHORIZED, 401);
@@ -55,14 +53,11 @@
                     throw new RequestException(self::ERROR_ATTACHMENT_NOT_FOUND, 404);
                 }
 
-                $evidence = EvidenceManager::getEvidence($attachment->getEvidenceUuid());
-
-                if($evidence === null)
-                {
-                    throw new RequestException(self::ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND, 404);
-                }
-
-                if($evidence->isConfidential())
+                // An attachment without evidence is treated as an attachment of confidential evidence (OFD "Deletion of
+                // Records")
+                $evidenceUuid = $attachment->getEvidenceUuid();
+                $evidence = $evidenceUuid === null ? null : EvidenceManager::getEvidence($evidenceUuid);
+                if($evidence === null || $evidence->isConfidential())
                 {
                     if($authenticatedOperator === null)
                     {
@@ -106,6 +101,7 @@
             header('Content-Type: ' . $attachment->getFileMime());
             header('Content-Disposition: attachment; filename="' . str_replace(['"', '\\', "\n", "\r"], '_', $attachment->getFileName()) . '"');
             header('Content-Length: ' . filesize($fileLocation));
+            header('X-Content-Type-Options: nosniff');
             header('Cache-Control: no-cache, no-store, must-revalidate'); // HTTP 1.1
             header('Pragma: no-cache'); // HTTP 1.0
             header('Expires: 0'); // Proxies
@@ -228,7 +224,7 @@
                     ],
                 ],
                 '404' => [
-                    'description' => self::ERROR_ATTACHMENT_NOT_FOUND . ' or ' . self::ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND,
+                    'description' => self::ERROR_ATTACHMENT_NOT_FOUND . ' or its file does not exist',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
