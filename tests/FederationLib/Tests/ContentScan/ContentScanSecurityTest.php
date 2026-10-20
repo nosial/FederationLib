@@ -181,6 +181,13 @@
 
             $restrictedClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
 
+            // When scanning is public the token is ignored, so client permissions are not required
+            if($this->client->getServerInformation()->isPublicScanContent())
+            {
+                $this->assertNotNull($restrictedClient->scanContent(self::BENIGN_SAMPLE_TEXT));
+                return;
+            }
+
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(403);
             $restrictedClient->scanContent(self::BENIGN_SAMPLE_TEXT);

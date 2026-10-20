@@ -303,9 +303,9 @@
         {
             [$code] = $this->rawRequest(
                 'PATCH',
-                'operators/not-a-uuid/auto-assign',
+                'operators/not-a-uuid/configuration',
                 getenv('SERVER_ACCESS_TOKEN'),
-                json_encode(['enabled' => true])
+                json_encode(['auto_assign_reports' => true])
             );
             $this->assertContains(
                 $code,
@@ -318,9 +318,9 @@
         {
             [$code] = $this->rawRequest(
                 'PATCH',
-                'operators/00000000-0000-0000-0000-000000000000/auto-assign',
+                'operators/00000000-0000-0000-0000-000000000000/configuration',
                 getenv('SERVER_ACCESS_TOKEN'),
-                json_encode(['enabled' => true])
+                json_encode(['auto_assign_reports' => true])
             );
             $this->assertEquals(
                 HttpResponseCode::NOT_FOUND->value,
@@ -337,14 +337,14 @@
 
             [$code] = $this->rawRequest(
                 'PATCH',
-                'operators/' . $operatorUuid . '/auto-assign',
+                'operators/' . $operatorUuid . '/configuration',
                 getenv('SERVER_ACCESS_TOKEN'),
                 json_encode([])
             );
             $this->assertEquals(
                 HttpResponseCode::BAD_REQUEST->value,
                 $code,
-                'Missing enabled parameter should return 400'
+                'A configuration update without any setting should return 400'
             );
         }
 
@@ -519,17 +519,14 @@
             $this->assertNotEmpty($generatedEvidence, 'Generated report should include evidence from the scan input');
             foreach($generatedEvidence as $evidence)
             {
+                // Clean up the evidence the system attached to the generated report
+                $this->createdEvidenceRecords[] = $evidence->getUuid();
+
                 $this->assertEquals($generatedReport->getUuid(), $evidence->getReport(), 'Generated evidence should reference the generated report');
                 $this->assertEquals($entityUuid, $evidence->getEntityUuid(), 'Generated evidence should reference the scanned author entity');
-            }
-
-            // Clean up the evidence the system attached to the generated report
-            foreach ($this->client->listEvidence(1, 1000) as $evidence)
-            {
-                if ($evidence->getReport() === $generatedReport->getUuid())
-                {
-                    $this->createdEvidenceRecords[] = $evidence->getUuid();
-                }
+                // Evidence the host creates itself is automated and therefore confidential (OFD "Automated Records")
+                $this->assertTrue($evidence->isAutomated(), 'Generated evidence should be automated');
+                $this->assertTrue($evidence->isConfidential(), 'Generated evidence should be confidential');
             }
         }
 
@@ -538,7 +535,8 @@
             // The mechanism can only be tested if no operator is currently eligible for automatic assignment
             foreach ($this->client->listOperators(1, 1000) as $operator)
             {
-                if ($operator->isAutoAssigned() && $operator->hasManagementPermissions())
+                // Generated reports are automated, only operators opted in to automated reports are eligible
+                if ($operator->isAutoAssignAutomatedReports() && $operator->hasManagementPermissions() && !$operator->isDisabled())
                 {
                     $this->markTestSkipped('An eligible auto assign operator already exists in this environment');
                 }

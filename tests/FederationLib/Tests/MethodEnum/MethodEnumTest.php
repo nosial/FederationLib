@@ -191,10 +191,8 @@
             $this->assertSame(Method::DELETE_OPERATOR, Method::matchHandle('DELETE', "/operators/$uuid"));
             $this->assertSame(Method::ENABLE_OPERATOR, Method::matchHandle('PATCH', "/operators/$uuid/enable"));
             $this->assertSame(Method::DISABLE_OPERATOR, Method::matchHandle('PATCH', "/operators/$uuid/disable"));
-            $this->assertSame(Method::MANAGE_OPERATOR_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/operator-permissions"));
-            $this->assertSame(Method::MANAGE_MANAGEMENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/management-permissions"));
-            $this->assertSame(Method::MANAGE_CLIENT_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/client-permissions"));
-            $this->assertSame(Method::MANAGE_AUTO_ASSIGN, Method::matchHandle('PATCH', "/operators/$uuid/auto-assign"));
+            $this->assertSame(Method::UPDATE_OPERATOR_PERMISSIONS, Method::matchHandle('PATCH', "/operators/$uuid/permissions"));
+            $this->assertSame(Method::UPDATE_OPERATOR_CONFIGURATION, Method::matchHandle('PATCH', "/operators/$uuid/configuration"));
             $this->assertSame(Method::LIST_OPERATOR_EVIDENCE, Method::matchHandle('GET', "/operators/$uuid/evidence"));
             $this->assertSame(Method::LIST_OPERATOR_AUDIT_LOGS, Method::matchHandle('GET', "/operators/$uuid/audit"));
             $this->assertSame(Method::LIST_OPERATOR_BLACKLIST, Method::matchHandle('GET', "/operators/$uuid/blacklist"));

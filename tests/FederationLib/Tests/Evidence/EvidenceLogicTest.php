@@ -504,24 +504,23 @@ class EvidenceLogicTest extends TestCase
         $this->assertSame($upperUuids, $mixedUuids);
     }
 
-    public function testEvidenceClassificationIsImmutable(): void
+    public function testEvidenceClassificationCanBeReplaced(): void
     {
-        $entityUuid = $this->client->pushEntity('immutable-classification.com', 'immutable_' . uniqid());
+        $entityUuid = $this->client->pushEntity('replace-classification.com', 'replace_' . uniqid());
         $this->createdEntityRecords[] = $entityUuid;
 
-        $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Immutable classification evidence', 'Note', 'immutable');
+        $evidenceUuid = $this->client->submitEvidence($entityUuid, 'Replaced classification evidence', 'Note', 'replace');
         $this->createdEvidenceRecords[] = $evidenceUuid;
 
         $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::NORMAL);
         $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
 
-        $this->expectRequestFailure(
-            fn() => $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::MALICIOUS),
-            [HttpResponseCode::CONFLICT->value],
-            'A classification must not be replaced'
-        );
+        $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::MALICIOUS);
+        $this->assertSame(ClassificationFlag::MALICIOUS, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
 
-        $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
+        // Classifying with the same classification succeeds and changes nothing
+        $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::MALICIOUS);
+        $this->assertSame(ClassificationFlag::MALICIOUS, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
     }
 
     public function testCloseReportSkipsPreviouslyClassifiedEvidence(): void
@@ -565,10 +564,9 @@ class EvidenceLogicTest extends TestCase
         $this->createdEvidenceRecords[] = $evidenceUuid;
 
         $this->assertSame(ClassificationFlag::SUSPICIOUS, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
-        $this->expectRequestFailure(
-            fn() => $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::NORMAL),
-            [HttpResponseCode::CONFLICT->value],
-            'Submission classification must be immutable'
-        );
+
+        // A classification assigned at submission can be replaced
+        $this->client->classifyEvidence($evidenceUuid, ClassificationFlag::NORMAL);
+        $this->assertSame(ClassificationFlag::NORMAL, $this->client->getEvidenceRecord($evidenceUuid)->getClassificationFlag());
     }
 }

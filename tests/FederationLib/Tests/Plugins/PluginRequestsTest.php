@@ -449,18 +449,16 @@
                 'classification' => 'MALICIOUS',
             ]], $this->getRecordChangeEvents($evidenceUuid));
 
-            // Classifications are immutable, classifying it again fails and changes nothing
-            try
-            {
-                $client->classifyEvidence($evidenceUuid, \FederationLib\Enums\ClassificationFlag::NORMAL);
-                $this->fail('Classifying evidence twice must fail');
-            }
-            catch(\FederationLib\Exceptions\RequestException $e)
-            {
-                $this->assertSame(409, $e->getCode());
-            }
+            // Replacing the classification produces the change again with the new classification
+            $client->classifyEvidence($evidenceUuid, \FederationLib\Enums\ClassificationFlag::NORMAL);
+            $events = $this->getRecordChangeEvents($evidenceUuid);
+            $this->assertCount(2, $events);
+            $this->assertSame('EVIDENCE_CLASSIFIED', $events[1]['type']);
+            $this->assertSame('NORMAL', $events[1]['classification']);
 
-            $this->assertCount(1, $this->getRecordChangeEvents($evidenceUuid));
+            // Classifying with the same classification changes nothing
+            $client->classifyEvidence($evidenceUuid, \FederationLib\Enums\ClassificationFlag::NORMAL);
+            $this->assertCount(2, $this->getRecordChangeEvents($evidenceUuid));
         }
 
         public function testRecordChangeWhenAReportIsClosed(): void

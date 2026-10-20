@@ -511,9 +511,10 @@
                 $this->createdOperators[] = $operatorUuid;
                 $operatorUuids[] = $operatorUuid;
 
+                // Client permissions first: they cannot be revoked while management permissions, which inherit them, remain
+                $this->client->setClientPermissions($operatorUuid, $i % 4 === 0);
                 $this->client->setManagementPermissions($operatorUuid, $i % 2 === 0);
                 $this->client->setOperatorPermissions($operatorUuid, $i % 3 === 0);
-                $this->client->setClientPermissions($operatorUuid, $i % 4 === 0);
             }
 
             foreach ($operatorUuids as $index => $operatorUuid)

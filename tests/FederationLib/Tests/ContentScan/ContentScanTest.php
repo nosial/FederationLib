@@ -525,14 +525,16 @@
             $values = [];
             $expectedValues = [];
             $value = 1.5;
+            // The points of every rule are overridden through the combined scanning.modifiers setting, keyed by rule name
             foreach($rules as $key => [$getter, $rule])
             {
-                $values['modifier_' . $key] = $value;
+                $this->assertSame(strtoupper($key), $rule->name);
+                $values[$rule->name] = $value;
                 $expectedValues[$getter] = $value;
                 $value += 1.0;
             }
 
-            $configuration = new ScanningConfiguration($values);
+            $configuration = new ScanningConfiguration(['modifiers' => $values]);
             foreach($expectedValues as $getter => $expectedValue)
             {
                 $this->assertSame($expectedValue, $configuration->$getter(), "$getter must use its configured modifier");
