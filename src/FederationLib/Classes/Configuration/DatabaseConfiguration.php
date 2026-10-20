@@ -9,6 +9,9 @@
      */
     class DatabaseConfiguration
     {
+        private const string CHARSET = 'utf8mb4';
+        private const string COLLATION = 'utf8mb4_unicode_ci';
+
         private string $host;
         private int $port;
         private string $username;
@@ -29,8 +32,8 @@
             $this->username = $configuration['username'] ?? 'root';
             $this->password = $configuration['password'] ?? 'root';
             $this->name = $configuration['name'] ?? 'federation';
-            $this->charset = $configuration['charset'] ?? 'utf8mb4';
-            $this->collation = $configuration['collation'] ?? 'utf8mb4_unicode_ci';
+            $this->charset = self::CHARSET;
+            $this->collation = self::COLLATION;
         }
 
         /**
@@ -110,9 +113,7 @@
          */
         public function getDsn(): string
         {
-            return sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s',
-                $this->host, $this->port, $this->name, $this->charset
-            );
+            return sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $this->host, $this->port, $this->name, $this->charset);
         }
     }
 
