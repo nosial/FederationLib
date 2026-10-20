@@ -25,10 +25,16 @@ The implementation is based of the [Open Federated Database](https://github.com/
     * [Library Usage](#library-usage)
       * [Client Usage](#client-usage)
     * [Server Usage](#server-usage)
+    * [Scheduled Jobs](#scheduled-jobs)
+    * [BayesianServer Memory](#bayesianserver-memory)
+    * [BayesianServer Embeddings](#bayesianserver-embeddings)
+    * [BayesianServer Placeholder Rules](#bayesianserver-placeholder-rules)
+    * [Disabling Bayesian Classification](#disabling-bayesian-classification)
     * [Locally testing/development](#locally-testingdevelopment)
     * [Command-Line Interface](#command-line-interface)
   * [Configuration](#configuration)
     * [Server configuration](#server-configuration)
+    * [Remote Retrieval Configuration](#remote-retrieval-configuration)
     * [Scanning Configuration](#scanning-configuration)
     * [Database Configuration](#database-configuration)
     * [Redis/Caching configuration](#rediscaching-configuration)
@@ -258,12 +264,114 @@ is not enabled or if the scripts are not available (eg; outside the docker image
 [Bayesian Model Configuration](#bayesian-model-configuration).
 
 The entrypoint also accepts the following docker-only environment variables, processed in this order before
-`federationlib init`. The container does not start if either step fails.
+`federationlib init`. The container does not start if any step fails.
 
-| Environment Variable | Description                                                                                                                                                                                  |
-|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AUTOSTART`          | The path to a shell script executed on every container start, eg; to install additional services or dependencies required by plugins. Executed directly if executable, otherwise with `bash` |
-| `REQUIRE_PLUGINS`    | A comma-separated list of plugin packages to install or update, see [Plugins](#plugins)                                                                                                      |
+| Environment Variable         | Description                                                                                                                                                                                  |
+|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `AUTOSTART`                  | The path to a shell script executed on every container start, eg; to install additional services or dependencies required by plugins. Executed directly if executable, otherwise with `bash` |
+| `REQUIRE_PLUGINS`            | A comma-separated list of plugin packages to install or update, see [Plugins](#plugins)                                                                                                      |
+| `CRONTAB`                    | The path to a crontab of scheduled jobs (eg; a mounted file) replacing the bundled [crontab](crontab), see [Scheduled Jobs](#scheduled-jobs)                                                 |
+| `BAYESIAN_EMBEDDINGS`        | `true` adds a sentence embedding model to BayesianServer, see [BayesianServer Embeddings](#bayesianserver-embeddings)                                                                        |
+| `BAYESIAN_PLACEHOLDER_RULES` | Placeholder rules file of BayesianServer (default: the bundled Telegram rules), `none` for its generic rules, see [BayesianServer Placeholder Rules](#bayesianserver-placeholder-rules)      |
+| `BAYESIAN_DISABLED`          | `true` disables Bayesian classification entirely, see [Disabling Bayesian Classification](#disabling-bayesian-classification)                                                                |
+
+### Scheduled Jobs
+
+The docker image runs scheduled jobs with [supercronic](https://github.com/aptible/supercronic), a supervisord
+service next to the web server. The bundled [crontab](crontab) runs three hourly jobs: `federationlib reputation settle`, which applies the reputation of completed days, `federationlib maintenance`, which
+does nothing if maintenance is disabled (`FEDERATION_MAINTENANCE_ENABLED`), and `federationlib bayesian sync`, which
+teaches BayesianServer the evidence classifications it missed (eg; while it was restarting). Jobs run with the environment of the container
+(so they use the same configuration as the server), with their output in the container logs, and a job does not
+start again while its previous run is still running.
+
+To run other jobs, mount a crontab and set `CRONTAB` to its path, it replaces the bundled crontab so include the
+maintenance and reputation jobs if they should keep running. Running jobs with `nice`/`ionice` keeps them from slowing down the web
+server:
+
+```yaml
+volumes:
+  - ./crontab:/etc/federation/custom_crontab:ro
+environment:
+  - CRONTAB=/etc/federation/custom_crontab
+```
+
+```cron
+0 * * * * nice -n 10 ionice -c3 /usr/local/bin/federationlib maintenance
+15 * * * * nice -n 10 /usr/local/bin/federationlib reputation settle
+*/15 * * * * nice -n 10 ionice -c3 /usr/local/bin/my-plugin-job
+```
+
+### BayesianServer Memory
+
+The bundled BayesianServer runs with a maximum heap of 4 GB by default, the most memory its model and training data
+can use. To give it more (or less), set `BAYESIAN_MAX_MEMORY` on the container to a size with a `k`, `m`, `g` or `t`
+suffix, or to a percentage of the memory available to the container, and restart it:
+
+```yaml
+services:
+  app:
+    environment:
+      - BAYESIAN_MAX_MEMORY=16g   # or eg; 16384m, or 50% of the container's memory
+```
+
+With a percentage, the memory available to the container is its memory limit (eg; `deploy.resources.limits.memory`
+or `docker run --memory`), or the memory of the host if it has none. The container does not start if the value is
+invalid. The current maximum heap is the `available_memory_bytes` of BayesianServer's diagnostics:
+
+```shell
+docker exec federation curl -s localhost:6380/ | jq '.server.available_memory_bytes, .server.current_memory_bytes'
+```
+
+### BayesianServer Embeddings
+
+Setting `BAYESIAN_EMBEDDINGS=true` adds a sentence embedding model
+([multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small)) to the bundled BayesianServer: its
+classifier is averaged with the word and character features, so spam is recognized in other words and languages. The
+model (about 490 MB) is downloaded on the first start into the `embedding` directory of the Bayesian model volume, from
+`BAYESIAN_EMBEDDING_URL` (default `https://huggingface.co/intfloat/multilingual-e5-small/resolve/main/onnx`, which holds
+`model.onnx` and `tokenizer.json`). If the download fails the container starts without it and tries again on the next
+start. The model is retrained with the embeddings on the first start, which takes longer than usual.
+
+The model uses about 1 GB of memory outside BayesianServer's heap (`BAYESIAN_MAX_MEMORY`) and a few milliseconds of CPU
+for every classified or newly learned message.
+
+```yaml
+services:
+  app:
+    environment:
+      - BAYESIAN_EMBEDDINGS=true
+```
+
+### BayesianServer Placeholder Rules
+
+The bundled BayesianServer replaces links, mentions, phone numbers, prices, numbers and emoji with placeholder words
+before learning or classifying a message (`--placeholders`). The image adds rules for Telegram links
+([`bayesian_recovery/placeholder_rules.json`](bayesian_recovery/placeholder_rules.json)): invites become `xtginvitex`
+and other Telegram links `xtglinkx`. `BAYESIAN_PLACEHOLDER_RULES` replaces them with another rules file (eg; a mounted
+file with the links of another platform, see BayesianServer's `--placeholder-rules`), or `none` uses BayesianServer's
+generic rules only. Changing the rules retrains the model on the next start.
+
+### Disabling Bayesian Classification
+
+The docker image classifies content with the bundled BayesianServer and BayesianPlugin by default. Setting
+`BAYESIAN_DISABLED=true` on the container (`true`, `1`, `yes` or `on`, default `false`) disables everything related to
+it:
+
+ - BayesianServer is not started, neither as a service nor temporarily by `federationlib init`, and the healthcheck
+   doesn't check it
+ - BayesianPlugin is not enabled, even if it's listed in `FEDERATION_PLUGINS`
+ - The Bayesian model volume (`/var/www/bayesian_model`) is left untouched and the model is not checked
+   (`FEDERATION_BAYESIAN_MODEL_ENABLED` is set to `false`)
+
+```yaml
+services:
+  app:
+    environment:
+      - BAYESIAN_DISABLED=true
+```
+
+The model and archive in the volume are kept, so removing the option (or setting it to `false`) brings Bayesian
+classification back with the model as it was. The container does not start if the value is not a boolean.
 
 ### Locally testing/development
 
@@ -285,20 +393,25 @@ with specification requirements.
 ### Command-Line Interface
 
 Deployments that do not use the bundled docker entrypoint can manage the server through the `federationlib` command-line
-utility, run `federationlib --help` for usage details and `federationlib --help <command>` for command-specific
-documentation.
+utility. Commands are written in the style of docker, `federationlib <command> [<arguments>...]`: run `federationlib help`
+for the list of commands and `federationlib help <command>` or `federationlib <command> --help` for the usage of one.
 
-| Command                                        | Description                                                                                      |
-|------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `federationlib init`                           | Initializes FederationLib's database schema and default operators, and checks the Bayesian model |
-| `federationlib create-operator`                | Creates a new operator with specified permissions                                                |
-| `federationlib edit-operator`                  | Edits an operator's permissions and status                                                       |
-| `federationlib get-operator`                   | Retrieves information about a specific operator by UUID                                          |
-| `federationlib list-operators`                 | Lists all operators with pagination support                                                      |
-| `federationlib delete-operator`                | Deletes an operator by UUID                                                                      |
-| `federationlib generate-operator-access-token` | Generates a new access token for an operator                                                     |
-| `federationlib list-audit`                     | Lists audit log entries                                                                          |
-| `federationlib maintenance`                    | Runs maintenance tasks to clean up expired records                                               |
+| Command                                             | Description                                                                                                                                                     |
+|-----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `federationlib init`                                | Initializes FederationLib's database schema and default operators, and checks the Bayesian model                                                                |
+| `federationlib operators ls`                        | Lists the operators (`--page`, `--limit`)                                                                                                                       |
+| `federationlib operators create <name>`             | Creates an operator and prints its access token (`--client`, `--management`, `--operator`, `--bot`, `--auto-assign-reports`, `--auto-assign-automated-reports`) |
+| `federationlib operators <uuid>`                    | Shows an operator (`inspect`)                                                                                                                                   |
+| `federationlib operators <uuid> set`                | Changes the permissions and configuration of an operator, eg; `set --bot true --client false`                                                                   |
+| `federationlib operators <uuid> enable` / `disable` | Enables or disables an operator                                                                                                                                 |
+| `federationlib operators <uuid> token`              | Generates a new access token for an operator, the previous one stops working                                                                                    |
+| `federationlib operators <uuid> rm`                 | Deletes an operator                                                                                                                                             |
+| `federationlib audit ls`                            | Lists audit log entries (`--page`, `--limit`, `--type`)                                                                                                         |
+| `federationlib reputation settle`                   | Applies the reputation of every completed day of activity, never twice (run hourly by the docker image)                                                         |
+| `federationlib maintenance`                         | Runs maintenance tasks to clean up expired records (`--archive <directory>`) and refresh the DNS details of domain entities                                     |
+| `federationlib bayesian sync`                       | Teaches BayesianServer the evidence classifications it missed since the last sync (`--full` for all)                                                            |
+
+The root and system operators cannot be modified from the command line.
 
 ## Configuration
 
@@ -308,207 +421,198 @@ Federated Database to be fine-tuned for different services/applications. Configu
 `configlib` command-line utility, modifying the configuration file or setting environment variables.
 
 
+Lists can be written as YAML lists or, for example in environment variables, as comma-separated values
+(`FEDERATION_PUBLIC=ENTITIES,EVIDENCE,BLACKLIST`). Maps can be written as YAML mappings or as comma-separated
+`KEY=VALUE` pairs (`FEDERATION_MAINTENANCE_RETENTION=EVIDENCE=1y,ENTITIES=off`). Durations are seconds, or a number with
+a unit: `30s`, `10m`, `12h`, `30d`, `2w` or `2y`.
+
+Configuration keys and environment variables of earlier releases are migrated automatically on start, with a warning in
+the log naming their replacement: keys stored in the configuration file are converted to the settings that replaced
+them (and removed from the file), and deprecated environment variables are converted on every start until renamed.
+
 ### Server configuration
 
-This section is used to configured how the server operates, dictating the permissions that is permitted for public use,
-where data is stored at, what limits should be applied.
+This section is used to configured how the server operates, dictating what is permitted for public use, where data is
+stored at and what limits should be applied.
 
 The production Docker image sets `display_errors = Off` and `display_startup_errors = Off`. PHP errors remain available
 to registered handlers such as LogLib2, but are not emitted into HTTP responses.
 
-| Name                                | Environment Variable                   | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                                                                           |
-|-------------------------------------|----------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------|
-| `server.base_url`                   | `FEDERATION_BASE_URL`                  | string   | `http://127.0.0.1:7000`                                                                                                                                                                       | Yes      | Base URL of the server                                                                                                |
-| `server.name`                       | `FEDERATION_NAME`                      | string   | `Federation Server`                                                                                                                                                                           | Yes      | Server display name                                                                                                   |
-| `server.access_token`               | `FEDERATION_ACCESS_TOKEN`              | string   | Randomly generated                                                                                                                                                                            | Yes      | Master access token for authentication                                                                                |
-| `server.max_upload_size`            | `FEDERATION_MAX_UPLOAD_SIZE`           | int      | `52428800` (50 MB)                                                                                                                                                                            | Yes      | Maximum allowed upload size in bytes                                                                                  |
-| `server.storage_path`               | `FEDERATION_STORAGE_PATH`              | string   | `/var/www/uploads`                                                                                                                                                                            | Yes      | Directory where uploaded files are stored                                                                             |
-| `server.list_audit_logs_max_items`  | `FEDERATION_LIST_AUDIT_LOGS_MAX_ITEMS` | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing audit logs                                                                        |
-| `server.list_entities_max_items`    | `FEDERATION_LIST_ENTITIES_MAX_ITEMS`   | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing entities                                                                          |
-| `server.list_operators_max_items`   | `FEDERATION_LIST_OPERATORS_MAX_ITEMS`  | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing operators                                                                         |
-| `server.list_evidence_max_items`    | `FEDERATION_LIST_EVIDENCE_MAX_ITEMS`   | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing evidence                                                                          |
-| `server.list_blacklist_max_items`   | `FEDERATION_LIST_BLACKLIST_MAX_ITEMS`  | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing blacklist                                                                         |
-| `server.list_attachments_max_items` | —                                      | int      | `100`                                                                                                                                                                                         | No       | Maximum items returned when listing file attachments                                                                  |
-| `server.list_reports_max_items`     | `FEDERATION_LIST_REPORTS_MAX_ITEMS`    | int      | `100`                                                                                                                                                                                         | Yes      | Maximum items returned when listing reports                                                                           |
-| `server.public_audit_logs`          | `FEDERATION_PUBLIC_AUDIT_LOGS`         | bool     | `true`                                                                                                                                                                                        | Yes      | Whether audit logs are publicly accessible                                                                            |
-| `server.public_audit_entries`       | —                                      | string[] | `["operator_created", "operator_deleted", "attachment_uploaded", "attachment_deleted", "evidence_submitted", "evidence_deleted", "entity_blacklisted", "entity_updated", "report_generated"]` | Yes      | List of audit log types publicly accessible                                                                           |
-| `server.public_evidence`            | `FEDERATION_PUBLIC_EVIDENCE`           | bool     | `true`                                                                                                                                                                                        | Yes      | Whether evidence records are publicly accessible                                                                      |
-| `server.public_blacklist`           | `FEDERATION_PUBLIC_BLACKLIST`          | bool     | `true`                                                                                                                                                                                        | Yes      | Whether blacklist records are publicly accessible                                                                     |
-| `server.public_entities`            | `FEDERATION_PUBLIC_ENTITIES`           | bool     | `true`                                                                                                                                                                                        | Yes      | Whether entity records are publicly accessible                                                                        |
-| `server.public_entity_metadata`     | `FEDERATION_PUBLIC_ENTITY_METADATA`    | bool     | `false`                                                                                                                                                                                       | Yes      | Whether entity metadata is publicly accessible to unauthenticated users                                               |
-| `server.public_reports`             | `FEDERATION_PUBLIC_REPORTS`            | bool     | `true`                                                                                                                                                                                        | Yes      | Whether reports are publicly accessible                                                                               |
-| `server.public_scan_content`        | `FEDERATION_PUBLIC_SCAN_CONTENT`       | bool     | `true`                                                                                                                                                                                        | Yes      | Whether scan content endpoint is publicly accessible                                                                  |
-| `server.public_query_entity`        | `FEDERATION_PUBLIC_QUERY_ENTITY`       | bool     | `true`                                                                                                                                                                                        | Yes      | Whether entity relationship queries are publicly accessible                                                           |
-| `server.min_blacklist_time`         | `FEDERATION_MIN_BLACKLIST_TIME`        | int      | `1800` (30 min)                                                                                                                                                                               | Yes      | Minimum allowed blacklist expiration time in seconds                                                                  |
-| `server.top_threats_limit`          | `FEDERATION_TOP_THREATS_LIMIT`         | int      | `25`                                                                                                                                                                                          | Yes      | Maximum number of top-threat entities to return                                                                       |
-| `server.allow_illegal_content`      | `FEDERATION_ALLOW_ILLEGAL_CONTENT`     | bool     | `true`                                                                                                                                                                                        | Yes      | Whether `ILLEGAL_CONTENT` reports are accepted; rejected with 403 if not                                              |
-| `server.link_subdomain_entities`    | `FEDERATION_LINK_SUBDOMAIN_ENTITIES`   | bool     | `true`                                                                                                                                                                                        | Yes      | Automatically link new subdomain host entities (e.g. `sub.example.com`) to their registrable domain entity as `CHILD` |
+| Name                             | Environment Variable                 | Type   | Default                                                                                      | Description                                                                                                              |
+|----------------------------------|--------------------------------------|--------|----------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| `server.base_url`                | `FEDERATION_BASE_URL`                | string | `http://127.0.0.1:7000`                                                                      | The base URL the server is served at                                                                                     |
+| `server.name`                    | `FEDERATION_NAME`                    | string | `Federation Server`                                                                          | The name of the server                                                                                                   |
+| `server.access_token`            | `FEDERATION_ACCESS_TOKEN`            | string | Randomly generated                                                                           | The root access token                                                                                                    |
+| `server.max_upload_size`         | `FEDERATION_MAX_UPLOAD_SIZE`         | int    | `52428800` (50 MB)                                                                           | The maximum size of an uploaded file in bytes                                                                            |
+| `server.storage_path`            | `FEDERATION_STORAGE_PATH`            | string | `/var/www/uploads`                                                                           | Where uploaded files are stored                                                                                          |
+| `server.max_page_size`           | `FEDERATION_MAX_PAGE_SIZE`           | int    | `100`                                                                                        | The maximum number of records a list returns, and its default page size                                                  |
+| `server.public`                  | `FEDERATION_PUBLIC`                  | list   | `AUDIT_LOGS`, `EVIDENCE`, `BLACKLIST`, `ENTITIES`, `REPORTS`, `SCAN_CONTENT`, `QUERY_ENTITY` | What is accessible without authentication, also `ENTITY_METADATA`, `SEARCH` (the global search) and `TELEPHONE_ENTITIES` |
+| `server.public_audit_entries`    | `FEDERATION_PUBLIC_AUDIT_ENTRIES`    | list   | The default public audit log types                                                           | The audit log entry types visible without authentication when `AUDIT_LOGS` is public                                     |
+| `server.top_threats_limit`       | `FEDERATION_TOP_THREATS_LIMIT`       | int    | `25`                                                                                         | The maximum number of entities returned by top threats                                                                   |
+| `server.min_blacklist_time`      | `FEDERATION_MIN_BLACKLIST_TIME`      | int    | `1800` (30 min)                                                                              | The shortest temporary blacklist in seconds                                                                              |
+| `server.allow_illegal_content`   | `FEDERATION_ALLOW_ILLEGAL_CONTENT`   | bool   | `true`                                                                                       | Whether reports of illegal content are accepted                                                                          |
+| `server.link_subdomain_entities` | `FEDERATION_LINK_SUBDOMAIN_ENTITIES` | bool   | `true`                                                                                       | Automatically link new subdomain host entities (e.g. `sub.example.com`) to their registrable domain entity as `CHILD`    |
 
+`TELEPHONE_ENTITIES` exposes telephone entities (`<number>@e164.arpa`) to unauthenticated requests like other entities;
+without it they are only returned to requests that already know the number.
+
+### Remote Retrieval Configuration
+
+The server can be made to retrieve URLs chosen by a requester: URL uploads of attachments, and URLs submitted for scanning,
+which FederationLib never retrieves itself but plugins may. Both are guarded against server-side request forgery the same
+way. DNS lookups of scanned names are a separate scanning setting (`scanning.dns_lookup_limit`).
+
+| Name                             | Environment Variable                        | Type     | Default | Description                                                                                                 |
+|----------------------------------|---------------------------------------------|----------|---------|-------------------------------------------------------------------------------------------------------------|
+| `remote_retrieval.uploads`       | `FEDERATION_REMOTE_RETRIEVAL_UPLOADS`       | bool     | `true`  | Whether attachments may be uploaded from a URL the server retrieves itself                                  |
+| `remote_retrieval.scans`         | `FEDERATION_REMOTE_RETRIEVAL_SCANS`         | bool     | `false` | Whether plugins may retrieve URLs submitted for scanning, a security risk: keep it disabled unless required |
+| `remote_retrieval.timeout`       | `FEDERATION_REMOTE_RETRIEVAL_TIMEOUT`       | duration | `30`    | The maximum time a retrieval may take                                                                       |
+| `remote_retrieval.allow_private` | `FEDERATION_REMOTE_RETRIEVAL_ALLOW_PRIVATE` | bool     | `false` | Whether retrievals may connect to private, loopback, link-local or reserved addresses                       |
 
 ### Scanning Configuration
 
 Scanning configuration section changes the scanning behavior when invoking the request path `/scan` to scan content.
 
-All score modifiers are configurable. Their configuration keys use the `modifier_` prefix, and each is consumed by
-`ScannedContent` when it calculates scan results. Override them with the corresponding environment variable.
+Every scanning rule (eg; `AUTHOR_BLACKLISTED`, `NAMED_ENTITY_BAD_REPUTATION`, `CLASSIFICATION_MALICIOUS`) has default
+points, consumed by `ScannedContent` when it calculates scan results; `scanning.modifiers` overrides the points of the
+rules it names, eg; `FEDERATION_SCANNING_MODIFIERS=AUTHOR_BLACKLISTED=-25,AUTHOR_WHITELISTED=15`. The risk score starts at
+`50` and is bounded by `0` and `100`, and reputation is bounded by `-1000` and `1000`, as OFD requires.
 
-| Name                                                            | Environment Variable                                                       | Default | Description                                 |
-|-----------------------------------------------------------------|----------------------------------------------------------------------------|--------:|---------------------------------------------|
-| `scanning.modifier_author_blacklisted`                          | `FEDERATION_SCANNING_MODIFIER_AUTHOR_BLACKLISTED`                          | `-20.0` | Blacklisted author                          |
-| `scanning.modifier_author_permanently_blacklisted`              | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PERMANENTLY_BLACKLISTED`              | `-35.0` | Permanently blacklisted author              |
-| `scanning.modifier_author_whitelisted`                          | `FEDERATION_SCANNING_MODIFIER_AUTHOR_WHITELISTED`                          |  `20.0` | Whitelisted author                          |
-| `scanning.modifier_author_good_reputation`                      | `FEDERATION_SCANNING_MODIFIER_AUTHOR_GOOD_REPUTATION`                      |  `20.0` | Author with good reputation                 |
-| `scanning.modifier_author_bad_reputation`                       | `FEDERATION_SCANNING_MODIFIER_AUTHOR_BAD_REPUTATION`                       | `-25.0` | Author with bad reputation                  |
-| `scanning.modifier_author_parent_blacklisted`                   | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BLACKLISTED`                   | `-15.0` | Blacklisted author parent                   |
-| `scanning.modifier_author_parent_permanently_blacklisted`       | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_PERMANENTLY_BLACKLISTED`       | `-25.0` | Permanently blacklisted author parent       |
-| `scanning.modifier_author_parent_whitelisted`                   | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_WHITELISTED`                   |  `12.0` | Whitelisted author parent                   |
-| `scanning.modifier_author_parent_good_reputation`               | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_GOOD_REPUTATION`               |  `10.0` | Author parent with good reputation          |
-| `scanning.modifier_author_parent_bad_reputation`                | `FEDERATION_SCANNING_MODIFIER_AUTHOR_PARENT_BAD_REPUTATION`                | `-12.0` | Author parent with bad reputation           |
-| `scanning.modifier_named_entity_blacklisted`                    | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BLACKLISTED`                    |  `-8.0` | Blacklisted named entity                    |
-| `scanning.modifier_named_entity_permanently_blacklisted`        | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PERMANENTLY_BLACKLISTED`        | `-13.0` | Permanently blacklisted named entity        |
-| `scanning.modifier_named_entity_whitelisted`                    | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_WHITELISTED`                    |   `8.0` | Whitelisted named entity                    |
-| `scanning.modifier_named_entity_good_reputation`                | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_GOOD_REPUTATION`                |   `5.0` | Named entity with good reputation           |
-| `scanning.modifier_named_entity_bad_reputation`                 | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_BAD_REPUTATION`                 | `-10.0` | Named entity with bad reputation            |
-| `scanning.modifier_named_entity_parent_blacklisted`             | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BLACKLISTED`             |  `-5.0` | Blacklisted named-entity parent             |
-| `scanning.modifier_named_entity_parent_permanently_blacklisted` | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED` |  `-8.0` | Permanently blacklisted named-entity parent |
-| `scanning.modifier_named_entity_parent_whitelisted`             | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_WHITELISTED`             |   `5.0` | Whitelisted named-entity parent             |
-| `scanning.modifier_named_entity_parent_good_reputation`         | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_GOOD_REPUTATION`         |   `3.0` | Named-entity parent with good reputation    |
-| `scanning.modifier_named_entity_parent_bad_reputation`          | `FEDERATION_SCANNING_MODIFIER_NAMED_ENTITY_PARENT_BAD_REPUTATION`          |  `-5.0` | Named-entity parent with bad reputation     |
-| `scanning.modifier_classification_normal`                       | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_NORMAL`                       |   `1.0` | Normal classification                       |
-| `scanning.modifier_classification_suspicious`                   | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_SUSPICIOUS`                   | `-10.0` | Suspicious classification                   |
-| `scanning.modifier_classification_malicious`                    | `FEDERATION_SCANNING_MODIFIER_CLASSIFICATION_MALICIOUS`                    | `-25.0` | Malicious classification                    |
+| Name                                      | Environment Variable                                 | Type     | Default                                       | Description                                                                                                                                |
+|-------------------------------------------|------------------------------------------------------|----------|-----------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `scanning.modifiers`                      | `FEDERATION_SCANNING_MODIFIERS`                      | map      | none                                          | Points of scanning rules that override their defaults, keyed by rule name                                                                  |
+| `scanning.auto_report`                    | `FEDERATION_SCANNING_AUTO_REPORT`                    | string   | `block`                                       | Which scans generate a report: `block` (the risk score reaches the block threshold), `caution` (it reaches the caution threshold) or `off` |
+| `scanning.action_block_threshold`         | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`         | float    | `80.0`                                        | The risk score from which `BLOCK_CONTENT` is suggested                                                                                     |
+| `scanning.action_caution_threshold`       | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`       | float    | `60.0`                                        | The risk score from which `CAUTION` is suggested                                                                                           |
+| `scanning.risk_score_scaling_factor`      | `FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR`      | float    | `2.3`                                         | Scan-result to risk-score scaling factor                                                                                                   |
+| `scanning.reputation_gain`                | `FEDERATION_SCANNING_REPUTATION_GAIN`                | int      | `10`                                          | Reputation gained for a day of normal activity, `0` to `10`, tapering above 500                                                            |
+| `scanning.reputation_loss`                | `FEDERATION_SCANNING_REPUTATION_LOSS`                | int      | `-5`                                          | Reputation lost by an author for a day with content that reached the block threshold, `0` only holds back the gain                         |
+| `scanning.mention_min_authors`            | `FEDERATION_SCANNING_MENTION_MIN_AUTHORS`            | int      | `3`                                           | Distinct authors that must mention an entity in normal content on a day for it to gain reputation                                          |
+| `scanning.report_reputation`              | `FEDERATION_SCANNING_REPORT_REPUTATION`              | map      | `NORMAL=1`, `SUSPICIOUS=-10`, `MALICIOUS=-20` | Reputation adjustment of the reported entity when a report is closed with each classification flag                                         |
+| `scanning.report_named_entity_reputation` | `FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION` | map/bool | `NORMAL=1`, `SUSPICIOUS=-5`, `MALICIOUS=-10`  | The same for every existing entity named in the report's evidence, `false` disables it                                                     |
+| `scanning.blacklist_reputation`           | `FEDERATION_SCANNING_BLACKLIST_REPUTATION`           | int      | `-50`                                         | Reputation adjustment of a blacklisted entity                                                                                              |
+| `scanning.blacklist_related_reputation`   | `FEDERATION_SCANNING_BLACKLIST_RELATED_REPUTATION`   | int      | `-10`                                         | Reputation adjustment of the entities directly related to a blacklisted entity                                                             |
+| `scanning.concerns`                       | `FEDERATION_SCANNING_CONCERNS`                       | list     | every incident type                           | Concerns (incident types) the server can assess, published as `concerns`                                                                   |
+| `scanning.default_concerns`               | `FEDERATION_SCANNING_DEFAULT_CONCERNS`               | list     | all except `ADVERTISING`, `TRACKING`          | Concerns assessed when a scan or entity query names none, published as `default_concerns`                                                  |
+| `scanning.dns_lookup_limit`               | `FEDERATION_SCANNING_DNS_LOOKUP_LIMIT`               | int      | `10`                                          | Maximum DNS lookups of `HOSTNAME`, `URL` and `WEB_PAGE` names per scan request, `0` disables DNS lookups                                   |
 
-| Name                                  | Environment Variable                             | Type  | Default | Description                                  |
-|---------------------------------------|--------------------------------------------------|-------|--------:|----------------------------------------------|
-| `scanning.auto_report`                | `FEDERATION_SCANNING_AUTO_REPORT`                | bool  |  `true` | Enable automatic report generation           |
-| `scanning.auto_report_threshold`      | `FEDERATION_SCANNING_AUTO_REPORT_THRESHOLD`      | float |  `80.0` | Risk score that triggers automatic reporting |
-| `scanning.auto_report_caution`        | `FEDERATION_SCANNING_AUTO_REPORT_CAUTION`        | bool  | `false` | Also report scans suggesting `CAUTION`       |
-| `scanning.action_block_threshold`     | `FEDERATION_SCANNING_ACTION_BLOCK_THRESHOLD`     | float |  `80.0` | Risk score that suggests blocking content    |
-| `scanning.action_caution_threshold`   | `FEDERATION_SCANNING_ACTION_CAUTION_THRESHOLD`   | float |  `60.0` | Risk score that suggests caution             |
-| `scanning.reputation_window_duration` | `FEDERATION_SCANNING_REPUTATION_WINDOW_DURATION` | int   |  `3600` | Reputation window duration in seconds        |
-| `scanning.reputation_gain`            | `FEDERATION_SCANNING_REPUTATION_GAIN`            | int   |     `1` | Reputation gained per clean activity window  |
-| `scanning.reputation_min_bound`       | `FEDERATION_SCANNING_REPUTATION_MIN_BOUND`       | int   | `-1000` | Minimum stored reputation                    |
-| `scanning.reputation_max_bound`       | `FEDERATION_SCANNING_REPUTATION_MAX_BOUND`       | int   |  `1000` | Maximum stored reputation                    |
-| `scanning.risk_score_neutral_point`   | `FEDERATION_SCANNING_RISK_SCORE_NEUTRAL_POINT`   | float |  `50.0` | Neutral risk score                           |
-| `scanning.risk_score_scaling_factor`  | `FEDERATION_SCANNING_RISK_SCORE_SCALING_FACTOR`  | float |   `2.3` | Scan-result to risk-score scaling factor     |
-| `scanning.risk_score_min_bound`       | `FEDERATION_SCANNING_RISK_SCORE_MIN_BOUND`       | float |   `0.0` | Minimum returned risk score                  |
-| `scanning.risk_score_max_bound`       | `FEDERATION_SCANNING_RISK_SCORE_MAX_BOUND`       | float | `100.0` | Maximum returned risk score                  |
+Reputation is built from scans by authenticated clients over time, never from anonymous scans. The activity of each
+entity is recorded per day (UTC), and every completed day is applied by `federationlib reputation settle` (run every hour
+by the docker image), at most one change per entity per day, so reputation rises gradually rather than per message:
+
+ - The author of scanned content gains `reputation_gain` for a day of normal content. A day with content that warranted
+   caution earns nothing, and a day with content that reached the block threshold costs it `reputation_loss`. A
+   blacklisted author earns nothing while the blacklist is in effect.
+ - An entity mentioned in scanned content, such as `youtube.com` in a shared link, gains `reputation_gain` for a day on
+   which at least `mention_min_authors` distinct authors mentioned it in normal content and none in content that warranted
+   caution. Requiring several authors keeps a single account from building up the reputation of a domain it promotes;
+   mentions never cost reputation.
+ - A gain also credits the parent of a `CHILD` entity for the day, eg; the registrable domain of a subdomain.
+ - Gains are full up to a reputation of 500 and taper towards 1000, so an entity active every day reaches 500 in about
+   two months and approaches 1000 much more slowly. Whitelisted entities are never adjusted.
+
+When Redis is enabled, the activity of each scan is buffered in Redis (one pipelined round trip, keys prefixed
+`reputation_activity:`) instead of being written to the database, and `federationlib reputation settle` writes the
+buffer to the database in batches before it settles. Buffered activity expires after 7 days if it is never settled, so
+the Redis instance should not evict keys under memory pressure (`maxmemory-policy noeviction` or a `volatile-*` policy
+with enough memory) for activity not to be lost. Without Redis, or when it fails, scans write their activity directly.
 
 When a report is closed with a classification flag, the reputation of the reported entity is adjusted, and optionally
 the reputation of every existing entity mentioned in the report's evidence (resolved the same way `/scan` resolves
 named entities). Positive adjustments are clamped to `0`–`10` and negative adjustments to `0` or below.
 
-| Name                                                  | Environment Variable                                             | Type | Default | Description                                                |
-|-------------------------------------------------------|------------------------------------------------------------------|------|--------:|------------------------------------------------------------|
-| `scanning.report_reputation_normal`                   | `FEDERATION_SCANNING_REPORT_REPUTATION_NORMAL`                   | int  |     `1` | Reported entity adjustment for a `NORMAL` report           |
-| `scanning.report_reputation_suspicious`               | `FEDERATION_SCANNING_REPORT_REPUTATION_SUSPICIOUS`               | int  |   `-10` | Reported entity adjustment for a `SUSPICIOUS` report       |
-| `scanning.report_reputation_malicious`                | `FEDERATION_SCANNING_REPORT_REPUTATION_MALICIOUS`                | int  |   `-20` | Reported entity adjustment for a `MALICIOUS` report        |
-| `scanning.report_named_entity_reputation`             | `FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION`             | bool |  `true` | Whether entities mentioned in the evidence are adjusted    |
-| `scanning.report_named_entity_reputation_normal`      | `FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_NORMAL`      | int  |     `2` | Mentioned entity adjustment for a `NORMAL` report          |
-| `scanning.report_named_entity_reputation_suspicious`  | `FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_SUSPICIOUS`  | int  |    `-5` | Mentioned entity adjustment for a `SUSPICIOUS` report      |
-| `scanning.report_named_entity_reputation_malicious`   | `FEDERATION_SCANNING_REPORT_NAMED_ENTITY_REPUTATION_MALICIOUS`   | int  |   `-10` | Mentioned entity adjustment for a `MALICIOUS` report       |
-
 When an entity is blacklisted, its reputation is lowered, and so is the reputation of the entities directly related to
-it: the entity it references as its relationship target, and the entities that reference it. Both adjustments are
-clamped to `0` or below; `0` disables the adjustment.
+it through an `ALTERNATIVE` or `CHILD` relationship, in either direction: those that share its actor or depend on it. A
+`PROXY` relays for many actors, so it is neither lowered by nor lowers its target. Both adjustments are clamped to `0` or
+below; `0` disables the adjustment.
 
-| Name                                    | Environment Variable                               | Type | Default | Description                                 |
-|-----------------------------------------|----------------------------------------------------|------|--------:|---------------------------------------------|
-| `scanning.blacklist_reputation`         | `FEDERATION_SCANNING_BLACKLIST_REPUTATION`         | int  |   `-50` | Blacklisted entity adjustment               |
-| `scanning.blacklist_related_reputation` | `FEDERATION_SCANNING_BLACKLIST_RELATED_REPUTATION` | int  |   `-10` | Adjustment for each directly related entity |
-
+`collects_public_scan_content` is published as `true` when scanning is public and `auto_report` is not `off`, since
+automatic reports record the scanned content as evidence, or when a plugin declares that it stores scanned content
+(see [PLUGINS.md](PLUGINS.md)).
 
 ### Database Configuration
 
-This configuration section is responsible for configuring the database connection to MariaDB
+This configuration section is responsible for configuring the database connection to MariaDB, the character set is
+always `utf8mb4`.
 
-| Name                                            | Environment Variable                                         | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                 |
-|-------------------------------------------------|--------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------|
-| `database.host`                                 | `FEDERATION_DATABASE_HOST`                                   | string   | `127.0.0.1`                                                                                                                                                                                   | Yes      | Database server host                                        |
-| `database.port`                                 | `FEDERATION_DATABASE_PORT`                                   | int      | `3306`                                                                                                                                                                                        | Yes      | Database server port                                        |
-| `database.username`                             | `FEDERATION_DATABASE_USERNAME`                               | string   | `root`                                                                                                                                                                                        | Yes      | Database username                                           |
-| `database.password`                             | `FEDERATION_DATABASE_PASSWORD`                               | string   | `root`                                                                                                                                                                                        | Yes      | Database password                                           |
-| `database.name`                                 | `FEDERATION_DATABASE_NAME`                                   | string   | `federation`                                                                                                                                                                                  | Yes      | Database name                                               |
-| `database.charset`                              | `FEDERATION_DATABASE_CHARSET`                                | string   | `utf8mb4`                                                                                                                                                                                     | Yes      | Database connection charset                                 |
-| `database.collation`                            | `FEDERATION_DATABASE_COLLATION`                              | string   | `utf8mb4_unicode_ci`                                                                                                                                                                          | Yes      | Database collation                                          |
+| Name                | Environment Variable           | Type   | Default      | Description            |
+|---------------------|--------------------------------|--------|--------------|------------------------|
+| `database.host`     | `FEDERATION_DATABASE_HOST`     | string | `127.0.0.1`  | The database host      |
+| `database.port`     | `FEDERATION_DATABASE_PORT`     | int    | `3306`       | The database port      |
+| `database.username` | `FEDERATION_DATABASE_USERNAME` | string | `root`       | The database username  |
+| `database.password` | `FEDERATION_DATABASE_PASSWORD` | string | `root`       | The database password  |
+| `database.name`     | `FEDERATION_DATABASE_NAME`     | string | `federation` | The database name      |
 
 ### Redis/Caching configuration
 
 This configuration section is responsible for configuring the redis connection and object caching to improve server-side
-response performance
+response performance. `redis.record_cache` sets, per record type (`OPERATOR`, `ENTITY`, `FILE_ATTACHMENT`, `EVIDENCE`,
+`AUDIT_LOG`, `BLACKLIST`, `REPORT`), the maximum number of cached records and their TTL, as `{limit: 5000, ttl: 600}` or
+`ENTITY=5000/600`; a limit of `0` disables the cache of the record type. Record types that are not configured keep their
+defaults.
 
-| Name                                            | Environment Variable                                         | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                 |
-|-------------------------------------------------|--------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------|
-| `redis.enabled`                                 | `FEDERATION_REDIS_ENABLED`                                   | bool     | `false`                                                                                                                                                                                       | Yes      | Whether Redis caching is enabled                            |
-| `redis.host`                                    | `FEDERATION_REDIS_HOST`                                      | string   | `127.0.0.1`                                                                                                                                                                                   | Yes      | Redis server host                                           |
-| `redis.port`                                    | `FEDERATION_REDIS_PORT`                                      | int      | `6379`                                                                                                                                                                                        | Yes      | Redis server port                                           |
-| `redis.password`                                | `FEDERATION_REDIS_PASSWORD`                                  | string   | `null`                                                                                                                                                                                        | Yes      | Redis password (null for no auth)                           |
-| `redis.database`                                | `FEDERATION_REDIS_DATABASE`                                  | int      | `0`                                                                                                                                                                                           | Yes      | Redis database index                                        |
-| `redis.throw_on_errors`                         | `FEDERATION_CACHE_THROW_ON_ERRORS`                           | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to throw exceptions on Redis errors                 |
-| `redis.pre_cache_enabled`                       | `FEDERATION_PRE_CACHE_ENABLED`                               | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to pre-cache objects before retrieval               |
-| `redis.operator_cache_enabled`                  | `FEDERATION_OPERATOR_CACHE_ENABLED`                          | bool     | `true`                                                                                                                                                                                        | Yes      | Whether operator cache is enabled                           |
-| `redis.operator_cache_limit`                    | `FEDERATION_OPERATOR_CACHE_LIMIT`                            | int      | `1000`                                                                                                                                                                                        | Yes      | Maximum number of operators to cache                        |
-| `redis.operator_cache_ttl`                      | `FEDERATION_OPERATOR_CACHE_TTL`                              | int      | `600` (10 min)                                                                                                                                                                                | Yes      | TTL for operator cache entries in seconds                   |
-| `redis.entity_cache_enabled`                    | `FEDERATION_ENTITY_CACHE_ENABLED`                            | bool     | `true`                                                                                                                                                                                        | Yes      | Whether entity cache is enabled                             |
-| `redis.entity_cache_limit`                      | `FEDERATION_ENTITY_CACHE_LIMIT`                              | int      | `5000`                                                                                                                                                                                        | Yes      | Maximum number of entities to cache                         |
-| `redis.entity_cache_ttl`                        | `FEDERATION_ENTITY_CACHE_TTL`                                | int      | `600` (10 min)                                                                                                                                                                                | Yes      | TTL for entity cache entries in seconds                     |
-| `redis.file_attachment_cache_enabled`           | `FEDERATION_FILE_ATTACHMENT_CACHE_ENABLED`                   | bool     | `true`                                                                                                                                                                                        | Yes      | Whether file attachment cache is enabled                    |
-| `redis.file_attachment_cache_limit`             | `FEDERATION_FILE_ATTACHMENT_CACHE_LIMIT`                     | int      | `2000`                                                                                                                                                                                        | Yes      | Maximum number of file attachments to cache                 |
-| `redis.file_attachment_cache_ttl`               | `FEDERATION_FILE_ATTACHMENT_CACHE_TTL`                       | int      | `600` (10 min)                                                                                                                                                                                | Yes      | TTL for file attachment cache entries in seconds            |
-| `redis.evidence_cache_enabled`                  | `FEDERATION_EVIDENCE_CACHE_ENABLED`                          | bool     | `true`                                                                                                                                                                                        | Yes      | Whether evidence cache is enabled                           |
-| `redis.evidence_cache_limit`                    | `FEDERATION_EVIDENCE_CACHE_LIMIT`                            | int      | `3000`                                                                                                                                                                                        | Yes      | Maximum number of evidence records to cache                 |
-| `redis.evidence_cache_ttl`                      | `FEDERATION_EVIDENCE_CACHE_TTL`                              | int      | `600` (10 min)                                                                                                                                                                                | Yes      | TTL for evidence cache entries in seconds                   |
-| `redis.report_cache_enabled`                    | `FEDERATION_REPORT_CACHE_ENABLED`                            | bool     | `true`                                                                                                                                                                                        | Yes      | Whether report cache is enabled                             |
-| `redis.report_cache_limit`                      | `FEDERATION_REPORT_CACHE_LIMIT`                              | int      | `1000`                                                                                                                                                                                        | Yes      | Maximum number of reports to cache                          |
-| `redis.report_cache_ttl`                        | `FEDERATION_REPORT_CACHE_TTL`                                | int      | `600` (10 min)                                                                                                                                                                                | Yes      | TTL for report cache entries in seconds                     |
-| `redis.audit_log_cache_enabled`                 | —                                                            | bool     | `true`                                                                                                                                                                                        | No       | Whether audit log cache is enabled                          |
-| `redis.audit_log_cache_limit`                   | —                                                            | int      | `1000`                                                                                                                                                                                        | No       | Maximum number of audit log records to cache                |
-| `redis.audit_log_cache_ttl`                     | —                                                            | int      | `600` (10 min)                                                                                                                                                                                | No       | TTL for audit log cache entries in seconds                  |
-| `redis.blacklist_cache_enabled`                 | —                                                            | bool     | `true`                                                                                                                                                                                        | No       | Whether blacklist cache is enabled                          |
-| `redis.blacklist_cache_limit`                   | —                                                            | int      | `3000`                                                                                                                                                                                        | No       | Maximum number of blacklist records to cache                |
-| `redis.blacklist_cache_ttl`                     | —                                                            | int      | `600` (10 min)                                                                                                                                                                                | No       | TTL for blacklist cache entries in seconds                  |
-| `redis.search_cache_ttl`                        | `FEDERATION_SEARCH_CACHE_TTL`                                | int      | `60`                                                                                                                                                                                          | Yes      | TTL for cached search/listing result sets in seconds        |
+| Name                      | Environment Variable               | Type     | Default                                                                                 | Description                                                    |
+|---------------------------|------------------------------------|----------|-----------------------------------------------------------------------------------------|----------------------------------------------------------------|
+| `redis.enabled`           | `FEDERATION_REDIS_ENABLED`         | bool     | `false`                                                                                 | Whether the cache layer is enabled                             |
+| `redis.host`              | `FEDERATION_REDIS_HOST`            | string   | `127.0.0.1`                                                                             | The Redis host                                                 |
+| `redis.port`              | `FEDERATION_REDIS_PORT`            | int      | `6379`                                                                                  | The Redis port                                                 |
+| `redis.password`          | `FEDERATION_REDIS_PASSWORD`        | string   | none                                                                                    | The Redis password                                             |
+| `redis.database`          | `FEDERATION_REDIS_DATABASE`        | int      | `0`                                                                                     | The Redis database index                                       |
+| `redis.throw_on_errors`   | `FEDERATION_CACHE_THROW_ON_ERRORS` | bool     | `true`                                                                                  | Whether cache errors fail the request rather than being logged |
+| `redis.pre_cache_enabled` | `FEDERATION_PRE_CACHE_ENABLED`     | bool     | `true`                                                                                  | Whether records are cached before they are requested           |
+| `redis.record_cache`      | `FEDERATION_REDIS_RECORD_CACHE`    | map      | entities 5000, evidence and blacklist 3000, file attachments 2000, others 1000; TTL 600 | The cache limit and TTL of each record type                    |
+| `redis.search_cache_ttl`  | `FEDERATION_SEARCH_CACHE_TTL`      | duration | `60`                                                                                    | How long cached search and listing results live                |
 
 ### Search Configuration
 
-This configuration is responsible for configuring the global search functionality, dictating which resource types
-are searchable and whether unauthenticated users are allowed to perform searches.
+This configuration is responsible for configuring the global search functionality, dictating which resource types are
+searchable. Whether unauthenticated users can use the global search is `SEARCH` in `server.public`.
 
-| Name                        | Environment Variable                   | Type | Default Value | Required | Description                                                                                                                                                 |
-|-----------------------------|----------------------------------------|------|---------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `search.enabled`            | `FEDERATION_SEARCH_ENABLED`            | bool | `true`        | Yes      | Whether the search functionality is enabled                                                                                                                 |
-| `search.public_search`      | `FEDERATION_SEARCH_PUBLIC`             | bool | `false`       | Yes      | Whether search is publicly accessible without authentication                                                                                                |
-| `search.max_limit`          | `FEDERATION_SEARCH_MAX_LIMIT`          | int  | `50`          | Yes      | Maximum number of results returned per resource type                                                                                                        |
-| `search.extended_search`    | `FEDERATION_SEARCH_EXTENDED`           | bool | `true`        | Yes      | Whether searches by authenticated operators also match extended record members such as entity metadata (unindexed, never used for unauthenticated requests) |
-| `search.enable_entities`    | `FEDERATION_SEARCH_ENABLE_ENTITIES`    | bool | `true`        | Yes      | Whether entity records are included in search results                                                                                                       |
-| `search.enable_evidence`    | `FEDERATION_SEARCH_ENABLE_EVIDENCE`    | bool | `true`        | Yes      | Whether evidence records are included in search results                                                                                                     |
-| `search.enable_blacklist`   | `FEDERATION_SEARCH_ENABLE_BLACKLIST`   | bool | `true`        | Yes      | Whether blacklist records are included in search results                                                                                                    |
-| `search.enable_reports`     | `FEDERATION_SEARCH_ENABLE_REPORTS`     | bool | `true`        | Yes      | Whether report records are included in search results                                                                                                       |
-| `search.enable_attachments` | `FEDERATION_SEARCH_ENABLE_ATTACHMENTS` | bool | `false`       | Yes      | Whether file attachment records are included in search results                                                                                              |
-| `search.enable_audit_logs`  | `FEDERATION_SEARCH_ENABLE_AUDIT_LOGS`  | bool | `true`        | Yes      | Whether audit log entries are included in search results                                                                                                    |
-| `search.enable_operators`   | `FEDERATION_SEARCH_ENABLE_OPERATORS`   | bool | `true`        | Yes      | Whether operator records are included in search results                                                                                                     |
+| Name                     | Environment Variable          | Type | Default                                                              | Description                                                                   |
+|--------------------------|-------------------------------|------|----------------------------------------------------------------------|-------------------------------------------------------------------------------|
+| `search.types`           | `FEDERATION_SEARCH_TYPES`     | list | `ENTITY`, `EVIDENCE`, `BLACKLIST`, `REPORT`, `AUDIT_LOG`, `OPERATOR` | The searchable record types, also `ATTACHMENT`; an empty list disables search |
+| `search.max_limit`       | `FEDERATION_SEARCH_MAX_LIMIT` | int  | `50`                                                                 | The maximum number of search results per record type                          |
+| `search.extended_search` | `FEDERATION_SEARCH_EXTENDED`  | bool | `true`                                                               | Whether authenticated operators also search columns that are not indexed      |
 
 ### Maintenance Configuration
 
-This configuration is responsible for configuring how the maintenance command operates, dictating how long database
-records should be retained before they are considered eligible for cleanup
+This configuration is responsible for configuring how the maintenance command (`federationlib maintenance`, run every
+hour by the docker image, see [Scheduled Jobs](#scheduled-jobs)) operates, dictating how long database records should
+be retained before they are considered eligible for cleanup. `maintenance.retention` sets the retention of each record
+type (`AUDIT_LOGS`, `BLACKLIST`, `EVIDENCE`, `REPORTS`, `FILE_ATTACHMENTS`, `ENTITIES`) as a duration, or `off` to keep
+the records forever; record types that are not configured keep their defaults:
 
-| Name                                            | Environment Variable                                         | Type     | Default Value                                                                                                                                                                                 | Required | Description                                                 |
-|-------------------------------------------------|--------------------------------------------------------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------|
-| `maintenance.enabled`                           | `FEDERATION_MAINTENANCE_ENABLED`                             | bool     | `true`                                                                                                                                                                                        | Yes      | Whether maintenance tasks are enabled                       |
-| `maintenance.clean_audit_logs`                  | `FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS`                    | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to clean expired audit logs                         |
-| `maintenance.clean_audit_logs_ttl`              | `FEDERATION_MAINTENANCE_CLEAN_AUDIT_LOGS_TTL`                | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for audit logs before cleanup in seconds                |
-| `maintenance.clean_blacklist`                   | `FEDERATION_MAINTENANCE_CLEAN_BLACKLIST`                     | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to clean expired blacklist records                  |
-| `maintenance.clean_blacklist_ttl`               | `FEDERATION_MAINTENANCE_CLEAN_BLACKLIST_TTL`                 | int      | `31536000` (1 year)                                                                                                                                                                           | Yes      | TTL for blacklist records before cleanup in seconds         |
-| `maintenance.clean_evidence`                    | `FEDERATION_MAINTENANCE_CLEAN_EVIDENCE`                      | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to clean expired evidence records                   |
-| `maintenance.clean_evidence_ttl`                | `FEDERATION_MAINTENANCE_CLEAN_EVIDENCE_TTL`                  | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for evidence records before cleanup in seconds          |
-| `maintenance.clean_reports`                     | `FEDERATION_MAINTENANCE_CLEAN_REPORTS`                       | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to clean expired reports                            |
-| `maintenance.clean_reports_ttl`                 | `FEDERATION_MAINTENANCE_CLEAN_REPORTS_TTL`                   | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for reports before cleanup in seconds                   |
-| `maintenance.clean_file_attachments`            | `FEDERATION_MAINTENANCE_CLEAN_FILE_ATTACHMENTS`              | bool     | `true`                                                                                                                                                                                        | Yes      | Whether to clean expired file attachments                   |
-| `maintenance.clean_file_attachments_ttl`        | `FEDERATION_MAINTENANCE_CLEAN_FILE_ATTACHMENTS_TTL`          | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for file attachments before cleanup in seconds          |
-| `maintenance.clean_entities`                    | `FEDERATION_MAINTENANCE_CLEAN_ENTITIES`                      | bool     | `false`                                                                                                                                                                                       | Yes      | Whether to clean expired entity records                     |
-| `maintenance.clean_entities_ttl`                | `FEDERATION_MAINTENANCE_CLEAN_ENTITIES_TTL`                  | int      | `63072000` (2 years)                                                                                                                                                                          | Yes      | TTL for entity records before cleanup in seconds            |
+ - File attachments and evidence are removed when they were created before their retention, along with their stored
+   files. Removing evidence also removes its file attachments.
+ - Only closed reports are removed, when they were last changed (eg; closed) before the retention. Open reports are kept.
+ - Only blacklist records no longer in effect are removed: expired records when they expired before the retention, and
+   lifted records when they were created before the retention. Permanent and unexpired blacklist records are kept.
+ - Entities are only removed when they were created, last updated and their reputation last changed before the
+   retention, and they have no evidence, reports or blacklist records left. Whitelisted entities are kept.
+ - Audit log entries are removed when they were created before the retention.
 
+Records are removed in batches without dispatching record changes to plugins, `--archive <directory>` saves them as
+CSV files before they are removed.
+
+After cleaning, maintenance resolves the domain entities (host entities whose host is a DNS name, not an IP address or a
+telephone number) whose DNS details are missing or were resolved longer than `maintenance.dns_refresh` ago, and stores
+the details in their metadata, at most 500 per run (those never resolved first, the rest on the next runs):
+
+| Metadata key                                         | Value                                                                                               |
+|------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `dns_resolved`                                       | When the name was last resolved (Unix timestamp)                                                    |
+| `dns_status`                                         | `RESOLVED`, `NO_RECORDS` (none of the record types exist) or `FAILED` (eg; the name does not exist) |
+| `dns_a`, `dns_aaaa`, `dns_cname`, `dns_mx`, `dns_ns` | The records of each type, comma-separated (MX as `<priority> <host>`), absent when there are none   |
+
+The other metadata keys of the entity are kept. The details are maintained by the server, so refreshing them neither
+changes the `updated` timestamp of the entity nor postpones its removal by maintenance. Entity metadata is only public
+when `ENTITY_METADATA` is in `server.public`.
+
+| Name                      | Environment Variable                 | Type     | Default                                                      | Description                                                                                           |
+|---------------------------|--------------------------------------|----------|--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+| `maintenance.enabled`     | `FEDERATION_MAINTENANCE_ENABLED`     | bool     | `true`                                                       | Whether `federationlib maintenance` runs                                                              |
+| `maintenance.retention`   | `FEDERATION_MAINTENANCE_RETENTION`   | map      | `BLACKLIST=1y`, `ENTITIES=off`, every other record type `2y` | How long records of each type are kept                                                                |
+| `maintenance.dns_refresh` | `FEDERATION_MAINTENANCE_DNS_REFRESH` | duration | `90d`                                                        | How long the DNS details of a domain entity are kept before it is resolved again, `off` disables them |
 
 ### Plugins Configuration
 
