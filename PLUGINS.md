@@ -214,6 +214,10 @@ build_configurations:
       federationlib: *federationlib
 ```
 
+A plugin that stores the content submitted for scanning, or records derived from it, also sets
+`collects_scan_content: true` in the `federationlib` option; the server then publishes `collects_public_scan_content` as
+`true` whenever content scanning is public, so that clients know what they submit may be kept.
+
 Package options belong to a single build configuration, so every build configuration that may be installed needs the
 `federationlib` option. The YAML anchor (`&federationlib`) and alias (`*federationlib`) avoid repeating it. Classes may
 be written as `\MyPlugin\Foo`, `MyPlugin\Foo` or `\MyPlugin\Foo::class`.
