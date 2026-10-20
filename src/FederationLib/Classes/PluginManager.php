@@ -13,16 +13,21 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\AuditLogEventHandlerInterface;
     use FederationLib\Interfaces\ContentScanEventHandlerInterface;
+    use FederationLib\Interfaces\MaintenanceEventHandlerInterface;
     use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
     use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
+    use FederationLib\Interfaces\StartupEventHandlerInterface;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Objects\AuditLog;
+    use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\Plugin;
     use FederationLib\Objects\Plugin\ContentScan;
     use FederationLib\Objects\Plugin\EntityQuery;
+    use FederationLib\Objects\Plugin\Maintenance;
     use FederationLib\Objects\Plugin\MatchedRequestHandler;
     use FederationLib\Objects\Plugin\PluginRoute;
     use FederationLib\Objects\Plugin\RecordChange;
+    use FederationLib\Objects\Plugin\Startup;
     use Throwable;
 
     class PluginManager
@@ -321,6 +326,92 @@
         }
 
         /**
+         * Dispatches the start of the server to the STARTUP event handlers of the loaded plugins, in the order the
+         * plugins are configured. A failing event handler fails the start: it is logged, the remaining event handlers
+         * are not executed and false is returned, so that the server does not start with a plugin that could not be set up.
+         *
+         * @param Startup $startup The start of the server
+         * @return bool True if every event handler succeeded
+         */
+        public static function dispatchStartup(Startup $startup): bool
+        {
+            try
+            {
+                $plugins = self::loadPlugins();
+            }
+            catch(PluginException $e)
+            {
+                Logger::log()->critical('Unable to dispatch the start of the server to the plugins: ' . $e->getMessage(), $e);
+                return false;
+            }
+
+            foreach($plugins as $plugin)
+            {
+                foreach($plugin->getEventHandlers(EventType::STARTUP) as $definition)
+                {
+                    Logger::log()->debug(sprintf('Executing STARTUP event handler %s of plugin %s', $definition->getClass(), $plugin->getPackage()));
+
+                    try
+                    {
+                        /** @var StartupEventHandlerInterface $class */
+                        $class = $definition->getClass();
+                        $class::handleStartup($startup);
+                    }
+                    catch(Throwable $e)
+                    {
+                        Logger::log()->critical(sprintf('The STARTUP event handler %s of plugin %s failed: %s', $definition->getClass(), $plugin->getPackage(), $e->getMessage()), $e);
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        /**
+         * Dispatches a maintenance run to the MAINTENANCE event handlers of the loaded plugins, in the order the plugins
+         * are configured. A failing event handler is logged and the remaining event handlers are still executed.
+         *
+         * @param Maintenance $maintenance The maintenance run
+         * @return bool True if every event handler succeeded
+         */
+        public static function dispatchMaintenance(Maintenance $maintenance): bool
+        {
+            try
+            {
+                $plugins = self::loadPlugins();
+            }
+            catch(PluginException $e)
+            {
+                Logger::log()->error('Unable to dispatch the maintenance run to the plugins: ' . $e->getMessage(), $e);
+                return false;
+            }
+
+            $succeeded = true;
+            foreach($plugins as $plugin)
+            {
+                foreach($plugin->getEventHandlers(EventType::MAINTENANCE) as $definition)
+                {
+                    Logger::log()->debug(sprintf('Executing MAINTENANCE event handler %s of plugin %s', $definition->getClass(), $plugin->getPackage()));
+
+                    try
+                    {
+                        /** @var MaintenanceEventHandlerInterface $class */
+                        $class = $definition->getClass();
+                        $class::handleMaintenance($maintenance);
+                    }
+                    catch(Throwable $e)
+                    {
+                        Logger::log()->error(sprintf('The MAINTENANCE event handler %s of plugin %s failed: %s', $definition->getClass(), $plugin->getPackage(), $e->getMessage()), $e);
+                        $succeeded = false;
+                    }
+                }
+            }
+
+            return $succeeded;
+        }
+
+        /**
          * Dispatches a change that was written to the database to the RECORD_CHANGE event handlers of the loaded
          * plugins, in the order the plugins are configured. The record is only retrieved when an event handler asks
          * for it, and is shared between the event handlers. Event handlers can never affect the change or the
@@ -329,9 +420,11 @@
          *
          * @param RecordChangeType $type The type of the change
          * @param string $uuid The UUID of the changed record
+         * @param EvidenceRecord|null $deletedRecord For a deletion, the record as it was before it was deleted, so
+         *                                           handlers can act on what was removed (eg; forget its content)
          * @return void
          */
-        public static function dispatchRecordChange(RecordChangeType $type, string $uuid): void
+        public static function dispatchRecordChange(RecordChangeType $type, string $uuid, ?EvidenceRecord $deletedRecord=null): void
         {
             if(self::$dispatchingRecordChange)
             {
@@ -349,7 +442,7 @@
                 return;
             }
 
-            $change = new RecordChange($type, $uuid);
+            $change = new RecordChange($type, $uuid, $type->isDeletion() ? $deletedRecord : null);
             self::$dispatchingRecordChange = true;
 
             try
