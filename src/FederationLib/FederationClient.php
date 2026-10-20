@@ -2139,27 +2139,26 @@
             );
         }
 
-        // BLACKLIST METHODS
-
         /**
-         * Blacklists an entity with the given identifier using the supporting report and type.
+         * Blacklists an entity with the given identifier and type, optionally referencing the report supporting the
+         * decision, which may concern another entity than the one being blacklisted.
          *
          * @param string $entityIdentifier The UUID, hash, or entity address (email) of the entity to blacklist
-         * @param string $reportUuid The UUID of the report record supporting the blacklist action
+         * @param string|null $reportUuid The UUID of the report record supporting the blacklist action, null for none
          * @param IncidentType $type The type of blacklist action (e.g., SPAM, MALWARE)
          * @param int|null $expires Optional. Expiration time in seconds for the blacklist entry (null for permanent)
          * @return string The UUID of the created blacklist record
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If any of the parameters are invalid
          */
-        public function blacklistEntity(string $entityIdentifier, string $reportUuid, IncidentType $type, ?int $expires=null): string
+        public function blacklistEntity(string $entityIdentifier, ?string $reportUuid, IncidentType $type, ?int $expires=null): string
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('The entity identifier must not be empty');
             }
 
-            if(empty($reportUuid))
+            if($reportUuid !== null && $reportUuid === '')
             {
                 throw new InvalidArgumentException('The report UUID must not be empty');
             }
@@ -2169,12 +2168,12 @@
                 throw new InvalidArgumentException('The expires parameter must be a positive integer or null');
             }
 
-            return $this->makeRequest('POST', 'blacklist', [
+            return $this->makeRequest('POST', 'blacklist', array_filter([
                 'entity_identifier' => $entityIdentifier,
                 'report_uuid' => $reportUuid,
                 'type' => $type->value,
                 'expires' => $expires
-            ], [HttpResponseCode::CREATED], sprintf('Failed to blacklist entity %s', $entityIdentifier));
+            ], fn($value) => $value !== null), [HttpResponseCode::CREATED], sprintf('Failed to blacklist entity %s', $entityIdentifier));
         }
 
         /**
