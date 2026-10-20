@@ -1284,7 +1284,7 @@
                 throw new InvalidArgumentException('Related entity identifier cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/relationship',
+            $this->makeRequest('PATCH', 'entities/' . rawurlencode($entityIdentifier) . '/relationship',
                 ['target_identifier' => $relatedEntityIdentifier, 'relationship_type' => $relationshipType->value], [HttpResponseCode::OK],
                 sprintf('Failed to set relationship for entity %s', $entityIdentifier)
             );
