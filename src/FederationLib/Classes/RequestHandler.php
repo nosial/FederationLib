@@ -28,6 +28,8 @@
         private static ?string $uri = null;
         private static ?array $parameters = null;
         private static bool $responseSent = false;
+        private static bool $operatorAuthenticated = false;
+        private static ?OperatorRecord $authenticatedOperator = null;
 
         /**
          * Handle the incoming request.
@@ -54,6 +56,8 @@
             self::$path = implode('/', $segments);
             self::$decodedContent = null;
             self::$parameters = [];
+            self::$operatorAuthenticated = false;
+            self::$authenticatedOperator = null;
 
             // PHP only parses the form-encoded and multipart bodies of POST requests into $_POST and $_FILES, the body
             // of any other request is parsed here before it is read as php://input
@@ -528,12 +532,31 @@
         }
 
         /**
-         * Validates the Access Token provided in the request and returns the operator it authenticates.
+         * Validates the Access Token provided in the request and returns the operator it authenticates. The operator
+         * is authenticated once per request, as a request handler may need it several times (eg; omitEntityMetadata()
+         * and hideTelephoneEntities()), a failed authentication is not remembered and is thrown again.
          *
          * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if no token was given.
          * @throws RequestException If the Access Token is invalid, or the operator is disabled.
          */
         private static function authenticateOperator(): ?OperatorRecord
+        {
+            if(!self::$operatorAuthenticated)
+            {
+                self::$authenticatedOperator = self::resolveAuthenticatedOperator();
+                self::$operatorAuthenticated = true;
+            }
+
+            return self::$authenticatedOperator;
+        }
+
+        /**
+         * Resolves the operator authenticated by the Access Token provided in the request (see authenticateOperator())
+         *
+         * @return OperatorRecord|null Returns the authenticated OperatorRecord object or null if no token was given.
+         * @throws RequestException If the Access Token is invalid, or the operator is disabled.
+         */
+        private static function resolveAuthenticatedOperator(): ?OperatorRecord
         {
             $accessToken = null;
             if (isset($_SERVER['HTTP_AUTHORIZATION']))
