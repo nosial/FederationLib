@@ -10,7 +10,6 @@
     use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Exceptions\DatabaseOperationException;
-    use FederationLib\Objects\EvidenceRecord;
     use RuntimeException;
     use Throwable;
 
@@ -142,7 +141,7 @@
                 return false;
             }
 
-            self::backupModel($configuration);
+            $archivePath = self::backupModel($configuration);
 
             Logger::log()->info('Starting BayesianServer with a new Bayesian model');
             if(!self::startServer($configuration))
@@ -153,14 +152,16 @@
 
             $client = BayesianPlugin::getClient();
             $classifiedEvidence = EvidenceManager::countClassifiedEvidence();
-            if($classifiedEvidence < $configuration->getMinimumEvidence())
+            $archivedDocuments = $archivePath === null ? [] : self::readArchive($archivePath);
+            if($classifiedEvidence + count($archivedDocuments) < $configuration->getMinimumEvidence())
             {
-                Logger::log()->info(sprintf('Created a new Bayesian model, %d classified evidence record(s) available and at least %d are required to train it', $classifiedEvidence, $configuration->getMinimumEvidence()));
+                Logger::log()->info(sprintf('Created a new Bayesian model, %d classified evidence record(s) and %d archived document(s) available and at least %d are required to train it',
+                    $classifiedEvidence, count($archivedDocuments), $configuration->getMinimumEvidence()));
                 return self::verifyModel($client);
             }
 
-            Logger::log()->info(sprintf('Training the new Bayesian model with %d classified evidence record(s)', $classifiedEvidence));
-            if(!self::trainModel($client, $classifiedEvidence, $configuration->getLearningTimeout()))
+            Logger::log()->info(sprintf('Training the new Bayesian model with %d archived document(s) and %d classified evidence record(s)', count($archivedDocuments), $classifiedEvidence));
+            if(!self::trainModel($client, $archivedDocuments, $classifiedEvidence, $configuration->getLearningTimeout()))
             {
                 return false;
             }
@@ -249,61 +250,89 @@
         }
 
         /**
-         * Trains the model with every classified evidence record from the oldest to the newest, the same way
-         * BayesianPlugin trains the model when evidence is classified, and waits for BayesianServer to process the
-         * training
+         * Trains the model with the documents of the backed up archive, which hold everything the previous model
+         * learned (including evidence that has since been deleted, eg; by the retention cleanup), then with every
+         * classified evidence record in the order it was classified, so the latest classification of a text wins.
+         * Waits for BayesianServer to process the training, and records the last classification so the next
+         * `federationlib bayesian-sync` doesn't learn them again.
          *
          * @param BayesianClientInterface $client The BayesianServer client
+         * @param array<string, array{0: string[], 1: float}> $archivedDocuments The archived documents by text
          * @param int $total The number of classified evidence records, used to report the progress
          * @param int $timeout The maximum number of seconds to wait for BayesianServer to accept or process training
          * @return bool True if the model was trained
          * @throws DatabaseOperationException If the classified evidence records could not be retrieved
          */
-        private static function trainModel(BayesianClientInterface $client, int $total, int $timeout): bool
+        private static function trainModel(BayesianClientInterface $client, array $archivedDocuments, int $total, int $timeout): bool
         {
             $submitted = 0;
-            $page = 1;
-
-            // The server is not serving requests yet, so the evidence records can't change while they're paginated
-            while(count($records = EvidenceManager::getClassifiedEvidence(self::TRAINING_PAGE_SIZE, $page++)) > 0)
+            $maximumReached = false;
+            try
             {
-                foreach($records as $record)
+                foreach($archivedDocuments as $text => [$labels, $weight])
                 {
-                    try
+                    if(!self::learn($client, (string)$text, $labels, $weight, $timeout))
                     {
-                        if(!self::learn($client, $record, $timeout))
-                        {
-                            Logger::log()->warning(sprintf('BayesianServer reached its maximum number of documents, %d of %d classified evidence record(s) were submitted', $submitted, $total));
-                            return self::awaitLearning($client, $timeout);
-                        }
+                        $maximumReached = true;
+                        break;
                     }
-                    catch(Throwable $e)
+
+                    if(++$submitted % 1000 === 0)
                     {
-                        Logger::log()->critical(sprintf('Failed to train the Bayesian model with the evidence %s: %s', $record->getUuid(), $e->getMessage()), $e);
+                        Logger::log()->info(sprintf('Submitted %d of %d archived document(s) for training', $submitted, count($archivedDocuments)));
+                    }
+                }
+
+                $replayed = 0;
+                $result = $maximumReached ? null : BayesianSync::replay(null, function(string $text, string $label) use ($client, $timeout, $total, &$replayed, &$maximumReached): bool
+                {
+                    if(!self::learn($client, $text, [$label], 1.0, $timeout))
+                    {
+                        $maximumReached = true;
                         return false;
                     }
 
-                    $submitted++;
-                }
+                    if(++$replayed % self::TRAINING_PAGE_SIZE === 0)
+                    {
+                        Logger::log()->info(sprintf('Submitted %d of %d classified evidence record(s) for training', $replayed, $total));
+                    }
 
-                Logger::log()->info(sprintf('Submitted %d of %d classified evidence record(s) for training', $submitted, $total));
+                    return true;
+                });
+            }
+            catch(Throwable $e)
+            {
+                Logger::log()->critical('Failed to train the Bayesian model: ' . $e->getMessage(), $e);
+                return false;
+            }
+
+            if($maximumReached)
+            {
+                Logger::log()->warning('BayesianServer reached its maximum number of documents, the remaining documents were not submitted');
+            }
+
+            if($result !== null)
+            {
+                BayesianSync::setPosition($result['position']);
             }
 
             return self::awaitLearning($client, $timeout);
         }
 
         /**
-         * Submits an evidence record for training, if the learning queue of BayesianServer is full the record is
-         * submitted again once there is room. Request failures are retried a few times.
+         * Submits a document for training, if the learning queue of BayesianServer is full the document is submitted
+         * again once there is room. Request failures are retried a few times.
          *
          * @param BayesianClientInterface $client The BayesianServer client
-         * @param EvidenceRecord $record The classified evidence record with text content
+         * @param string $text The text of the document
+         * @param string[] $labels The labels of the document
+         * @param float $weight The weight of the document
          * @param int $timeout The maximum number of seconds to wait for room in the learning queue
-         * @return bool True if the record was accepted, false if BayesianServer reached its maximum number of documents
-         * @throws BayesianException If the record could not be submitted
+         * @return bool True if the document was accepted, false if BayesianServer reached its maximum number of documents
+         * @throws BayesianException If the document could not be submitted
          * @throws RuntimeException If the learning queue remained full for too long
          */
-        private static function learn(BayesianClientInterface $client, EvidenceRecord $record, int $timeout): bool
+        private static function learn(BayesianClientInterface $client, string $text, array $labels, float $weight, int $timeout): bool
         {
             $deadline = time() + $timeout;
             $attempt = 0;
@@ -312,7 +341,8 @@
             {
                 try
                 {
-                    $result = $client->learn($record->getTextContent(), $record->getClassificationFlag()->value);
+                    // A weight of 1 is the server's default, older servers don't know the parameter
+                    $result = $client->learn($text, $labels, $weight === 1.0 ? null : $weight);
                 }
                 catch(BayesianException $e)
                 {
@@ -344,6 +374,66 @@
 
                 usleep(500000);
             }
+        }
+
+        /**
+         * Reads the documents of a training archive as BayesianServer wrote it (labels,content[,weight]): the
+         * latest labels and weight of every text, a row without labels (a forgotten text) removes the text
+         *
+         * @param string $archivePath The path of the archive
+         * @return array<string, array{0: string[], 1: float}> The labels and weight of every text, in the order texts
+         *                                                     were last learned
+         */
+        private static function readArchive(string $archivePath): array
+        {
+            $handle = @fopen($archivePath, 'r');
+            if($handle === false)
+            {
+                Logger::log()->warning(sprintf('Unable to read the Bayesian archive %s, the model is trained without it', $archivePath));
+                return [];
+            }
+
+            $documents = [];
+            try
+            {
+                $header = fgetcsv($handle, escape: '');
+                $labelsColumn = $header === false ? false : array_search('labels', $header, true);
+                $contentColumn = $header === false ? false : array_search('content', $header, true);
+                if($labelsColumn === false || $contentColumn === false)
+                {
+                    Logger::log()->warning(sprintf('The Bayesian archive %s has no labels and content columns, the model is trained without it', $archivePath));
+                    return [];
+                }
+
+                // Archives written before weights existed have no weight column, their rows may still have a weight
+                $weightColumn = array_search('weight', $header, true);
+                $weightColumn = $weightColumn === false ? max($labelsColumn, $contentColumn) + 1 : $weightColumn;
+                while(($row = fgetcsv($handle, escape: '')) !== false)
+                {
+                    $content = $row[$contentColumn] ?? null;
+                    if(!is_string($content) || $content === '')
+                    {
+                        continue;
+                    }
+
+                    // Re-inserting moves the text to the end, so the documents stay in the order texts were last learned
+                    unset($documents[$content]);
+                    $labels = array_values(array_filter(explode(';', $row[$labelsColumn] ?? ''), fn(string $label) => $label !== ''));
+                    if(count($labels) === 0)
+                    {
+                        continue;
+                    }
+
+                    $weight = (float)($row[$weightColumn] ?? 1.0);
+                    $documents[$content] = [$labels, $weight > 0.0 ? $weight : 1.0];
+                }
+            }
+            finally
+            {
+                fclose($handle);
+            }
+
+            return $documents;
         }
 
         /**
@@ -390,17 +480,17 @@
 
         /**
          * Moves the model directory and the archive to a timestamped directory in the backup directory and creates an
-         * empty model directory in its place. The archive is backed up with the model because the new model is
-         * trained with the evidence records again, which the archive already contains. An empty model directory and
-         * an archive without any documents are not backed up.
+         * empty model directory in its place. The new model is trained with the backed up archive and the evidence
+         * records. An empty model directory and an archive without any documents are not backed up.
          *
          * @param BayesianModelConfiguration $configuration The configuration
-         * @return void
+         * @return string|null The path of the backed up archive, null if there was no archive with documents
          * @throws RuntimeException If the model directory or the archive could not be backed up, or if the model
          *                          directory could not be created
          */
-        private static function backupModel(BayesianModelConfiguration $configuration): void
+        private static function backupModel(BayesianModelConfiguration $configuration): ?string
         {
+            $backedUpArchive = null;
             $modelPath = $configuration->getModelPath();
             $archivePath = $configuration->getArchivePath();
             $backupModel = is_dir($modelPath) && count(array_diff(scandir($modelPath) ?: [], ['.', '..'])) > 0;
@@ -425,10 +515,14 @@
                     throw new RuntimeException(sprintf('Failed to move the Bayesian model %s to %s', $modelPath, $destination));
                 }
 
-                // BayesianServer creates a new archive when it's started
-                if($backupArchive && !rename($archivePath, $destination . DIRECTORY_SEPARATOR . basename($archivePath)))
+                // BayesianServer creates a new archive when it's started, the new model is trained with the backed up one
+                if($backupArchive)
                 {
-                    throw new RuntimeException(sprintf('Failed to move the Bayesian archive %s to %s', $archivePath, $destination));
+                    $backedUpArchive = $destination . DIRECTORY_SEPARATOR . basename($archivePath);
+                    if(!rename($archivePath, $backedUpArchive))
+                    {
+                        throw new RuntimeException(sprintf('Failed to move the Bayesian archive %s to %s', $archivePath, $destination));
+                    }
                 }
 
                 Logger::log()->info(sprintf('Backed up the Bayesian %s to %s', $backupModel && $backupArchive ? 'model and archive' : ($backupModel ? 'model' : 'archive'), $destination));
@@ -438,6 +532,8 @@
             {
                 throw new RuntimeException(sprintf('Failed to create the Bayesian model directory %s', $modelPath));
             }
+
+            return $backedUpArchive;
         }
 
         /**
