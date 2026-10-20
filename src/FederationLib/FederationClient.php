@@ -1304,7 +1304,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest('DELETE', 'entities/' . $entityIdentifier . '/relationship', null, [HttpResponseCode::OK],
+            $this->makeRequest('DELETE', 'entities/' . rawurlencode($entityIdentifier) . '/relationship', null, [HttpResponseCode::OK],
                 sprintf('Failed to clear relationship for entity %s', $entityIdentifier)
             );
         }
