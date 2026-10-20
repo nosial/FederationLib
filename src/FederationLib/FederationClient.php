@@ -1258,7 +1258,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/clear-reputation', null, [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'entities/' . rawurlencode($entityIdentifier) . '/clear-reputation', null, [HttpResponseCode::OK],
                 sprintf('Failed to clear reputation for entity %s', $entityIdentifier)
             );
         }
@@ -1324,7 +1324,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier . '/whitelist', ['whitelisted' => $whitelisted], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'entities/' . rawurlencode($entityIdentifier) . '/whitelist', ['whitelisted' => $whitelisted], [HttpResponseCode::OK],
                 sprintf('Failed to set whitelist state for entity %s', $entityIdentifier)
             );
         }
