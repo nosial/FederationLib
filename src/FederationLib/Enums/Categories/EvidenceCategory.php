@@ -11,6 +11,8 @@
         case NOT_CONFIDENTIAL = 'NOT_CONFIDENTIAL';
         case CLASSIFIED = 'CLASSIFIED';
         case UNCLASSIFIED = 'UNCLASSIFIED';
+        case AUTOMATED = 'AUTOMATED';
+        case NOT_AUTOMATED = 'NOT_AUTOMATED';
 
         /**
          * @inheritDoc
@@ -31,6 +33,8 @@
                 self::NOT_CONFIDENTIAL => 'confidential = 0',
                 self::CLASSIFIED => 'classification_flag IS NOT NULL',
                 self::UNCLASSIFIED => 'classification_flag IS NULL',
+                self::AUTOMATED => 'automated = 1',
+                self::NOT_AUTOMATED => 'automated = 0',
             };
         }
     }
