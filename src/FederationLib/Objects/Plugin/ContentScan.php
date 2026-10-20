@@ -2,19 +2,18 @@
 
     namespace FederationLib\Objects\Plugin;
 
+    use FederationLib\Classes\Configuration;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\ContentScanRejectedException;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ScannedContent\ContentClassification;
+    use FederationLib\Objects\ScannedContent\Detection;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use InvalidArgumentException;
 
-    /**
-     * A content scan request as seen by the CONTENT_SCAN event handlers, contains everything that was provided with
-     * the request and everything FederationLib found so far, and collects the scanning rules added by the handlers.
-     */
     class ContentScan
     {
         /** @var ContentInput[] */
@@ -30,6 +29,12 @@
         private array $scanResults;
         /** @var array<int, array{classification: ContentClassification, evidence_index: int|null}> */
         private array $addedClassifications;
+        /** @var IncidentType[]|null */
+        private ?array $concerns;
+        /** @var Detection[] */
+        private array $detections;
+        /** @var array<int, string[]> */
+        private array $resolvedAddresses;
 
         /**
          * ContentScan constructor.
@@ -41,10 +46,15 @@
          * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
          * @param int|null $topK The top_k parameter that was provided, if any
          * @param float|null $threshold The threshold parameter that was provided, if any
+         * @param IncidentType[]|null $concerns The effective concerns of the request, null to accept every concern
+         * @param array<int, string[]> $resolvedAddresses The addresses the host resolved for each evidence item itself
          */
         public function __construct(array $evidence, ?string $authorIdentifier, ?ResolvedEntity $authorEntity, array $resolvedEntities,
-            ?OperatorRecord $authenticatedOperator=null, ?int $topK=null, ?float $threshold=null)
+            ?OperatorRecord $authenticatedOperator=null, ?int $topK=null, ?float $threshold=null, ?array $concerns=null, array $resolvedAddresses=[])
         {
+            $this->resolvedAddresses = $resolvedAddresses;
+            $this->concerns = $concerns !== null ? array_values($concerns) : null;
+            $this->detections = [];
             $this->evidence = array_values($evidence);
             $this->authorIdentifier = $authorIdentifier;
             $this->authorEntity = $authorEntity;
@@ -146,18 +156,120 @@
         }
 
         /**
+         * Returns the effective concerns of the request: the concerns the client requested, or the default concerns of
+         * the host when it requested none
+         *
+         * @return IncidentType[] The effective concerns
+         */
+        public function getConcerns(): array
+        {
+            return $this->concerns ?? IncidentType::cases();
+        }
+
+        /**
+         * Returns whether the given concern is an effective concern of the request, only contributions for an
+         * effective concern affect the result
+         *
+         * @param IncidentType $concern The concern
+         * @return bool True if the concern is effective
+         */
+        public function isConcernEffective(IncidentType $concern): bool
+        {
+            return $this->concerns === null || in_array($concern, $this->concerns, true);
+        }
+
+        /**
+         * Returns the publicly routable IP addresses the host resolved itself for an evidence item: those of the name
+         * of a HOSTNAME, or of the host of a URL or of the page a WEB_PAGE declares. Unlike the context of the
+         * content, these were determined by the host and not asserted by the client (OFD "Client Assertions").
+         *
+         * @param int $evidenceIndex The index of the evidence item (see getEvidence())
+         * @return string[] The resolved addresses, empty if none were resolved or DNS lookups are disabled
+         */
+        public function getResolvedAddresses(int $evidenceIndex): array
+        {
+            return $this->resolvedAddresses[$evidenceIndex] ?? [];
+        }
+
+        /**
+         * Returns whether the host permits retrieving the URLs submitted for scanning, which makes it contact addresses
+         * chosen by the requester. Disabled by default; a handler must not retrieve a URL unless this returns true, and
+         * must then guard the retrieval as URL uploads are guarded (OFD "Remote Retrieval").
+         *
+         * @return bool True if URL retrieval is permitted
+         */
+        public function isUrlRetrievalAllowed(): bool
+        {
+            return Configuration::getRemoteRetrievalConfiguration()->isScansEnabled();
+        }
+
+        /**
+         * Adds a detection, a finding about one of the evidence items with respect to a concern, included in the
+         * detections of the scan result. Discarded when the concern is not an effective concern of the request.
+         *
+         * A detection that relies on the context of the content, or on anything else the client asserted that the
+         * handler has not verified (OFD "Client Assertions"), must be added with $verified set to false.
+         *
+         * @param IncidentType $concern The concern the detection relates to
+         * @param int $evidenceIndex The index of the evidence item (see getEvidence()) the detection relates to
+         * @param string $source The name of the mechanism that made the detection, eg; the name of a filter list
+         * @param string|null $entityUuid Optional. The UUID of the entity the detection relates to
+         * @param float|null $confidence Optional. The confidence of the detection
+         * @param bool $verified Whether the detection relies only on information that was verified
+         * @return void
+         * @throws InvalidArgumentException If the evidence index does not exist or the source is empty
+         */
+        public function addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid=null, ?float $confidence=null, bool $verified=true): void
+        {
+            if(!isset($this->evidence[$evidenceIndex]))
+            {
+                throw new InvalidArgumentException(sprintf('The evidence index %d does not exist, %d evidence item(s) were provided', $evidenceIndex, count($this->evidence)));
+            }
+
+            if(trim($source) === '')
+            {
+                throw new InvalidArgumentException('The source of a detection must not be empty');
+            }
+
+            if($confidence !== null && !is_finite($confidence))
+            {
+                throw new InvalidArgumentException('The confidence of a detection must be a finite number');
+            }
+
+            if(!$this->isConcernEffective($concern))
+            {
+                return;
+            }
+
+            $this->detections[] = new Detection($concern, $evidenceIndex, $source, $entityUuid, $confidence, $verified);
+        }
+
+        /**
+         * Returns the detections added so far
+         *
+         * @return Detection[] The detections
+         */
+        public function getDetections(): array
+        {
+            return $this->detections;
+        }
+
+        /**
          * Adds points to a scanning rule, the scanning rule is included in the scan results and contributes to the
          * risk score in the same way FederationLib's own scanning rules do: positive points lower the risk score and
          * negative points raise it. Adding points to the same scanning rule more than once accumulates them.
          *
          * Scanning rule names should be prefixed to avoid conflicting with other plugins, eg; `ABUSEIPDB_REPORTED`.
          *
+         * The points are discarded when the concern of the scanning rule is not an effective concern of the request.
+         *
          * @param string $rule The scanning rule name, uppercase letters, digits and underscores (eg; ABUSEIPDB_REPORTED)
          * @param float $points The points to add to the scanning rule
+         * @param IncidentType $concern Optional. The concern the scanning rule assesses (default SPAM)
          * @return void
          * @throws InvalidArgumentException If the scanning rule name is invalid or is one of FederationLib's own scanning rules
          */
-        public function addScanResult(string $rule, float $points): void
+        public function addScanResult(string $rule, float $points, IncidentType $concern=IncidentType::SPAM): void
         {
             if(!preg_match('/^[A-Z][A-Z0-9_]*$/', $rule))
             {
@@ -172,6 +284,11 @@
             if(!is_finite($points))
             {
                 throw new InvalidArgumentException(sprintf('The points of the scanning rule "%s" must be a finite number', $rule));
+            }
+
+            if(!$this->isConcernEffective($concern))
+            {
+                return;
             }
 
             $this->scanResults[$rule] = ($this->scanResults[$rule] ?? 0.0) + $points;
@@ -194,12 +311,15 @@
          * CLASSIFICATION_SUSPICIOUS or CLASSIFICATION_MALICIOUS scanning rule weighted by its confidence.
          *
          * @param ContentClassification $classification The classification
+         * The classification is discarded when its concern is not an effective concern of the request.
+         *
          * @param int|null $evidenceIndex Optional. The index of the evidence item (see getEvidence()) the classification
          *                                belongs to, used to describe the evidence of automatically generated reports
+         * @param IncidentType $concern Optional. The concern the classification assesses (default SPAM)
          * @return void
          * @throws InvalidArgumentException If the evidence index does not exist or the confidence is not between 0 and 1
          */
-        public function addClassification(ContentClassification $classification, ?int $evidenceIndex=null): void
+        public function addClassification(ContentClassification $classification, ?int $evidenceIndex=null, IncidentType $concern=IncidentType::SPAM): void
         {
             if($evidenceIndex !== null && !isset($this->evidence[$evidenceIndex]))
             {
@@ -209,6 +329,11 @@
             if(!is_finite($classification->getConfidence()) || $classification->getConfidence() < 0.0 || $classification->getConfidence() > 1.0)
             {
                 throw new InvalidArgumentException('The confidence of a classification must be between 0 and 1');
+            }
+
+            if(!$this->isConcernEffective($concern))
+            {
+                return;
             }
 
             $this->addedClassifications[] = ['classification' => $classification, 'evidence_index' => $evidenceIndex];
@@ -246,7 +371,7 @@
          */
         public function getState(): array
         {
-            return ['scan_results' => $this->scanResults, 'added_classifications' => $this->addedClassifications];
+            return ['scan_results' => $this->scanResults, 'added_classifications' => $this->addedClassifications, 'detections' => $this->detections];
         }
 
         /**
@@ -260,6 +385,7 @@
         {
             $this->scanResults = $state['scan_results'] ?? [];
             $this->addedClassifications = $state['added_classifications'] ?? [];
+            $this->detections = $state['detections'] ?? [];
         }
 
         /**
