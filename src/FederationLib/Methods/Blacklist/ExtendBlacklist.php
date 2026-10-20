@@ -48,13 +48,12 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, 400);
             }
 
-            $seconds = FederationServer::getParameter('seconds');
+            $seconds = FederationServer::getIntegerParameter('seconds');
             if($seconds === null)
             {
                 throw new RequestException(self::ERROR_SECONDS_REQUIRED, 400);
             }
 
-            $seconds = (int)$seconds;
             if($seconds <= 0)
             {
                 throw new RequestException(self::ERROR_INVALID_SECONDS, 400);
@@ -74,7 +73,8 @@
                     throw new RequestException(self::ERROR_IS_PERMANENT, 400);
                 }
 
-                if($blacklistRecord->isLifted())
+                // A lifted or expired record is no longer active and is not extended (OFD "Extend Blacklist")
+                if($blacklistRecord->isLifted() || $blacklistRecord->getExpires() <= time())
                 {
                     throw new RequestException(self::ERROR_NOT_ACTIVE, 400);
                 }
