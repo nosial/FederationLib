@@ -51,9 +51,9 @@
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                     'Reputation cleared for entity %s by %s',
-                    $entityRecord->getAddress(),
+                    $entityRecord->getLoggableAddress(),
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid());
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid());
             }
             catch (DatabaseOperationException $e)
             {
