@@ -4,6 +4,16 @@
 
     class RedisConfiguration
     {
+        public const array DEFAULT_RECORD_CACHE = [
+            'OPERATOR' => ['limit' => 1000, 'ttl' => 600],
+            'ENTITY' => ['limit' => 5000, 'ttl' => 600],
+            'FILE_ATTACHMENT' => ['limit' => 2000, 'ttl' => 600],
+            'EVIDENCE' => ['limit' => 3000, 'ttl' => 600],
+            'AUDIT_LOG' => ['limit' => 1000, 'ttl' => 600],
+            'BLACKLIST' => ['limit' => 3000, 'ttl' => 600],
+            'REPORT' => ['limit' => 1000, 'ttl' => 600],
+        ];
+
         private bool $enabled;
         private string $host;
         private int $port;
@@ -11,71 +21,50 @@
         private int $database;
         private bool $throwOnErrors;
         private bool $preCacheEnabled;
-        private bool $operatorCacheEnabled;
-        private int $operatorCacheLimit;
-        private int $operatorCacheTtl;
-        private bool $entitiesCacheEnabled;
-        private int $entitiesCacheLimit;
-        private int $entitiesCacheTtl;
-        private bool $fileAttachmentCacheEnabled;
-        private int $fileAttachmentCacheLimit;
-        private int $fileAttachmentCacheTtl;
-        private bool $evidenceCacheEnabled;
-        private int $evidenceCacheLimit;
-        private int $evidenceCacheTtl;
-        private bool $auditLogCacheEnabled;
-        private int $auditLogCacheLimit;
-        private int $auditLogCacheTtl;
-        private bool $blacklistCacheEnabled;
-        private int $blacklistCacheLimit;
-        private int $blacklistCacheTtl;
-        private bool $reportCacheEnabled;
-        private int $reportCacheLimit;
-        private int $reportCacheTtl;
+        /**
+         * @var array<string, array{limit: int, ttl: int}>
+         */
+        private array $recordCache;
         private int $searchCacheTtl;
 
         /**
          * RedisConfiguration constructor.
          *
-         * @param array $configuration Array with Redis configuration values.
+         * @param array $configuration The redis configuration values
          */
         public function __construct(array $configuration)
         {
-            $this->enabled = $configuration['enabled'] ?? false;
+            $this->enabled = ConfigurationValues::parseBool($configuration['enabled'] ?? null, false);
             $this->host = $configuration['host'] ?? '127.0.0.1';
-            $this->port = $configuration['port'] ?? 6379;
+            $this->port = (int)($configuration['port'] ?? 6379);
             $this->password = $configuration['password'] ?? null;
-            $this->database = $configuration['database'] ?? 0;
-            $this->throwOnErrors = $configuration['throw_on_errors'] ?? true;
-            $this->preCacheEnabled = $configuration['pre_cache_enabled'] ?? true;
-            $this->operatorCacheEnabled = $configuration['operator_cache_enabled'] ?? true;
-            $this->operatorCacheLimit = $configuration['operator_cache_limit'] ?? 1000;
-            $this->operatorCacheTtl = $configuration['operator_cache_ttl'] ?? 600;
-            $this->entitiesCacheEnabled = $configuration['entity_cache_enabled'] ?? true;
-            $this->entitiesCacheLimit = $configuration['entity_cache_limit'] ?? 5000;
-            $this->entitiesCacheTtl = $configuration['entity_cache_ttl'] ?? 600;
-            $this->fileAttachmentCacheEnabled = $configuration['file_attachment_cache_enabled'] ?? true;
-            $this->fileAttachmentCacheLimit = $configuration['file_attachment_cache_limit'] ?? 2000;
-            $this->fileAttachmentCacheTtl = $configuration['file_attachment_cache_ttl'] ?? 600;
-            $this->evidenceCacheEnabled = $configuration['evidence_cache_enabled'] ?? true;
-            $this->evidenceCacheLimit = $configuration['evidence_cache_limit'] ?? 3000;
-            $this->evidenceCacheTtl = $configuration['evidence_cache_ttl'] ?? 600;
-            $this->auditLogCacheEnabled = $configuration['audit_log_cache_enabled'] ?? true;
-            $this->auditLogCacheLimit = $configuration['audit_log_cache_limit'] ?? 1000;
-            $this->auditLogCacheTtl = $configuration['audit_log_cache_ttl'] ?? 600;
-            $this->blacklistCacheEnabled = $configuration['blacklist_cache_enabled'] ?? true;
-            $this->blacklistCacheLimit = $configuration['blacklist_cache_limit'] ?? 3000;
-            $this->blacklistCacheTtl = $configuration['blacklist_cache_ttl'] ?? 600;
-            $this->reportCacheEnabled = $configuration['report_cache_enabled'] ?? true;
-            $this->reportCacheLimit = $configuration['report_cache_limit'] ?? 1000;
-            $this->reportCacheTtl = $configuration['report_cache_ttl'] ?? 600;
-            $this->searchCacheTtl = $configuration['search_cache_ttl'] ?? 60;
+            $this->database = (int)($configuration['database'] ?? 0);
+            $this->throwOnErrors = ConfigurationValues::parseBool($configuration['throw_on_errors'] ?? null, true);
+            $this->preCacheEnabled = ConfigurationValues::parseBool($configuration['pre_cache_enabled'] ?? null, true);
+            $this->searchCacheTtl = ConfigurationValues::parseDuration($configuration['search_cache_ttl'] ?? 60, 60) ?? 0;
+            $configured = ConfigurationValues::parseMap($configuration['record_cache'] ?? []);
+            $this->recordCache = [];
+            foreach(self::DEFAULT_RECORD_CACHE as $type => $default)
+            {
+                $value = $configured[$type] ?? null;
+                if(is_string($value))
+                {
+                    $parts = explode('/', $value, 2);
+                    $value = ['limit' => $parts[0], 'ttl' => $parts[1] ?? $default['ttl']];
+                }
+
+                $value = is_array($value) ? $value : [];
+                $this->recordCache[$type] = [
+                    'limit' => max(0, (int)($value['limit'] ?? $default['limit'])),
+                    'ttl' => ConfigurationValues::parseDuration($value['ttl'] ?? $default['ttl'], $default['ttl']) ?? 0,
+                ];
+            }
         }
 
         /**
-         * Check if Redis is enabled.
+         * Checks if the cache layer is enabled.
          *
-         * @return bool
+         * @return bool True if enabled
          */
         public function isEnabled(): bool
         {
@@ -83,9 +72,9 @@
         }
 
         /**
-         * Get the Redis host.
+         * Returns the host of the Redis server.
          *
-         * @return string
+         * @return string The host
          */
         public function getHost(): string
         {
@@ -93,9 +82,9 @@
         }
 
         /**
-         * Get the Redis port.
+         * Returns the port of the Redis server.
          *
-         * @return int
+         * @return int The port
          */
         public function getPort(): int
         {
@@ -103,9 +92,9 @@
         }
 
         /**
-         * Get the Redis password.
+         * Returns the password of the Redis server.
          *
-         * @return string|null
+         * @return string|null The password, null if none is required
          */
         public function getPassword(): ?string
         {
@@ -113,9 +102,9 @@
         }
 
         /**
-         * Get the Redis database index.
+         * Returns the Redis database index.
          *
-         * @return int
+         * @return int The database index
          */
         public function getDatabase(): int
         {
@@ -123,9 +112,9 @@
         }
 
         /**
-         * Returns True if errors should be thrown when Redis operations fail, otherwise False.
+         * Checks if cache errors are thrown rather than logged.
          *
-         * @return bool True if errors should be thrown, False otherwise
+         * @return bool True if cache errors are thrown
          */
         public function shouldThrowOnErrors(): bool
         {
@@ -133,11 +122,9 @@
         }
 
         /**
-         * Returns True if pre-caching is enabled, when enabled some database functions will attempt to pre-cache
-         * objects before they are fully retrieved from the database, in such operations such as creating new objects
-         * or updating existing objects, this may worsen the performance on some systems.
+         * Checks if records are cached before they are requested (eg; the records of a listing).
          *
-         * @return bool True if pre-caching is enabled, False otherwise
+         * @return bool True if pre-caching is enabled
          */
         public function isPreCacheEnabled(): bool
         {
@@ -145,219 +132,252 @@
         }
 
         /**
-         * Returns True if operator caching is enabled
+         * Returns the maximum number of cached records of a record type, 0 when its cache is disabled
          *
-         * @return bool True if operator caching is Enabled, False otherwise
+         * @param string $type The record type, one of the keys of DEFAULT_RECORD_CACHE
+         * @return int The maximum number of cached records
+         */
+        public function getRecordCacheLimit(string $type): int
+        {
+            return $this->recordCache[$type]['limit'] ?? 0;
+        }
+
+        /**
+         * Returns the TTL of cached records of a record type in seconds, 0 for no expiry
+         *
+         * @param string $type The record type, one of the keys of DEFAULT_RECORD_CACHE
+         * @return int The TTL in seconds
+         */
+        public function getRecordCacheTtl(string $type): int
+        {
+            return $this->recordCache[$type]['ttl'] ?? 0;
+        }
+
+        /**
+         * Checks if records of a record type are cached
+         *
+         * @param string $type The record type, one of the keys of DEFAULT_RECORD_CACHE
+         * @return bool True if the cache of the record type is enabled
+         */
+        public function isRecordCacheEnabled(string $type): bool
+        {
+            return $this->getRecordCacheLimit($type) > 0;
+        }
+
+        /**
+         * Determines if the operator cache is enabled.
+         *
+         * @return bool True if the operator cache is enabled, false otherwise.
          */
         public function isOperatorCacheEnabled(): bool
         {
-            return $this->operatorCacheEnabled;
+            return $this->isRecordCacheEnabled('OPERATOR');
         }
 
         /**
-         * Returns the operator cache limit for the cache
+         * Retrieves the cache limit for operators.
          *
-         * @return int The maximum number of operators, anything 0 or less=no limit
+         * @return int The cache limit value for operators.
          */
         public function getOperatorCacheLimit(): int
         {
-            return $this->operatorCacheLimit;
+            return $this->getRecordCacheLimit('OPERATOR');
         }
 
         /**
-         * Returns the operator cache TTL in seconds
+         * Retrieves the cache time-to-live (TTL) value for the operator cache.
          *
-         * @return int The time to live in seconds for the operator cache
+         * @return int The TTL value for the operator cache, in seconds.
          */
         public function getOperatorCacheTtl(): int
         {
-            return $this->operatorCacheTtl;
+            return $this->getRecordCacheTtl('OPERATOR');
         }
 
         /**
-         * Returns True if entities caching is enabled
+         * Determines if the entities cache is enabled.
          *
-         * @return bool True if entities caching is Enabled, False otherwise
+         * @return bool True if the entities cache is enabled, false otherwise.
          */
         public function isEntitiesCacheEnabled(): bool
         {
-            return $this->entitiesCacheEnabled;
+            return $this->isRecordCacheEnabled('ENTITY');
         }
 
         /**
-         * Returns the entities cache limit for the cache
+         * Retrieves the cache limit for entities.
          *
-         * @return int The maximum number of entities, anything 0 or less=no limit
+         * @return int The maximum number of entities allowed in the cache.
          */
         public function getEntitiesCacheLimit(): int
         {
-            return $this->entitiesCacheLimit;
+            return $this->getRecordCacheLimit('ENTITY');
         }
 
         /**
-         * Returns the entities cache TTL in seconds
+         * Retrieves the cache time-to-live (TTL) for entities.
          *
-         * @return int The time to live in seconds for the entities cache
+         * @return int The TTL value for the entities cache, in seconds.
          */
         public function getEntitiesCacheTtl(): int
         {
-            return $this->entitiesCacheTtl;
+            return $this->getRecordCacheTtl('ENTITY');
         }
 
         /**
-         * Returns True if file attachment caching is enabled
+         * Determines if the file attachment cache is enabled.
          *
-         * @return bool True if file attachment caching is Enabled, False otherwise
+         * @return bool True if the file attachment cache is enabled, false otherwise.
          */
         public function isFileAttachmentCacheEnabled(): bool
         {
-            return $this->fileAttachmentCacheEnabled;
+            return $this->isRecordCacheEnabled('FILE_ATTACHMENT');
         }
 
         /**
-         * Returns the file attachment cache limit for the cache
+         * Retrieves the cache limit for file attachments.
          *
-         * @return int The maximum number of file attachments, anything 0 or less=no limit
+         * @return int The cache limit for file attachments.
          */
         public function getFileAttachmentCacheLimit(): int
         {
-            return $this->fileAttachmentCacheLimit;
+            return $this->getRecordCacheLimit('FILE_ATTACHMENT');
         }
 
         /**
-         * Returns the file attachment cache TTL in seconds
+         * Retrieves the cache time-to-live (TTL) for file attachments.
          *
-         * @return int The time to live in seconds for the file attachment cache
+         * @return int The cache TTL in seconds for file attachments.
          */
         public function getFileAttachmentCacheTtl(): int
         {
-            return $this->fileAttachmentCacheTtl;
+            return $this->getRecordCacheTtl('FILE_ATTACHMENT');
         }
 
         /**
-         * Returns True if evidence caching is enabled
+         * Determines if the evidence cache is enabled.
          *
-         * @return bool True if evidence caching is Enabled, False otherwise
+         * @return bool True if the evidence cache is enabled, false otherwise.
          */
         public function isEvidenceCacheEnabled(): bool
         {
-            return $this->evidenceCacheEnabled;
+            return $this->isRecordCacheEnabled('EVIDENCE');
         }
 
         /**
-         * Returns the evidence cache limit for the cache
+         * Retrieves the cache limit for evidence records.
          *
-         * @return int The maximum number of evidence records, anything 0 or less=no limit
+         * @return int The maximum number of evidence records allowed in the cache.
          */
         public function getEvidenceCacheLimit(): int
         {
-            return $this->evidenceCacheLimit;
+            return $this->getRecordCacheLimit('EVIDENCE');
         }
 
         /**
-         * Returns the evidence cache TTL in seconds
+         * Retrieves the time-to-live (TTL) value for the evidence cache.
          *
-         * @return int The time to live in seconds for the evidence cache
+         * @return int The TTL value for the evidence cache in seconds.
          */
         public function getEvidenceCacheTtl(): int
         {
-            return $this->evidenceCacheTtl;
+            return $this->getRecordCacheTtl('EVIDENCE');
         }
 
         /**
-         * Returns True if audit log caching is enabled
+         * Determines if the audit log cache is enabled.
          *
-         * @return bool True if audit log caching is Enabled, False otherwise
+         * @return bool True if the audit log cache is enabled, false otherwise.
          */
         public function isAuditLogCacheEnabled(): bool
         {
-            return $this->auditLogCacheEnabled;
+            return $this->isRecordCacheEnabled('AUDIT_LOG');
         }
 
         /**
-         * Returns the audit log cache limit for the cache
+         * Retrieves the cache limit for audit logs.
          *
-         * @return int The maximum number of audit log records, anything 0 or less=no limit
+         * @return int The maximum number of audit log entries that can be cached.
          */
         public function getAuditLogCacheLimit(): int
         {
-            return $this->auditLogCacheLimit;
+            return $this->getRecordCacheLimit('AUDIT_LOG');
         }
 
         /**
-         * Returns the audit log cache TTL in seconds
+         * Retrieves the time-to-live (TTL) value for the audit log cache.
          *
-         * @return int The time to live in seconds for the audit log cache
+         * @return int The TTL value for the audit log cache, in seconds.
          */
         public function getAuditLogCacheTtl(): int
         {
-            return $this->auditLogCacheTtl;
+            return $this->getRecordCacheTtl('AUDIT_LOG');
         }
 
         /**
-         * Returns True if caching for blacklist records are enabled
+         * Determines if the blacklist cache is enabled.
          *
-         * @return bool True if caching blacklists is Enabled, False otherwise.
+         * @return bool True if the blacklist cache is enabled, false otherwise.
          */
         public function isBlacklistCacheEnabled(): bool
         {
-            return $this->blacklistCacheEnabled;
+            return $this->isRecordCacheEnabled('BLACKLIST');
         }
 
         /**
-         * Returns the limit of the amount of records that are allowed to be cached at once
+         * Retrieves the cache limit for the blacklist.
          *
-         * @return int The limit of the blacklist cache records
+         * @return int The maximum number of blacklist records that can be stored in the cache.
          */
         public function getBlacklistCacheLimit(): int
         {
-            return $this->blacklistCacheLimit;
+            return $this->getRecordCacheLimit('BLACKLIST');
         }
 
         /**
-         * Returns the Time-To-Live (TTL) of the Blacklist cache record.
+         * Retrieves the time-to-live (TTL) value for the blacklist cache.
          *
-         * @return int The Time-To-Live for the cache entry
+         * @return int The TTL value for the blacklist cache in seconds.
          */
         public function getBlacklistCacheTtl(): int
         {
-            return $this->blacklistCacheTtl;
+            return $this->getRecordCacheTtl('BLACKLIST');
         }
 
         /**
-         * Returns True if report caching is enabled
+         * Determines if the report cache is enabled.
          *
-         * @return bool True if report caching is Enabled, False otherwise
+         * @return bool True if the report cache is enabled, false otherwise.
          */
         public function isReportCacheEnabled(): bool
         {
-            return $this->reportCacheEnabled;
+            return $this->isRecordCacheEnabled('REPORT');
         }
 
         /**
-         * Returns the report cache limit for the cache
+         * Retrieves the cache limit for reports.
          *
-         * @return int The maximum number of reports, anything 0 or less=no limit
+         * @return int The cache limit for reports
          */
         public function getReportCacheLimit(): int
         {
-            return $this->reportCacheLimit;
+            return $this->getRecordCacheLimit('REPORT');
         }
 
         /**
-         * Returns the report cache TTL in seconds
+         * Retrieves the cache TTL (Time to Live) for report records.
          *
-         * @return int The time to live in seconds for the report cache
+         * @return int The cache TTL for reports in seconds
          */
         public function getReportCacheTtl(): int
         {
-            return $this->reportCacheTtl;
+            return $this->getRecordCacheTtl('REPORT');
         }
 
         /**
-         * Returns the search/listing result set cache TTL in seconds.
+         * Returns the TTL of cached search and listing results in seconds.
          *
-         * @return int The time to live in seconds for cached search/listing results.
+         * @return int The TTL in seconds
          */
         public function getSearchCacheTtl(): int
         {
