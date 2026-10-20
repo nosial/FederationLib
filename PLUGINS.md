@@ -379,17 +379,22 @@ class SiemExportHandler implements \FederationLib\Interfaces\AuditLogEventHandle
 Executed once per content scan request (`POST /scan`), after FederationLib resolved the entities and before anything
 about the scan is recorded or returned. The `ContentScan` provides the request and FederationLib's findings:
 
-| Method                        | Returns                                                                                      |
-|-------------------------------|----------------------------------------------------------------------------------------------|
-| `getEvidence()`               | The evidence items as `ContentInput` (text content, note, tag, confidentiality and metadata) |
-| `getTextContents()`           | The text content of every evidence item that has any                                         |
-| `getAuthorIdentifier()`       | The author as provided in the request, `null` if none was provided                           |
-| `getAuthorEntity()`           | The resolved author (`ResolvedEntity`: the entity, its parent and their active blacklists)   |
-| `getResolvedEntities()`       | Every entity found in the content (`ResolvedEntity[]`)                                       |
-| `getAuthenticatedOperator()`  | The operator that made the request, `null` when anonymous                                    |
-| `getTopK()`, `getThreshold()` | The `top_k` and `threshold` parameters of the request, intended for classifiers              |
-| `getAddedClassifications()`   | The classifications added by the handlers executed before                                    |
-| `getScanResults()`            | The scanning rules added by the handlers executed before                                     |
+| Method                         | Returns                                                                                                             |
+|--------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `getEvidence()`                | The evidence items as `ContentInput` (text content, content type, context, note, tag, confidentiality and metadata) |
+| `getConcerns()`                | The effective concerns of the request (`IncidentType[]`), requested or the server's default                         |
+| `isConcernEffective($type)`    | Whether a concern is effective, contributions for any other concern are discarded                                   |
+| `getResolvedAddresses($index)` | The public IP addresses the server resolved itself for a `HOSTNAME`, `URL` or `WEB_PAGE` item                       |
+| `isUrlRetrievalAllowed()`      | Whether the server permits retrieving submitted URLs (`remote_retrieval.scans`, off by default)                     |
+| `getDetections()`              | The detections added so far, including FederationLib's own blacklist detections                                     |
+| `getTextContents()`            | The text content of every evidence item that has any                                                                |
+| `getAuthorIdentifier()`        | The author as provided in the request, `null` if none was provided                                                  |
+| `getAuthorEntity()`            | The resolved author (`ResolvedEntity`: the entity, its parent and their active blacklists)                          |
+| `getResolvedEntities()`        | Every entity found in the content (`ResolvedEntity[]`)                                                              |
+| `getAuthenticatedOperator()`   | The operator that made the request, `null` when anonymous                                                           |
+| `getTopK()`, `getThreshold()`  | The `top_k` and `threshold` parameters of the request, intended for classifiers                                     |
+| `getAddedClassifications()`    | The classifications added by the handlers executed before                                                           |
+| `getScanResults()`             | The scanning rules added by the handlers executed before                                                            |
 
 The handler may optionally:
 
