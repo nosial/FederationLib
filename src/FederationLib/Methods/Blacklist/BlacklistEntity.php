@@ -39,10 +39,10 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            $entityIdentifier = FederationServer::getParameter('entity_identifier') ?? null;
-            $report = FederationServer::getParameter('report_uuid') ?? null;
-            $type = IncidentType::tryFromCaseInsensitive(FederationServer::getParameter('type') ?? '');
-            $expires = FederationServer::getParameter('expires');
+            $entityIdentifier = FederationServer::getStringParameter('entity_identifier') ?? null;
+            $report = FederationServer::getStringParameter('report_uuid') ?? null;
+            $type = IncidentType::tryFromCaseInsensitive(FederationServer::getStringParameter('type') ?? '');
+            $expires = FederationServer::getIntegerParameter('expires');
 
             if($entityIdentifier === null)
             {
@@ -75,18 +75,9 @@
                     throw new RequestException(self::ERROR_ENTITY_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if($report !== null)
+                if($report !== null && ReportManager::getReport($report) === null)
                 {
-                    $reportRecord = ReportManager::getReport($report);
-                    if($reportRecord === null)
-                    {
-                        throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
-                    }
-
-                    if($reportRecord->getReportingEntity() !== $entityRecord->getUuid())
-                    {
-                        throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
-                    }
+                    throw new RequestException(self::ERROR_REPORT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
                 $blacklistUuid = BlacklistManager::blacklistEntity(
@@ -99,12 +90,12 @@
 
                 AuditLogManager::createEntry(AuditLogType::ENTITY_BLACKLISTED, sprintf(
                     'Entity %s blacklisted by operator %s with type %s%s%s',
-                    $entityRecord->getAddress(),
+                    $entityRecord->getLoggableAddress(),
                     $authenticatedOperator->getName(),
                     $type->name,
                     $expires ? ' until ' . date('Y-m-d H:i:s', $expires) : ' as a permanent',
                     $report !== null ? ' referencing report ' . $report : ''
-                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid(), $blacklistUuid, null, null);
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid(), $blacklistUuid, null, null, $report);
             }
             catch(DatabaseOperationException $e)
             {
@@ -173,12 +164,12 @@
                                 'type' => [
                                     'type' => 'string',
                                     'description' => 'The type of incident',
-                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
+                                    'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases()),
                                 ],
                                 'report_uuid' => [
                                     'type' => ['string', 'null'],
                                     'format' => 'uuid',
-                                    'description' => 'UUID of the report supporting the blacklist',
+                                    'description' => 'UUID of the report supporting the blacklist, which may concern another entity',
                                 ],
                                 'expires' => [
                                     'type' => ['integer', 'null'],
