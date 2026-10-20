@@ -27,7 +27,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEvidencePublic());
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTH_REQUIRED, 401);
