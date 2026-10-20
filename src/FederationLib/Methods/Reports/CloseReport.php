@@ -32,6 +32,7 @@
         private const string ERROR_INVALID_UUID = 'Invalid report UUID';
         private const string ERROR_NOT_ASSIGNED = 'Report not assigned to operator';
         private const string ERROR_ALREADY_CLOSED = 'The report is already closed';
+        private const string ERROR_NO_REPORTED_ENTITY = 'The report concerns no entity to blacklist';
         private const string ERROR_FAILED_TO_GET = 'Failed to get report record';
         private const string ERROR_FAILED_UPDATE_CLASSIFICATION = 'Failed to update classification flag for evidence record';
         private const string ERROR_FAILED_CLOSE_REPORT = 'Failed to close the requested report';
@@ -49,9 +50,8 @@
             }
 
             $reportUuid = $matches[1];
-            $classificationFlag = FederationServer::getParameter('classification_flag');
-            $blacklistIncidentType = FederationServer::getParameter('blacklist_incident_type');
-            $blacklistExpires = FederationServer::getParameter('blacklist_expires');
+            $classificationFlag = FederationServer::getStringParameter('classification_flag');
+            $blacklistIncidentType = FederationServer::getStringParameter('blacklist_incident_type');
 
             // Get the report
             if(!$authenticatedOperator->hasManagementPermissions())
@@ -84,9 +84,11 @@
                 }
             }
 
-            if($blacklistExpires !== null && $blacklistExpires !== '')
+            // The expiry only applies to the blacklist record created with blacklist_incident_type, it's ignored otherwise
+            // blacklist_expires is ignored, and not validated, when no blacklist record is created
+            $blacklistExpires = $blacklistType !== null ? FederationServer::getIntegerParameter('blacklist_expires') : null;
+            if($blacklistExpires !== null)
             {
-                $blacklistExpires = (int)$blacklistExpires;
                 if($blacklistExpires < time())
                 {
                     throw new RequestException('Blacklist expiration must be in the future', HttpResponseCode::BAD_REQUEST);
@@ -129,8 +131,13 @@
                 throw new RequestException(self::ERROR_ALREADY_CLOSED, HttpResponseCode::BAD_REQUEST);
             }
 
+            if($blacklistType !== null && $reportRecord->getReportingEntity() === null)
+            {
+                throw new RequestException(self::ERROR_NO_REPORTED_ENTITY, HttpResponseCode::BAD_REQUEST);
+            }
+
             // Assign classifications before closing the report. The conditional database update
-            // preserves immutable classifications.
+            // preserves existing classifications.
             $evidenceRecords = [];
             if($classificationFlag !== null)
             {
@@ -185,7 +192,7 @@
                     'Report %s closed by operator %s',
                     $reportUuid,
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $reportRecord->getReportingEntity(), null, null, null);
+                ), $authenticatedOperator->getUuid(), $reportRecord->getReportingEntity(), null, null, null, $reportUuid);
             }
             catch (InvalidArgumentException $e)
             {
@@ -321,7 +328,7 @@
                                 'blacklist_incident_type' => [
                                     'type' => ['string', 'null'],
                                     'description' => 'Optional blacklist incident type',
-                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER', null],
+                                    'enum' => [...array_map(fn(IncidentType $type) => $type->value, IncidentType::cases()), null],
                                 ],
                                 'blacklist_expires' => [
                                     'type' => ['integer', 'null'],
@@ -350,7 +357,7 @@
                     ],
                 ],
                 '400' => [
-                    'description' => self::ERROR_INVALID_UUID . ', ' . self::ERROR_NOT_ASSIGNED . ', ' . self::ERROR_ALREADY_CLOSED . ', invalid classification, invalid blacklist type, or blacklist expiration in the past',
+                    'description' => self::ERROR_INVALID_UUID . ', ' . self::ERROR_NOT_ASSIGNED . ', ' . self::ERROR_ALREADY_CLOSED . ', ' . self::ERROR_NO_REPORTED_ENTITY . ', invalid classification, invalid blacklist type, or blacklist expiration in the past',
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
