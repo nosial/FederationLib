@@ -527,6 +527,85 @@ class TrainingHandler implements RecordChangeEventHandlerInterface
 }
 ```
 
+#### STARTUP
+
+Executed once every time the server starts: `federationlib init`, which the docker entrypoint runs whenever the container
+starts, dispatches it last, after the database was created or migrated and every other start-up step succeeded, and
+before the web server and the scheduled jobs are started. The server does not answer requests yet, so a handler must
+not call the server's own API. The `Startup` provides:
+
+| Method                | Returns                                                                                                               |
+|-----------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `getStartedAt()`      | The Unix timestamp at which the server started                                                                        |
+| `isDatabaseCreated()` | Whether this start created the database, ie; the server's first start                                                 |
+| `getMigratedFrom()`   | The schema version the database was migrated from by this start (eg; after an upgrade), `null` if it was not migrated |
+| `getSchemaVersion()`  | The schema version of the database                                                                                    |
+
+A handler that throws fails `federationlib init`: the error is logged, the remaining `STARTUP` handlers are not executed
+and the container does not start, so the server never runs with a plugin that could not be set up. Catch the errors of
+anything that is allowed to fail.
+
+```php
+use FederationLib\Classes\DatabaseConnection;
+use FederationLib\Interfaces\StartupEventHandlerInterface;
+use FederationLib\Objects\Plugin\Startup;
+
+// Creates the plugin's own table before the server serves requests
+class CreateTables implements StartupEventHandlerInterface
+{
+    public static function handleStartup(Startup $startup): void
+    {
+        DatabaseConnection::getConnection()->exec('CREATE TABLE IF NOT EXISTS my_plugin_stats (day date PRIMARY KEY, scans int NOT NULL DEFAULT 0)');
+    }
+}
+```
+
+#### MAINTENANCE
+
+Executed by every maintenance run, `federationlib maintenance`, which the docker image runs every hour (see
+[Scheduled Jobs](README.md#scheduled-jobs)). It is dispatched after FederationLib cleaned its own records, and also when
+cleaning is disabled (`maintenance.enabled`), so it can serve as the plugin's periodic job. The `Maintenance` provides:
+
+| Method                | Returns                                                                                           |
+|-----------------------|---------------------------------------------------------------------------------------------------|
+| `getStartedAt()`      | The Unix timestamp at which the maintenance run started                                           |
+| `isCleaningEnabled()` | Whether FederationLib cleaned its records in this run, a plugin may follow it for its own records |
+| `getArchivePath()`    | The directory removed records are archived to (`--archive`), `null` if they are not archived      |
+| `getRemoved()`        | The number of records FederationLib removed, keyed by record type (eg; `evidence`, `entity`)      |
+
+A handler that throws is logged and makes the run exit with an error, the remaining `MAINTENANCE` handlers are still
+executed.
+
+```php
+use FederationLib\Classes\DatabaseConnection;
+use FederationLib\Interfaces\MaintenanceEventHandlerInterface;
+use FederationLib\Objects\Plugin\Maintenance;
+
+// Removes the plugin's statistics older than a year
+class CleanStats implements MaintenanceEventHandlerInterface
+{
+    public static function handleMaintenance(Maintenance $maintenance): void
+    {
+        if($maintenance->isCleaningEnabled())
+        {
+            DatabaseConnection::getConnection()->exec('DELETE FROM my_plugin_stats WHERE day < CURDATE() - INTERVAL 1 YEAR');
+        }
+    }
+}
+```
+
+Both are registered like any other event handler:
+
+```yaml
+event_handlers:
+  -
+    event: STARTUP
+    class: \MyPlugin\EventHandlers\CreateTables::class
+  -
+    event: MAINTENANCE
+    class: \MyPlugin\EventHandlers\CleanStats::class
+```
+
 ### Accessing FederationLib
 
 Plugins use FederationLib's own classes. Request handlers can use everything below. Event handlers can use everything
