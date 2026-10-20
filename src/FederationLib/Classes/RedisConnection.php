@@ -12,7 +12,8 @@
     {
         private const string KEY_COUNT_PREFIX = 'cache_count:';
         private const int KEY_COUNT_TTL = 10;
-
+        private const string SEARCH_CACHE_PREFIX = 'search:';
+        private const string SEARCH_CACHE_VERSION_PREFIX = 'search:version:';
         private static ?Redis $redis = null;
 
         /**
@@ -355,8 +356,88 @@
             return null;
         }
 
-        private const string SEARCH_CACHE_PREFIX = 'search:';
-        private const string SEARCH_CACHE_VERSION_PREFIX = 'search:version:';
+        /**
+         * Retrieves several cached records at once, in a single pipelined round trip.
+         *
+         * @param string[] $cacheKeys The cache keys to retrieve the records from.
+         * @return array<string, array> The cached records keyed by their cache key, records not found are left out.
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        public static function getRecords(array $cacheKeys): array
+        {
+            $redis = self::getConnection();
+            if($redis === null || $cacheKeys === [])
+            {
+                return [];
+            }
+
+            $cacheKeys = array_values($cacheKeys);
+            try
+            {
+                $pipeline = $redis->multi(Redis::PIPELINE);
+                foreach($cacheKeys as $cacheKey)
+                {
+                    $pipeline->hGetAll($cacheKey);
+                }
+                $results = $pipeline->exec();
+            }
+            catch (RedisException $e)
+            {
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException("Failed to retrieve record data from the cache", $e->getCode(), $e);
+                }
+
+                return [];
+            }
+
+            $records = [];
+            foreach($cacheKeys as $index => $cacheKey)
+            {
+                $record = $results[$index] ?? null;
+                if(is_array($record) && $record !== [])
+                {
+                    $records[$cacheKey] = $record;
+                }
+            }
+
+            return $records;
+        }
+
+        /**
+         * Sets several pointer keys (eg; from an entity hash to the entity UUID) at once, in a single pipelined
+         * round trip.
+         *
+         * @param array<string, string> $pointers The value of each pointer key.
+         * @param int $ttl Time-to-live of the pointers in seconds, pointers are not set without one.
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        public static function setPointers(array $pointers, int $ttl): void
+        {
+            $redis = self::getConnection();
+            if($redis === null || $pointers === [] || $ttl <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                $pipeline = $redis->multi(Redis::PIPELINE);
+                foreach($pointers as $key => $value)
+                {
+                    $pipeline->setex((string)$key, $ttl, $value);
+                }
+                $pipeline->exec();
+            }
+            catch(RedisException $e)
+            {
+                Logger::log()->error(sprintf("Failed to cache %d pointers: %s", count($pointers), $e->getMessage()), $e);
+                if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                {
+                    throw new CacheOperationException(sprintf("Failed to cache %d pointers", count($pointers)), $e->getCode(), $e);
+                }
+            }
+        }
 
         /**
          * Returns a versioned cache key for a search or listing result set.
