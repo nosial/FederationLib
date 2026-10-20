@@ -827,9 +827,18 @@
                 throw new InvalidArgumentException('Operator UUID cannot be empty');
             }
 
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/auto-assign', ['enabled' => $autoAssign], [HttpResponseCode::OK],
-                sprintf('Failed to %s the operator\'s auto assign', ($autoAssign ? 'enable' : 'disable'))
-            );
+        /**
+         * Sets whether an operator is a bot, whose evidence and reports are automated and whose evidence is created
+         * confidential.
+         *
+         * @param string $operatorUuid The UUID of the operator
+         * @param bool $isBot True if the operator is a bot
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty
+         */
+        public function setBot(string $operatorUuid, bool $isBot): void
+        {
+            $this->updateOperatorConfiguration($operatorUuid, isBot: $isBot);
         }
 
         /**
