@@ -38,8 +38,8 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAttachmentsMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListAttachmentsMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListAttachmentsMaxItems())
             {
@@ -51,10 +51,10 @@
                 $page = 1;
             }
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? AttachmentCategory::tryFromCaseInsensitive($categoryInput) : null;
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
