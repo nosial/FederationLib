@@ -12,6 +12,7 @@
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\Managers\ReputationManager;
     use FederationLib\Classes\PluginManager;
+    use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
@@ -21,6 +22,7 @@
     use FederationLib\Enums\NamedEntityType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\SuggestedActionType;
+    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -48,6 +50,7 @@
          * The source of the detections FederationLib makes from the active blacklist records of resolved entities
          */
         private const string DETECTION_SOURCE_BLACKLIST = 'blacklist';
+        private const string DNS_CACHE_PREFIX = 'dns_addresses:';
 
         /**
          * @inheritDoc
@@ -410,7 +413,53 @@
          */
         private static function lookupAddresses(string $name): array
         {
-            $records = @dns_get_record(strtolower(rtrim($name, '.')) . '.', DNS_A | DNS_AAAA);
+            $name = strtolower(rtrim($name, '.'));
+
+            // A host MAY reuse the results of an earlier resolution (OFD "Scan Content"), the addresses of a name,
+            // including a name that does not resolve, are cached for the TTL of cached results
+            $cacheKey = null;
+            if(Configuration::getRedisConfiguration()->isEnabled() && RedisConnection::getResultCacheTtl() > 0)
+            {
+                $cacheKey = self::DNS_CACHE_PREFIX . $name;
+                try
+                {
+                    $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                    if($cached !== null)
+                    {
+                        return $cached;
+                    }
+                }
+                catch(CacheOperationException $e)
+                {
+                    Logger::log()->warning('Failed to retrieve the cached addresses of ' . $name . ': ' . $e->getMessage(), $e);
+                }
+            }
+
+            $addresses = self::resolveAddresses($name);
+            if($cacheKey !== null)
+            {
+                try
+                {
+                    RedisConnection::cacheSearchResults($cacheKey, $addresses);
+                }
+                catch(CacheOperationException $e)
+                {
+                    Logger::log()->warning('Failed to cache the addresses of ' . $name . ': ' . $e->getMessage(), $e);
+                }
+            }
+
+            return $addresses;
+        }
+
+        /**
+         * Resolves the publicly routable IPv4 and IPv6 addresses of a DNS name (see lookupAddresses())
+         *
+         * @param string $name The lowercase DNS name without a trailing dot
+         * @return string[] The addresses
+         */
+        private static function resolveAddresses(string $name): array
+        {
+            $records = @dns_get_record($name . '.', DNS_A | DNS_AAAA);
             if(!is_array($records))
             {
                 return [];
