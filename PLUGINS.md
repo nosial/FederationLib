@@ -403,7 +403,11 @@ evidence item (`getContext()`) is what the client asserts, not something the ser
 
 The handler may optionally:
 
- - **Classify the content** with `addClassification(ContentClassification $classification, ?int $evidenceIndex)`. The
+ - **Add a detection** with `addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid, ?float $confidence, bool $verified)`,
+   eg; a match of a `HOSTNAME` against an advertising filter list. `$source` names the mechanism (eg; `easylist`), and
+   `$verified` must be `false` when the detection relies on the context or anything else the client asserted that the
+   plugin did not verify itself.
+ - **Classify the content** with `addClassification(ContentClassification $classification, ?int $evidenceIndex, IncidentType $concern)`. The
    response's `classification` is the worst flag of all the classifications with their average confidence, and the
    matching `CLASSIFICATION_*` scanning rule is weighted by the confidence. The evidence index (of `getEvidence()`)
    describes the evidence of automatically generated reports.
@@ -416,7 +420,9 @@ The handler may optionally:
    about the scan is recorded.
 
 A plugin that must never let content through on failure (eg; illegal content detection) should catch its own errors
-and reject the request.
+and reject the request. A plugin must not retrieve submitted URLs unless `isUrlRetrievalAllowed()` returns `true`, and
+a plugin that stores the content it scans (or records derived from it) must declare `collects_scan_content: true` in
+its `federationlib` package option, so that the server publishes `collects_public_scan_content` correctly.
 
 ```php
 use FederationLib\Enums\HttpResponseCode;
@@ -492,7 +498,8 @@ Executed whenever a change is written to the database, after the change is writt
 `getType()` (a `RecordChangeType`), `getRecordType()` (a `RecordType`) and `getUuid()`. `getRecord()` returns the
 current state of the record: an `OperatorRecord`, `EntityRecord`, `EvidenceRecord`, `FileAttachmentRecord`,
 `ReportRecord` or `BlacklistRecord`. The record is only retrieved when a handler asks for it, and is `null` for
-deletions.
+deletions, except for `EVIDENCE_DELETED`: its record is the `EvidenceRecord` as it was before it was deleted (eg; to
+forget its content).
 
 | Record     | Change types                                                                                        |
 |------------|-----------------------------------------------------------------------------------------------------|
