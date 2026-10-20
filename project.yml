@@ -17,6 +17,7 @@ dependencies:
   net.nosial.loglib2: nosial/loglib2@github
   net.nosial.optslib: nosial/optslib@github
   com.symfony.uid: symfony/uid@packagist
+  com.giggsey.libphonenumber_for_php: giggsey/libphonenumber-for-php@packagist
 execution_units:
   -
     name: main
