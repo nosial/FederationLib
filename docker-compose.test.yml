@@ -21,3 +21,5 @@ services:
       - FEDERATION_PLUGINS=net.nosial.test_plugin
       # The TestPlugin's own configuration (see tests/TestPlugin/src/TestPlugin/Configuration.php)
       - TEST_PLUGIN_GREETING=Hello from the test environment
+      # The migration check of the TestPlugin creates (and drops) scratch databases as the root user
+      - TEST_PLUGIN_DATABASE_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-federation_root}
