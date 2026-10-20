@@ -27,16 +27,16 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEvidencePublic());
 
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $includeConfidential = filter_var(FederationServer::getParameter('include_confidential') ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListEvidenceMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
+            $includeConfidential = FederationServer::getBooleanParameter('include_confidential') ?? false;
 
             if($includeConfidential)
             {
