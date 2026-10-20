@@ -50,7 +50,7 @@
                 throw new RequestException(self::ERROR_UNABLE_TO_GET, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
             }
 
-            self::successResponse($existingOperator);
+            self::successResponse($existingOperator->toStandardArray(FederationServer::getAuthenticatedOperator(true)));
         }
 
         /**
