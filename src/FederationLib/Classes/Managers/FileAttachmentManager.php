@@ -108,7 +108,7 @@
             {
                 RedisConnection::setRecord(
                     record: $result, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $uuid),
-                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl()
                 );
             }
 
@@ -142,7 +142,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl()
                 );
             }
 
@@ -279,7 +279,7 @@
                 RedisConnection::setRecords(
                     records: $results, prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
                     limit: Configuration::getRedisConfiguration()->getFileAttachmentCacheLimit(),
-                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTTL()
+                    ttl: Configuration::getRedisConfiguration()->getFileAttachmentCacheTtl()
                 );
             }
 
