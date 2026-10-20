@@ -250,6 +250,25 @@
         }
 
         /**
+         * Returns whether a loaded plugin declares that it stores the content submitted for scanning. When the plugins
+         * cannot be loaded, it is assumed that they may, so that the server never understates what it collects.
+         *
+         * @return bool True if a plugin stores scanned content, or the plugins could not be loaded
+         */
+        private static function pluginsCollectScanContent(): bool
+        {
+            try
+            {
+                return array_any(PluginManager::getPlugins(), fn(Plugin $plugin) => $plugin->collectsScanContent());
+            }
+            catch(Throwable $e)
+            {
+                Logger::log()->warning('Failed to load the plugins to determine whether they collect scanned content: ' . $e->getMessage(), $e);
+                return true;
+            }
+        }
+
+        /**
          * Returns information about the Federation server instance
          *
          * @return ServerInformation The server information object containing details about the server.
