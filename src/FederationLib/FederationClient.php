@@ -3027,7 +3027,30 @@
             );
         }
 
-        // INTERNAL METHODS
+        /**
+         * Converts a list of incident types, given as IncidentType cases or strings, to their values
+         *
+         * @param array $types The incident types
+         * @return string[] The incident type values
+         * @throws InvalidArgumentException If an entry is not an incident type
+         */
+        private static function concernValues(array $types): array
+        {
+            return array_values(array_map(function($type)
+            {
+                if($type instanceof IncidentType)
+                {
+                    return $type->value;
+                }
+
+                if(is_string($type) && IncidentType::tryFromCaseInsensitive($type) !== null)
+                {
+                    return strtoupper($type);
+                }
+
+                throw new InvalidArgumentException('Each entry must be an incident type');
+            }, $types));
+        }
 
         /**
          * Extract filename from Content-Disposition header
