@@ -5,7 +5,6 @@
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
-    use FederationLib\Interfaces\StandardObjectInterface;
 
     class ContentClassification implements SerializableInterface, ObjectSpecificationInterface
     {
