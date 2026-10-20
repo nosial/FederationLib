@@ -25,14 +25,14 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isAuditLogsPublic());
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUDIT_LOGS_DISABLED, 401);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListAuditLogsMaxItems())
             {
@@ -55,10 +55,10 @@
                 $filteredEntries = null;
             }
 
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? AuditLogCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             try
