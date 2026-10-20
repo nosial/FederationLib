@@ -19,7 +19,7 @@
          */
         public static function getPath(): string
         {
-            return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'net.nosial.test_plugin.lifecycle_events.json';
+            return EventFiles::getPath('lifecycle_events.json');
         }
 
         /**
@@ -104,6 +104,6 @@
         private static function write(array $events): void
         {
             file_put_contents(self::getPath(), json_encode($events), LOCK_EX);
-            @chmod(self::getPath(), 0666);
+            EventFiles::share(self::getPath());
         }
     }

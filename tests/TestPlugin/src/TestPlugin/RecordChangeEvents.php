@@ -19,7 +19,7 @@
          */
         public static function getPath(): string
         {
-            return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'net.nosial.test_plugin.record_change_events.json';
+            return EventFiles::getPath('record_change_events.json');
         }
 
         /**
@@ -66,7 +66,7 @@
                 $event['assigned_operator'] = $record->getAssignedOperator();
             }
 
-            $handle = fopen(self::getPath(), 'c+');
+            $handle = EventFiles::open(self::getPath());
             if($handle === false)
             {
                 return;

@@ -17,7 +17,7 @@
          */
         public static function getPath(): string
         {
-            return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'net.nosial.test_plugin.content_scan_events.json';
+            return EventFiles::getPath('content_scan_events.json');
         }
 
         /**
@@ -60,6 +60,7 @@
                 'top_k' => $contentScan->getTopK(),
                 'threshold' => $contentScan->getThreshold(),
             ]), LOCK_EX);
+            EventFiles::share(self::getPath());
         }
 
         /**

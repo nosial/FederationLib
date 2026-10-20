@@ -22,7 +22,7 @@
          */
         public static function getPath(): string
         {
-            return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'net.nosial.test_plugin.audit_log_events.json';
+            return EventFiles::getPath('audit_log_events.json');
         }
 
         /**
@@ -50,7 +50,7 @@
          */
         public static function record(string $handler, AuditLog $auditLog): void
         {
-            $handle = fopen(self::getPath(), 'c+');
+            $handle = EventFiles::open(self::getPath());
             if($handle === false)
             {
                 return;

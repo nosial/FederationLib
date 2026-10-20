@@ -15,7 +15,7 @@
          */
         public static function getPath(): string
         {
-            return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'net.nosial.test_plugin.post_request.json';
+            return EventFiles::getPath('post_request.json');
         }
 
         /**
@@ -45,7 +45,7 @@
          */
         public static function record(int $responseCode, bool $responseSent, ?string $path): void
         {
-            $handle = fopen(self::getPath(), 'c+');
+            $handle = EventFiles::open(self::getPath());
             if($handle === false)
             {
                 return;
