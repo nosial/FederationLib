@@ -2,27 +2,21 @@
 
     namespace FederationLib\Enums;
 
-    use FederationLib\Classes\CLI\CreateOperator;
-    use FederationLib\Classes\CLI\DeleteOperator;
-    use FederationLib\Classes\CLI\EditOperator;
-    use FederationLib\Classes\CLI\GetOperator;
+    use FederationLib\Classes\CLI\AuditCommand;
+    use FederationLib\Classes\CLI\BayesianCommand;
     use FederationLib\Classes\CLI\InitializeCommand;
-    use FederationLib\Classes\CLI\ListAuditLogs;
-    use FederationLib\Classes\CLI\ListOperators;
     use FederationLib\Classes\CLI\MaintenanceCommand;
-    use FederationLib\Classes\CLI\GenerateOperatorAccessToken;
+    use FederationLib\Classes\CLI\OperatorsCommand;
+    use FederationLib\Classes\CLI\ReputationCommand;
 
     enum CliCommands : string
     {
-        case CREATE_OPERATOR = 'create-operator';
-        case DELETE_OPERATOR = 'delete-operator';
-        case GET_OPERATOR = 'get-operator';
         case INITIALIZE = 'init';
-        case LIST_AUDIT_LOGS = 'list-audit';
-        case EDIT_OPERATOR = 'edit-operator';
-        case LIST_OPERATORS = 'list-operators';
+        case OPERATORS = 'operators';
+        case AUDIT = 'audit';
+        case REPUTATION = 'reputation';
         case MAINTENANCE = 'maintenance';
-        case GENERATE_OPERATOR_ACCESS_TOKEN = 'generate-operator-access-token';
+        case BAYESIAN = 'bayesian';
 
         /**
          * Returns the class interface of the cli command
@@ -34,27 +28,24 @@
         {
             return match ($this)
             {
-                self::CREATE_OPERATOR => CreateOperator::class,
-                self::DELETE_OPERATOR => DeleteOperator::class,
-                self::EDIT_OPERATOR => EditOperator::class,
-                self::GET_OPERATOR => GetOperator::class,
                 self::INITIALIZE => InitializeCommand::class,
-                self::LIST_AUDIT_LOGS => ListAuditLogs::class,
-                self::LIST_OPERATORS => ListOperators::class,
+                self::OPERATORS => OperatorsCommand::class,
+                self::AUDIT => AuditCommand::class,
+                self::REPUTATION => ReputationCommand::class,
                 self::MAINTENANCE => MaintenanceCommand::class,
-                self::GENERATE_OPERATOR_ACCESS_TOKEN => GenerateOperatorAccessToken::class
+                self::BAYESIAN => BayesianCommand::class,
             };
         }
 
         /**
          * Handles the execution of the command-line command
          *
-         * @param array $args The parsed arguments (OptsLib) to the command handler
+         * @param string[] $tokens The arguments that follow the command name
          * @return int The exit code
          */
-        public function handle(array $args): int
+        public function handle(array $tokens): int
         {
-            return $this->getInterface()::handle($args);
+            return $this->getInterface()::handle($tokens);
         }
 
         /**
