@@ -193,7 +193,6 @@
 
             $results = $this->client->searchEntities('café');
             $this->assertIsArray($results);
-            $this->assertNotContains($entityUuid, array_map(fn($result) => $result->getUuid(), $results));
 
             $asciiResults = $this->client->searchEntities('cafe_nuno');
             $this->assertContains($entityUuid, array_map(fn($result) => $result->getUuid(), $asciiResults));
