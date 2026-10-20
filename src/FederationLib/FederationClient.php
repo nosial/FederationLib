@@ -979,7 +979,7 @@
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
-            return EntityRecord::fromArray($this->makeRequest('GET', 'entities/' . $entityIdentifier, null, [HttpResponseCode::OK],
+            return EntityRecord::fromArray($this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier), null, [HttpResponseCode::OK],
                 sprintf('Failed to get the entity record for %s', $entityIdentifier)
             ));
         }
