@@ -813,10 +813,10 @@
         }
 
         /**
-         * Sets the auto assign flag for an operator.
+         * Sets whether an operator opts in to the automatic assignment of every report, ordinary and automated.
          *
-         * @param string $operatorUuid The UUID of the operator whose auto assign flag is to be set
-         * @param bool $autoAssign True to enable auto assign, false to disable it
+         * @param string $operatorUuid The UUID of the operator whose auto assign opt-ins are to be set
+         * @param bool $autoAssign True to opt in to both kinds of reports, false to opt out of both
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the operator UUID is empty
          */
