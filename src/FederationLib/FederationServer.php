@@ -221,12 +221,13 @@
          * This method retrieves the currently authenticated operator, if any.
          * If no operator is authenticated, it returns null.
          *
+         * @param bool $public True if the method is publicly accessible, an invalid token is then ignored
          * @return OperatorRecord|null The authenticated operator record or null if not authenticated.
          * @throws RequestException If authentication is provided but is invalid/operator is disabled.
          */
-        public static function getAuthenticatedOperator(): ?OperatorRecord
+        public static function getAuthenticatedOperator(bool $public=false): ?OperatorRecord
         {
-            return parent::getAuthenticatedOperator();
+            return parent::getAuthenticatedOperator($public);
         }
 
         /**
