@@ -48,6 +48,22 @@ build_configurations:
             path: /test-plugin/record-change-events
             class: \TestPlugin\RequestHandlers\RecordChangeEventsHandler::class
             request_method: GET, DELETE
+          -
+            path: /test-plugin/lifecycle-events
+            class: \TestPlugin\RequestHandlers\LifecycleEventsHandler::class
+            request_method: GET, DELETE
+          -
+            path: /test-plugin/run-maintenance
+            class: \TestPlugin\RequestHandlers\RunMaintenanceHandler::class
+            request_method: POST
+          -
+            path: /test-plugin/settle-reputation
+            class: \TestPlugin\RequestHandlers\SettleReputationHandler::class
+            request_method: POST
+          -
+            path: /test-plugin/migration-check
+            class: \TestPlugin\RequestHandlers\MigrationCheckHandler::class
+            request_method: POST
           # Executed before every route of the plugin (wildcard path)
           -
             path: /test-plugin/*
@@ -92,6 +108,14 @@ build_configurations:
           -
             event: RECORD_CHANGE
             class: \TestPlugin\EventHandlers\RecordChangeEventHandler::class
+          # Executed once when the server starts (federationlib init)
+          -
+            event: STARTUP
+            class: \TestPlugin\EventHandlers\StartupEventHandler::class
+          # Executed on every maintenance run (federationlib maintenance)
+          -
+            event: MAINTENANCE
+            class: \TestPlugin\EventHandlers\MaintenanceEventHandler::class
   -
     name: release
     output: 'target/release/${ASSEMBLY.PACKAGE}.ncc'
