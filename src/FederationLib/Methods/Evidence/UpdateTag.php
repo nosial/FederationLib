@@ -46,7 +46,7 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, 400);
             }
 
-            $tag = FederationServer::getParameter('tag');
+            $tag = FederationServer::getStringParameter('tag');
             if($tag === null)
             {
                 throw new RequestException(self::ERROR_TAG_REQUIRED, 400);
