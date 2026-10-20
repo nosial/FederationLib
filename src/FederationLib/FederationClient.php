@@ -6,6 +6,7 @@
     use CurlHandle;
     use FederationLib\Classes\Logger;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\ContentType;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
@@ -19,6 +20,8 @@
     use FederationLib\Objects\FileAttachmentRecord;
     use FederationLib\Objects\OperatorCreated;
     use FederationLib\Objects\OperatorRecord;
+    use FederationLib\Objects\OperatorRecord\OperatorConfiguration;
+    use FederationLib\Objects\OperatorRecord\OperatorPermissions;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ReportRecord;
     use FederationLib\Objects\ReportSubmission;
