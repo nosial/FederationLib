@@ -3050,9 +3050,8 @@
         }
 
         /**
-         * Applies sort parameters to the request params array, normalizing case:
-         * - `by` is lowercased to match server-side enum values
-         * - `order` is uppercased to match OrderType enum values
+         * Applies sort parameters to the request params array, normalizing both `by` and `order` to the uppercase
+         * values defined by the specification
          *
          * @param array &$params The request parameters array to modify
          * @param string|null $by The field to sort by
@@ -3062,7 +3061,7 @@
         {
             if ($by !== null)
             {
-                $params['by'] = strtolower($by);
+                $params['by'] = strtoupper($by);
             }
 
             if ($order !== null)
