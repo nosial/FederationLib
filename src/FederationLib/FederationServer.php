@@ -176,6 +176,88 @@
         }
 
         /**
+         * Get a string parameter from the request. A value of another type, such as a JSON array or number, is a
+         * client error, unless it is ignored like an unrecognized value (OFD "Pagination, Filtering, and Ordering"
+         * ignores unrecognized category, by and order values).
+         *
+         * @param string $name The name of the parameter
+         * @param bool $ignoreInvalid True to treat a value that is not a string as absent instead of rejecting it
+         * @return string|null The value of the parameter, or null if it is absent
+         * @throws RequestException If the parameter is not a string and is not ignored
+         */
+        public static function getStringParameter(string $name, bool $ignoreInvalid=false): ?string
+        {
+            $value = self::getParameter($name);
+            if($value === null || is_string($value))
+            {
+                return $value;
+            }
+
+            if($ignoreInvalid)
+            {
+                return null;
+            }
+
+            throw new RequestException(sprintf('The %s parameter must be a string', $name), 400);
+        }
+
+        /**
+         * Get an integer parameter from the request, given as a JSON integer or as a string of decimal digits in a
+         * query string or form body. Any other value, such as 1.5 or 10abc, is a client error rather than being cast.
+         *
+         * @param string $name The name of the parameter
+         * @return int|null The value of the parameter, or null if it is absent
+         * @throws RequestException If the parameter is not an integer
+         */
+        public static function getIntegerParameter(string $name): ?int
+        {
+            $value = self::getParameter($name);
+            if($value === null || is_int($value))
+            {
+                return $value;
+            }
+
+            if(is_string($value) && preg_match('/^-?[0-9]{1,18}$/', $value) === 1)
+            {
+                return (int)$value;
+            }
+
+            throw new RequestException(sprintf('The %s parameter must be an integer', $name), 400);
+        }
+
+        /**
+         * Get a boolean parameter from the request, given as a JSON boolean or as the string true or false in a query
+         * string or form body (OFD "Data Formats"), case-insensitively; 1 and 0 are also accepted, as produced by
+         * http_build_query(). Any other value is a client error rather than being read as false.
+         *
+         * @param string $name The name of the parameter
+         * @return bool|null The value of the parameter, or null if it is absent
+         * @throws RequestException If the parameter is not a boolean
+         */
+        public static function getBooleanParameter(string $name): ?bool
+        {
+            $value = self::getParameter($name);
+            if($value === null || is_bool($value))
+            {
+                return $value;
+            }
+
+            $boolean = match(is_string($value) || is_int($value) ? strtolower((string)$value) : null)
+            {
+                'true', '1' => true,
+                'false', '0' => false,
+                default => null
+            };
+
+            if($boolean === null)
+            {
+                throw new RequestException(sprintf('The %s parameter must be a boolean', $name), 400);
+            }
+
+            return $boolean;
+        }
+
+        /**
          * @inheritDoc
          */
         public static function getDecodedContent(): ?array
