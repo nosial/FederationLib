@@ -1482,12 +1482,14 @@
          * @param string|null $textContent Optional. The textual content of the evidence
          * @param string|null $note Optional. An optional note about the evidence
          * @param bool $confidential Optional. If true, the evidence is marked as confidential (default is false)
-         * @param ClassificationFlag|null $classification Optional immutable classification. Requires management permissions.
+         * @param ClassificationFlag|null $classification Optional classification. Requires management permissions.
+         * @param ContentType|null $contentType Optional. The content type of the text content, TEXT when omitted
+         * @param array|null $context Optional. The context of the content, its keys depend on the content type
          * @return string The UUID of the created evidence record
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the entity identifier is empty
          */
-        public function submitEvidence(string $entityIdentifier, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?array $metadata=null, ?ClassificationFlag $classification=null): string
+        public function submitEvidence(string $entityIdentifier, ?string $textContent=null, ?string $note=null, ?string $tag=null, bool $confidential=false, ?array $metadata=null, ?ClassificationFlag $classification=null, ?ContentType $contentType=null, ?array $context=null): string
         {
             if(empty($entityIdentifier))
             {
@@ -1519,6 +1521,16 @@
             if($classification !== null)
             {
                 $parameters['classification'] = $classification->value;
+            }
+
+            if($contentType !== null && $contentType !== ContentType::TEXT)
+            {
+                $parameters['content_type'] = $contentType->value;
+            }
+
+            if($context !== null)
+            {
+                $parameters['context'] = $context;
             }
 
             return $this->makeRequest('POST', 'evidence', $parameters, [HttpResponseCode::CREATED],
