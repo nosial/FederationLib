@@ -26,10 +26,10 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(true);
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListOperatorsMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
             Logger::log()->debug("ListOperators: limit=$limit, page=$page");
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListOperatorsMaxItems())
@@ -42,10 +42,10 @@
                 $page = 1;
             }
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? OperatorCategory::tryFromCaseInsensitive($categoryInput) : null;
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
@@ -66,7 +66,8 @@
                 }
             });
 
-            self::successResponse($operators);
+            // The configuration is only shown to the operator itself and to operators with operator permissions
+            self::successResponse(array_map(fn(OperatorRecord $operator) => $operator->toStandardArray($authenticatedOperator), $operators));
         }
 
         /**
