@@ -10,6 +10,7 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\Categories\BlacklistCategory;
+    use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\BlacklistOrderType;
@@ -32,7 +33,8 @@
          * @param string $operatorUuid The UUID of the operator performing the blacklisting.
          * @param IncidentType $type The type of blacklist action.
          * @param int|null $expires Optional expiration time in Unix timestamp, null for permanent blacklisting.
-         * @param string|null $reportUuid Optional report UUID, must be a valid UUID if provided.
+         * @param string|null $reportUuid Optional report UUID, must be a valid UUID if provided. The report may concern
+         *                                another entity.
          * @return string The UUID of the created blacklist entry.
          * @throws InvalidArgumentException If the entity or operator is empty, or if expires is in the past.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
@@ -342,10 +344,11 @@
          * @param int $limit The total amount of records to return in this database query
          * @param int $page The current page, must start from 1.
          * @param bool $includeLifted If True, lifted blacklist records are included in the result
+         * @param IncidentType[]|null $types Optional. Only records of one of these incident types are returned
          * @return BlacklistRecord[] An array of blacklist records as the result
          * @throws DatabaseOperationException Thrown if there was a database issue
          */
-        public static function getEntries(int $limit=100, int $page=1, bool $includeLifted=false, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function getEntries(int $limit=100, int $page=1, bool $includeLifted=false, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null, ?array $types=null): array
         {
             if($limit <= 0 || $page <= 0)
             {
@@ -380,6 +383,13 @@
                     $conditions[] = $categoryCondition;
                 }
 
+                $typeParameters = [];
+                if (!empty($types))
+                {
+                    [$typePlaceholders, $typeParameters] = Utilities::getInPlaceholders(array_map(fn(IncidentType $type) => $type->value, $types), 'type');
+                    $conditions[] = "type IN ($typePlaceholders)";
+                }
+
                 $sql = "SELECT * FROM blacklist";
                 if (!empty($conditions))
                 {
@@ -387,6 +397,10 @@
                 }
                 $sql .= " $sortClause LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
+                foreach ($typeParameters as $placeholder => $value)
+                {
+                    $stmt->bindValue($placeholder, $value);
+                }
 
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
@@ -596,33 +610,71 @@
         }
 
         /**
-         * Cleans up blacklist entries that have expired based on the specified TTL.
+         * Retrieves the oldest blacklist records that are eligible for cleanup, as raw record data.
          *
-         * @param int $ttl The TTL in seconds to consider for cleaning expired entries.
-         * @return int The number of entries cleaned.
-         * @throws InvalidArgumentException If the TTL is less than or equal to zero.
+         * Only blacklist records that are no longer in effect are cleaned up: a lifted record is old when it was
+         * created before the given time, an expired record when it expired before the given time. Blacklist records
+         * in effect, including permanent ones, are never cleaned up.
+         *
+         * @param int $before The Unix timestamp before which a record is old
+         * @param int $limit The maximum number of records to return
+         * @return array[] An array of raw blacklist record data, oldest first
+         * @throws InvalidArgumentException If the limit is out of range
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function cleanEntries(int $ttl): int
+        public static function getOldRecords(int $before, int $limit=1000): array
         {
-            // Remove blacklist records older than $ttl and if the expiration hasn't been expired yet
-            if($ttl <= 0)
+            if($limit < 1 || $limit > 10000)
             {
-                throw new InvalidArgumentException("TTL must be greater than zero.");
+                throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
 
-            $dateThreshold = date('Y-m-d H:i:s', time() - $ttl);
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE (expires IS NOT NULL AND expires < :date_threshold) OR (expires IS NULL AND created < :date_threshold)");
-                $stmt->bindParam(':date_threshold', $dateThreshold);
+                // A lifted record is no longer in effect since it was lifted, which isn't recorded so its creation is
+                // used, an expired record since it expired. A record in effect (not expired or permanent) is never old.
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM blacklist WHERE IF(lifted = 1, LEAST(created, COALESCE(expires, created)), expires) < :before ORDER BY created ASC, uuid ASC LIMIT :limit");
+                $stmt->bindValue(':before', date('Y-m-d H:i:s', $before));
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
-                return $stmt->rowCount(); // Return the number of rows affected
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to clean blacklist entries: " . $e->getMessage(), 0, $e);
+                throw new DatabaseOperationException("Failed to retrieve old blacklist records: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
+         * Deletes the given blacklist records that are still eligible for cleanup (see getOldRecords()), a record that
+         * changed since it was retrieved is kept. No record changes are dispatched for the deleted records.
+         * The database sets the blacklist of audit log records that refer to a deleted blacklist record to null.
+         *
+         * @param string[] $uuids The UUIDs of the blacklist records to delete
+         * @param int $before The Unix timestamp that was given to getOldRecords()
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function purgeRecords(array $uuids, int $before): int
+        {
+            if(empty($uuids))
+            {
+                return 0;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($uuids);
+            $parameters[':before'] = date('Y-m-d H:i:s', $before);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM blacklist WHERE uuid IN ($placeholders) AND IF(lifted = 1, LEAST(created, COALESCE(expires, created)), expires) < :before");
+                $stmt->execute($parameters);
+                return $stmt->rowCount();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to purge blacklist records: " . $e->getMessage(), 0, $e);
             }
             finally
             {
@@ -630,6 +682,7 @@
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                 }
             }
         }
@@ -662,10 +715,12 @@
          * @param int $limit The maximum number of results to return.
          * @param int $page The page number for pagination.
          * @param bool $extended True to also match the columns of the extended search, available to operators
+         * @param IncidentType[]|null $types Optional. Only records of one of these incident types are returned
+         * @param bool $excludeTelephone True to never match the query against the address of a telephone entity
          * @return BlacklistRecord[] An array of matching BlacklistRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchBlacklist(string $likePattern, int $limit, int $page, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
+        public static function searchBlacklist(string $likePattern, int $limit, int $page, ?BlacklistCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false, ?array $types=null, bool $excludeTelephone=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -682,18 +737,33 @@
 
             try
             {
-                $columns = ['b.uuid', 'b.entity', 'e.host', 'e.id'];
+                $columns = ['b.uuid', 'b.entity'];
                 if ($extended)
                 {
                     array_push($columns, 'b.operator', 'b.report', 'b.lifted_by', 'b.type');
                 }
 
-                $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE " . Utilities::buildLikeCondition($columns);
+                // The address of a hidden telephone entity is never matched, so a search cannot reveal which numbers
+                // the host holds records about (OFD "Telephone Entities")
+                $addressCondition = Utilities::buildLikeCondition(['e.host', 'e.id']);
+                if ($excludeTelephone)
+                {
+                    $addressCondition = "($addressCondition AND e.host <> '" . Utilities::TELEPHONE_ENTITY_HOST . "')";
+                }
+
+                $sql = "SELECT b.* FROM blacklist b LEFT JOIN entities e ON b.entity = e.uuid WHERE (" . Utilities::buildLikeCondition($columns) . " OR $addressCondition)";
 
                 $categoryCondition = $category?->toCondition() ?? '';
                 if ($categoryCondition !== '')
                 {
                     $sql .= " AND ($categoryCondition)";
+                }
+
+                $typeParameters = [];
+                if (!empty($types))
+                {
+                    [$typePlaceholders, $typeParameters] = Utilities::getInPlaceholders(array_map(fn(IncidentType $type) => $type->value, $types), 'type');
+                    $sql .= " AND b.type IN ($typePlaceholders)";
                 }
 
                 $sortClause = self::buildBlacklistSortClause($by, $order);
@@ -703,6 +773,10 @@
                 $stmt->bindValue(':q', $likePattern);
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                foreach ($typeParameters as $placeholder => $value)
+                {
+                    $stmt->bindValue($placeholder, $value);
+                }
                 $stmt->execute();
 
                 $results = array_map(fn($row) => new BlacklistRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
@@ -803,18 +877,27 @@
                 return;
             }
 
+            // The blacklist reflects on the entities that share an actor with the blacklisted entity: the accounts it is
+            // an alternative of and those that are alternatives of it, and the entities that depend on it or that it
+            // depends on (CHILD). A PROXY relays for many actors, so it is neither affected nor affects its target.
+            $propagates = fn(?EntityRelationshipType $type) => $type === EntityRelationshipType::ALTERNATIVE || $type === EntityRelationshipType::CHILD;
+
             try
             {
                 $relatedEntities = [];
-                $parentUuid = EntitiesManager::getEntityByUuid($entityUuid)?->getRelationshipEntity();
-                if($parentUuid !== null)
+                $entity = EntitiesManager::getEntityByUuid($entityUuid);
+                $parentUuid = $entity?->getRelationshipEntity();
+                if($parentUuid !== null && $propagates($entity->getRelationshipType()))
                 {
                     $relatedEntities[$parentUuid] = true;
                 }
 
                 foreach(EntitiesManager::getEntitiesByRelationshipEntity($entityUuid) as $childEntity)
                 {
-                    $relatedEntities[$childEntity->getUuid()] = true;
+                    if($propagates($childEntity->getRelationshipType()))
+                    {
+                        $relatedEntities[$childEntity->getUuid()] = true;
+                    }
                 }
             }
             catch(DatabaseOperationException $e)
