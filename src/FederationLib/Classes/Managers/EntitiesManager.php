@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\DnsDetails;
     use FederationLib\Classes\Logger;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
@@ -16,23 +17,23 @@
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EntityOrderType;
     use FederationLib\Enums\RecordChangeType;
-    use FederationLib\Enums\ScanningRules;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Objects\EntityRecord;
-    use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
     use InvalidArgumentException;
     use PDO;
     use PDOException;
-    use Redis;
-    use RedisException;
     use Symfony\Component\Uid\Uuid;
 
     class EntitiesManager
     {
-        private const string CACHE_PREFIX = 'entity:';
-        private const string REPUTATION_WINDOW_PREFIX = 'reputation_window:';
-        private const string REPUTATION_ACTIVE_SET = 'reputation_window:active';
+        public const string CACHE_PREFIX = 'entity:';
+
+        /**
+         * SQL condition that excludes telephone entities, which are hidden from requests that do not already know the
+         * number (OFD "Telephone Entities")
+         */
+        public const string NOT_TELEPHONE_CONDITION = "host <> '" . Utilities::TELEPHONE_ENTITY_HOST . "'";
 
         /**
          * Registers a new entity with the given ID and domain.
@@ -64,6 +65,11 @@
             if(strlen($host) > 255)
             {
                 throw new InvalidArgumentException("Host cannot exceed 255 characters.");
+            }
+
+            if(!Validate::entityAddress($host, $id))
+            {
+                throw new InvalidArgumentException('A telephone entity must be the international number as 1 to 15 digits without a leading + or separators, and no entity host may be under e164.arpa');
             }
 
             if($metadata !== null && !Validate::metadata($metadata))
@@ -215,7 +221,13 @@
                 $parentUuid = self::getEntity($parentHost)?->getUuid();
                 if($parentUuid === null)
                 {
-                    // Registering the domain entity links its existing subdomain entities
+                    // Registering the domain entity links its existing subdomain entities, a domain that is not a
+                    // valid entity host (eg; under e164.arpa, stored before it was rejected) is skipped
+                    if(!Validate::entityAddress($parentHost, null))
+                    {
+                        continue;
+                    }
+
                     $parentUuid = self::registerEntity($parentHost);
                     $linked += count(self::getEntitiesByRelationshipEntity($parentUuid));
                     continue;
@@ -653,6 +665,75 @@
         }
 
         /**
+         * Retrieves several entities by their UUIDs at once: the cached ones are served from the cache, the others
+         * are retrieved with a single query and cached like getEntityByUuid() caches them
+         *
+         * @param string[] $uuids The entity UUIDs, invalid UUIDs are ignored
+         * @return array<string, EntityRecord> The entities that exist, keyed by their UUID
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntitiesByUuids(array $uuids): array
+        {
+            $uuids = array_values(array_unique(array_filter($uuids, fn($uuid) => is_string($uuid) && Validate::uuid($uuid))));
+            $entities = [];
+
+            if(self::isCachingEnabled())
+            {
+                foreach($uuids as $uuid)
+                {
+                    $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                    if($data !== null)
+                    {
+                        $entities[$uuid] = new EntityRecord($data);
+                    }
+                }
+            }
+
+            $missing = array_values(array_diff($uuids, array_keys($entities)));
+            if(count($missing) === 0)
+            {
+                return $entities;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($missing, 'uuid');
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE uuid IN ($placeholders)");
+                foreach($parameters as $placeholder => $value)
+                {
+                    $stmt->bindValue($placeholder, $value);
+                }
+                $stmt->execute();
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve entities by UUID: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            $loaded = array_map(fn(array $row) => new EntityRecord($row), $rows);
+            foreach($loaded as $entity)
+            {
+                $entities[$entity->getUuid()] = $entity;
+            }
+
+            if(self::isCachingEnabled() && count($loaded) > 0 && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
+            {
+                $ttl = Configuration::getRedisConfiguration()->getEntitiesCacheTtl();
+                foreach($loaded as $entity)
+                {
+                    RedisConnection::setRecord(record: $entity, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $entity->getUuid()), ttl: $ttl);
+                    if($ttl > 0)
+                    {
+                        RedisConnection::getConnection()->setex(sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($entity->getHost(), $entity->getId())), $ttl, $entity->getUuid());
+                    }
+                }
+            }
+
+            return $entities;
+        }
+
+        /**
          * Retrieves an entity by any OFD entity identifier form: its UUID, its SHA-256 identifier, a named entity
          * address (local-part@entity-host) or a host entity address (the entity host alone). An entity address must
          * be in canonical form, and its entity host may be a DNS name, an IPv4 address or an IPv6 address.
@@ -669,7 +750,8 @@
                 return self::getEntityByUuid($identifier);
             }
 
-            if(Utilities::isSha256($identifier))
+            // Only 64 lowercase hexadecimal characters are a SHA-256 identifier, any other value is an entity address
+            if(preg_match('/^[a-f0-9]{64}$/', $identifier) === 1)
             {
                 return self::getEntityByHash($identifier);
             }
@@ -680,7 +762,7 @@
             {
                 $id = substr($identifier, 0, $separator);
                 $host = substr($identifier, $separator + 1);
-                if(preg_match('/^[a-zA-Z0-9._%+-]+$/', $id) !== 1 || !Validate::host($host))
+                if(preg_match('/^[a-zA-Z0-9._%+-]+$/', $id) !== 1 || !Validate::host($host) || !Validate::entityAddress($host, $id))
                 {
                     throw new InvalidArgumentException('Invalid entity address');
                 }
@@ -688,7 +770,7 @@
                 return self::getEntityByHash(Utilities::hashEntity($host, $id));
             }
 
-            if(!Validate::host($identifier))
+            if(!Validate::host($identifier) || !Validate::entityAddress($identifier, null))
             {
                 throw new InvalidArgumentException('Invalid entity identifier');
             }
@@ -927,6 +1009,9 @@
                 throw new InvalidArgumentException("Entity UUID must be provided.");
             }
 
+            // The database deletes the attachments of the entity's evidence, but not their stored files
+            $attachmentUuids = FileAttachmentManager::getUuidsByEvidenceColumn('entity', $uuid);
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE uuid = :uuid");
@@ -970,6 +1055,7 @@
 
             if($changed)
             {
+                FileAttachmentManager::forgetDeletedRecords($attachmentUuids);
                 PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_DELETED, $uuid);
             }
         }
@@ -1118,7 +1204,7 @@
          * @return EntityRecord[] An array of EntityRecord objects.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getEntities(int $limit=100, int $page=1, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null): array
+        public static function getEntities(int $limit=100, int $page=1, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $excludeTelephone=false): array
         {
             if($limit < 1)
             {
@@ -1143,12 +1229,12 @@
             try
             {
                 $offset = ($page - 1) * $limit;
-                $categoryCondition = $category?->toCondition() ?? '';
+                $conditions = array_filter([$category?->toCondition() ?? '', $excludeTelephone ? self::NOT_TELEPHONE_CONDITION : '']);
                 $sortClause = self::buildEntitySortClause($by, $order);
                 $sql = "SELECT * FROM entities";
-                if ($categoryCondition !== '')
+                if (!empty($conditions))
                 {
-                    $sql .= " WHERE $categoryCondition";
+                    $sql .= ' WHERE (' . implode(') AND (', $conditions) . ')';
                 }
                 $sql .= " $sortClause LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
@@ -1307,6 +1393,11 @@
                     case NamedEntityType::IPv6:
                         $host = $entityIdentifier;
                         break;
+
+                    case NamedEntityType::TELEPHONE:
+                        $id = Utilities::canonicalizeTelephoneNumber($entityIdentifier);
+                        $host = $id !== null ? Utilities::TELEPHONE_ENTITY_HOST : null;
+                        break;
                 }
             }
             elseif(Validate::url($entityIdentifier))
@@ -1363,48 +1454,9 @@
             return $resolved;
         }
 
-        /**
-         * Records a completed scan of authored content into the open reputation window of the author entity
-         * and its parent entity, if any.
-         *
-         * @param ScannedContent $scannedContent The fully constructed scan result
-         */
-        public static function recordScan(ScannedContent $scannedContent): void
-        {
-            $author = $scannedContent->getAuthorEntity();
-            if($author === null)
-            {
-                return;
-            }
-
-            $redis = self::getReputationRedis();
-            if($redis === null)
-            {
-                return;
-            }
-
-            $now = time();
-            $scanResults = $scannedContent->getScanResults();
-            $flagged = ($scanResults[ScanningRules::CLASSIFICATION_SUSPICIOUS->name] ?? 0.0) < 0
-                || ($scanResults[ScanningRules::CLASSIFICATION_MALICIOUS->name] ?? 0.0) < 0
-                || count($author->getActiveBlacklists()) > 0
-                || array_any($scannedContent->getAdditionalScanResults(), fn(float $points) => $points < 0);
-
-            $authorUuid = $author->getEntity()->getUuid();
-            self::recordActivity($authorUuid, $flagged, $now, $redis);
-            self::closeReputationWindow($authorUuid, $redis);
-
-            $authorParent = $author->getParentEntity();
-            if($authorParent !== null)
-            {
-                $parentUuid = $authorParent->getEntity()->getUuid();
-                self::recordActivity($parentUuid, $flagged || count($authorParent->getActiveBlacklists()) > 0, $now, $redis);
-                self::closeReputationWindow($parentUuid, $redis);
-            }
-        }
 
         /**
-         * Clears the reputation score of an entity back to 0, clearing the reputation window
+         * Clears the reputation score of an entity back to 0, along with its unsettled activity
          *
          * @param string $uuid The target entity UUID
          * @param bool $affectParent True to affect parent entities recursively, False otherwise
@@ -1441,13 +1493,8 @@
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
 
-            $redis = self::getReputationRedis();
-            if($redis !== null)
-            {
-                $windowKey = self::REPUTATION_WINDOW_PREFIX . $uuid;
-                $redis->del($windowKey);
-                $redis->sRem(self::REPUTATION_ACTIVE_SET, $uuid);
-            }
+            // Activity recorded before the reputation was cleared no longer counts
+            ReputationManager::clearActivity($uuid);
 
             PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_REPUTATION_UPDATED, $uuid);
 
@@ -1462,208 +1509,168 @@
         }
 
         /**
-         * Checks whether a single entity's reputation window has elapsed and, if so, applies the configured
-         * reputation gain when the window was clean and the entity has no opened reports awaiting a conclusion,
-         * then cleans up the Redis window data. However many scans the window received, it gains at most once.
+         * Retrieves the oldest entity records that are eligible for cleanup, as raw record data.
          *
-         * @param string $entityUuid The entity UUID
-         * @param Redis $redis The Redis connection
-         * @return bool True if the window was closed, False otherwise
-         */
-        private static function closeReputationWindow(string $entityUuid, Redis $redis): bool
-        {
-            $key = self::REPUTATION_WINDOW_PREFIX . $entityUuid;
-
-            try
-            {
-                $data = $redis->hGetAll($key);
-            }
-            catch (RedisException $e)
-            {
-                Logger::log()->error(sprintf('Failed to read reputation window for %s: %s', $entityUuid, $e->getMessage()), $e);
-                return false;
-            }
-
-            if(empty($data))
-            {
-                try
-                {
-                    $redis->sRem(self::REPUTATION_ACTIVE_SET, $entityUuid);
-                }
-                catch (RedisException $e)
-                {
-                    Logger::log()->error(sprintf('Failed to clean up stale reputation window set entry for %s: %s', $entityUuid, $e->getMessage()), $e);
-                }
-
-                return false;
-            }
-
-            $windowDuration = Configuration::getScanningConfiguration()->getReputationWindowDuration();
-            $windowStart = (int)($data['window_start'] ?? 0);
-            $now = time();
-
-            if($now - $windowStart < $windowDuration)
-            {
-                return false;
-            }
-
-            $flagged = (bool)(int)($data['flagged'] ?? 0);
-            $scanCount = (int)($data['scan_count'] ?? 0);
-            $gain = Configuration::getScanningConfiguration()->getReputationGain();
-
-            try
-            {
-                // Hold back gains while a report against the entity is still awaiting its conclusion
-                if(!$flagged && $gain > 0 && !ReportManager::hasOpenReports($entityUuid))
-                {
-                    self::updateEntityReputation($entityUuid, $gain);
-
-                    Logger::log()->debug(sprintf('Reputation window closed for %s: %+d gain (%d scans)',
-                        $entityUuid, $gain, $scanCount
-                    ));
-                }
-
-                $redis->del($key);
-                $redis->sRem(self::REPUTATION_ACTIVE_SET, $entityUuid);
-                return true;
-            }
-            catch (DatabaseOperationException $e)
-            {
-                Logger::log()->error(sprintf('Failed to persist reputation for %s: %s', $entityUuid, $e->getMessage()), $e);
-                return false;
-            }
-            catch (RedisException $e)
-            {
-                Logger::log()->error(sprintf('Failed to clean up reputation window for %s: %s', $entityUuid, $e->getMessage()), $e);
-                return false;
-            }
-        }
-
-        /**
-         * Records a scan into an entity's open window, creating the window if it does not yet exist.
-         * Once a window is flagged it stays flagged until it closes.
+         * An entity is old when it was created, last updated and its reputation last changed before the given time.
+         * Whitelisted entities and entities that still have evidence, reports or blacklist records are never cleaned
+         * up, those records are cleaned up by their own retention.
          *
-         * @param string $entityUuid The entity UUID
-         * @param bool $flagged True if the scan showed abnormal activity, False otherwise
-         * @param int $now Current Unix timestamp
-         * @param Redis $redis The Redis connection
-         */
-        private static function recordActivity(string $entityUuid, bool $flagged, int $now, Redis $redis): void
-        {
-            $key = self::REPUTATION_WINDOW_PREFIX . $entityUuid;
-
-            try
-            {
-                $redis->hSetNx($key, 'window_start', $now);
-                $redis->hSetNx($key, 'flagged', 0);
-                if($flagged)
-                {
-                    $redis->hSet($key, 'flagged', 1);
-                }
-
-                $redis->hIncrBy($key, 'scan_count', 1);
-                $redis->hSet($key, 'last_scan_at', $now);
-                $redis->sAdd(self::REPUTATION_ACTIVE_SET, $entityUuid);
-            }
-            catch (RedisException $e)
-            {
-                Logger::log()->error(sprintf('Failed to record reputation activity for %s: %s', $entityUuid, $e->getMessage()), $e);
-            }
-        }
-
-        /**
-         * Returns the Redis connection for reputation window operations or null if unavailable.
-         *
-         * @return Redis|null
-         */
-        private static function getReputationRedis(): ?Redis
-        {
-            return RedisConnection::getConnection();
-        }
-
-        /**
-         * Retrieves entity records older than the specified TTL.
-         *
-         * @param int $ttl The TTL in seconds to look back
+         * @param int $before The Unix timestamp before which a record is old
          * @param int $limit The maximum number of records to return
-         * @param int $page The page number for pagination
-         * @return array[] An array of raw entity record data
+         * @return array[] An array of raw entity record data, oldest first
+         * @throws InvalidArgumentException If the limit is out of range
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        public static function getOldRecords(int $before, int $limit=1000): array
         {
-            if($ttl <= 0)
-            {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
-            }
-
             if($limit < 1 || $limit > 10000)
             {
                 throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
 
-            if($page < 1)
-            {
-                throw new InvalidArgumentException('Page must be greater than zero.');
-            }
-
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
-            $offset = ($page - 1) * $limit;
-
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM entities WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
-                );
-                $stmt->bindParam(':timestamp', $timestamp);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                // GREATEST() is when the entity last changed: its creation, last update or last reputation change
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE whitelisted = 0 AND GREATEST(created, COALESCE(updated, created), COALESCE(reputation_last_updated, created)) < :before AND NOT EXISTS (SELECT 1 FROM evidence WHERE evidence.entity = entities.uuid) AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.reporting_entity = entities.uuid) AND NOT EXISTS (SELECT 1 FROM blacklist WHERE blacklist.entity = entities.uuid) ORDER BY created ASC, uuid ASC LIMIT :limit");
+                $stmt->bindValue(':before', date('Y-m-d H:i:s', $before));
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
                 return $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to retrieve old entity records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to retrieve old entity records: " . $e->getMessage(), 0, $e);
             }
         }
 
         /**
-         * Deletes entity records older than the specified TTL.
-         * Related evidence, reports, and blacklist records are cascade-deleted by the database.
+         * Retrieves the domain entities (host entities whose host is a DNS name, not an IP address or the telephone
+         * numbering namespace) whose DNS details are missing or were resolved before the given time, those never
+         * resolved first and then the longest resolved ago. A resolution time in the future counts as missing.
          *
-         * @param int $ttl The TTL in seconds after which entity records are considered old
-         * @return int The number of deleted records
+         * @param int $before The Unix timestamp before which DNS details are refreshed
+         * @param int $limit The maximum number of entities to retrieve
+         * @return EntityRecord[] The entities
+         * @throws InvalidArgumentException If the limit is not between 1 and 10000
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function cleanEntries(int $ttl): int
+        public static function getDnsRefreshCandidates(int $before, int $limit=500): array
         {
-            if($ttl <= 0)
+            if($limit < 1 || $limit > 10000)
             {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
+                throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
-
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE created < :timestamp");
-                $stmt->bindParam(':timestamp', $timestamp);
+                // The metadata is JSON text, an entity whose metadata is not valid JSON has no DNS details
+                $resolved = "CAST(JSON_VALUE(metadata, '$." . DnsDetails::KEY_RESOLVED . "') AS SIGNED)";
+                $stmt = DatabaseConnection::getConnection()->prepare(
+                    "SELECT * FROM entities WHERE id IS NULL AND " . self::NOT_TELEPHONE_CONDITION . " AND host LIKE '%.%' AND host NOT LIKE '%:%' AND host NOT REGEXP '^[0-9.]+$'
+                     AND ($resolved IS NULL OR $resolved < :before OR $resolved > :now)
+                     ORDER BY $resolved IS NOT NULL, $resolved ASC, created ASC, uuid ASC LIMIT :limit"
+                );
+                $stmt->bindValue(':before', $before, PDO::PARAM_INT);
+                $stmt->bindValue(':now', time(), PDO::PARAM_INT);
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
+
+                return array_map(fn(array $row) => new EntityRecord($row), $stmt->fetchAll(PDO::FETCH_ASSOC));
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve the entities to refresh the DNS details of: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
+         * Replaces the DNS details in the metadata of an entity (see DnsDetails), keeping every other metadata key. The
+         * details are maintained by the host, so the entity is not considered changed by an operator: its updated
+         * timestamp is left as it is, which also keeps refreshing the details from postponing the removal of an
+         * entity by maintenance. When the details and the other metadata exceed the size of entity metadata, only
+         * the resolution time and status are kept.
+         *
+         * @param EntityRecord $entity The entity
+         * @param array<string, string|int> $details The DNS details
+         * @return bool True if the details were stored, false if the metadata has no room for them
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function setDnsDetails(EntityRecord $entity, array $details): bool
+        {
+            $metadata = array_filter($entity->getMetadata() ?? [], fn($key) => !DnsDetails::isKey((string)$key), ARRAY_FILTER_USE_KEY);
+            $updated = array_merge($metadata, $details);
+            if(!Validate::metadata($updated))
+            {
+                $updated = array_merge($metadata, array_intersect_key($details, array_flip([DnsDetails::KEY_RESOLVED, DnsDetails::KEY_STATUS])));
+                if(!Validate::metadata($updated))
+                {
+                    return false;
+                }
+            }
+
+            try
+            {
+                $json = json_encode($updated, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE entities SET metadata=:metadata WHERE uuid=:uuid");
+                $stmt->bindValue(':metadata', $json);
+                $stmt->bindValue(':uuid', $entity->getUuid());
+                $stmt->execute();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to update the DNS details of an entity: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $entity->getUuid()));
+                RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($entity->getHost(), $entity->getId())));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_UPDATED, $entity->getUuid());
+            return true;
+        }
+
+        /**
+         * Deletes the given entity records that are still eligible for cleanup (see getOldRecords()), a record that
+         * changed since it was retrieved is kept. No record changes are dispatched for the deleted records.
+         * The database sets the relationship of entities and the entity of audit log records that refer to a deleted
+         * entity to null.
+         *
+         * @param string[] $uuids The UUIDs of the entity records to delete
+         * @param int $before The Unix timestamp that was given to getOldRecords()
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function purgeRecords(array $uuids, int $before): int
+        {
+            if(empty($uuids))
+            {
+                return 0;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($uuids);
+            $parameters[':before'] = date('Y-m-d H:i:s', $before);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM entities WHERE uuid IN ($placeholders) AND whitelisted = 0 AND GREATEST(created, COALESCE(updated, created), COALESCE(reputation_last_updated, created)) < :before AND NOT EXISTS (SELECT 1 FROM evidence WHERE evidence.entity = entities.uuid) AND NOT EXISTS (SELECT 1 FROM reports WHERE reports.reporting_entity = entities.uuid) AND NOT EXISTS (SELECT 1 FROM blacklist WHERE blacklist.entity = entities.uuid)");
+                $stmt->execute($parameters);
                 return $stmt->rowCount();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to clean entity records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to purge entity records: " . $e->getMessage(), 0, $e);
             }
             finally
             {
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
-                    RedisConnection::clearRecords(BlacklistManager::CACHE_PREFIX);
-                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                 }
             }
         }
@@ -1679,7 +1686,7 @@
          * @return EntityRecord[] An array of matching EntityRecord objects.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false): array
+        public static function searchEntities(string $likePattern, int $limit, int $page, ?EntityCategory $category=null, ?string $by=null, ?OrderType $order=null, bool $extended=false, bool $excludeTelephone=false): array
         {
             $offset = ($page - 1) * $limit;
 
@@ -1703,6 +1710,10 @@
                 }
 
                 $sql = "SELECT * FROM entities WHERE " . Utilities::buildLikeCondition($columns);
+                if ($excludeTelephone)
+                {
+                    $sql .= ' AND ' . self::NOT_TELEPHONE_CONDITION;
+                }
 
                 $categoryCondition = $category?->toCondition() ?? '';
                 if ($categoryCondition !== '')
@@ -1752,7 +1763,7 @@
          * @return EntityRecord[] An array of EntityRecord objects ordered by reputation ascending.
          * @throws DatabaseOperationException If there is an error executing the query.
          */
-        public static function getTopThreats(int $limit=25): array
+        public static function getTopThreats(int $limit=25, bool $excludeTelephone=false): array
         {
             if($limit < 1)
             {
@@ -1763,7 +1774,7 @@
             $cacheKey = null;
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
-                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['top_threats', $limit]);
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['top_threats', $limit, $excludeTelephone]);
                 $cached = RedisConnection::getCachedSearchResults($cacheKey);
                 if($cached !== null)
                 {
@@ -1773,7 +1784,8 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities ORDER BY reputation ASC, uuid DESC LIMIT :limit");
+                $condition = $excludeTelephone ? ' WHERE ' . self::NOT_TELEPHONE_CONDITION : '';
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities$condition ORDER BY reputation ASC, uuid DESC LIMIT :limit");
                 $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
