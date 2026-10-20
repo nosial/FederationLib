@@ -23,7 +23,6 @@
         private const string ERROR_INVALID_UUID = 'Invalid evidence UUID';
         private const string ERROR_INVALID_CLASSIFICATION = 'Invalid classification flag';
         private const string ERROR_NOT_FOUND = 'Evidence not found';
-        private const string ERROR_ALREADY_CLASSIFIED = 'Evidence has already been classified';
         private const string ERROR_UNABLE_TO_CLASSIFY = 'Unable to classify evidence';
 
         /**
@@ -42,7 +41,7 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, HttpResponseCode::BAD_REQUEST);
             }
 
-            $classificationValue = FederationServer::getParameter('classification_flag');
+            $classificationValue = FederationServer::getStringParameter('classification_flag');
             if(!is_string($classificationValue))
             {
                 throw new RequestException(self::ERROR_INVALID_CLASSIFICATION, HttpResponseCode::BAD_REQUEST);
@@ -64,17 +63,24 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                if(!EvidenceManager::updateClassificationFlag($evidenceUuid, $classification))
+                $previousClassification = $evidenceRecord->getClassificationFlag();
+                if(!EvidenceManager::updateClassificationFlag($evidenceUuid, $classification, true))
                 {
-                    throw new RequestException(self::ERROR_ALREADY_CLASSIFIED, HttpResponseCode::CONFLICT);
+                    if(!EvidenceManager::evidenceExists($evidenceUuid))
+                    {
+                        throw new RequestException(self::ERROR_NOT_FOUND, HttpResponseCode::NOT_FOUND);
+                    }
+
+                    self::successResponse();
+                    return;
                 }
 
-                AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, sprintf(
-                    'Evidence %s classified as %s by %s',
-                    $evidenceUuid,
-                    $classification->value,
-                    $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
+                $auditMessage = $previousClassification !== null && $previousClassification !== $classification
+                    ? sprintf('Evidence %s reclassified from %s to %s by %s', $evidenceUuid, $previousClassification->value, $classification->value, $authenticatedOperator->getName())
+                    : sprintf('Evidence %s classified as %s by %s', $evidenceUuid, $classification->value, $authenticatedOperator->getName());
+
+                AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, $auditMessage, $authenticatedOperator->getUuid(),
+                    $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
             }
             catch(InvalidArgumentException $e)
             {
@@ -109,7 +115,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Assigns an immutable classification to evidence. Requires management permissions.';
+            return 'Assigns a classification to evidence, replacing its existing classification if it has one. Requires management permissions.';
         }
 
         /**
@@ -167,7 +173,6 @@
                 '401' => ['description' => 'Authentication required', 'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]]],
                 '403' => ['description' => self::ERROR_INSUFFICIENT_PERMISSIONS, 'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]]],
                 '404' => ['description' => self::ERROR_NOT_FOUND, 'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]]],
-                '409' => ['description' => self::ERROR_ALREADY_CLASSIFIED, 'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]]],
                 '500' => ['description' => self::ERROR_UNABLE_TO_CLASSIFY, 'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]]],
             ];
         }
