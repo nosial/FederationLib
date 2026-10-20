@@ -22,13 +22,13 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEntitiesPublic());
             if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getTopThreatsLimit());
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getTopThreatsLimit());
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getTopThreatsLimit())
             {
@@ -37,7 +37,7 @@
 
             try
             {
-                $entities = EntitiesManager::getTopThreats($limit);
+                $entities = EntitiesManager::getTopThreats($limit, self::hideTelephoneEntities());
             }
             catch (DatabaseOperationException $e)
             {
