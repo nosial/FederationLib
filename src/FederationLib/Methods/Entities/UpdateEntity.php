@@ -66,7 +66,7 @@
                 {
                     AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                         'Entity %s updated by operator %s',
-                        $entityRecord->getAddress(),
+                        $entityRecord->getLoggableAddress(),
                         $authenticatedOperator->getName()
                     ), $authenticatedOperator->getUuid(), $entityUuid);
                 }
