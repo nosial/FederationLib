@@ -6,6 +6,7 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\Categories\BlacklistCategory;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\BlacklistOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -19,23 +20,24 @@
     {
         private const string ERROR_AUTHENTICATION_REQUIRED = 'You must be authenticated to list blacklist records';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to retrieve blacklist records';
+        private const string ERROR_INVALID_TYPE = 'The type parameter must be a comma-separated list of incident types';
 
         /**
          * @inheritDoc
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isBlacklistPublic());
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $includeLifted = filter_var(FederationServer::getParameter('include_lifted'), FILTER_VALIDATE_BOOLEAN);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListBlacklistMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
+            $includeLifted = FederationServer::getBooleanParameter('include_lifted') ?? false;
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? BlacklistCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListBlacklistMaxItems())
@@ -48,13 +50,24 @@
                 $page = 1;
             }
 
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
+
+            $types = null;
+            $typeInput = FederationServer::getParameter('type');
+            if($typeInput !== null)
+            {
+                $types = IncidentType::parseList($typeInput);
+                if($types === null)
+                {
+                    throw new RequestException(self::ERROR_INVALID_TYPE, 400);
+                }
+            }
 
             try
             {
-                $blacklistRecords = BlacklistManager::getEntries($limit, $page, $includeLifted, $category, $by, $order);
+                $blacklistRecords = BlacklistManager::getEntries($limit, $page, $includeLifted, $category, $by, $order, $types);
             }
             catch (DatabaseOperationException $e)
             {
@@ -134,6 +147,13 @@
                     ],
                 ],
                 [
+                    'name' => 'type',
+                    'in' => 'query',
+                    'description' => 'A comma-separated list of incident types, only blacklist records of one of these types are returned',
+                    'required' => false,
+                    'schema' => ['type' => 'string'],
+                ],
+                [
                     'name' => 'by',
                     'in' => 'query',
                     'description' => 'Field to sort by',
@@ -175,6 +195,14 @@
                                 'type' => 'array',
                                 'items' => ['$ref' => BlacklistRecord::getReference()],
                             ],
+                        ],
+                    ],
+                ],
+                '400' => [
+                    'description' => self::ERROR_INVALID_TYPE,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
                         ],
                     ],
                 ],
