@@ -32,21 +32,21 @@
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, HttpResponseCode::UNAUTHORIZED);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListReportsMaxItems());
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListReportsMaxItems());
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListReportsMaxItems())
             {
                 $limit = Configuration::getServerConfiguration()->getListReportsMaxItems();
             }
 
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
             if($page < 1)
             {
                 $page = 1;
             }
 
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             try
