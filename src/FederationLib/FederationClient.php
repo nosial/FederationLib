@@ -1181,7 +1181,7 @@
 
             return array_map(
                 fn($item) => EvidenceRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/evidence', $params, [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier) . '/evidence', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list evidence records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
