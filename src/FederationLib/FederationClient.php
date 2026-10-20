@@ -1657,7 +1657,7 @@
         }
 
         /**
-         * Assigns a classification to evidence, replacing its existing classification if it has one (OFD 1.1, an
+         * Assigns a classification to evidence, replacing its existing classification if it has one (OFD 2.0, an
          * OFD 1.0 server rejects classifying evidence that is already classified with HTTP 409).
          *
          * @param string $evidenceUuid The UUID of the evidence record to classify
