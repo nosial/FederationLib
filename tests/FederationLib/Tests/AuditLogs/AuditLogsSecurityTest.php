@@ -2,6 +2,7 @@
 
     namespace FederationLib\Tests\AuditLogs;
 
+    use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
@@ -100,15 +101,15 @@
             $snooper = $this->createLimitedOperator('audit_snooper', client: true);
             $actorUuid = $actor->getSelf()->getUuid();
 
-            // Generate an OPERATOR_UPDATED audit entry as the actor.
             $actor->setManagementPermissions($victim->getSelf()->getUuid(), false);
+            $this->createdOperators[] = $actor->createOperator(substr(uniqid('audit_created_'), 0, 32))->getUuid();
 
-            // Audit logs are public by default, so another operator without operator permissions receives the public
-            // entries of the actor, never more than an anonymous client and never entries of other operators
             $snooperEntries = $snooper->listOperatorAuditLogs($actorUuid);
             $anonymousEntries = new FederationClient(getenv('SERVER_ENDPOINT'))->listOperatorAuditLogs($actorUuid);
 
-            $this->assertNotEmpty($snooperEntries);
+            $snooperTypes = array_map(fn($entry) => $entry->getType(), $snooperEntries);
+            $this->assertContains(AuditLogType::OPERATOR_CREATED, $snooperTypes);
+            $this->assertNotContains(AuditLogType::OPERATOR_UPDATED, $snooperTypes, 'Private entries of another operator must not be listed');
             $this->assertEquals(
                 array_map(fn($entry) => $entry->getUuid(), $anonymousEntries),
                 array_map(fn($entry) => $entry->getUuid(), $snooperEntries)
@@ -117,5 +118,10 @@
             {
                 $this->assertEquals($actorUuid, $entry->getOperatorUuid());
             }
+
+            // The actor itself receives all of its entries
+            $actorTypes = array_map(fn($entry) => $entry->getType(), $actor->listOperatorAuditLogs($actorUuid));
+            $this->assertContains(AuditLogType::OPERATOR_UPDATED, $actorTypes);
+            $this->assertContains(AuditLogType::OPERATOR_CREATED, $actorTypes);
         }
     }

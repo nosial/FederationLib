@@ -331,7 +331,7 @@
             }
         }
 
-        public function testOperatorListingsOfDeletedOperatorKeepRecords(): void
+        public function testOperatorListingsOfDeletedOperator(): void
         {
             $submitter = $this->createLimitedOperator('deleted_lister', client: true);
             $submitterUuid = $submitter->getSelf()->getUuid();
@@ -340,8 +340,11 @@
             $this->client->deleteOperator($submitterUuid);
             $this->createdOperators = array_values(array_diff($this->createdOperators, [$submitterUuid]));
 
-            // The evidence outlives its operator, but the operator can no longer be listed
-            $this->assertEquals($evidenceUuid, $this->client->getEvidenceRecord($evidenceUuid)->getUuid());
+            $this->expectRequestFailure(
+                fn() => $this->client->getEvidenceRecord($evidenceUuid),
+                [HttpResponseCode::NOT_FOUND->value],
+                'The evidence of a deleted operator should be deleted with it'
+            );
             $this->expectRequestFailure(
                 fn() => $this->client->listOperatorEvidence($submitterUuid),
                 [HttpResponseCode::NOT_FOUND->value],
