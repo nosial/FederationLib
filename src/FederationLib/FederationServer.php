@@ -268,8 +268,17 @@
                     'public_reports' => Configuration::getServerConfiguration()->isReportsPublic(),
                     'public_entity_metadata' => Configuration::getServerConfiguration()->isEntityMetadataPublic(),
                     'public_scan_content' => Configuration::getServerConfiguration()->isScanContentPublic(),
+                    'collects_public_scan_content' => Configuration::getScanningConfiguration()->collectsPublicScanContent(
+                        Configuration::getServerConfiguration()->isScanContentPublic(),
+                        self::pluginsCollectScanContent()
+                    ),
                     'public_query_entity' => Configuration::getServerConfiguration()->isQueryEntityPublic(),
                     'allow_illegal_content' => Configuration::getServerConfiguration()->isIllegalContentAllowed(),
+                    'allow_url_uploads' => Configuration::getRemoteRetrievalConfiguration()->isUploadsEnabled(),
+                    'public_telephone_entities' => Configuration::getServerConfiguration()->isTelephoneEntitiesPublic(),
+                    'scan_content_types' => array_map(fn(ContentType $type) => $type->value, ContentType::cases()),
+                    'concerns' => array_map(fn(IncidentType $type) => $type->value, Configuration::getScanningConfiguration()->getConcerns()),
+                    'default_concerns' => array_map(fn(IncidentType $type) => $type->value, Configuration::getScanningConfiguration()->getDefaultConcerns()),
                     'search_enabled' => Configuration::getSearchConfiguration()->isEnabled(),
                     'public_search' => Configuration::getSearchConfiguration()->isPublicSearch(),
                     'search_types' => array_map(
