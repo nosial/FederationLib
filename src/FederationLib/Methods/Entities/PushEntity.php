@@ -17,7 +17,9 @@
     class PushEntity extends RequestHandler implements RequestSpecificationInterface
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to push entities';
+        private const string ERROR_INVALID_ID = 'The local part of the entity must only contain ASCII letters, digits, ., _, %, + or -';
         private const string ERROR_INVALID_METADATA = 'Invalid entity metadata provided';
+        private const string ERROR_INVALID_TELEPHONE = 'A telephone entity must be the international number as 1 to 15 digits without a leading + or separators, such as 15550123456@e164.arpa, and no entity host may be under e164.arpa';
         private const string ERROR_UNABLE_TO_REGISTER = 'Unable to register entity';
 
         /**
@@ -40,6 +42,18 @@
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
             }
 
+            // The local part must already be canonical, it is case-sensitive and limited to these characters
+            if($id !== null && (!is_string($id) || preg_match('/^[a-zA-Z0-9._%+-]+$/', $id) !== 1))
+            {
+                throw new RequestException(self::ERROR_INVALID_ID, 400);
+            }
+
+            // A telephone entity is the E.164 number without '+' or separators, and neither e164.arpa nor a host under it is an entity
+            if(!Validate::entityAddress($host, $id))
+            {
+                throw new RequestException(self::ERROR_INVALID_TELEPHONE, 400);
+            }
+
             if($metadata !== null && (!is_array($metadata) || !Validate::metadata($metadata)))
             {
                 throw new RequestException(self::ERROR_INVALID_METADATA, 400);
@@ -50,9 +64,10 @@
                 if(!EntitiesManager::entityExists($host, $id))
                 {
                     $entityUuid = EntitiesManager::registerEntity($host, $id, $metadata);
+                    // The address of a telephone entity never appears in an audit log message (OFD "Telephone Entities")
                     AuditLogManager::createEntry(AuditLogType::ENTITY_PUSHED, sprintf(
                         'Entity %s registered by operator %s',
-                        $id !== null ? $id . '@' . $host : $host,
+                        Utilities::isTelephoneHost($host) ? 'telephone entity ' . $entityUuid : ($id !== null ? $id . '@' . $host : $host),
                         $authenticatedOperator->getName()
                     ), $authenticatedOperator->getUuid(), $entityUuid);
                 }
@@ -65,7 +80,7 @@
                     {
                         AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                             'Entity %s updated by operator %s',
-                            $entity->getAddress(), $authenticatedOperator->getName()
+                            $entity->getLoggableAddress(), $authenticatedOperator->getName()
                         ), $authenticatedOperator->getUuid(), $entityUuid);
                     }
                 }
