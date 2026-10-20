@@ -593,6 +593,19 @@
                 }
             }
 
+            $cacheKey = null;
+            if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
+            {
+                $sortedUuids = $entityUuids;
+                sort($sortedUuids);
+                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['active_entries', $sortedUuids]);
+                $cached = RedisConnection::getCachedSearchResults($cacheKey);
+                if($cached !== null)
+                {
+                    return array_map(fn(array $data) => new BlacklistRecord($data), $cached);
+                }
+            }
+
             try
             {
                 $placeholders = implode(', ', array_fill(0, count($entityUuids), '?'));
@@ -601,12 +614,33 @@
                 );
                 $stmt->execute($entityUuids);
 
-                return array_map(fn(array $blacklist) => new BlacklistRecord($blacklist), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $results = array_map(fn(array $blacklist) => new BlacklistRecord($blacklist), $stmt->fetchAll(PDO::FETCH_ASSOC));
             }
             catch(PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve active blacklist entries by entities: ' . $e->getMessage(), 0, $e);
             }
+
+            if($cacheKey !== null)
+            {
+                // Expiring is not a change that invalidates the cache, so the result is cached no longer than until the
+                // first of its entries expires, less the second that time() truncates
+                $ttl = RedisConnection::getResultCacheTtl();
+                foreach($results as $record)
+                {
+                    if($record->getExpires() !== null)
+                    {
+                        $ttl = min($ttl, $record->getExpires() - time() - 1);
+                    }
+                }
+
+                if($ttl > 0)
+                {
+                    RedisConnection::cacheSearchResults($cacheKey, array_map(fn(BlacklistRecord $record) => $record->toArray(), $results), $ttl);
+                }
+            }
+
+            return $results;
         }
 
         /**
