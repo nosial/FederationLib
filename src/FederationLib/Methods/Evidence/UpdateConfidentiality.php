@@ -2,9 +2,13 @@
 
     namespace FederationLib\Methods\Evidence;
 
+    use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
+    use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -19,6 +23,8 @@
         private const string ERROR_INVALID_UUID = 'Invalid evidence UUID';
         private const string ERROR_NOT_FOUND = 'Evidence not found';
         private const string ERROR_UNABLE_TO_UPDATE = 'Unable to update evidence confidentiality';
+        private const string ERROR_CONFIDENTIAL_REQUIRED = 'The confidential member is required and must be a boolean';
+        private const string ERROR_ILLEGAL_CONTENT = 'Evidence linked to an ILLEGAL_CONTENT report must remain confidential';
 
         /**
          * @inheritDoc
@@ -42,7 +48,12 @@
                 throw new RequestException(self::ERROR_INVALID_UUID, 400);
             }
 
-            $confidential = filter_var(FederationServer::getParameter('confidential') ?? false, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+            // A missing or invalid value is rejected rather than defaulting, it would otherwise expose the evidence
+            $confidential = FederationServer::getBooleanParameter('confidential');
+            if($confidential === null)
+            {
+                throw new RequestException(self::ERROR_CONFIDENTIAL_REQUIRED, 400);
+            }
 
             try
             {
@@ -52,7 +63,24 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
+                // Evidence of illegal content must stay confidential while it is linked to the report (OFD "Confidential
+                // Evidence")
+                if(!$confidential && $evidenceRecord->getReport() !== null)
+                {
+                    $reportRecord = ReportManager::getReport($evidenceRecord->getReport());
+                    if($reportRecord !== null && $reportRecord->getIncidentType() === IncidentType::ILLEGAL_CONTENT)
+                    {
+                        throw new RequestException(self::ERROR_ILLEGAL_CONTENT, 409);
+                    }
+                }
+
                 EvidenceManager::updateConfidentiality($evidenceUuid, $confidential);
+                AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, sprintf(
+                    'Evidence %s made %s by operator %s',
+                    $evidenceUuid,
+                    $confidential ? 'confidential' : 'non-confidential',
+                    $authenticatedOperator->getName()
+                ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
             }
             catch(DatabaseOperationException $e)
             {
@@ -83,7 +111,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Updates the confidentiality flag of an evidence record. Requires management permissions.';
+            return 'Updates the confidentiality flag of an evidence record. Requires management permissions. Evidence linked to an ILLEGAL_CONTENT report cannot be made non-confidential.';
         }
 
         /**
@@ -174,6 +202,14 @@
                 ],
                 '404' => [
                     'description' => self::ERROR_NOT_FOUND,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => ErrorResponse::getReference()],
+                        ],
+                    ],
+                ],
+                '409' => [
+                    'description' => self::ERROR_ILLEGAL_CONTENT,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
