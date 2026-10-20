@@ -26,6 +26,7 @@
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_NOT_FOUND = 'Entity not found';
         private const string ERROR_TARGET_NOT_FOUND = 'Related entity not found';
+        private const string ERROR_SELF_RELATIONSHIP = 'An entity cannot have a relationship to itself';
         private const string ERROR_UNABLE_TO_SET = 'Unable to set entity relationship';
 
         /**
@@ -45,13 +46,13 @@
                 throw new RequestException(self::ERROR_IDENTIFIER_REQUIRED, 400);
             }
 
-            $targetEntityIdentifier = FederationServer::getParameter('target_identifier');
+            $targetEntityIdentifier = FederationServer::getStringParameter('target_identifier');
             if($targetEntityIdentifier === null)
             {
                 throw new RequestException(self::ERROR_TARGET_IDENTIFIER_REQUIRED, 400);
             }
 
-            $relationshipType = FederationServer::getParameter('relationship_type');
+            $relationshipType = FederationServer::getStringParameter('relationship_type');
             if($relationshipType === null)
             {
                 throw new RequestException(self::ERROR_RELATIONSHIP_TYPE_REQUIRED, 400);
@@ -77,13 +78,18 @@
                     throw new RequestException(self::ERROR_TARGET_NOT_FOUND, 404);
                 }
 
+                if($targetEntityRecord->getUuid() === $entityRecord->getUuid())
+                {
+                    throw new RequestException(self::ERROR_SELF_RELATIONSHIP, 400);
+                }
+
                 EntitiesManager::assignEntityRelationship($entityRecord->getUuid(), $targetEntityRecord->getUuid(), $type);
                 AuditLogManager::createEntry(AuditLogType::ENTITY_UPDATED, sprintf(
                     'Relationship set for entity %s to %s by %s',
-                    $entityRecord->getAddress(),
-                    $targetEntityRecord->getAddress(),
+                    $entityRecord->getLoggableAddress(),
+                    $targetEntityRecord->getLoggableAddress(),
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid());
+                ), $authenticatedOperator->getUuid(), $entityRecord->getUuid());
             }
             catch (DatabaseOperationException $e)
             {
