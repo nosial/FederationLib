@@ -62,7 +62,7 @@
                 self::NAMED_ENTITY_PARENT_WHITELISTED => 5.0,
                 self::NAMED_ENTITY_PARENT_GOOD_REPUTATION => 3.0,
                 self::NAMED_ENTITY_PARENT_BAD_REPUTATION => -5.0,
-                self::CLASSIFICATION_NORMAL => 1.0,
+                self::CLASSIFICATION_NORMAL => 10.0,
                 self::CLASSIFICATION_SUSPICIOUS => -10.0,
                 self::CLASSIFICATION_MALICIOUS => -25.0
             };
