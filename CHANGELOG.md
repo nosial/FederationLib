@@ -175,6 +175,20 @@ converted on every start, logging a warning for each replaced setting (see Chang
    Attachments does, and returns records of non-public domains to authenticated operators
  - `FileAttachmentRecord::getEvidenceUuid()` returns null instead of an empty string when a server reports no
    associated evidence record
+ - Cache layer performance for `/scan` and entity queries, with Redis enabled:
+   - The active blacklist records of entities are cached in the blacklist search namespace, for no longer than until
+     the first of them expires, instead of being queried for every resolved entity and its parent
+   - Entity hashes that have no entity are cached for `redis.search_cache_ttl`, so names in scanned content that are
+     not entities are not queried again until an entity is registered
+   - The entities related to an entity are cached in the entity search namespace
+   - The public addresses of the DNS names resolved by `/scan`, including names that do not resolve, are reused for
+     `redis.search_cache_ttl` (OFD "Scan Content" permits reusing an earlier resolution)
+   - `EntitiesManager::getEntitiesByUuids()` reads and writes cached entities in pipelined round trips
+     (`RedisConnection::getRecords()` and `setPointers()`)
+ - The authenticated operator is resolved once per request rather than by every check that needs it (entity metadata,
+   telephone entities, extended search)
+ - Removing a cached operator reads only its Access Token and deletes the record and its Access Token pointer in a
+   single command, and an Access Token pointer whose cached operator holds a different Access Token is ignored
 
 ### Removed
  - Unused code: the `UploadHandler` class (attachment uploads are handled by Upload Attachment),
