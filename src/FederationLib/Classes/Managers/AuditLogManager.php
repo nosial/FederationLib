@@ -498,35 +498,68 @@
         }
 
         /**
-         * Deletes audit log entries older than the given TTL.
+         * Retrieves the oldest audit log records that are eligible for cleanup, as raw record data.
          *
-         * @param int $ttl The TTL in seconds.
+         * @param int $before The Unix timestamp before which a record is old
+         * @param int $limit The maximum number of records to return
+         * @return array[] An array of raw audit log record data, oldest first
+         * @throws InvalidArgumentException If the limit is out of range
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @return int The number of rows deleted.
          */
-        public static function cleanEntries(int $ttl): int
+        public static function getOldRecords(int $before, int $limit=1000): array
         {
-            if($ttl <= 0)
+            if($limit < 1 || $limit > 10000)
             {
-                throw new InvalidArgumentException("TTL must be greater than zero.");
+                throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
-
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM audit_log WHERE timestamp < :timestamp");
-                $stmt->bindParam(':timestamp', $timestamp);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM audit_log WHERE timestamp < :before ORDER BY timestamp ASC, uuid ASC LIMIT :limit");
+                $stmt->bindValue(':before', date('Y-m-d H:i:s', $before));
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve old audit log records: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
+         * Deletes the given audit log records that are still eligible for cleanup (see getOldRecords()), a record that
+         * changed since it was retrieved is kept. No record changes are dispatched for the deleted records.
+         *
+         * @param string[] $uuids The UUIDs of the audit log records to delete
+         * @param int $before The Unix timestamp that was given to getOldRecords()
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function purgeRecords(array $uuids, int $before): int
+        {
+            if(empty($uuids))
+            {
+                return 0;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($uuids);
+            $parameters[':before'] = date('Y-m-d H:i:s', $before);
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("DELETE FROM audit_log WHERE uuid IN ($placeholders) AND timestamp < :before");
+                $stmt->execute($parameters);
                 return $stmt->rowCount();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to clean audit log entries: " . $e->getMessage(), 0, $e);
+                throw new DatabaseOperationException("Failed to purge audit log records: " . $e->getMessage(), 0, $e);
             }
             finally
             {
-                if (self::isCachingEnabled())
+                if(self::isCachingEnabled())
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
