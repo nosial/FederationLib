@@ -991,19 +991,31 @@
          * parent's other related entities, excluding the queried entity itself.
          *
          * @param string $entityIdentifier The entity UUID, hash, or address to query.
+         * @param IncidentType[]|string[]|null $concerns Optional. The concerns whose blacklist records determine the suggested action, the server's default concerns when omitted
          * @return EntityQueryResult The queried entity and its related entities.
          * @throws RequestException If the request fails or the entity is not found.
          * @throws InvalidArgumentException If the identifier is empty.
          */
-        public function queryEntity(string $entityIdentifier): EntityQueryResult
+        public function queryEntity(string $entityIdentifier, ?array $concerns=null): EntityQueryResult
         {
             if(empty($entityIdentifier))
             {
                 throw new InvalidArgumentException('Entity identifier cannot be empty');
             }
 
+            $params = null;
+            if($concerns !== null)
+            {
+                if(empty($concerns))
+                {
+                    throw new InvalidArgumentException('Concerns cannot be empty');
+                }
+
+                $params = ['concerns' => implode(',', self::concernValues($concerns))];
+            }
+
             return EntityQueryResult::fromArray(
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/query', null, [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier) . '/query', $params, [HttpResponseCode::OK],
                 sprintf('Failed to query entity %s', $entityIdentifier)
             ));
         }
