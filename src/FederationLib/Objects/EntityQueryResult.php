@@ -2,6 +2,7 @@
 
     namespace FederationLib\Objects;
 
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\SuggestedActionType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\StandardObjectInterface;
@@ -20,14 +21,21 @@
         private bool $suggestionOverridden;
         private ?SuggestedActionType $suggestedAction;
         private ?int $suggestedLiftTimestamp;
+        /**
+         * @var IncidentType[]|null
+         */
+        private ?array $concerns;
 
         /**
          * @param EntityRecord $entityRecord The queried entity.
          * @param EntityRecord[] $relatedEntities Entities in the queried entity's relationship group.
          * @param BlacklistRecord[] $activeBlacklists Active blacklist records for the queried entity and its relationship group.
+         * @param IncidentType[]|null $concerns The effective concerns of the request, only active blacklist records of
+         *                                      these incident types determine the suggested action, null considers all
          */
-        public function __construct(EntityRecord $entityRecord, array $relatedEntities, array $activeBlacklists=[])
+        public function __construct(EntityRecord $entityRecord, array $relatedEntities, array $activeBlacklists=[], ?array $concerns=null)
         {
+            $this->concerns = $concerns !== null ? array_values($concerns) : null;
             $this->entityRecord = $entityRecord;
             $this->relatedEntities = array_values(array_filter($relatedEntities, fn($entity) => $entity instanceof EntityRecord));
             $this->activeBlacklists = array_values(array_filter($activeBlacklists, fn($blacklist) => $blacklist instanceof BlacklistRecord && !$blacklist->isLifted()));
@@ -80,6 +88,24 @@
         }
 
         /**
+         * Returns the active blacklist records whose incident type is an effective concern of the request, which alone
+         * determine the suggested action; every active blacklist record is still returned (OFD "Concerns")
+         *
+         * @return BlacklistRecord[] The relevant active blacklist records
+         */
+        private function getRelevantBlacklists(): array
+        {
+            if($this->concerns === null)
+            {
+                return $this->activeBlacklists;
+            }
+
+            return array_values(array_filter($this->activeBlacklists,
+                fn(BlacklistRecord $blacklist) => in_array($blacklist->getType(), $this->concerns, true)
+            ));
+        }
+
+        /**
          * Returns the action suggested by active blacklist records.
          *
          * A permanent target blacklist permanently blocks the target. Any other
@@ -94,12 +120,13 @@
             }
 
             $targetUuid = $this->entityRecord->getUuid();
-            if (array_any($this->activeBlacklists, fn($blacklist) => $blacklist->getEntityUuid() === $targetUuid && $blacklist->getExpires() === null))
+            $relevantBlacklists = $this->getRelevantBlacklists();
+            if (array_any($relevantBlacklists, fn($blacklist) => $blacklist->getEntityUuid() === $targetUuid && $blacklist->getExpires() === null))
             {
                 return SuggestedActionType::PERMANENTLY_BLOCK_ENTITY;
             }
 
-            return empty($this->activeBlacklists) ? null : SuggestedActionType::TEMPORARILY_BLOCK_ENTITY;
+            return empty($relevantBlacklists) ? null : SuggestedActionType::TEMPORARILY_BLOCK_ENTITY;
         }
 
         /**
@@ -121,7 +148,7 @@
             }
 
             $latestExpiry = 0;
-            foreach($this->activeBlacklists as $blacklist)
+            foreach($this->getRelevantBlacklists() as $blacklist)
             {
                 $expires = $blacklist->getExpires();
                 if($expires === null)
@@ -146,15 +173,30 @@
         /**
          * @inheritDoc
          */
-        public function toStandardArray(bool $includeMetadata=true): array
+        public function toStandardArray(bool $includeMetadata=true, bool $hideTelephone=false): array
         {
+            // A hidden telephone entity is returned only when it was itself queried by its address or SHA-256
+            // identifier, never as a related entity, and its metadata is never returned (OFD "Telephone Entities")
+            $relatedEntities = $hideTelephone
+                ? array_values(array_filter($this->relatedEntities, fn(EntityRecord $entity) => !$entity->isTelephone()))
+                : $this->relatedEntities;
+
+            // The blacklist records of hidden related telephone entities are omitted too, their entity member would
+            // reveal that the host holds records about them
+            $hiddenUuids = $hideTelephone ? array_map(fn(EntityRecord $entity) => $entity->getUuid(), array_filter(
+                $this->relatedEntities, fn(EntityRecord $entity) => $entity->isTelephone() && $entity->getUuid() !== $this->entityRecord->getUuid()
+            )) : [];
+            $activeBlacklists = array_values(array_filter($this->activeBlacklists,
+                fn(BlacklistRecord $blacklist) => !in_array($blacklist->getEntityUuid(), $hiddenUuids, true)
+            ));
+
             return [
-                'entity_record' => $this->entityRecord->toArray($includeMetadata),
+                'entity_record' => $this->entityRecord->toArray($includeMetadata && !($hideTelephone && $this->entityRecord->isTelephone())),
                 'related_entities' => array_map(
-                    fn(EntityRecord $entity) => $entity->toArray($includeMetadata), $this->relatedEntities
+                    fn(EntityRecord $entity) => $entity->toArray($includeMetadata), $relatedEntities
                 ),
                 'active_blacklists' => array_map(
-                    fn(BlacklistRecord $blacklist) => $blacklist->toArray(), $this->activeBlacklists
+                    fn(BlacklistRecord $blacklist) => $blacklist->toArray(), $activeBlacklists
                 ),
                 'suggested_action' => $this->getSuggestedAction()?->value,
                 'suggested_lift_timestamp' => $this->getSuggestedLiftTimestamp(),
