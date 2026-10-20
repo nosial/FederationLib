@@ -26,7 +26,6 @@
         private const string ERROR_ENTITY_IDENTIFIER_REQUIRED = 'Reporting entity identifier is required';
         private const string ERROR_EVIDENCE_REQUIRED = 'Evidence is required';
         private const string ERROR_EVIDENCE_INVALID = 'Evidence must be a single evidence object or an array of evidence objects';
-        private const string ERROR_EVIDENCE_ITEM_INVALID = 'Each evidence entry must be an object';
         private const string ERROR_INVALID_TYPE = 'Invalid incident type';
         private const string ERROR_INVALID_IDENTIFIER = 'Given identifier is not a valid UUID, SHA-256, or entity address input';
         private const string ERROR_FAILED_RETRIEVE_ENTITY = 'Failed to retrieve entity record';
@@ -46,7 +45,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            $entityIdentifier = FederationServer::getParameter('reporting_entity');
+            $entityIdentifier = FederationServer::getStringParameter('reporting_entity');
             if($entityIdentifier === null)
             {
                 throw new RequestException(self::ERROR_ENTITY_IDENTIFIER_REQUIRED, HttpResponseCode::BAD_REQUEST);
@@ -64,15 +63,21 @@
                 throw new RequestException(self::ERROR_EVIDENCE_INVALID, HttpResponseCode::BAD_REQUEST);
             }
 
+            // Each evidence entry is a ContentInput object, validated with its content type and context
+            $contentInputs = [];
             foreach($evidenceItems as $index => $item)
             {
-                if(!self::validateEvidenceItem($item))
+                try
                 {
-                    throw new RequestException(self::ERROR_EVIDENCE_ITEM_INVALID . ' at index ' . $index, HttpResponseCode::BAD_REQUEST);
+                    $contentInputs[] = ContentInput::fromRequest($item);
+                }
+                catch(InvalidArgumentException $e)
+                {
+                    throw new RequestException(sprintf('%s at index %d', $e->getMessage(), $index), HttpResponseCode::BAD_REQUEST, $e);
                 }
             }
 
-            $incidentType = FederationServer::getParameter('incident_type');
+            $incidentType = FederationServer::getStringParameter('incident_type');
             if(!is_string($incidentType))
             {
                 throw new RequestException(self::ERROR_INVALID_TYPE, HttpResponseCode::BAD_REQUEST);
@@ -88,7 +93,7 @@
                 throw new RequestException(self::ERROR_ILLEGAL_CONTENT_NOT_PERMITTED, HttpResponseCode::FORBIDDEN);
             }
 
-            $reportMessage = FederationServer::getParameter('report_message');
+            $reportMessage = FederationServer::getStringParameter('report_message');
             if(empty((string)$reportMessage))
             {
                 $reportMessage = null;
@@ -115,31 +120,29 @@
                     submittingOperator: $authenticatedOperator->getUuid(),
                     reportingEntity: $entityRecord->getUuid(),
                     type: $incidentType,
-                    message: $reportMessage ?? null
+                    message: $reportMessage ?? null,
+                    // A report submitted by a bot operator is automated, like the reports the host creates itself
+                    automated: $authenticatedOperator->isBot()
                 );
 
                 // Create the evidence records
                 $evidenceRecords = [];
-                foreach($evidenceItems as $item)
+                foreach($contentInputs as $contentInput)
                 {
-                    $textContent = isset($item['text_content']) && is_string($item['text_content']) ? $item['text_content'] : null;
-                    $note = isset($item['note']) && is_string($item['note']) ? $item['note'] : null;
-                    $tag = isset($item['tag']) && is_string($item['tag']) ? $item['tag'] : null;
-                    // Evidence for ILLEGAL_CONTENT reports is always confidential regardless of the submitted value
-                    $confidential = $incidentType === IncidentType::ILLEGAL_CONTENT || (isset($item['confidential'])
-                        ? filter_var($item['confidential'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false
-                        : false);
-                    $metadata = isset($item['metadata']) && is_array($item['metadata']) ? $item['metadata'] : null;
-
+                    // Evidence for ILLEGAL_CONTENT reports is always confidential regardless of the submitted value,
+                    // and EvidenceManager makes evidence about a telephone entity confidential
                     $evidenceUuid = EvidenceManager::addEvidence(
                         entity: $entityRecord->getUuid(),
                         operator: $authenticatedOperator->getUuid(),
-                        textContent: $textContent,
-                        note: $note,
-                        tag: $tag,
-                        confidential: $confidential,
+                        textContent: $contentInput->getTextContent(),
+                        note: $contentInput->getNote(),
+                        tag: $contentInput->getTag(),
+                        confidential: $incidentType === IncidentType::ILLEGAL_CONTENT || $contentInput->isConfidential(),
                         report: $reportUuid,
-                        metadata: $metadata
+                        metadata: $contentInput->getMetadata(),
+                        contentType: $contentInput->getContentType(),
+                        context: $contentInput->getContext(),
+                        automated: $authenticatedOperator->isBot()
                     );
 
                     $evidenceRecord = EvidenceManager::getEvidence($evidenceUuid);
@@ -156,7 +159,8 @@
                         message: $reportMessage ?? 'No message provided',
                         operatorUuid: $authenticatedOperator->getUuid(),
                         entityUuid: $entityRecord->getUuid(),
-                        evidenceUuid: $evidenceRecords[0]->getUuid()
+                        evidenceUuid: $evidenceRecords[0]->getUuid(),
+                        reportUuid: $reportUuid
                     );
                 }
             }
@@ -201,47 +205,6 @@
             }
 
             return [$evidenceInput];
-        }
-
-        /**
-         * Validates that an evidence item contains only expected fields with valid types.
-         *
-         * @param array $item The evidence item to validate
-         * @return bool True if valid, false otherwise
-         */
-        private static function validateEvidenceItem(array $item): bool
-        {
-            if (array_any(array_keys($item), fn($key) => !in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true)))
-            {
-                return false;
-            }
-
-            if(isset($item['text_content']) && !is_string($item['text_content']))
-            {
-                return false;
-            }
-
-            if(isset($item['note']) && !is_string($item['note']))
-            {
-                return false;
-            }
-
-            if(isset($item['tag']) && !is_string($item['tag']))
-            {
-                return false;
-            }
-
-            if(isset($item['confidential']) && !is_bool($item['confidential']) && !is_string($item['confidential']) && !is_int($item['confidential']))
-            {
-                return false;
-            }
-
-            if(isset($item['metadata']) && !is_array($item['metadata']))
-            {
-                return false;
-            }
-
-            return true;
         }
 
         /**
@@ -314,7 +277,7 @@
                                 'incident_type' => [
                                     'type' => 'string',
                                     'description' => 'The type of incident being reported',
-                                    'enum' => ['SPAM', 'SCAM', 'SERVICE_ABUSE', 'ILLEGAL_CONTENT', 'MALWARE', 'PHISHING', 'OTHER'],
+                                    'enum' => [...array_map(fn(IncidentType $type) => $type->value, IncidentType::cases())],
                                 ],
                                 'report_message' => [
                                     'type' => ['string', 'null'],
