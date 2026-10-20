@@ -29,7 +29,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isAuditLogsPublic());
             if(!Configuration::getServerConfiguration()->isAuditLogsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUDIT_LOGS_NOT_AVAILABLE, HttpResponseCode::UNAUTHORIZED);
@@ -46,12 +46,12 @@
                 throw new RequestException(self::ERROR_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
-            $categoryInput = FederationServer::getParameter('category');
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListAuditLogsMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? AuditLogCategory::tryFromCaseInsensitive($categoryInput) : null;
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListAuditLogsMaxItems())
@@ -64,22 +64,19 @@
                 $page = 1;
             }
 
-            if($authenticatedOperator === null)
+            if($authenticatedOperator !== null && ($operatorUuid === $authenticatedOperator->getUuid() || $authenticatedOperator->hasOperatorPermissions()))
             {
-                // Public audit logs are enabled, filter by public entries
+                // An operator can retrieve all of its own entries, operator permissions grant every operator's entries
+                $filteredEntries = null;
+            }
+            elseif(Configuration::getServerConfiguration()->isAuditLogsPublic())
+            {
+                // Public audit logs are enabled, filter by public entries, authenticating never reduces this access
                 $filteredEntries = Configuration::getServerConfiguration()->getPublicAuditEntries();
             }
             else
             {
-                // Enforce audit log isolation: an operator may only view their own logs
-                // unless they have operator management permissions.
-                if ($operatorUuid !== $authenticatedOperator->getUuid() && !$authenticatedOperator->hasOperatorPermissions())
-                {
-                    throw new RequestException(self::ERROR_PERMISSION_DENIED, HttpResponseCode::FORBIDDEN);
-                }
-
-                // If an operator is authenticated, we can retrieve all entries
-                $filteredEntries = null;
+                throw new RequestException(self::ERROR_PERMISSION_DENIED, HttpResponseCode::FORBIDDEN);
             }
 
             try
