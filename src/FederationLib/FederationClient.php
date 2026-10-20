@@ -1103,7 +1103,7 @@
 
             return array_map(
                 fn($item) => AuditLog::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/audit', $params, [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier) . '/audit', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list audit logs for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
