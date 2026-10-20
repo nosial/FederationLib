@@ -22,6 +22,7 @@
     {
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to upload attachments';
         private const string ERROR_EVIDENCE_NOT_FOUND = 'Evidence not found';
+        private const string ERROR_NOT_EVIDENCE_OWNER = 'Files can only be attached to evidence submitted by the operator itself without management permissions';
         private const string ERROR_UNABLE_TO_UPLOAD = 'Unable to upload file attachment to server';
         private const int URL_MAX_LENGTH = 2048;
         private const int URL_MAX_REDIRECTS = 5;
@@ -37,7 +38,7 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, 403);
             }
 
-            $evidenceUuid = FederationServer::getParameter('evidence_uuid');
+            $evidenceUuid = FederationServer::getStringParameter('evidence_uuid');
             if(empty($evidenceUuid) || !Validate::uuid($evidenceUuid))
             {
                 throw new RequestException('A valid evidence UUID is required', 400);
@@ -47,9 +48,15 @@
             {
                 try
                 {
-                    if(!EvidenceManager::evidenceExists($evidenceUuid))
+                    $evidenceRecord = EvidenceManager::getEvidence($evidenceUuid);
+                    if($evidenceRecord === null)
                     {
                         throw new RequestException(self::ERROR_EVIDENCE_NOT_FOUND, 404);
+                    }
+
+                    if($evidenceRecord->getOperatorUuid() !== $operator->getUuid() && !$operator->hasManagementPermissions())
+                    {
+                        throw new RequestException(self::ERROR_NOT_EVIDENCE_OWNER, 403);
                     }
                 }
                 catch (DatabaseOperationException $e)
@@ -77,7 +84,7 @@
                 throw new RequestException('A valid URL is required', 400);
             }
 
-            if($hasUrl && !Configuration::getServerConfiguration()->isUrlUploadsEnabled())
+            if($hasUrl && !Configuration::getRemoteRetrievalConfiguration()->isUploadsEnabled())
             {
                 throw new RequestException('Uploading attachments from a URL is disabled on this server', 400);
             }
@@ -255,7 +262,7 @@
         private static function downloadFromUrl(string $url, string $destination): string
         {
             $maxSize = Configuration::getServerConfiguration()->getMaxUploadSize();
-            $deadline = time() + Configuration::getServerConfiguration()->getUrlUploadTimeout();
+            $deadline = time() + Configuration::getRemoteRetrievalConfiguration()->getTimeout();
 
             for ($redirects = 0; ; $redirects++)
             {
@@ -421,7 +428,7 @@
                 throw new RequestException('The host of the URL could not be resolved', 400);
             }
 
-            if (!Configuration::getServerConfiguration()->isUrlUploadPrivateAllowed())
+            if (!Configuration::getRemoteRetrievalConfiguration()->isPrivateAllowed())
             {
                 foreach ($addresses as $address)
                 {
@@ -620,7 +627,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Uploads a file as an attachment and associates it with an evidence record. The file is either uploaded directly as a multipart/form-data part or retrieved by the server from an HTTP or HTTPS URL, but not both. Client permissions are required.';
+            return 'Uploads a file as an attachment and associates it with an evidence record. The file is either uploaded directly as a multipart/form-data part or retrieved by the server from an HTTP or HTTPS URL, but not both. Client permissions are required, and management permissions to attach a file to evidence submitted by another operator.';
         }
 
         /**
@@ -723,7 +730,7 @@
                     ],
                 ],
                 '403' => [
-                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS,
+                    'description' => self::ERROR_INSUFFICIENT_PERMISSIONS . ', or ' . self::ERROR_NOT_EVIDENCE_OWNER,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
