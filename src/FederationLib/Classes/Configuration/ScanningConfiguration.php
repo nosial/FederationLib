@@ -3,10 +3,17 @@
     namespace FederationLib\Classes\Configuration;
 
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\ScanningRules;
 
     class ScanningConfiguration
     {
+        public const float RISK_SCORE_NEUTRAL_POINT = 50.0;
+        public const float RISK_SCORE_MIN_BOUND = 0.0;
+        public const float RISK_SCORE_MAX_BOUND = 100.0;
+        public const int REPUTATION_MIN_BOUND = -1000;
+        public const int REPUTATION_MAX_BOUND = 1000;
+        private string $autoReportMode;
         private float $modifierAuthorBlacklisted;
         private float $modifierAuthorPermanentlyBlacklisted;
         private float $modifierAuthorWhitelisted;
@@ -30,15 +37,11 @@
         private float $modifierClassificationNormal;
         private float $modifierClassificationSuspicious;
         private float $modifierClassificationMalicious;
-        private bool $autoReport;
-        private float $autoReportThreshold;
-        private bool $autoReportCaution;
         private float $actionBlockThreshold;
         private float $actionCautionThreshold;
-        private int $reputationWindowDuration;
         private int $reputationGain;
-        private int $reputationMinBound;
-        private int $reputationMaxBound;
+        private int $reputationLoss;
+        private int $mentionMinAuthors;
         private int $reportReputationNormal;
         private int $reportReputationSuspicious;
         private int $reportReputationMalicious;
@@ -48,10 +51,16 @@
         private int $reportNamedEntityReputationMalicious;
         private int $blacklistReputation;
         private int $blacklistRelatedReputation;
-        private float $riskScoreNeutralPoint;
         private float $riskScoreScalingFactor;
-        private float $riskScoreMinBound;
-        private float $riskScoreMaxBound;
+        /**
+         * @var IncidentType[]
+         */
+        private array $concerns;
+        /**
+         * @var IncidentType[]
+         */
+        private array $defaultConcerns;
+        private int $dnsLookupLimit;
 
         /**
          * Constructs a ScanningConfiguration from a configuration array
@@ -60,55 +69,112 @@
          */
         public function __construct(array $configuration)
         {
-            $this->modifierAuthorBlacklisted = (float)($configuration['modifier_author_blacklisted'] ?? ScanningRules::AUTHOR_BLACKLISTED->getModifier());
-            $this->modifierAuthorPermanentlyBlacklisted = (float)($configuration['modifier_author_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->modifierAuthorWhitelisted = (float)($configuration['modifier_author_whitelisted'] ?? ScanningRules::AUTHOR_WHITELISTED->getModifier());
-            $this->modifierAuthorGoodReputation = (float)($configuration['modifier_author_good_reputation'] ?? ScanningRules::AUTHOR_GOOD_REPUTATION->getModifier());
-            $this->modifierAuthorBadReputation = (float)($configuration['modifier_author_bad_reputation'] ?? ScanningRules::AUTHOR_BAD_REPUTATION->getModifier());
-            $this->modifierAuthorParentBlacklisted = (float)($configuration['modifier_author_parent_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_BLACKLISTED->getModifier());
-            $this->modifierAuthorParentPermanentlyBlacklisted = (float)($configuration['modifier_author_parent_permanently_blacklisted'] ?? ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->modifierAuthorParentWhitelisted = (float)($configuration['modifier_author_parent_whitelisted'] ?? ScanningRules::AUTHOR_PARENT_WHITELISTED->getModifier());
-            $this->modifierAuthorParentGoodReputation = (float)($configuration['modifier_author_parent_good_reputation'] ?? ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION->getModifier());
-            $this->modifierAuthorParentBadReputation = (float)($configuration['modifier_author_parent_bad_reputation'] ?? ScanningRules::AUTHOR_PARENT_BAD_REPUTATION->getModifier());
-            $this->modifierNamedEntityBlacklisted = (float)($configuration['modifier_named_entity_blacklisted'] ?? ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier());
-            $this->modifierNamedEntityPermanentlyBlacklisted = (float)($configuration['modifier_named_entity_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->modifierNamedEntityWhitelisted = (float)($configuration['modifier_named_entity_whitelisted'] ?? ScanningRules::NAMED_ENTITY_WHITELISTED->getModifier());
-            $this->modifierNamedEntityGoodReputation = (float)($configuration['modifier_named_entity_good_reputation'] ?? ScanningRules::NAMED_ENTITY_GOOD_REPUTATION->getModifier());
-            $this->modifierNamedEntityBadReputation = (float)($configuration['modifier_named_entity_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_BAD_REPUTATION->getModifier());
-            $this->modifierNamedEntityParentBlacklisted = (float)($configuration['modifier_named_entity_parent_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED->getModifier());
-            $this->modifierNamedEntityParentPermanentlyBlacklisted = (float)($configuration['modifier_named_entity_parent_permanently_blacklisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier());
-            $this->modifierNamedEntityParentWhitelisted = (float)($configuration['modifier_named_entity_parent_whitelisted'] ?? ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED->getModifier());
-            $this->modifierNamedEntityParentGoodReputation = (float)($configuration['modifier_named_entity_parent_good_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION->getModifier());
-            $this->modifierNamedEntityParentBadReputation = (float)($configuration['modifier_named_entity_parent_bad_reputation'] ?? ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION->getModifier());
-            $this->modifierClassificationNormal = (float)($configuration['modifier_classification_normal'] ?? ScanningRules::CLASSIFICATION_NORMAL->getModifier());
-            $this->modifierClassificationSuspicious = (float)($configuration['modifier_classification_suspicious'] ?? ScanningRules::CLASSIFICATION_SUSPICIOUS->getModifier());
-            $this->modifierClassificationMalicious = (float)($configuration['modifier_classification_malicious'] ?? ScanningRules::CLASSIFICATION_MALICIOUS->getModifier());
-            $this->autoReport = (bool)($configuration['auto_report'] ?? false);
-            $this->autoReportThreshold = (float)($configuration['auto_report_threshold'] ?? 80.00);
-            $this->autoReportCaution = (bool)($configuration['auto_report_caution'] ?? false);
+            // Overrides of the points of FederationLib's scanning rules, keyed by rule name (eg; AUTHOR_BLACKLISTED)
+            $modifiers = ConfigurationValues::parseMap($configuration['modifiers'] ?? []);
+            $this->modifierAuthorBlacklisted = self::getModifier($modifiers, ScanningRules::AUTHOR_BLACKLISTED);
+            $this->modifierAuthorPermanentlyBlacklisted = self::getModifier($modifiers, ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED);
+            $this->modifierAuthorWhitelisted = self::getModifier($modifiers, ScanningRules::AUTHOR_WHITELISTED);
+            $this->modifierAuthorGoodReputation = self::getModifier($modifiers, ScanningRules::AUTHOR_GOOD_REPUTATION);
+            $this->modifierAuthorBadReputation = self::getModifier($modifiers, ScanningRules::AUTHOR_BAD_REPUTATION);
+            $this->modifierAuthorParentBlacklisted = self::getModifier($modifiers, ScanningRules::AUTHOR_PARENT_BLACKLISTED);
+            $this->modifierAuthorParentPermanentlyBlacklisted = self::getModifier($modifiers, ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED);
+            $this->modifierAuthorParentWhitelisted = self::getModifier($modifiers, ScanningRules::AUTHOR_PARENT_WHITELISTED);
+            $this->modifierAuthorParentGoodReputation = self::getModifier($modifiers, ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION);
+            $this->modifierAuthorParentBadReputation = self::getModifier($modifiers, ScanningRules::AUTHOR_PARENT_BAD_REPUTATION);
+            $this->modifierNamedEntityBlacklisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_BLACKLISTED);
+            $this->modifierNamedEntityPermanentlyBlacklisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED);
+            $this->modifierNamedEntityWhitelisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_WHITELISTED);
+            $this->modifierNamedEntityGoodReputation = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_GOOD_REPUTATION);
+            $this->modifierNamedEntityBadReputation = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_BAD_REPUTATION);
+            $this->modifierNamedEntityParentBlacklisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED);
+            $this->modifierNamedEntityParentPermanentlyBlacklisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED);
+            $this->modifierNamedEntityParentWhitelisted = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED);
+            $this->modifierNamedEntityParentGoodReputation = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION);
+            $this->modifierNamedEntityParentBadReputation = self::getModifier($modifiers, ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION);
+            $this->modifierClassificationNormal = self::getModifier($modifiers, ScanningRules::CLASSIFICATION_NORMAL);
+            $this->modifierClassificationSuspicious = self::getModifier($modifiers, ScanningRules::CLASSIFICATION_SUSPICIOUS);
+            $this->modifierClassificationMalicious = self::getModifier($modifiers, ScanningRules::CLASSIFICATION_MALICIOUS);
             $this->actionBlockThreshold = (float)($configuration['action_block_threshold'] ?? 80.00);
             $this->actionCautionThreshold = (float)($configuration['action_caution_threshold'] ?? 60.00);
-            $this->reputationWindowDuration = (int)($configuration['reputation_window_duration'] ?? 3600);
-            // OFD: incremental positive adjustments SHOULD NOT exceed 10 points; 0 disables gains
-            $this->reputationGain = max(0, min(10, (int)($configuration['reputation_gain'] ?? 1)));
-            $this->reputationMinBound = (int)($configuration['reputation_min_bound'] ?? -1000);
-            $this->reputationMaxBound = (int)($configuration['reputation_max_bound'] ?? 1000);
-            // Reputation adjustments applied when a report is closed with a classification flag. Positive
-            // adjustments are clamped to 0-10 per the OFD incremental gain rule, negative ones to 0 or below.
-            $this->reportReputationNormal = max(0, min(10, (int)($configuration['report_reputation_normal'] ?? 1)));
-            $this->reportReputationSuspicious = min(0, (int)($configuration['report_reputation_suspicious'] ?? -10));
-            $this->reportReputationMalicious = min(0, (int)($configuration['report_reputation_malicious'] ?? -20));
-            $this->reportNamedEntityReputation = (bool)($configuration['report_named_entity_reputation'] ?? true);
-            $this->reportNamedEntityReputationNormal = max(0, min(10, (int)($configuration['report_named_entity_reputation_normal'] ?? 1)));
-            $this->reportNamedEntityReputationSuspicious = min(0, (int)($configuration['report_named_entity_reputation_suspicious'] ?? -5));
-            $this->reportNamedEntityReputationMalicious = min(0, (int)($configuration['report_named_entity_reputation_malicious'] ?? -10));
-            // Reputation decreases applied when an entity is blacklisted, clamped to 0 or below
+            $autoReport = $configuration['auto_report'] ?? 'block';
+            $autoReport = is_bool($autoReport) ? ($autoReport ? 'block' : 'off') : strtolower(trim((string)$autoReport));
+            $this->autoReportMode = in_array($autoReport, ['block', 'caution', 'off'], true) ? $autoReport
+                : (ConfigurationValues::parseBool($autoReport, true) ? 'block' : 'off');
+            $this->reputationGain = max(0, min(10, (int)($configuration['reputation_gain'] ?? 10)));
+            $this->reputationLoss = min(0, (int)($configuration['reputation_loss'] ?? -5));
+            $this->mentionMinAuthors = max(1, (int)($configuration['mention_min_authors'] ?? 3));
+            $reportReputation = ConfigurationValues::parseMap($configuration['report_reputation'] ?? []);
+            $this->reportReputationNormal = max(0, min(10, (int)($reportReputation['NORMAL'] ?? 1)));
+            $this->reportReputationSuspicious = min(0, (int)($reportReputation['SUSPICIOUS'] ?? -10));
+            $this->reportReputationMalicious = min(0, (int)($reportReputation['MALICIOUS'] ?? -20));
+            $namedEntityReputation = $configuration['report_named_entity_reputation'] ?? [];
+            $this->reportNamedEntityReputation = !($namedEntityReputation === false
+                || (is_string($namedEntityReputation) && in_array(strtolower(trim($namedEntityReputation)), ['false', 'off', 'no', '0'], true)));
+            $namedEntityReputation = ConfigurationValues::parseMap($namedEntityReputation);
+            $this->reportNamedEntityReputationNormal = max(0, min(10, (int)($namedEntityReputation['NORMAL'] ?? 1)));
+            $this->reportNamedEntityReputationSuspicious = min(0, (int)($namedEntityReputation['SUSPICIOUS'] ?? -5));
+            $this->reportNamedEntityReputationMalicious = min(0, (int)($namedEntityReputation['MALICIOUS'] ?? -10));
             $this->blacklistReputation = min(0, (int)($configuration['blacklist_reputation'] ?? -50));
             $this->blacklistRelatedReputation = min(0, (int)($configuration['blacklist_related_reputation'] ?? -10));
-            $this->riskScoreNeutralPoint = (float)($configuration['risk_score_neutral_point'] ?? 50.0);
             $this->riskScoreScalingFactor = (float)($configuration['risk_score_scaling_factor'] ?? 2.3);
-            $this->riskScoreMinBound = (float)($configuration['risk_score_min_bound'] ?? 0.0);
-            $this->riskScoreMaxBound = (float)($configuration['risk_score_max_bound'] ?? 100.0);
+            $this->concerns = self::parseConcerns($configuration['concerns'] ?? null, self::getAllConcerns());
+            $this->defaultConcerns = array_values(array_filter(
+                self::parseConcerns($configuration['default_concerns'] ?? null, self::getStandardDefaultConcerns()),
+                fn(IncidentType $concern) => in_array($concern, $this->concerns, true)
+            ));
+            $this->dnsLookupLimit = max(0, (int)($configuration['dns_lookup_limit'] ?? 10));
+        }
+
+        /**
+         * Returns every incident type that can be a concern, which is every incident type (OFD "Concern values")
+         *
+         * @return IncidentType[] The concerns
+         */
+        public static function getAllConcerns(): array
+        {
+            return IncidentType::cases();
+        }
+
+        /**
+         * Returns the concerns assessed by default when a request names none: every concern except ADVERTISING and
+         * TRACKING, which OFD recommends hosts do not assess by default so that a service concerned only with
+         * unsolicited messages is not affected by them
+         *
+         * @return IncidentType[] The default concerns
+         */
+        public static function getStandardDefaultConcerns(): array
+        {
+            return array_values(array_filter(self::getAllConcerns(),
+                fn(IncidentType $type) => $type !== IncidentType::ADVERTISING && $type !== IncidentType::TRACKING
+            ));
+        }
+
+        /**
+         * Parses a configured list of concerns, ignoring values that are not incident types
+         *
+         * @param mixed $value The configured list, an array or a comma-separated string
+         * @param IncidentType[] $default The concerns to use when nothing is configured
+         * @return IncidentType[] The concerns
+         */
+        private static function parseConcerns(mixed $value, array $default): array
+        {
+            if($value === null)
+            {
+                return $default;
+            }
+
+            $values = is_string($value) ? explode(',', $value) : (is_array($value) ? $value : []);
+            $concerns = [];
+            foreach($values as $item)
+            {
+                $concern = is_string($item) ? IncidentType::tryFromCaseInsensitive(trim($item)) : null;
+                if($concern !== null)
+                {
+                    $concerns[$concern->value] = $concern;
+                }
+            }
+
+            return array_values($concerns);
         }
 
         /**
@@ -348,7 +414,7 @@
          */
         public function isAutoReport(): bool
         {
-            return $this->autoReport;
+            return $this->autoReportMode !== 'off';
         }
 
         /**
@@ -358,7 +424,7 @@
          */
         public function getAutoReportThreshold(): float
         {
-            return $this->autoReportThreshold;
+            return $this->autoReportMode === 'caution' ? $this->actionCautionThreshold : $this->actionBlockThreshold;
         }
 
         /**
@@ -368,7 +434,7 @@
          */
         public function isAutoReportCaution(): bool
         {
-            return $this->autoReportCaution;
+            return $this->autoReportMode === 'caution';
         }
 
         /**
@@ -392,23 +458,34 @@
         }
 
         /**
-         * Returns the reputation window duration
+         * Returns the reputation an entity gains for a day of normal activity, before it tapers above 500
          *
-         * @return int Window duration in seconds
-         */
-        public function getReputationWindowDuration(): int
-        {
-            return $this->reputationWindowDuration;
-        }
-
-        /**
-         * Returns the reputation gained by an entity for each window of clean, authenticated activity
-         *
-         * @return int Reputation gain per window
+         * @return int Reputation gain per day, 0 to 10
          */
         public function getReputationGain(): int
         {
             return $this->reputationGain;
+        }
+
+        /**
+         * Returns the reputation an author loses for a day on which content it authored reached the block threshold
+         *
+         * @return int Reputation loss per day, 0 or below
+         */
+        public function getReputationLoss(): int
+        {
+            return $this->reputationLoss;
+        }
+
+        /**
+         * Returns the number of distinct authors that must mention an entity in normal content on a day for the entity
+         * to gain reputation from the mentions
+         *
+         * @return int The minimum number of distinct authors
+         */
+        public function getMentionMinAuthors(): int
+        {
+            return $this->mentionMinAuthors;
         }
 
         /**
@@ -418,7 +495,7 @@
          */
         public function getReputationMinBound(): int
         {
-            return $this->reputationMinBound;
+            return self::REPUTATION_MIN_BOUND;
         }
 
         /**
@@ -428,7 +505,7 @@
          */
         public function getReputationMaxBound(): int
         {
-            return $this->reputationMaxBound;
+            return self::REPUTATION_MAX_BOUND;
         }
 
         /**
@@ -503,7 +580,7 @@
          */
         public function getRiskScoreNeutralPoint(): float
         {
-            return $this->riskScoreNeutralPoint;
+            return self::RISK_SCORE_NEUTRAL_POINT;
         }
 
         /**
@@ -523,7 +600,7 @@
          */
         public function getRiskScoreMinBound(): float
         {
-            return $this->riskScoreMinBound;
+            return self::RISK_SCORE_MIN_BOUND;
         }
 
         /**
@@ -533,6 +610,75 @@
          */
         public function getRiskScoreMaxBound(): float
         {
-            return $this->riskScoreMaxBound;
+            return self::RISK_SCORE_MAX_BOUND;
+        }
+    
+        /**
+         * Returns the concerns the host can assess, published as the concerns member of the ServerInformation object
+         *
+         * @return IncidentType[] The concerns
+         */
+        public function getConcerns(): array
+        {
+            return $this->concerns;
+        }
+
+        /**
+         * Returns the concerns the host assesses when a request names none, a subset of getConcerns()
+         *
+         * @return IncidentType[] The default concerns
+         */
+        public function getDefaultConcerns(): array
+        {
+            return $this->defaultConcerns;
+        }
+
+        /**
+         * Returns whether the host resolves the DNS names submitted for scanning (HOSTNAME content, and the hosts of URL
+         * and WEB_PAGE content) itself, rather than relying on what the client asserts about them
+         *
+         * @return bool True if DNS lookups are performed
+         */
+        public function isDnsLookupsEnabled(): bool
+        {
+            return $this->dnsLookupLimit > 0;
+        }
+
+        /**
+         * Returns the maximum number of DNS names a single scan request may cause the host to resolve
+         *
+         * @return int The maximum number of DNS lookups per request
+         */
+        public function getDnsLookupLimit(): int
+        {
+            return $this->dnsLookupLimit;
+        }
+
+
+        /**
+         * Returns whether the host may store content submitted for scanning by unauthenticated requests, or records
+         * derived from it, published as collects_public_scan_content (OFD "Content Scanning"). This is the case when
+         * content scanning is public and either automatic reports, whose evidence records the scanned content, are
+         * generated, or a plugin declares that it stores scanned content.
+         *
+         * @param bool $scanContentPublic Whether content scanning is publicly accessible
+         * @param bool $pluginsCollect Whether a loaded plugin declares that it stores scanned content
+         * @return bool True if content submitted by unauthenticated requests may be stored
+         */
+        public function collectsPublicScanContent(bool $scanContentPublic, bool $pluginsCollect=false): bool
+        {
+            return $scanContentPublic && ($this->isAutoReport() || $pluginsCollect);
+        }
+
+        /**
+         * Returns the points of a scanning rule: the configured override, or the rule's default points
+         *
+         * @param array<string, mixed> $modifiers The configured overrides keyed by rule name
+         * @param ScanningRules $rule The scanning rule
+         * @return float The points
+         */
+        private static function getModifier(array $modifiers, ScanningRules $rule): float
+        {
+            return is_numeric($modifiers[$rule->name] ?? null) ? (float)$modifiers[$rule->name] : $rule->getModifier();
         }
     }
