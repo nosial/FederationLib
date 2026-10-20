@@ -1572,11 +1572,12 @@
         }
 
         /**
-         * Assigns an immutable classification to evidence.
+         * Assigns a classification to evidence, replacing its existing classification if it has one (OFD 1.1, an
+         * OFD 1.0 server rejects classifying evidence that is already classified with HTTP 409).
          *
          * @param string $evidenceUuid The UUID of the evidence record to classify
          * @param ClassificationFlag $classification The classification to assign
-         * @throws RequestException If the request fails or the evidence was already classified
+         * @throws RequestException If the request fails
          * @throws InvalidArgumentException If the evidence UUID is empty
          */
         public function classifyEvidence(string $evidenceUuid, ClassificationFlag $classification): void
@@ -2032,7 +2033,7 @@
 
             return array_map(
                 fn($item) => ReportRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/reports', $params, [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier) . '/reports', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list reports for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
