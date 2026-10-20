@@ -753,7 +753,74 @@
         }
 
         /**
-         * Sets the operator permissions for an operator.
+         * Grants or revokes permission groups of an operator, leaving the groups given as null unchanged. Management
+         * permissions inherit client permissions, so the server rejects revoking client permissions from an operator
+         * that keeps management permissions (HTTP 409).
+         *
+         * @param string $operatorUuid The UUID of the operator
+         * @param bool|null $client Optional. Whether the operator holds client permissions
+         * @param bool|null $management Optional. Whether the operator holds management permissions
+         * @param bool|null $operator Optional. Whether the operator holds operator permissions
+         * @return OperatorPermissions The updated permissions of the operator
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or no permission group is given
+         */
+        public function updateOperatorPermissions(string $operatorUuid, ?bool $client=null, ?bool $management=null, ?bool $operator=null): OperatorPermissions
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            $parameters = array_filter(['client' => $client, 'management' => $management, 'operator' => $operator], fn($value) => $value !== null);
+            if(count($parameters) === 0)
+            {
+                throw new InvalidArgumentException('At least one permission group must be given');
+            }
+
+            return OperatorPermissions::fromArray($this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/permissions', $parameters, [HttpResponseCode::OK],
+                sprintf('Failed to update the permissions of operator %s', $operatorUuid)
+            ));
+        }
+
+        /**
+         * Changes the configuration of an operator, leaving the settings given as null unchanged.
+         *
+         * @param string $operatorUuid The UUID of the operator
+         * @param bool|null $autoAssignReports Optional. Whether the operator opts in to the automatic assignment of
+         *                                     reports that are not automated
+         * @param bool|null $autoAssignAutomatedReports Optional. Whether the operator opts in to the automatic
+         *                                              assignment of automated reports
+         * @param bool|null $isBot Optional. Whether the operator is a bot, whose evidence and reports are automated
+         *                         and whose evidence is created confidential
+         * @return OperatorConfiguration The updated configuration of the operator
+         * @throws RequestException If the request fails or the response is invalid
+         * @throws InvalidArgumentException If the operator UUID is empty or no setting is given
+         */
+        public function updateOperatorConfiguration(string $operatorUuid, ?bool $autoAssignReports=null, ?bool $autoAssignAutomatedReports=null, ?bool $isBot=null): OperatorConfiguration
+        {
+            if(empty($operatorUuid))
+            {
+                throw new InvalidArgumentException('Operator UUID cannot be empty');
+            }
+
+            $parameters = array_filter([
+                'auto_assign_reports' => $autoAssignReports,
+                'auto_assign_automated_reports' => $autoAssignAutomatedReports,
+                'is_bot' => $isBot,
+            ], fn($value) => $value !== null);
+            if(count($parameters) === 0)
+            {
+                throw new InvalidArgumentException('At least one setting must be given');
+            }
+
+            return OperatorConfiguration::fromArray($this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/configuration', $parameters, [HttpResponseCode::OK],
+                sprintf('Failed to update the configuration of operator %s', $operatorUuid)
+            ));
+        }
+
+        /**
+         * Grants or revokes the operator permissions of an operator.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
          * @param bool $hasOperatorPermissions True to enable the permission, false to disable it
