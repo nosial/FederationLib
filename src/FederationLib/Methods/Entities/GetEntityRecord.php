@@ -25,7 +25,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEntitiesPublic());
             if(!Configuration::getServerConfiguration()->isEntitiesPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
@@ -51,7 +51,8 @@
                 throw new RequestException(self::ERROR_NOT_FOUND, 404);
             }
 
-            self::successResponse($entityRecord->toArray(!self::omitEntityMetadata()));
+            // The metadata of a hidden telephone entity is never returned, even when entity metadata is public
+            self::successResponse($entityRecord->toArray(!self::omitEntityMetadata() && !($entityRecord->isTelephone() && self::hideTelephoneEntities())));
         }
 
         /**
