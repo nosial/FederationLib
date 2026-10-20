@@ -30,7 +30,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isEvidencePublic());
             if(!Configuration::getServerConfiguration()->isEvidencePublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, HttpResponseCode::UNAUTHORIZED);
@@ -56,9 +56,11 @@
                     throw new RequestException(self::ERROR_ATTACHMENT_NOT_FOUND, HttpResponseCode::NOT_FOUND);
                 }
 
-                // Get the associated evidence record with the attachment
-                $evidenceRecord = EvidenceManager::getEvidence($attachmentRecord->getEvidenceUuid());
-                if($evidenceRecord !== null && $evidenceRecord->isConfidential())
+                // An attachment without evidence is treated as an attachment of confidential evidence (OFD "Deletion of
+                // Records")
+                $evidenceUuid = $attachmentRecord->getEvidenceUuid();
+                $evidenceRecord = $evidenceUuid === null ? null : EvidenceManager::getEvidence($evidenceUuid);
+                if($evidenceRecord === null || $evidenceRecord->isConfidential())
                 {
                     if($authenticatedOperator === null)
                     {
