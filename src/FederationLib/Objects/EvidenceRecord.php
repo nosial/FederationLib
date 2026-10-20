@@ -5,6 +5,7 @@
     use DateTime;
     use FederationLib\Classes\Utilities;
     use FederationLib\Enums\ClassificationFlag;
+    use FederationLib\Enums\ContentType;
     use FederationLib\Interfaces\ObjectSpecificationInterface;
     use FederationLib\Interfaces\SerializableInterface;
 
@@ -14,7 +15,10 @@
         private string $entityUuid;
         private string $operatorUuid;
         private bool $confidential;
+        private bool $automated;
         private ?string $textContent;
+        private ContentType $contentType;
+        private ?array $context;
         private ?string $note;
         private ?string $tag;
         private ?string $report;
@@ -34,7 +38,23 @@
             $this->entityUuid = $data['entity'] ?? '';
             $this->operatorUuid = $data['operator'] ?? '';
             $this->confidential = (bool)$data['confidential'] ?? false;
+            $this->automated = (bool)($data['automated'] ?? false);
             $this->textContent = $data['text_content'] ?? null;
+            $contentType = $data['content_type'] ?? null;
+            if(is_string($contentType))
+            {
+                $contentType = ContentType::tryFromCaseInsensitive($contentType);
+            }
+            $this->contentType = $contentType instanceof ContentType ? $contentType : ContentType::TEXT;
+            $this->context = null;
+            if(isset($data['context']))
+            {
+                $context = is_string($data['context']) ? @json_decode($data['context'], true) : $data['context'];
+                if(is_array($context) && count($context) > 0)
+                {
+                    $this->context = $context;
+                }
+            }
             $this->note = $data['note'] ?? null;
             $this->tag = $data['tag'] ?? null;
             $this->report = $data['report'] ?? null;
@@ -140,6 +160,16 @@
         }
 
         /**
+         * Check if the evidence is automated: created by the host itself or submitted by a bot operator
+         *
+         * @return bool
+         */
+        public function isAutomated(): bool
+        {
+            return $this->automated;
+        }
+
+        /**
          * Get the text content value.
          *
          * @return string|null
@@ -147,6 +177,26 @@
         public function getTextContent(): ?string
         {
             return $this->textContent;
+        }
+
+        /**
+         * Returns the content type of the text content, TEXT for evidence submitted without one
+         *
+         * @return ContentType The content type
+         */
+        public function getContentType(): ContentType
+        {
+            return $this->contentType;
+        }
+
+        /**
+         * Returns the context submitted with the evidence, as the client observed it
+         *
+         * @return array|null The context, null if none was submitted
+         */
+        public function getContext(): ?array
+        {
+            return $this->context;
         }
 
         /**
@@ -230,7 +280,10 @@
                 'entity' => $this->entityUuid,
                 'operator' => $this->operatorUuid,
                 'confidential' => $this->confidential,
+                'automated' => $this->automated,
                 'text_content' => $this->textContent,
+                'content_type' => $this->contentType->value,
+                'context' => $this->context,
                 'tag' => $this->tag,
                 'report' => $this->report,
                 'metadata' => $this->metadata,
@@ -291,7 +344,18 @@
                 'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the entity the evidence relates to'],
                 'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who submitted the evidence'],
                 'confidential' => ['type' => 'boolean', 'description' => 'Whether the evidence is marked as confidential'],
+                'automated' => ['type' => 'boolean', 'description' => 'Whether the evidence is automated: created by the server itself or submitted by a bot operator. Automated evidence is created confidential'],
                 'text_content' => ['type' => ['string', 'null'], 'description' => 'Text content of the evidence'],
+                'content_type' => [
+                    'type' => 'string',
+                    'enum' => array_map(fn(ContentType $type) => $type->value, ContentType::cases()),
+                    'description' => 'The content type of the evidence, TEXT for evidence submitted without one',
+                ],
+                'context' => [
+                    'type' => ['object', 'null'],
+                    'additionalProperties' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 1000],
+                    'description' => 'The context submitted with the evidence, its keys depend on the content type',
+                ],
                 'note' => ['type' => ['string', 'null'], 'description' => 'Optional note attached to the evidence'],
                 'tag' => ['type' => ['string', 'null'], 'description' => 'Tag categorizing the evidence'],
                 'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the report this evidence is linked to'],
@@ -311,7 +375,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['uuid', 'entity', 'operator', 'confidential', 'created'];
+            return ['uuid', 'entity', 'operator', 'confidential', 'automated', 'created'];
         }
 
         /**
