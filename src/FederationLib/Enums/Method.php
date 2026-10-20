@@ -60,10 +60,8 @@
     use FederationLib\Methods\Operators\ListOperatorEvidence;
     use FederationLib\Methods\Operators\ListOperatorReports;
     use FederationLib\Methods\Operators\ListOperators;
-    use FederationLib\Methods\Operators\ManageClientPermissions;
-    use FederationLib\Methods\Operators\ManageManagementPermissions;
-    use FederationLib\Methods\Operators\ManageOperatorPermissions;
-    use FederationLib\Methods\Operators\ManageAutoAssign;
+    use FederationLib\Methods\Operators\UpdateOperatorConfiguration;
+    use FederationLib\Methods\Operators\UpdateOperatorPermissions;
     use FederationLib\Methods\Operators\GenerateAccessToken;
     use FederationLib\Methods\Operators\GenerateOperatorAccessToken;
     use FederationLib\Methods\Operators\SearchOperators;
@@ -103,10 +101,8 @@
         case GET_OPERATOR;
         case GENERATE_OPERATOR_ACCESS_TOKEN;
         case GENERATE_ACCESS_TOKEN;
-        case MANAGE_OPERATOR_PERMISSIONS;
-        case MANAGE_MANAGEMENT_PERMISSIONS;
-        case MANAGE_CLIENT_PERMISSIONS;
-        case MANAGE_AUTO_ASSIGN;
+        case UPDATE_OPERATOR_PERMISSIONS;
+        case UPDATE_OPERATOR_CONFIGURATION;
         case LIST_OPERATOR_EVIDENCE;
         case LIST_OPERATOR_AUDIT_LOGS;
         case LIST_OPERATOR_BLACKLIST;
@@ -257,10 +253,8 @@
                 self::DELETE_OPERATOR => ['/operators/{uuid}', 'delete', DeleteOperator::class],
                 self::ENABLE_OPERATOR => ['/operators/{uuid}/enable', 'patch', EnableOperator::class],
                 self::DISABLE_OPERATOR => ['/operators/{uuid}/disable', 'patch', DisableOperator::class],
-                self::MANAGE_OPERATOR_PERMISSIONS => ['/operators/{uuid}/operator-permissions', 'patch', ManageOperatorPermissions::class],
-                self::MANAGE_MANAGEMENT_PERMISSIONS => ['/operators/{uuid}/management-permissions', 'patch', ManageManagementPermissions::class],
-                self::MANAGE_CLIENT_PERMISSIONS => ['/operators/{uuid}/client-permissions', 'patch', ManageClientPermissions::class],
-                self::MANAGE_AUTO_ASSIGN => ['/operators/{uuid}/auto-assign', 'patch', ManageAutoAssign::class],
+                self::UPDATE_OPERATOR_PERMISSIONS => ['/operators/{uuid}/permissions', 'patch', UpdateOperatorPermissions::class],
+                self::UPDATE_OPERATOR_CONFIGURATION => ['/operators/{uuid}/configuration', 'patch', UpdateOperatorConfiguration::class],
                 self::LIST_OPERATOR_EVIDENCE => ['/operators/{uuid}/evidence', 'get', ListOperatorEvidence::class],
                 self::LIST_OPERATOR_AUDIT_LOGS => ['/operators/{uuid}/audit', 'get', ListOperatorAuditLogs::class],
                 self::LIST_OPERATOR_BLACKLIST => ['/operators/{uuid}/blacklist', 'get', ListOperatorBlacklist::class],
@@ -352,10 +346,8 @@
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/enable$#', $path) && $requestMethod === 'PATCH' => Method::ENABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/disable$#', $path) && $requestMethod === 'PATCH' => Method::DISABLE_OPERATOR,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', $path) && $requestMethod === 'POST' => Method::GENERATE_OPERATOR_ACCESS_TOKEN,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/operator-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_OPERATOR_PERMISSIONS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/management-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_MANAGEMENT_PERMISSIONS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/client-permissions$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_CLIENT_PERMISSIONS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/auto-assign$#', $path) && $requestMethod === 'PATCH' => Method::MANAGE_AUTO_ASSIGN,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36})/permissions$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_PERMISSIONS,
+                preg_match('#^/operators/([a-fA-F0-9\-]{36})/configuration$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_CONFIGURATION,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_EVIDENCE,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_AUDIT_LOGS,
                 preg_match('#^/operators/([a-fA-F0-9\-]{36})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_BLACKLIST,
