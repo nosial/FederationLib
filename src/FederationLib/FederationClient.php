@@ -1142,7 +1142,7 @@
 
             return array_map(
                 fn($item) => BlacklistRecord::fromArray($item),
-                $this->makeRequest('GET', 'entities/' . $entityIdentifier . '/blacklist', $params, [HttpResponseCode::OK],
+                $this->makeRequest('GET', 'entities/' . rawurlencode($entityIdentifier) . '/blacklist', $params, [HttpResponseCode::OK],
                     sprintf('Failed to list blacklist records for entity %s, page: %d, limit: %d', $entityIdentifier, $page, $limit)
                 )
             );
