@@ -26,7 +26,7 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isBlacklistPublic());
             if(!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, 401);
