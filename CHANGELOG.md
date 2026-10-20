@@ -5,9 +5,246 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.17] - Ongoing
+## [2.0.0] - 2026-10-20
 
-This is an ongoing update
+This update implements version 2.0 of the OFD Specification: operator permissions and configuration, bot operators,
+content types, concerns, detections and telephone entities. Reputation is rebuilt around daily activity, the
+configuration is simplified and the command-line interface follows the style of docker.
+
+**Upgrading:** servers running 1.0.8 to 1.0.16 upgrade in place. The first start (`federationlib init`, run by the
+docker entrypoint) migrates the database from schema `1.0` to `1.4`, in order and resuming from the last completed
+step if interrupted, and clears the records cached in Redis and the reputation windows of earlier releases. The
+migrations change populated tables in place rather than copying them. The configuration of earlier releases is
+converted on every start, logging a warning for each replaced setting (see Changed).
+
+### Added
+ - Operator permissions and configuration (OFD 2.0, `api_version` is now `2.0`): operator records carry `permissions`
+   (`client`, `management`, `operator`, `client` being true whenever `management` is) and `configuration`
+   (`auto_assign_reports`, `auto_assign_automated_reports`, `is_bot`). `PATCH /operators/{uuid}/permissions` and
+   `PATCH /operators/{uuid}/configuration` take a partial object and return the updated one; revoking client
+   permissions from an operator that keeps management permissions is rejected with HTTP 409. Operators can change
+   their own configuration, changing another operator's requires operator permissions, and the root and system
+   operators can't be modified. `configuration` is only returned to the operator itself and to operators with
+   operator permissions, anyone else receives `null`. The client adds `updateOperatorPermissions()`,
+   `updateOperatorConfiguration()` and `setBot()`
+ - Bot operators (`is_bot`): the evidence and reports they submit are automated. Evidence records have an `automated`
+   member and `AUTOMATED`/`NOT_AUTOMATED` categories; automated evidence (created by the server or submitted by a bot)
+   is always created confidential and can be made public by a manager afterwards. Existing evidence of the system
+   operator is marked automated, its confidentiality is unchanged
+ - Content types: evidence (scanned, submitted or reported) accepts a `content_type` (`TEXT`, `EMAIL`, `SMS`,
+   `WEB_PAGE`, `HOSTNAME`, `URL`) and a `context` object validated per type. `/scan` treats a `HOSTNAME` or `URL` as
+   the entity itself (falling back to its registrable domain), resolves the URL a `WEB_PAGE` declares as an unverified
+   assertion, and resolves the names in `HOSTNAME`, `URL` and `WEB_PAGE` content by DNS to their public addresses (at
+   most `scanning.dns_lookup_limit` per request, 10 by default). FederationLib never retrieves these URLs, plugins may
+   only when `remote_retrieval.scans` is enabled (disabled by default)
+ - Concerns: `/scan` accepts `concerns` and entity queries a comma-separated `concerns` parameter. Only these incident
+   types (`scanning.default_concerns` when omitted, every type except `ADVERTISING` and `TRACKING` by default) affect
+   the classification, risk score, suggested action and detections; blacklist records of other types are still
+   returned but don't suggest blocking. Plugin scanning rules, classifications and detections relate to a concern
+   (`SPAM` unless given) and are discarded for concerns that were not requested
+ - `detections` in scan results (`Detection`), including one for every active blacklist record of a requested concern
+   on a resolved entity or its parent, and `ContentScan::addDetection()` for plugins
+ - `ADVERTISING` and `TRACKING` incident types, and a comma-separated `type` filter on `/blacklist` and
+   `/blacklist/search`
+ - Telephone entities (`<E.164 number>@e164.arpa`), validated on registration and lookup and extracted from content
+   with [libphonenumber](https://github.com/giggsey/libphonenumber-for-php) (a new dependency): international numbers
+   always, national numbers when an `SMS` declares the `region` it was received in, and only numbers valid for their
+   region, so one-time codes and order numbers are ignored and every spelling of a number resolves to one entity.
+   Unless `server.public` includes `TELEPHONE_ENTITIES`, they are hidden from unauthenticated requests (omitted from
+   listings, searches, top threats and related entities, unresolvable by UUID and stripped of metadata). Evidence
+   about a telephone entity is always confidential, and audit log messages refer to them by UUID
+ - Server information members `public_telephone_entities`, `scan_content_types`, `concerns`, `default_concerns`,
+   `allow_url_uploads` (treated as false by the client when absent) and `collects_public_scan_content`, which is true
+   when content scanning is public and automatic reports may record scanned content as evidence, or when a plugin
+   declares `collects_scan_content`
+ - `report` member of audit log entries (OFD 2.0), set by report related entries: submitted, generated, assigned and
+   closed reports, evidence linked to a report and blacklists referencing a report
+ - Upload Attachment accepts a `url` instead of the `file` part (multipart, form-encoded or JSON), which the server
+   retrieves itself, controlled by `remote_retrieval.uploads` (default `true`) and `remote_retrieval.timeout` (`30`
+   seconds). Redirects are followed up to 5 times, every request is pinned to its validated address, and URLs with
+   credentials or that resolve to non-public addresses are rejected unless `remote_retrieval.allow_private` is set.
+   `FederationClient::uploadFileAttachmentByUrl()` uploads by URL, `uploadFileAttachmentFromUrl()` still downloads
+   the file locally first
+ - `STARTUP` and `MAINTENANCE` plugin events. `STARTUP` is dispatched once per start by `federationlib init`, after the
+   database is created or migrated and before requests are served; a failing handler fails the start. `MAINTENANCE` is
+   dispatched by every `federationlib maintenance` run, also when cleaning is disabled, with the archive directory and
+   the number of records removed; a failing handler is logged and the run exits with an error
+ - Maintenance stores the DNS details of domain entities (A, AAAA, CNAME, MX and NS records, lookup time and status)
+   in their metadata as `dns_*` keys, refreshing those missing or older than `maintenance.dns_refresh` (default `90d`,
+   `off` disables it), at most 500 entities per run. The refresh keeps the other metadata and changes neither the
+   `updated` timestamp of the entity nor when maintenance removes it
+ - `federationlib bayesian sync` teaches BayesianServer the evidence classifications made since the last sync, so
+   classifications it missed (unavailable, restarting or a full learning queue) are learned; `--full` learns every
+   classification again. Evidence records when it was classified so classifications are learned in order
+ - `EVIDENCE_DELETED` record changes carry the deleted `EvidenceRecord`, so BayesianPlugin forgets deleted evidence
+ - Docker: scheduled jobs run with supercronic, the bundled crontab runs `maintenance`, `reputation settle` and
+   `bayesian sync` hourly and `CRONTAB` replaces it. `BAYESIAN_DISABLED` disables the bundled BayesianServer and
+   BayesianPlugin (the healthcheck, now `docker-healthcheck.sh`, then skips it), `BAYESIAN_MAX_MEMORY` sets its heap
+   (default `4g`, a size or a percentage of the container's memory, previously 25%), `BAYESIAN_EMBEDDINGS` adds the
+   multilingual-e5-small embedding model, and `BAYESIAN_PLACEHOLDER_RULES` replaces the bundled Telegram link
+   placeholder rules (`bayesian_recovery/placeholder_rules.json`) or `none` uses BayesianServer's generic rules
+ - The bundled BayesianServer learns content it classified as `NORMAL` a week later unless it is classified in the
+   meantime (`--implicit-delay 604800`), so the model sees ordinary traffic and not only reported content
+ - CORS preflight (`OPTIONS`) requests are answered with HTTP 204 and the CORS headers without authentication, an
+   `OPTIONS` request without `Access-Control-Request-Method` is still routed to a plugin route that handles it
+ - Download Attachment responses carry `X-Content-Type-Options: nosniff`
+ - `federationlib init` warns when the root access token is not 32 characters of the `b64token` syntax, as such a
+   token can never authenticate
+ - `EvidenceManager::updateClassificationFlag()` takes an optional `$overwrite` argument, and
+   `EntitiesManager::getEntitiesByUuids()` retrieves several entities at once
+ - Test units for the changes of this release, TestPlugin routes that run maintenance, settle reputation and check the
+   migration of a populated 1.0.14 database (`TEST_PLUGIN_DATABASE_ROOT_PASSWORD`), and the `InMemoryConfiguration`
+   test helper, a ConfigLib configuration that never touches a file
+
+### Changed
+ - Reputation is rebuilt around daily activity, replacing reputation windows. Scans by authenticated clients record
+   the activity of the author and of the entities mentioned in the content per day (UTC), buffered in Redis when it
+   is enabled, and `federationlib reputation settle` applies every completed day, at most one change per entity per
+   day: authors gain `scanning.reputation_gain` (now 10) for a day of normal content, nothing for a day with content
+   that warranted caution, and lose `scanning.reputation_loss` (-5) for a day with content that reached the block
+   threshold; mentioned entities (eg; youtube.com) gain for a day on which `scanning.mention_min_authors` (3)
+   distinct authors mentioned them in normal content, and never lose from mentions. Gains credit the parent of a
+   `CHILD` entity and taper above 500. A stored `reputation_gain` still at the former default of 1 becomes 10
+ - Blacklists lower the reputation of entities related through `ALTERNATIVE` or `CHILD` only, not `PROXY`
+ - The configuration is simplified from 142 to 58 settings. Settings repeated per record type or scanning rule became
+   a single list or map, which one environment variable can also set (`ENTITIES,EVIDENCE` or `ENTITY=5000/600`), and
+   durations accept units (`30d`, `2y`):
+   - `server.public` (list) replaces `server.public_*` and `search.public_search`
+   - `server.max_page_size` replaces `server.list_*_max_items`
+   - `remote_retrieval` (`uploads`, `scans`, `timeout`, `allow_private`) replaces `scanning.url_retrieval`
+   - `scanning.modifiers` (map) replaces the 23 `scanning.modifier_*`; `CLASSIFICATION_NORMAL` now defaults to `10.0`
+     instead of `1.0`, as much as a `SUSPICIOUS` classification takes away, so a confident `NORMAL` classification of
+     one plugin can offset an unsure spam classification of another
+   - `scanning.auto_report` is `block`, `caution` or `off`, replacing `auto_report_threshold` and `auto_report_caution`
+   - `scanning.report_reputation` and `scanning.report_named_entity_reputation` (maps, the latter `false` to disable)
+     replace their `_normal`, `_suspicious` and `_malicious` settings
+   - `scanning.dns_lookup_limit` of `0` disables DNS lookups, replacing `scanning.dns_lookups`
+   - `search.types` (list) replaces `search.enabled` and `search.enable_*`
+   - `maintenance.retention` (map) replaces `maintenance.clean_*` and `clean_*_ttl`
+   - `redis.record_cache` (map) replaces `redis.<type>_cache_enabled`, `_limit` and `_ttl`
+   - `scanning.collects_public_scan_content` is replaced by the `collects_scan_content` property plugins declare
+   - Removed as their values are fixed: `scanning.risk_score_neutral_point` (50), `risk_score_min_bound`/`max_bound`
+     (0 and 100), `reputation_min_bound`/`max_bound` (-1000 and 1000) and `database.charset`/`collation` (utf8mb4);
+     `scanning.reputation_window_duration` is removed with reputation windows
+
+   Keys stored in the configuration file are converted and removed from it, deprecated environment variables are
+   converted on every start
+ - `PATCH /operators/{uuid}/permissions` and `PATCH /operators/{uuid}/configuration` replace the `client-permissions`,
+   `management-permissions`, `operator-permissions` and `auto-assign` endpoints, which the client's `set*Permissions()`
+   and `setAutoAssign()` (setting both opt-ins) now use. `OperatorRecord::getConfiguration()` returns null when the
+   server did not disclose the configuration
+ - Automatic report assignment follows the kind of report: automated reports go to operators that opt in to automated
+   reports, others to operators that opt in to ordinary reports, and disabled operators are never assigned. The
+   previous `auto_assign` opt-in carries over to both
+ - The command-line interface follows the style of docker: `operators ls`, `operators create <name>`,
+   `operators <uuid> [inspect|set|enable|disable|token|rm]`, `audit ls` and `bayesian sync` replace `list-operators`,
+   `create-operator`, `get-operator`, `edit-operator`, `generate-operator-access-token`, `delete-operator`,
+   `list-audit` and `bayesian-sync`. `operators <uuid> set` changes permissions and configuration (`--client`,
+   `--management`, `--operator`, `--bot`, `--auto-assign-reports`, `--auto-assign-automated-reports`), the options
+   of `audit ls` (`--page`, `--limit`, `--type`) now apply, and the system operator can no longer be modified, like
+   the root operator
+ - The report supporting a blacklist record may concern another entity than the one being blacklisted (eg;
+   blacklisting the domain a reported account advertised) instead of being rejected with HTTP 404, and
+   `FederationClient::blacklistEntity()` no longer requires a report
+ - Classify Evidence replaces the classification of evidence that is already classified (OFD 2.0) instead of
+   rejecting the request with HTTP 409, audited as a reclassification and producing `EVIDENCE_CLASSIFIED` again.
+   Classifying with the same classification changes nothing, and Close Report still never replaces classifications
+ - The bundled BayesianServer (requires 1.0.4) runs the logistic model with chat placeholders, without stop-words,
+   with deduplicated learning, `2^16` hash buckets per feature block (as accurate as `2^18` with a quarter of the
+   memory) and thresholds calibrated for a 5% false positive rate on `NORMAL` content, and keeps a data log of
+   classified messages to label real traffic. The previous model is replaced on the next start by one trained from
+   the classified evidence
+ - Rebuilding a broken Bayesian model trains the new model with the backed up archive (everything the previous model
+   learned, including since deleted evidence) before the classified evidence
+ - Ordering values for `by` are uppercase (e.g. `CREATED`) as defined by OFD 2.0 and the client sends them uppercase,
+   the server still accepts them case-insensitively
+ - A token presented to a public method no longer causes an error when it is malformed, unknown or belongs to a
+   disabled operator, the request is processed as unauthenticated. A valid token still authenticates the operator
+ - Scan Content only requires client permissions when content scanning is not public, scans by operators without
+   client permissions do not contribute to reputation
+ - List Operator Audit Logs returns the public entries of another operator to an authenticated operator without
+   operator permissions when audit logs are public, instead of rejecting the request with HTTP 403
+ - Path segments are percent-decoded once before routing and validation, so entity addresses can be percent-encoded
+   in paths (e.g. `user%40example.com`), and the client percent-encodes entity identifiers in every entity path
+ - Without a matching `Origin`, `Access-Control-Allow-Origin` is the origin of the base URL instead of the full URL
+ - Delete Operator rejects an operator deleting itself with HTTP 400
+ - Set Entity Relationship rejects a relationship of an entity to itself with HTTP 400
+ - Push Entity rejects a local part (`id`) that is not canonical with HTTP 400, and an entity host with leading or
+   trailing whitespace is no longer accepted
+ - The cross-collection Search returns file attachments only to operators with management permissions, as Search
+   Attachments does, and returns records of non-public domains to authenticated operators
+ - `FileAttachmentRecord::getEvidenceUuid()` returns null instead of an empty string when a server reports no
+   associated evidence record
+
+### Removed
+ - Unused code: the `UploadHandler` class (attachment uploads are handled by Upload Attachment),
+   `EvidenceManager::getClassifiedEvidence()` (replaced by `getClassifiedSince()`) and
+   `RedisConnection::getRecordsByField()`
+
+### Fixed
+ - Form-encoded and multipart bodies of PATCH, PUT and DELETE requests are read, PHP only parses POST bodies, so their
+   parameters were ignored; this also makes direct uploads with `PUT /attachments` work
+ - Update Evidence Confidentiality rejects a missing or non-boolean `confidential` member with HTTP 400 instead of
+   making the evidence non-confidential, rejects making evidence linked to an `ILLEGAL_CONTENT` report non-confidential
+   with HTTP 409, and records an `EVIDENCE_UPDATED` audit log entry
+ - Deleting evidence, an entity or an operator deletes the stored files of the attachments the database deletes with
+   them, which were left on disk
+ - Deleting an operator that created evidence, reports or blacklist records, which are deleted with it, requires
+   management permissions besides operator permissions
+ - Upload Attachment attaches files only to evidence the operator submitted, unless it holds management permissions
+ - Download Attachment, Get Attachment Info and Delete Attachment treat an attachment without evidence as an
+   attachment of confidential evidence instead of failing or exposing it, and Delete Attachment deletes it
+ - Close Report rejects `blacklist_incident_type` for a report that concerns no entity instead of ignoring it, Assign
+   Operator to Report rejects closed reports and malformed operator UUIDs with HTTP 400, and Extend Blacklist rejects
+   expired records and non-integer `seconds`
+ - Query Entity omits the blacklist records of hidden telephone entities from `active_blacklists`
+ - Entity hosts under `e164.arpa`, such as the ENUM domain of a number (eg; `6.5.4.3.2.1.5.5.5.1.e164.arpa`), are
+   rejected with HTTP 400; telephone entities remain `<number>@e164.arpa`. Maintenance skips such hosts stored before
+   they were rejected instead of failing while linking subdomain entities
+ - Request parameters of the wrong type, such as a JSON array or number where a string is expected, are rejected with
+   HTTP 400 instead of failing with HTTP 500; unrecognized `category`, `by` and `order` values are still ignored
+ - Integer parameters (`limit`, `page`, `expires`, `blacklist_expires`, `seconds`, `top_k`) only accept whole numbers,
+   values such as `1.5` or `10abc` are rejected with HTTP 400 instead of being cast, and `threshold` must be a number;
+   `blacklist_expires` is only validated when a blacklist record is created
+ - Boolean parameters and the `confidential` member of evidence only accept `true`, `false`, `1` and `0`, any other
+   value is rejected with HTTP 400 instead of being read as false, which could make evidence non-confidential
+ - An empty `text_content` in evidence is rejected with HTTP 400 instead of being treated as absent, and Submit
+   Evidence rejects members its body does not define
+ - Clear Reputation, Set Entity Relationship, Clear Entity Relationship and Delete Blacklist record the affected entity
+   in their audit log entries, so they appear in the entity's audit log
+ - Create Operator and Update Operator Name respond with HTTP 409 instead of HTTP 500 when a concurrent request takes
+   the name after it was checked
+ - Scan Content rejects an `author` that is not a string with HTTP 400 instead of failing with HTTP 500, and an
+   `author` that names the `e164.arpa` namespace without being a canonical telephone entity (eg; `+15550123456@e164.arpa`,
+   `15550123456@E164.ARPA` or `e164.arpa`) with HTTP 400 instead of leaving it unresolved
+ - A path segment that contains `/` once percent-decoded is rejected with HTTP 400 instead of being matched as two
+   segments, the `Bearer` authentication scheme is matched case-insensitively, and error responses no longer escape
+   slashes
+ - Blacklist and report records with an incident type the client does not recognize are read as `OTHER` instead of
+   failing
+ - The maintenance command removed records still in use, it now removes only expired and lifted blacklist records
+   (permanent ones were removed once older than the TTL), closed reports by when they were last changed (open reports
+   were removed too), and entities without evidence, reports or blacklist records that haven't changed within the TTL
+   and aren't whitelisted (every entity created before the TTL was removed along with its possibly recent records)
+ - The maintenance command removes records in batches, archiving each batch (`--archive`) before it's removed, and
+   keeps a batch that can't be archived. Records were removed even if archiving them failed, records that became old
+   while archiving were removed without being archived, and records of the same table could be archived with
+   different columns
+ - The maintenance command removes the stored files of the attachments it removes and clears the cached records that
+   referred to removed records, exits with `0` when maintenance is disabled, runs the remaining tasks when one fails
+   and rejects `--archive` without a directory
+ - Scan Content considered expired temporary blacklist records when suggesting to block the author entity, only
+   active blacklist records are considered now
+ - The `LIFTED` category of List Blacklist returned nothing unless `include_lifted` was set
+ - Update Operator Name accepted the reserved names `root` and `system`, they are now rejected case-insensitively as
+   Create Operator does
+ - `ServerInformation` parsed by the client always reported the server name as `Federation Server` and the
+   `api_version` as the client's own version instead of the values returned by the server
+ - Search methods accepted a query of a single multibyte character, the query must contain at least two
+   non-whitespace characters, and a non-string `q` or `type` parameter caused an internal error instead of HTTP 400
+ - Close Report rejected a `blacklist_expires` in the past even without `blacklist_incident_type`, it is now ignored
+ - Query Entity omitted the entities referencing the queried entity when the queried entity has a relationship
+ - Only 64 lowercase hexadecimal characters are resolved as a SHA-256 identifier, any other value as an entity address
 
 
 
