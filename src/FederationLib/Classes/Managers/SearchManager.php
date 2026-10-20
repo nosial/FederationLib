@@ -25,16 +25,17 @@
         {
             $results = [];
             $searchAll = $types === null || $types === [];
-            // The extended search matches columns that are not indexed, so it is limited to authenticated operators
             $extended = $operator !== null && Configuration::getSearchConfiguration()->isExtendedSearchEnabled();
+            $hideTelephone = $operator === null && !Configuration::getServerConfiguration()->isTelephoneEntitiesPublic();
 
             if (($searchAll || in_array(RecordType::ENTITY->value, $types, true)) && Configuration::getSearchConfiguration()->isEntitiesEnabled())
             {
-                if (Configuration::getServerConfiguration()->isEntitiesPublic())
+                // Records of a domain are returned according to its accessibility, operators can read every domain
+                if (Configuration::getServerConfiguration()->isEntitiesPublic() || $operator !== null)
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::ENTITY, $r),
-                        EntitiesManager::searchEntities($query, $limit, $page, extended: $extended)
+                        EntitiesManager::searchEntities($query, $limit, $page, extended: $extended, excludeTelephone: $hideTelephone)
                     ));
                 }
             }
@@ -52,18 +53,20 @@
 
             if (($searchAll || in_array(RecordType::BLACKLIST->value, $types, true)) && Configuration::getSearchConfiguration()->isBlacklistEnabled())
             {
-                if (Configuration::getServerConfiguration()->isBlacklistPublic())
+                // Records of a domain are returned according to its accessibility, operators can read every domain
+                if (Configuration::getServerConfiguration()->isBlacklistPublic() || $operator !== null)
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::BLACKLIST, $r),
-                        BlacklistManager::searchBlacklist($query, $limit, $page, extended: $extended)
+                        BlacklistManager::searchBlacklist($query, $limit, $page, extended: $extended, excludeTelephone: $hideTelephone)
                     ));
                 }
             }
 
             if (($searchAll || in_array(RecordType::REPORT->value, $types, true)) && Configuration::getSearchConfiguration()->isReportsEnabled())
             {
-                if (Configuration::getServerConfiguration()->isReportsPublic())
+                // Records of a domain are returned according to its accessibility, operators can read every domain
+                if (Configuration::getServerConfiguration()->isReportsPublic() || $operator !== null)
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::REPORT, $r),
@@ -74,18 +77,20 @@
 
             if (($searchAll || in_array(RecordType::ATTACHMENT->value, $types, true)) && Configuration::getSearchConfiguration()->isAttachmentsEnabled())
             {
-                if (Configuration::getServerConfiguration()->isEvidencePublic())
+                // File attachments are returned only to operators with management permissions, as Search Attachments does
+                if ($operator !== null && $operator->hasManagementPermissions())
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::ATTACHMENT, $r),
-                        FileAttachmentManager::searchAttachments($query, $limit, $page, $operator !== null && $operator->hasManagementPermissions(), extended: $extended)
+                        FileAttachmentManager::searchAttachments($query, $limit, $page, true, extended: $extended)
                     ));
                 }
             }
 
             if (($searchAll || in_array(RecordType::AUDIT_LOG->value, $types, true)) && Configuration::getSearchConfiguration()->isAuditLogsEnabled())
             {
-                if (Configuration::getServerConfiguration()->isAuditLogsPublic())
+                // Records of a domain are returned according to its accessibility, operators can read every domain
+                if (Configuration::getServerConfiguration()->isAuditLogsPublic() || $operator !== null)
                 {
                     array_push($results, ...array_map(
                         fn($r) => new SearchResult(RecordType::AUDIT_LOG, $r),
