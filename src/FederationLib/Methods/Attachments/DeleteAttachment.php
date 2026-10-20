@@ -22,7 +22,6 @@
         private const string ERROR_ATTACHMENT_UUID_REQUIRED = 'Attachment UUID is required';
         private const string ERROR_INVALID_ATTACHMENT_UUID = 'Invalid attachment UUID';
         private const string ERROR_ATTACHMENT_NOT_FOUND = 'Attachment not found';
-        private const string ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND = 'Associated evidence not found';
         private const string ERROR_UNABLE_TO_DELETE = 'Unable to delete file attachment';
 
         /**
@@ -56,16 +55,14 @@
                     throw new RequestException(self::ERROR_ATTACHMENT_NOT_FOUND, 404);
                 }
 
-                $existingEvidence = EvidenceManager::getEvidence($existingAttachment->getEvidenceUuid());
-                if($existingEvidence === null)
-                {
-                    throw new RequestException(self::ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND, 404);
-                }
+                // An attachment that is no longer associated with evidence remains deletable (OFD "Deletion of Records")
+                $evidenceUuid = $existingAttachment->getEvidenceUuid();
+                $existingEvidence = $evidenceUuid === null ? null : EvidenceManager::getEvidence($evidenceUuid);
 
                 AuditLogManager::createEntry(AuditLogType::ATTACHMENT_DELETED, sprintf('Attachment %s deleted by operator %s',
                     $attachmentUuid,
                     $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $existingEvidence->getEntityUuid(), null, $existingAttachment->getEvidenceUuid());
+                ), $authenticatedOperator->getUuid(), $existingEvidence?->getEntityUuid(), null, $existingEvidence?->getUuid());
                 FileAttachmentManager::deleteRecord($attachmentUuid); // This will delete the file automatically
             }
             catch(InvalidArgumentException $e)
@@ -176,7 +173,7 @@
                     ],
                 ],
                 '404' => [
-                    'description' => self::ERROR_ATTACHMENT_NOT_FOUND . ' or ' . self::ERROR_ASSOCIATED_EVIDENCE_NOT_FOUND,
+                    'description' => self::ERROR_ATTACHMENT_NOT_FOUND,
                     'content' => [
                         'application/json' => [
                             'schema' => ['$ref' => ErrorResponse::getReference()],
