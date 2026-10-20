@@ -211,10 +211,13 @@
          * @param string|null $author Optional author identifier (UUID, SHA-256, or entity address)
          * @param int|null $topK Optional. Number of top classifications to return
          * @param float|null $threshold Optional. Confidence threshold for classification
+         * @param IncidentType[]|null $concerns Optional. The concerns to assess, only these affect the result; the server
+         *                                      assesses its default concerns when omitted. Only supply concerns to a
+         *                                      server that publishes them in its server information.
          * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null): ScannedContent
+        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $concerns = null): ScannedContent
         {
             if(is_string($evidence))
             {
@@ -260,7 +263,7 @@
 
                 foreach(array_keys($item) as $key)
                 {
-                    if(!in_array($key, ['text_content', 'note', 'tag', 'confidential', 'metadata'], true))
+                    if(!in_array($key, ['text_content', 'content_type', 'context', 'note', 'tag', 'confidential', 'metadata'], true))
                     {
                         throw new InvalidArgumentException("Unknown evidence field '$key'");
                     }
@@ -293,6 +296,16 @@
             if($threshold !== null)
             {
                 $params['threshold'] = $threshold;
+            }
+
+            if($concerns !== null)
+            {
+                if(empty($concerns))
+                {
+                    throw new InvalidArgumentException('Concerns cannot be empty');
+                }
+
+                $params['concerns'] = self::concernValues($concerns);
             }
 
             return ScannedContent::fromArray($this->makeRequest('POST', 'scan', $params, [HttpResponseCode::OK],
