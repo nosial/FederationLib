@@ -28,6 +28,8 @@ FederationLib only needs to know which plugins to load. Each plugin is responsib
       * [CONTENT_SCAN](#content_scan)
       * [QUERY_ENTITY](#query_entity)
       * [RECORD_CHANGE](#record_change)
+      * [STARTUP](#startup)
+      * [MAINTENANCE](#maintenance)
     * [Accessing FederationLib](#accessing-federationlib)
       * [The request and the operator](#the-request-and-the-operator)
       * [Responses and errors](#responses-and-errors)
@@ -411,7 +413,7 @@ The handler may optionally:
    response's `classification` is the worst flag of all the classifications with their average confidence, and the
    matching `CLASSIFICATION_*` scanning rule is weighted by the confidence. The evidence index (of `getEvidence()`)
    describes the evidence of automatically generated reports.
- - **Add scanning rules** with `addScanResult('MY_PLUGIN_RULE', $points)`. Rules are included in `scan_results` and
+ - **Add scanning rules** with `addScanResult('MY_PLUGIN_RULE', $points, IncidentType $concern)`. Rules are included in `scan_results` and
    the risk score like FederationLib's own: positive points lower the risk, negative points raise it and prevent the
    scan from improving the author's reputation. Points added to the same rule accumulate. Names are uppercase
    (`[A-Z][A-Z0-9_]*`) and can not be one of FederationLib's own rules.
