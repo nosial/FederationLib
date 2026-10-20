@@ -6,6 +6,7 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Enums\Categories\BlacklistCategory;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\BlacklistOrderType;
     use FederationLib\Exceptions\DatabaseOperationException;
@@ -21,6 +22,7 @@
         private const string ERROR_QUERY_REQUIRED = 'Search query is required';
         private const string ERROR_QUERY_TOO_SHORT = 'Search query must be at least 2 characters';
         private const string ERROR_AUTH_REQUIRED = 'Authentication is required to search blacklist records';
+        private const string ERROR_INVALID_TYPE = 'The type parameter must be a comma-separated list of incident types';
         private const string ERROR_UNABLE_TO_SEARCH = 'There was an internal server error while performing the search operation';
 
         /**
@@ -34,26 +36,27 @@
                 throw new RequestException(self::ERROR_SEARCH_DISABLED, 404);
             }
 
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isBlacklistPublic());
             if (!Configuration::getServerConfiguration()->isBlacklistPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTH_REQUIRED, 401);
             }
 
             $query = FederationServer::getParameter('q');
-            if (empty($query))
+            if (empty($query) || !is_string($query))
             {
                 throw new RequestException(self::ERROR_QUERY_REQUIRED, 400);
             }
 
             $query = trim($query);
-            if (strlen($query) < 2)
+            // The query must contain at least two non-whitespace characters
+            if (mb_strlen(preg_replace('/\s+/u', '', $query) ?? '') < 2)
             {
                 throw new RequestException(self::ERROR_QUERY_TOO_SHORT, 400);
             }
 
-            $limit = (int)(FederationServer::getParameter('limit') ?? 10);
-            $page = (int)(FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? 10);
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
             $maxLimit = $searchConfig->getMaxLimit();
 
             if ($limit < 1)
@@ -72,15 +75,26 @@
 
             $likePattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $query) . '%';
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? BlacklistCategory::tryFromCaseInsensitive($categoryInput) : null;
-            $by = FederationServer::getParameter('by');
-            $orderInput = FederationServer::getParameter('order');
+            $by = FederationServer::getStringParameter('by', true);
+            $orderInput = FederationServer::getStringParameter('order', true);
             $order = $orderInput !== null ? OrderType::tryFromCaseInsensitive($orderInput) : null;
+
+            $types = null;
+            $typeInput = FederationServer::getParameter('type');
+            if($typeInput !== null)
+            {
+                $types = IncidentType::parseList($typeInput);
+                if($types === null)
+                {
+                    throw new RequestException(self::ERROR_INVALID_TYPE, 400);
+                }
+            }
 
             try
             {
-                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page, $category, $by, $order, self::useExtendedSearch());
+                $results = BlacklistManager::searchBlacklist($likePattern, $limit, $page, $category, $by, $order, self::useExtendedSearch(), $types, self::hideTelephoneEntities());
             }
             catch (DatabaseOperationException $e)
             {
@@ -160,6 +174,13 @@
                     ],
                 ],
                 [
+                    'name' => 'type',
+                    'in' => 'query',
+                    'description' => 'A comma-separated list of incident types, only blacklist records of one of these types are returned',
+                    'required' => false,
+                    'schema' => ['type' => 'string'],
+                ],
+                [
                     'name' => 'by',
                     'in' => 'query',
                     'description' => 'Field to sort by',
@@ -205,7 +226,7 @@
                     ],
                 ],
                 '400' => [
-                    'description' => self::ERROR_QUERY_REQUIRED,
+                    'description' => self::ERROR_QUERY_REQUIRED . ', or ' . lcfirst(self::ERROR_INVALID_TYPE),
                     'content' => ['application/json' => ['schema' => ['$ref' => ErrorResponse::getReference()]]],
                 ],
                 '401' => [
