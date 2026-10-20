@@ -4,6 +4,7 @@
 
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\SuggestedActionType;
     use FederationLib\Exceptions\EntityQueryRejectedException;
     use FederationLib\Objects\BlacklistRecord;
@@ -25,6 +26,8 @@
         private bool $suggestionOverridden;
         private ?SuggestedActionType $suggestedAction;
         private ?int $suggestedLiftTimestamp;
+        /** @var IncidentType[]|null */
+        private ?array $concerns;
 
         /**
          * EntityQuery constructor.
@@ -34,9 +37,11 @@
          * @param EntityRecord[] $relatedEntities The other entities in the queried entity's relationship group
          * @param BlacklistRecord[] $activeBlacklists The active blacklist records of the relationship group
          * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @param IncidentType[]|null $concerns The effective concerns of the request, null considers every blacklist record
          */
-        public function __construct(string $identifier, EntityRecord $entityRecord, array $relatedEntities, array $activeBlacklists, ?OperatorRecord $authenticatedOperator=null)
+        public function __construct(string $identifier, EntityRecord $entityRecord, array $relatedEntities, array $activeBlacklists, ?OperatorRecord $authenticatedOperator=null, ?array $concerns=null)
         {
+            $this->concerns = $concerns !== null ? array_values($concerns) : null;
             $this->identifier = $identifier;
             $this->entityRecord = $entityRecord;
             $this->authenticatedOperator = $authenticatedOperator;
@@ -56,6 +61,17 @@
             {
                 $this->activeBlacklists[$blacklist->getUuid()] = $blacklist;
             }
+        }
+
+        /**
+         * Returns the effective concerns of the request, only active blacklist records of these incident types
+         * determine the suggested action (OFD "Concerns")
+         *
+         * @return IncidentType[]|null The effective concerns, null if every blacklist record is considered
+         */
+        public function getConcerns(): ?array
+        {
+            return $this->concerns;
         }
 
         /**
@@ -265,7 +281,7 @@
                 ]));
             }
 
-            $result = new EntityQueryResult($entityRecord, $this->getRelatedEntities(), $this->getActiveBlacklists());
+            $result = new EntityQueryResult($entityRecord, $this->getRelatedEntities(), $this->getActiveBlacklists(), $this->concerns);
             if($this->suggestionOverridden)
             {
                 $result->overrideSuggestedAction($this->suggestedAction, $this->suggestedLiftTimestamp);
