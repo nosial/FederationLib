@@ -5,8 +5,10 @@
     use FederationLib\Interfaces\AuditLogEventHandlerInterface;
     use FederationLib\Interfaces\CaseSensitiveInterface;
     use FederationLib\Interfaces\ContentScanEventHandlerInterface;
+    use FederationLib\Interfaces\MaintenanceEventHandlerInterface;
     use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
     use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
+    use FederationLib\Interfaces\StartupEventHandlerInterface;
 
     enum EventType : string implements CaseSensitiveInterface
     {
@@ -34,6 +36,18 @@
         case RECORD_CHANGE = 'RECORD_CHANGE';
 
         /**
+         * Produced once when the server starts (`federationlib init`, run by the docker entrypoint), after the database
+         * was initialized and migrated and before requests are served, the handler receives the Startup
+         */
+        case STARTUP = 'STARTUP';
+
+        /**
+         * Produced by every maintenance run (`federationlib maintenance`, hourly in the docker image), after
+         * FederationLib cleaned its records, the handler receives the Maintenance
+         */
+        case MAINTENANCE = 'MAINTENANCE';
+
+        /**
          * Returns the interface an event handler class must implement to handle the event
          *
          * @return string The fully qualified interface name
@@ -46,6 +60,8 @@
                 self::CONTENT_SCAN => ContentScanEventHandlerInterface::class,
                 self::QUERY_ENTITY => QueryEntityEventHandlerInterface::class,
                 self::RECORD_CHANGE => RecordChangeEventHandlerInterface::class,
+                self::STARTUP => StartupEventHandlerInterface::class,
+                self::MAINTENANCE => MaintenanceEventHandlerInterface::class,
             };
         }
 
@@ -60,7 +76,7 @@
             return match($this)
             {
                 self::AUDIT_LOG => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases()),
-                self::CONTENT_SCAN, self::QUERY_ENTITY => [],
+                self::CONTENT_SCAN, self::QUERY_ENTITY, self::STARTUP, self::MAINTENANCE => [],
                 self::RECORD_CHANGE => array_map(fn(RecordChangeType $type) => $type->value, RecordChangeType::cases()),
             };
         }
