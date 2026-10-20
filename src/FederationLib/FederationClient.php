@@ -1239,7 +1239,7 @@
                 throw new InvalidArgumentException('Metadata must be an array');
             }
 
-            $this->makeRequest('PATCH', 'entities/' . $entityIdentifier, ['metadata' => $metadata], [HttpResponseCode::OK],
+            $this->makeRequest('PATCH', 'entities/' . rawurlencode($entityIdentifier), ['metadata' => $metadata], [HttpResponseCode::OK],
                 sprintf('Failed to update entity %s', $entityIdentifier)
             );
         }
