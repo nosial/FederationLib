@@ -272,10 +272,19 @@
             $entityB = $this->createSecurityEntity();
             $reportForB = $this->createReportForEntity($entityB);
 
+            // A report may support the blacklisting of another entity (eg; the domain a reported account advertised)
+            $blacklistUuid = $this->client->blacklistEntity($entityA, $reportForB, IncidentType::SPAM, time() + 3600);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+
+            $record = $this->client->getBlacklistRecord($blacklistUuid);
+            $this->assertEquals($entityA, $record->getEntityUuid());
+            $this->assertEquals($reportForB, $record->getReportUuid());
+
+            // The supporting report must still exist
             $this->expectRequestFailure(
-                fn() => $this->client->blacklistEntity($entityA, $reportForB, IncidentType::SPAM, time() + 3600),
+                fn() => $this->client->blacklistEntity($entityA, $this->randomUuid(), IncidentType::SPAM, time() + 3600),
                 [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
-                'Blacklisting entity A with a report belonging to entity B should be rejected'
+                'Blacklisting with a non-existent report should be rejected'
             );
         }
 

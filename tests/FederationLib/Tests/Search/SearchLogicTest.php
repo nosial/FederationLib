@@ -177,11 +177,26 @@
 
         public function testSearchWithUnicodeCharacters(): void
         {
-            $entityUuid = $this->client->pushEntity('unicode-test.com', 'café_ñuño');
+            // The local part of an entity must be canonical ASCII, but a search query may contain any characters
+            try
+            {
+                $this->client->pushEntity('unicode-test.com', 'café_ñuño');
+                $this->fail('A local part with non-ASCII characters should be rejected');
+            }
+            catch (RequestException $e)
+            {
+                $this->assertEquals(400, $e->getCode());
+            }
+
+            $entityUuid = $this->client->pushEntity('unicode-test.com', 'cafe_nuno');
             $this->createdEntities[] = $entityUuid;
 
             $results = $this->client->searchEntities('café');
             $this->assertIsArray($results);
+            $this->assertNotContains($entityUuid, array_map(fn($result) => $result->getUuid(), $results));
+
+            $asciiResults = $this->client->searchEntities('cafe_nuno');
+            $this->assertContains($entityUuid, array_map(fn($result) => $result->getUuid(), $asciiResults));
         }
 
         public function testSearchPartialHostMatch(): void

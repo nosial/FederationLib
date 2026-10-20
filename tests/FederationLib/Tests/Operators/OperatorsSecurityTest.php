@@ -428,10 +428,6 @@
             $endpoints = [
                 'getSelf' => fn() => $operatorClient->getSelf(),
                 'pushEntity' => fn() => $operatorClient->pushEntity('disabled-endpoints.com', 'user'),
-                'listOperators' => fn() => $operatorClient->listOperators(),
-                'listEvidence' => fn() => $operatorClient->listEvidence(),
-                'listReports' => fn() => $operatorClient->listReports(),
-                'listBlacklist' => fn() => $operatorClient->listBlacklistRecords(),
                 'listAttachments' => fn() => $operatorClient->listAttachments(),
             ];
 
@@ -443,6 +439,19 @@
                     "Disabled operator should be rejected for $name"
                 );
             }
+
+            // Public methods process the token of a disabled operator as unauthenticated
+            $this->assertIsArray($operatorClient->listOperators());
+            $this->assertIsArray($operatorClient->listEvidence());
+            $this->assertIsArray($operatorClient->listReports());
+            $this->assertIsArray($operatorClient->listBlacklistRecords());
+
+            // ...and never with the permissions the disabled operator held
+            $this->expectRequestFailure(
+                fn() => $operatorClient->listEvidence(includeConfidential: true),
+                [HttpResponseCode::UNAUTHORIZED->value],
+                'A disabled operator should not list confidential evidence through a public method'
+            );
         }
 
         public function testSystemOperatorCannotAuthenticate(): void

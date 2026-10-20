@@ -130,10 +130,14 @@
             $entityA = $this->createSecurityEntity();
             $entityB = $this->createSecurityEntity();
 
-            // Self-relationship is currently allowed by the server; ensure it does not crash.
-            $this->client->setEntityRelationship($entityA, $entityA, EntityRelationshipType::ALTERNATIVE);
+            // A relationship of an entity to itself is rejected and leaves the entity without a relationship
+            $this->expectRequestFailure(
+                fn() => $this->client->setEntityRelationship($entityA, $entityA, EntityRelationshipType::ALTERNATIVE),
+                [HttpResponseCode::BAD_REQUEST->value],
+                'A relationship of an entity to itself should be rejected'
+            );
             $recordA = $this->client->getEntityRecord($entityA);
-            $this->assertEquals($entityA, $recordA->getRelationshipEntity());
+            $this->assertNull($recordA->getRelationshipEntity());
 
             // Circular relationships are also allowed; ensure both links persist.
             $this->client->setEntityRelationship($entityA, $entityB, EntityRelationshipType::PROXY);
@@ -505,7 +509,11 @@
         public function testQueryEntityIsPublicByDefaultAndExcludesSelfReferences(): void
         {
             $entityUuid = $this->createSecurityEntity();
-            $this->client->setEntityRelationship($entityUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE);
+            $this->expectRequestFailure(
+                fn() => $this->client->setEntityRelationship($entityUuid, $entityUuid, EntityRelationshipType::ALTERNATIVE),
+                [HttpResponseCode::BAD_REQUEST->value],
+                'A relationship of an entity to itself should be rejected'
+            );
 
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
             $queryResult = $anonymousClient->queryEntity($entityUuid);

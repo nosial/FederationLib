@@ -976,12 +976,14 @@
 
             $this->assertSame(self::TEST_PLUGIN, $plugin->getPackage());
             $this->assertSame('1.0.0', $plugin->getVersion());
-            $this->assertCount(12, $plugin->getRequestHandlers());
-            $this->assertCount(5, $plugin->getEventHandlers());
+            $this->assertCount(16, $plugin->getRequestHandlers());
+            $this->assertCount(7, $plugin->getEventHandlers());
             $this->assertCount(2, $plugin->getEventHandlers(EventType::AUDIT_LOG));
             $this->assertCount(1, $plugin->getEventHandlers(EventType::CONTENT_SCAN));
             $this->assertCount(1, $plugin->getEventHandlers(EventType::QUERY_ENTITY));
             $this->assertCount(1, $plugin->getEventHandlers(EventType::RECORD_CHANGE));
+            $this->assertCount(1, $plugin->getEventHandlers(EventType::STARTUP));
+            $this->assertCount(1, $plugin->getEventHandlers(EventType::MAINTENANCE));
             $this->assertSame([], $plugin->getEventHandlers(EventType::AUDIT_LOG)[0]->getFilter());
             $this->assertSame(['OPERATOR_DELETED'], $plugin->getEventHandlers(EventType::AUDIT_LOG)[1]->getFilter());
 

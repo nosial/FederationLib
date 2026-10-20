@@ -93,19 +93,29 @@
             $unauthenticatedClient->getAuditLogRecord('00000000-0000-0000-0000-000000000000');
         }
 
-        public function testSecurityOperatorAuditLogsAreIsolated(): void
+        public function testSecurityOperatorAuditLogsOfOthersFollowPublicAccess(): void
         {
             $actor = $this->createLimitedOperator('audit_actor', operator: true);
             $victim = $this->createLimitedOperator('audit_victim', management: true);
             $snooper = $this->createLimitedOperator('audit_snooper', client: true);
+            $actorUuid = $actor->getSelf()->getUuid();
 
-            // Generate a private OPERATOR_UPDATED audit entry as the actor.
+            // Generate an OPERATOR_UPDATED audit entry as the actor.
             $actor->setManagementPermissions($victim->getSelf()->getUuid(), false);
 
-            $this->expectRequestFailure(
-                fn() => $snooper->listOperatorAuditLogs($actor->getSelf()->getUuid()),
-                [HttpResponseCode::FORBIDDEN->value],
-                'One operator should not be able to list another operator\'s audit logs'
+            // Audit logs are public by default, so another operator without operator permissions receives the public
+            // entries of the actor, never more than an anonymous client and never entries of other operators
+            $snooperEntries = $snooper->listOperatorAuditLogs($actorUuid);
+            $anonymousEntries = new FederationClient(getenv('SERVER_ENDPOINT'))->listOperatorAuditLogs($actorUuid);
+
+            $this->assertNotEmpty($snooperEntries);
+            $this->assertEquals(
+                array_map(fn($entry) => $entry->getUuid(), $anonymousEntries),
+                array_map(fn($entry) => $entry->getUuid(), $snooperEntries)
             );
+            foreach ($snooperEntries as $entry)
+            {
+                $this->assertEquals($actorUuid, $entry->getOperatorUuid());
+            }
         }
     }

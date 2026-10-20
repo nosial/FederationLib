@@ -407,10 +407,6 @@
             {
                 $params['category'] = $category;
             }
-            if (!empty($types))
-            {
-                $params['type'] = implode(',', self::concernValues($types));
-            }
             self::applySortParams($params, $by, $order);
 
             return array_map(
@@ -2422,6 +2418,10 @@
             if ($category !== null)
             {
                 $params['category'] = $category;
+            }
+            if (!empty($types))
+            {
+                $params['type'] = implode(',', self::concernValues($types));
             }
             self::applySortParams($params, $by, $order);
 
