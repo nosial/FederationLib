@@ -30,14 +30,14 @@
          */
         public static function handleRequest(): void
         {
-            $authenticatedOperator = FederationServer::getAuthenticatedOperator();
+            $authenticatedOperator = FederationServer::getAuthenticatedOperator(Configuration::getServerConfiguration()->isReportsPublic());
             if(!Configuration::getServerConfiguration()->isReportsPublic() && $authenticatedOperator === null)
             {
                 throw new RequestException(self::ERROR_AUTHENTICATION_REQUIRED, HttpResponseCode::UNAUTHORIZED);
             }
 
-            $limit = (int) (FederationServer::getParameter('limit') ?? Configuration::getServerConfiguration()->getListReportsMaxItems());
-            $page = (int) (FederationServer::getParameter('page') ?? 1);
+            $limit = (FederationServer::getIntegerParameter('limit') ?? Configuration::getServerConfiguration()->getListReportsMaxItems());
+            $page = (FederationServer::getIntegerParameter('page') ?? 1);
 
             if($limit < 1 || $limit > Configuration::getServerConfiguration()->getListReportsMaxItems())
             {
@@ -49,7 +49,7 @@
                 $page = 1;
             }
 
-            $categoryInput = FederationServer::getParameter('category');
+            $categoryInput = FederationServer::getStringParameter('category', true);
             $category = $categoryInput !== null ? ReportCategory::tryFromCaseInsensitive($categoryInput) : null;
 
             $entity = Utilities::matchEntityPath(FederationServer::getPath(), '/reports');
