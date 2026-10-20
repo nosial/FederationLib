@@ -773,7 +773,8 @@
         }
 
         /**
-         * Sets the client permissions for an operator.
+         * Grants or revokes the client permissions of an operator. Client permissions cannot be revoked from an
+         * operator that holds management permissions, which inherit them.
          *
          * @param string $operatorUuid The UUID of the operator whose permission is to be set
          * @param bool $hasClientPermissions True to enable the permission, false to disable it
