@@ -50,7 +50,7 @@
                 throw new RequestException(self::ERROR_INVALID_EVIDENCE_UUID, HttpResponseCode::BAD_REQUEST);
             }
 
-            $reportUuid = FederationServer::getParameter('report_uuid');
+            $reportUuid = FederationServer::getStringParameter('report_uuid');
             if($reportUuid === null || !Validate::uuid($reportUuid))
             {
                 throw new RequestException(self::ERROR_REPORT_UUID_REQUIRED, HttpResponseCode::BAD_REQUEST);
