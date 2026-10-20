@@ -762,14 +762,7 @@
          */
         public function setOperatorPermissions(string $operatorUuid, bool $hasOperatorPermissions): void
         {
-            if(empty($operatorUuid))
-            {
-                throw new InvalidArgumentException('Operator UUID cannot be empty');
-            }
-
-            $this->makeRequest('PATCH', 'operators/' . $operatorUuid . '/operator-permissions', ['enabled' => $hasOperatorPermissions], [HttpResponseCode::OK],
-                sprintf('Failed to %s the operator\'s operator permissions', ($hasOperatorPermissions ? 'enable' : 'disable'))
-            );
+            $this->updateOperatorPermissions($operatorUuid, operator: $hasOperatorPermissions);
         }
 
         /**
