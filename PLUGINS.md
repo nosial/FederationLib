@@ -505,8 +505,10 @@ deletions.
 
  - A change is only produced when a record actually changed, eg; closing a report that does not exist produces nothing.
  - `EVIDENCE_CLASSIFIED` is produced when evidence is submitted with a classification (after `EVIDENCE_CREATED`),
-   classified directly, or classified by closing a report. Classifications are immutable, so it is produced at most
-   once per evidence record.
+   classified directly, or classified by closing a report. An operator can replace a classification with
+   Classify Evidence, which produces it again with the new classification. A handler that
+   learns from classifications (eg; a classifier) should treat the latest classification of an evidence record as
+   the one that applies.
  - The following produce no changes: records removed by another deletion (eg; the evidence of a deleted entity),
    records removed by the retention cleanup or changed by the host migration, and the root and system operators
    created during initialization.
