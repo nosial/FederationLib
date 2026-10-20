@@ -50,7 +50,7 @@
                 EntitiesManager::deleteEntity($entityRecord->getUuid());
                 AuditLogManager::createEntry(AuditLogType::ENTITY_DELETED, sprintf(
                     'Entity %s deleted by %s',
-                    $entityRecord->getAddress(),
+                    $entityRecord->getLoggableAddress(),
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid());
             }
