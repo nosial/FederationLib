@@ -306,112 +306,192 @@
         }
 
         /**
-         * Retrieves file attachment records older than the specified TTL.
+         * Retrieves the oldest file attachment records that are eligible for cleanup, as raw record data.
          *
-         * @param int $ttl The TTL in seconds to look back
+         * @param int $before The Unix timestamp before which a record is old
          * @param int $limit The maximum number of records to return
-         * @param int $page The page number for pagination
-         * @return array[] An array of raw file attachment record data
+         * @return array[] An array of raw file attachment record data, oldest first
+         * @throws InvalidArgumentException If the limit is out of range
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getOldRecords(int $ttl, int $limit=1000, int $page=1): array
+        public static function getOldRecords(int $before, int $limit=1000): array
         {
-            if($ttl <= 0)
-            {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
-            }
-
             if($limit < 1 || $limit > 10000)
             {
                 throw new InvalidArgumentException('Limit must be between 1 and 10000.');
             }
 
-            if($page < 1)
-            {
-                throw new InvalidArgumentException('Page must be greater than zero.');
-            }
-
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
-            $offset = ($page - 1) * $limit;
-
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT * FROM file_attachments WHERE created < :timestamp ORDER BY created ASC LIMIT :limit OFFSET :offset"
-                );
-                $stmt->bindParam(':timestamp', $timestamp);
-                $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-                $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE created < :before ORDER BY created ASC, uuid ASC LIMIT :limit");
+                $stmt->bindValue(':before', date('Y-m-d H:i:s', $before));
+                $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
                 $stmt->execute();
 
                 return $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to retrieve old file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to retrieve old file attachment records: " . $e->getMessage(), 0, $e);
             }
         }
 
         /**
-         * Deletes file attachment records older than the specified TTL.
-         * Physical files on disk are also removed.
+         * Retrieves the file attachment records of the given evidence records, as raw record data.
          *
-         * @param int $ttl The TTL in seconds after which file attachment records are considered old
-         * @return int The number of deleted records
+         * @param string[] $evidenceUuids The UUIDs of the evidence records
+         * @return array[] An array of raw file attachment record data
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function cleanEntries(int $ttl): int
+        public static function getRawRecordsByEvidence(array $evidenceUuids): array
         {
-            if($ttl <= 0)
+            if(empty($evidenceUuids))
             {
-                throw new InvalidArgumentException('TTL must be greater than zero.');
+                return [];
             }
 
-            $timestamp = date('Y-m-d H:i:s', time() - $ttl);
-            $deletedCount = 0;
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($evidenceUuids);
 
             try
             {
-                // First, fetch records to delete physical files
-                $stmt = DatabaseConnection::getConnection()->prepare(
-                    "SELECT uuid FROM file_attachments WHERE created < :timestamp"
-                );
-                $stmt->bindParam(':timestamp', $timestamp);
-                $stmt->execute();
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE evidence IN ($placeholders) ORDER BY created ASC, uuid ASC");
+                $stmt->execute($parameters);
 
-                $uuids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+                return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), 0, $e);
+            }
+        }
 
-                // Delete physical files
-                $storagePath = Configuration::getServerConfiguration()->getStoragePath();
-                foreach ($uuids as $uuid)
+        /**
+         * Deletes the given file attachment records that were created before the given time along with their stored
+         * files. No record changes are dispatched for the deleted records.
+         *
+         * @param string[] $uuids The UUIDs of the file attachment records to delete
+         * @param int $before The Unix timestamp that was given to getOldRecords()
+         * @return int The number of deleted records
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function purgeRecords(array $uuids, int $before): int
+        {
+            if(empty($uuids))
+            {
+                return 0;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($uuids);
+            $parameters[':before'] = date('Y-m-d H:i:s', $before);
+            $deletedUuids = [];
+
+            try
+            {
+                // The creation time of an attachment never changes, every selected record is deleted below
+                $selectStmt = DatabaseConnection::getConnection()->prepare("SELECT uuid FROM file_attachments WHERE uuid IN ($placeholders) AND created < :before");
+                $selectStmt->execute($parameters);
+                $deletedUuids = $selectStmt->fetchAll(PDO::FETCH_COLUMN);
+                if(empty($deletedUuids))
                 {
-                    $filePath = rtrim($storagePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $uuid;
-                    if(file_exists($filePath) && is_writable($filePath))
-                    {
-                        @unlink($filePath);
-                    }
+                    return 0;
                 }
 
-                // Delete database records
-                $deleteStmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE created < :timestamp");
-                $deleteStmt->bindParam(':timestamp', $timestamp);
-                $deleteStmt->execute();
+                [$deletePlaceholders, $deleteParameters] = Utilities::getInPlaceholders($deletedUuids);
+                $deleteStmt = DatabaseConnection::getConnection()->prepare("DELETE FROM file_attachments WHERE uuid IN ($deletePlaceholders)");
+                $deleteStmt->execute($deleteParameters);
                 $deletedCount = $deleteStmt->rowCount();
             }
             catch (PDOException $e)
             {
-                throw new DatabaseOperationException("Failed to clean file attachment records: " . $e->getMessage(), $e->getCode(), $e);
+                throw new DatabaseOperationException("Failed to purge file attachment records: " . $e->getMessage(), 0, $e);
             }
             finally
             {
-                if(self::isCachingEnabled())
+                if(self::isCachingEnabled() && !empty($deletedUuids))
                 {
                     RedisConnection::clearRecords(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                    RedisConnection::clearRecords(AuditLogManager::CACHE_PREFIX);
                 }
             }
 
+            self::deleteFiles($deletedUuids);
             return $deletedCount;
+        }
+
+        /**
+         * Retrieves the UUIDs of the file attachments of the evidence records whose given column has the given value,
+         * which the database deletes along with that evidence.
+         *
+         * @param string $column The evidence column to match, one of uuid, entity or operator
+         * @param string $value The value of the column
+         * @return string[] The UUIDs of the file attachments
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getUuidsByEvidenceColumn(string $column, string $value): array
+        {
+            if(!in_array($column, ['uuid', 'entity', 'operator'], true))
+            {
+                throw new InvalidArgumentException(sprintf("'%s' is not a supported evidence column", $column));
+            }
+
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT f.uuid FROM file_attachments f INNER JOIN evidence e ON e.uuid = f.evidence WHERE e.$column = :value");
+                $stmt->bindParam(':value', $value);
+                $stmt->execute();
+
+                return $stmt->fetchAll(PDO::FETCH_COLUMN);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve file attachment records: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        /**
+         * Forgets the file attachments the database deleted along with their evidence, deleting their cached records
+         * and their stored files, which the database can't delete (OFD "Deletion of Records"). No record changes are
+         * dispatched for the deleted records.
+         *
+         * @param string[] $uuids The UUIDs of the deleted file attachments
+         */
+        public static function forgetDeletedRecords(array $uuids): void
+        {
+            if(empty($uuids))
+            {
+                return;
+            }
+
+            if(self::isCachingEnabled())
+            {
+                foreach($uuids as $uuid)
+                {
+                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                }
+
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            self::deleteFiles($uuids);
+        }
+
+        /**
+         * Deletes the stored files of the given file attachments, a file that can't be deleted is logged.
+         *
+         * @param string[] $uuids The UUIDs of the file attachments whose files to delete
+         */
+        public static function deleteFiles(array $uuids): void
+        {
+            $storagePath = rtrim(Configuration::getServerConfiguration()->getStoragePath(), DIRECTORY_SEPARATOR);
+            foreach($uuids as $uuid)
+            {
+                $filePath = $storagePath . DIRECTORY_SEPARATOR . $uuid;
+                if(file_exists($filePath) && !@unlink($filePath))
+                {
+                    Logger::log()->error(sprintf('Failed to delete the file of file attachment %s from %s', $uuid, $filePath));
+                }
+            }
         }
 
         /**
