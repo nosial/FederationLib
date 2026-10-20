@@ -2266,11 +2266,12 @@
          * @param int $page The page number to retrieve (default is 1)
          * @param int $limit The number of blacklist records per page (default is 100)
          * @param bool $includeLifted if True, lifted blacklist records are included if you have permission to view them
+         * @param IncidentType[]|string[]|null $types Optional. Only blacklist records of one of these incident types are returned
          * @return BlacklistRecord[] An array of BlacklistRecord objects
          * @throws RequestException If the request fails or the response is invalid
          * @throws InvalidArgumentException If the page or limit parameters are invalid
          */
-        public function listBlacklistRecords(int $page=1, int $limit=100, bool $includeLifted=false, ?string $category=null, ?string $by=null, ?string $order=null): array
+        public function listBlacklistRecords(int $page=1, int $limit=100, bool $includeLifted=false, ?string $category=null, ?string $by=null, ?string $order=null, ?array $types=null): array
         {
             if($page < 1)
             {
@@ -2286,6 +2287,10 @@
             if($category !== null)
             {
                 $params['category'] = $category;
+            }
+            if(!empty($types))
+            {
+                $params['type'] = implode(',', self::concernValues($types));
             }
             self::applySortParams($params, $by, $order);
 
