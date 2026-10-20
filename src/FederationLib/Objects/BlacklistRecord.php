@@ -36,7 +36,7 @@
             }
             else
             {
-                $this->type = isset($data['type']) ? IncidentType::from($data['type']) : IncidentType::OTHER;
+                $this->type = isset($data['type']) ? IncidentType::fromResponse($data['type']) : IncidentType::OTHER;
             }
             /** @noinspection PhpTernaryExpressionCanBeReplacedWithConditionInspection */
             $this->lifted = isset($data['lifted']) ? (bool)$data['lifted'] : false;
@@ -220,7 +220,7 @@
 
             if(isset($array['type']) && is_string($array['type']))
             {
-                $array['type'] = IncidentType::from($array['type']);
+                $array['type'] = IncidentType::fromResponse($array['type']);
             }
 
             return new self($array);
@@ -243,7 +243,7 @@
                 'uuid' => ['type' => 'string', 'format' => 'uuid', 'description' => 'Unique identifier for the blacklist entry'],
                 'operator' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the operator who created the entry'],
                 'entity' => ['type' => 'string', 'format' => 'uuid', 'description' => 'UUID of the blacklisted entity'],
-                'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the supporting report'],
+                'report' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'UUID of the supporting report, which may concern another entity'],
                 'type' => [
                     'type' => 'string',
                     'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases()),
