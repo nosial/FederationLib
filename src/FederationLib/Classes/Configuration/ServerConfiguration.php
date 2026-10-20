@@ -6,33 +6,33 @@
 
     class ServerConfiguration
     {
+        /**
+         * What may be made accessible without authentication, the items of server.public
+         */
+        public const array PUBLIC_ITEMS = [
+            'AUDIT_LOGS', 'EVIDENCE', 'BLACKLIST', 'ENTITIES', 'ENTITY_METADATA', 'REPORTS', 'SCAN_CONTENT',
+            'QUERY_ENTITY', 'SEARCH', 'TELEPHONE_ENTITIES',
+        ];
+
+        /**
+         * What is accessible without authentication by default
+         */
+        public const array DEFAULT_PUBLIC = ['AUDIT_LOGS', 'EVIDENCE', 'BLACKLIST', 'ENTITIES', 'REPORTS', 'SCAN_CONTENT', 'QUERY_ENTITY'];
+
         private string $baseUrl;
         private string $name;
         private ?string $accessToken;
         private int $maxUploadSize;
         private string $storagePath;
-        private bool $urlUploads;
-        private int $urlUploadTimeout;
-        private bool $urlUploadAllowPrivate;
-        private int $listAuditLogsMaxItems;
-        private int $listEntitiesMaxItems;
-        private int $listOperatorsMaxItems;
-        private int $listEvidenceMaxItems;
-        private int $listBlacklistMaxItems;
-        private int $listAttachmentsMaxItems;
-        private int $listReportsMaxItems;
-        private bool $publicAuditLogs;
+        private int $maxPageSize;
+        /**
+         * @var string[]
+         */
+        private array $public;
         /**
          * @var AuditLogType[]
          */
         private array $publicAuditEntries;
-        private bool $publicEvidence;
-        private bool $publicBlacklist;
-        private bool $publicEntities;
-        private bool $publicEntityMetadata;
-        private bool $publicReports;
-        private bool $publicScanContent;
-        private bool $publicQueryEntity;
         private int $minBlacklistTime;
         private int $topThreatsLimit;
         private bool $allowIllegalContent;
@@ -50,25 +50,14 @@
             $this->accessToken = $config['access_token'] ?? null;
             $this->maxUploadSize = $config['max_upload_size'] ?? 52428800; // 50MB default
             $this->storagePath = $config['storage_path'] ?? '/var/www/uploads';
-            $this->urlUploads = $config['url_uploads'] ?? true;
-            $this->urlUploadTimeout = $config['url_upload_timeout'] ?? 30;
-            $this->urlUploadAllowPrivate = $config['url_upload_allow_private'] ?? false;
-            $this->listAuditLogsMaxItems = $config['list_audit_logs_max_items'] ?? 100;
-            $this->listEntitiesMaxItems = $config['list_entities_max_items'] ?? 100;
-            $this->listOperatorsMaxItems = $config['list_operators_max_items'] ?? 100;
-            $this->listEvidenceMaxItems = $config['list_evidence_max_items'] ?? 100;
-            $this->listBlacklistMaxItems = $config['list_blacklist_max_items'] ?? 100;
-            $this->listAttachmentsMaxItems = $config['list_attachments_max_items'] ?? 100;
-            $this->listReportsMaxItems = $config['list_reports_max_items'] ?? 100;
-            $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
-            $this->publicAuditEntries = array_map(fn($type) => AuditLogType::from($type), $config['public_audit_entries'] ?? []);
-            $this->publicEvidence = $config['public_evidence'] ?? true;
-            $this->publicBlacklist = $config['public_blacklist'] ?? true;
-            $this->publicEntities = $config['public_entities'] ?? true;
-            $this->publicEntityMetadata = $config['public_entity_metadata'] ?? false;
-            $this->publicReports = $config['public_reports'] ?? true;
-            $this->publicScanContent = $config['public_scan_content'] ?? false;
-            $this->publicQueryEntity = $config['public_query_entity'] ?? true;
+            // The maximum number of records a list method returns, and the default page size of lists
+            $this->maxPageSize = max(1, (int)($config['max_page_size'] ?? 100));
+            // What is accessible without authentication (OFD "Public Accessibility")
+            $this->public = ConfigurationValues::parseList($config['public'] ?? null, self::PUBLIC_ITEMS, self::DEFAULT_PUBLIC);
+            $this->publicAuditEntries = array_values(array_filter(array_map(
+                fn($type) => is_string($type) ? AuditLogType::tryFrom(strtoupper(trim($type))) : null,
+                is_string($config['public_audit_entries'] ?? null) ? explode(',', $config['public_audit_entries']) : ($config['public_audit_entries'] ?? [])
+            )));
             $this->minBlacklistTime = $config['min_blacklist_time'] ?? 1800;
             $this->topThreatsLimit = $config['top_threats_limit'] ?? 25;
             $this->allowIllegalContent = $config['allow_illegal_content'] ?? true;
@@ -126,37 +115,28 @@
         }
 
         /**
-         * Checks if attachments may be uploaded by providing a URL that the server retrieves the file from, instead
-         * of uploading the file directly.
+         * Returns the maximum number of records a list method returns, also its default page size.
          *
-         * @return bool True if URL uploads are enabled, false otherwise
+         * @return int The maximum page size
          */
-        public function isUrlUploadsEnabled(): bool
+        public function getMaxPageSize(): int
         {
-            return $this->urlUploads;
+            return $this->maxPageSize;
         }
 
         /**
-         * Get the maximum number of seconds the server spends retrieving a file from a URL, including redirects.
+         * Checks if an item is accessible without authentication.
          *
-         * @return int The timeout in seconds
+         * @param string $item One of PUBLIC_ITEMS, eg; EVIDENCE
+         * @return bool True if the item is public
          */
-        public function getUrlUploadTimeout(): int
+        public function isPublic(string $item): bool
         {
-            return $this->urlUploadTimeout;
+            return in_array($item, $this->public, true);
         }
 
-        /**
-         * Checks if URL uploads may retrieve files from hosts that resolve to private, loopback, link-local or other
-         * addresses that aren't publicly routable. This should only be enabled in trusted environments, as it allows
-         * operators with client permissions to make the server send requests to internal services.
-         *
-         * @return bool True if non-public addresses are allowed, false otherwise
-         */
-        public function isUrlUploadPrivateAllowed(): bool
-        {
-            return $this->urlUploadAllowPrivate;
-        }
+
+
 
         /**
          * Get the maximum number of items to return when listing audit logs.
@@ -165,7 +145,7 @@
          */
         public function getListAuditLogsMaxItems(): int
         {
-            return $this->listAuditLogsMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -175,7 +155,7 @@
          */
         public function getListEntitiesMaxItems(): int
         {
-            return $this->listEntitiesMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -185,7 +165,7 @@
          */
         public function getListOperatorsMaxItems(): int
         {
-            return $this->listOperatorsMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -195,7 +175,7 @@
          */
         public function getListEvidenceMaxItems(): int
         {
-            return $this->listEvidenceMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -205,7 +185,7 @@
          */
         public function getListBlacklistMaxItems(): int
         {
-            return $this->listBlacklistMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -215,7 +195,7 @@
          */
         public function getListAttachmentsMaxItems(): int
         {
-            return $this->listAttachmentsMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -225,7 +205,7 @@
          */
         public function getListReportsMaxItems(): int
         {
-            return $this->listReportsMaxItems;
+            return $this->maxPageSize;
         }
 
         /**
@@ -235,7 +215,7 @@
          */
         public function isAuditLogsPublic(): bool
         {
-            return $this->publicAuditLogs;
+            return $this->isPublic('AUDIT_LOGS');
         }
 
         /**
@@ -255,7 +235,7 @@
          */
         public function isEvidencePublic(): bool
         {
-            return $this->publicEvidence;
+            return $this->isPublic('EVIDENCE');
         }
 
         /**
@@ -265,7 +245,7 @@
          */
         public function isBlacklistPublic(): bool
         {
-            return $this->publicBlacklist;
+            return $this->isPublic('BLACKLIST');
         }
 
         /**
@@ -275,7 +255,7 @@
          */
         public function isEntitiesPublic(): bool
         {
-            return $this->publicEntities;
+            return $this->isPublic('ENTITIES');
         }
 
         /**
@@ -285,7 +265,7 @@
          */
         public function isEntityMetadataPublic(): bool
         {
-            return $this->publicEntityMetadata;
+            return $this->isPublic('ENTITY_METADATA');
         }
 
         /**
@@ -295,7 +275,7 @@
          */
         public function isReportsPublic(): bool
         {
-            return $this->publicReports;
+            return $this->isPublic('REPORTS');
         }
 
         /**
@@ -305,7 +285,7 @@
          */
         public function isScanContentPublic(): bool
         {
-            return $this->publicScanContent;
+            return $this->isPublic('SCAN_CONTENT');
         }
 
         /**
@@ -315,7 +295,7 @@
          */
         public function isQueryEntityPublic(): bool
         {
-            return $this->publicQueryEntity;
+            return $this->isPublic('QUERY_ENTITY');
         }
 
         /**
@@ -360,5 +340,17 @@
         public function isLinkSubdomainEntitiesEnabled(): bool
         {
             return $this->linkSubdomainEntities;
+        }
+
+        /**
+         * Checks if telephone entities (eg; 15550123456@e164.arpa) are exposed to unauthenticated requests like other
+         * entities. When false (the default, as OFD recommends) they are hidden from unauthenticated requests that do
+         * not already know the number: omitted from lists and searches, not resolvable by UUID, and without metadata.
+         *
+         * @return bool True if telephone entities are public, false otherwise
+         */
+        public function isTelephoneEntitiesPublic(): bool
+        {
+            return $this->isPublic('TELEPHONE_ENTITIES');
         }
     }
