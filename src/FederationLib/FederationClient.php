@@ -2513,6 +2513,7 @@
          *
          * The filename is determined by the server's Content-Disposition header.
          * If no filename is provided by the server, the attachment UUID is used as the filename.
+         * The destination must not already exist; existing files and symbolic links are never overwritten.
          *
          * @param string $attachmentUuid The UUID of the attachment to download
          * @param string $directoryPath The directory to save the downloaded file in
@@ -2574,15 +2575,19 @@
 
             if($filename === '' || $filename === '.' || $filename === '..')
             {
-                $filename = $attachmentUuid;
+                $filename = basename(str_replace('\\', '/', $attachmentUuid));
+                if($filename === '' || $filename === '.' || $filename === '..')
+                {
+                    throw new InvalidArgumentException('Invalid attachment filename');
+                }
             }
 
             $finalFilePath = $directoryPath . DIRECTORY_SEPARATOR . $filename;
-            $fileHandle = fopen($finalFilePath, 'wb');
+            $fileHandle = @fopen($finalFilePath, 'xb');
 
             if($fileHandle === false)
             {
-                throw new InvalidArgumentException('Failed to open file for writing: ' . $finalFilePath);
+                throw new InvalidArgumentException('Destination already exists or cannot be created: ' . $finalFilePath);
             }
 
             if(fwrite($fileHandle, $body) === false)
