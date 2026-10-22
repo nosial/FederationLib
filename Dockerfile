@@ -5,14 +5,15 @@
 #   pre-installed, along with Nginx and Supervisor for web serving.
 #
 
-ARG PHP_VERSION=8.5
+ARG NCC_BUILDER_IMAGE=ghcr.io/nosial/ncc:dev
+ARG NCC_FPM_IMAGE=ghcr.io/nosial/ncc:dev-fpm
 
-FROM ghcr.io/nosial/ncc:dev AS builder
+FROM ${NCC_BUILDER_IMAGE} AS builder
 WORKDIR /app
 COPY . /app
 RUN ncc build --configuration web_release
 
-FROM ghcr.io/nosial/ncc:dev-fpm AS production
+FROM ${NCC_FPM_IMAGE} AS production
 
 LABEL org.opencontainers.image.title="FederationServer" \
       org.opencontainers.image.description="FederationServer Docker image" \
