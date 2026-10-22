@@ -1,4 +1,4 @@
-# FederationLib
+# <picture><source media="(prefers-color-scheme: dark)" srcset="assets/icon/federationlib_light.svg"><img src="assets/icon/federationlib_dark.svg" alt="FederationLib" width="32" height="32"></picture> FederationLib
 
 FederationLib is a complete Federated Database Server/Client implementation in PHP to serve/implement a protection layer
 against spam and abusive users on the internet across multiple platforms and use cases.
@@ -171,7 +171,7 @@ services:
 
   mariadb:
     container_name: federation_mariadb
-    image: mariadb:10.5
+    image: mariadb:latest
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-federation_root}
