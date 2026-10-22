@@ -31,7 +31,7 @@ services:
 
   mariadb:
     container_name: federation_mariadb
-    image: mariadb:10.5
+    image: mariadb:latest
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-federation_root}
