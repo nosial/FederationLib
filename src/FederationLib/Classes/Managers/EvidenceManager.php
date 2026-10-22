@@ -2,6 +2,7 @@
 
     namespace FederationLib\Classes\Managers;
 
+    use DomainException;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\PluginManager;
@@ -20,6 +21,7 @@
     use PDO;
     use PDOException;
     use Symfony\Component\Uid\Uuid;
+    use Throwable;
 
     class EvidenceManager
     {
@@ -219,6 +221,7 @@
          *
          * @param string $uuid The UUID of the evidence record to delete.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
+         * @throws DomainException If declassification would expose evidence of illegal content.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
@@ -770,7 +773,8 @@
         }
 
         /**
-         * Updates the confidentiality status of an evidence record.
+         * Updates the confidentiality status of an evidence record under a row lock.
+         * Evidence linked to an ILLEGAL_CONTENT report cannot be made public.
          *
          * @param string $evidenceUuid The UUID of the evidence record to update.
          * @param bool $confidential The new confidentiality status (true for confidential, false for non-confidential).
@@ -784,17 +788,43 @@
                 throw new InvalidArgumentException('UUID must be provided.');
             }
 
+            $pdo = DatabaseConnection::getConnection();
+            $ownsTransaction = !$pdo->inTransaction();
             try
             {
+                if($ownsTransaction)
+                {
+                    $pdo->beginTransaction();
+                }
+
+                $lock = $pdo->prepare("SELECT r.incident_type FROM evidence e LEFT JOIN reports r ON r.uuid = e.report WHERE e.uuid = :uuid FOR UPDATE");
+                $lock->execute([':uuid' => $evidenceUuid]);
+                if(!$confidential && $lock->fetchColumn() === 'ILLEGAL_CONTENT')
+                {
+                    throw new DomainException('Evidence linked to an ILLEGAL_CONTENT report must remain confidential');
+                }
+
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET confidential = :confidential WHERE uuid = :uuid");
                 $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->bindParam(':confidential', $confidential, PDO::PARAM_BOOL);
                 $stmt->execute();
                 $changed = $stmt->rowCount() > 0;
+                if($ownsTransaction)
+                {
+                    $pdo->commit();
+                }
             }
-            catch (PDOException $e)
+            catch (Throwable $e)
             {
-                throw new DatabaseOperationException("Failed to update confidentiality: " . $e->getMessage(), $e->getCode(), $e);
+                if($ownsTransaction && $pdo->inTransaction())
+                {
+                    $pdo->rollBack();
+                }
+                if($e instanceof PDOException)
+                {
+                    throw new DatabaseOperationException("Failed to update confidentiality: " . $e->getMessage(), $e->getCode(), $e);
+                }
+                throw $e;
             }
             finally
             {
@@ -971,7 +1001,7 @@
 
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET report=:report, updated=:updated WHERE uuid=:uuid");
+                $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence e JOIN reports r ON r.uuid = :report SET e.report = r.uuid, e.confidential = CASE WHEN r.incident_type = 'ILLEGAL_CONTENT' THEN 1 ELSE e.confidential END, e.updated = :updated WHERE e.uuid = :uuid");
                 $stmt->bindParam(':uuid', $evidenceUuid);
                 $stmt->bindParam(':report', $reportUuid);
                 $stmt->bindParam(':updated', $now);
