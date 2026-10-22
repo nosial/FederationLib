@@ -59,8 +59,6 @@
             self::$operatorAuthenticated = false;
             self::$authenticatedOperator = null;
 
-            // PHP only parses the form-encoded and multipart bodies of POST requests into $_POST and $_FILES, the body
-            // of any other request is parsed here before it is read as php://input
             $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
             $bodyParameters = [];
             if(self::$requestMethod === 'POST')
@@ -79,16 +77,21 @@
                 }
             }
 
-            self::$inputContent = file_get_contents('php://input') ?: '';
-
-            // Decode the input content if it's JSON
-            if (self::$inputContent && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json'))
+            self::$inputContent = file_get_contents('php://input');
+            if (self::$inputContent !== '' && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json'))
             {
-                self::$decodedContent = json_decode(self::$inputContent, true);
+                $decoded = json_decode(self::$inputContent);
                 if (json_last_error() !== JSON_ERROR_NONE)
                 {
                     throw new RequestException(json_last_error_msg(), 400);
                 }
+
+                if(!$decoded instanceof \stdClass)
+                {
+                    throw new RequestException('The JSON request body must be an object', 400);
+                }
+
+                self::$decodedContent = json_decode(self::$inputContent, true);
             }
 
             parse_str((string)parse_url(self::$uri, PHP_URL_QUERY), self::$parameters);
@@ -167,9 +170,6 @@
                 throw new RequestException($invalidIdentifierMessage, HttpResponseCode::BAD_REQUEST, $e);
             }
 
-            // The UUIDs of entities appear in other records, so a hidden telephone entity identified by its UUID is
-            // treated as though it did not exist; only its address or SHA-256 identifier, which require knowing the
-            // number, resolve it (OFD "Telephone Entities")
             if($entityRecord !== null && $entityRecord->isTelephone() && Utilities::isUuid($identifier) && self::hideTelephoneEntities())
             {
                 return null;
@@ -209,24 +209,27 @@
                     $values[$member] = $value;
                 }
             }
-            else
+            $parameters = self::getRequestParameters();
+            foreach($members as $member)
             {
-                foreach($members as $member)
+                if(!array_key_exists($member, $parameters))
                 {
-                    $value = FederationServer::getParameter($member);
-                    if($value === null)
-                    {
-                        continue;
-                    }
-
-                    $value = is_string($value) ? filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
-                    if($value === null)
-                    {
-                        throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
-                    }
-
-                    $values[$member] = $value;
+                    continue;
                 }
+
+                $value = FederationServer::getParameter($member);
+                $value = is_string($value) ? match(strtolower($value))
+                {
+                    'true' => true,
+                    'false' => false,
+                    default => null,
+                } : null;
+                if($value === null)
+                {
+                    throw new RequestException($errorMessage, HttpResponseCode::BAD_REQUEST);
+                }
+
+                $values[$member] = $value;
             }
 
             if(count($values) === 0)
@@ -583,10 +586,6 @@
             $configuredAccessToken = Configuration::getServerConfiguration()->getAccessToken();
             if($configuredAccessToken !== null && hash_equals($configuredAccessToken, $accessToken))
             {
-                // A master operator is automatically created if it does not exist.
-                // This is useful for initial setup or if the master operator was deleted.
-                // Master operators cannot be disabled, so we can safely return it.
-
                 try
                 {
                     return OperatorManager::getRootOperator();
