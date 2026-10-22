@@ -158,8 +158,13 @@
         public static function getParameter(string $name): mixed
         {
             $parameters = self::getRequestParameters();
-            if (isset($parameters[$name]) && is_string($parameters[$name]))
+            if (array_key_exists($name, $parameters))
             {
+                if(!is_string($parameters[$name]))
+                {
+                    throw new RequestException(sprintf('The %s parameter must be a scalar value', $name), 400);
+                }
+
                 return $parameters[$name];
             }
 
@@ -189,6 +194,12 @@
          */
         public static function getStringParameter(string $name, bool $ignoreInvalid=false): ?string
         {
+            $parameters = self::getRequestParameters();
+            if($ignoreInvalid && array_key_exists($name, $parameters) && !is_string($parameters[$name]))
+            {
+                return null;
+            }
+
             $value = self::getParameter($name);
             if($value === null || is_string($value))
             {
