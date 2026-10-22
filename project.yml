@@ -12,6 +12,13 @@ assembly:
   name: FederationLib
   package: net.nosial.federation
   version: 2.0.1
+  url: 'https://github.com/nosial/FederationLib'
+  license: 'MIT'
+  description: 'FederationLib is a complete Federated Database Server/Client implementation in PHP'
+  author: 'Netkas <netkas@nosial.net>'
+  organization: 'Nosial'
+  product: 'Federation'
+  copyright: 'Copyright (c) 2022-2026 Nosial'
 dependencies:
   net.nosial.configlib: nosial/configlib@github
   net.nosial.loglib2: nosial/loglib2@github
