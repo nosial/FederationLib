@@ -198,7 +198,7 @@
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            $downloadPath = sys_get_temp_dir();
+            $downloadPath = $this->createDownloadDirectory();
             $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
             $this->tempFiles[] = $downloadedFile;
 
@@ -521,7 +521,7 @@
             $uploadResult = $this->client->uploadFileAttachment($evidenceUuid, $testFilePath);
             $this->createdAttachments[] = $uploadResult->getUuid();
 
-            $downloadPath = sys_get_temp_dir();
+            $downloadPath = $this->createDownloadDirectory();
             $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
             $this->tempFiles[] = $downloadedFile;
 
@@ -681,6 +681,21 @@
             $this->assertNotEmpty($resultUpper);
             $this->assertSame($upperUuids, $lowerUuids);
             $this->assertSame($upperUuids, $mixedUuids);
+        }
+
+        /**
+         * Each download needs a fresh destination because existing files must not be overwritten.
+         */
+        private function createDownloadDirectory(): string
+        {
+            $directory = sys_get_temp_dir() . '/federation_download_' . bin2hex(random_bytes(16));
+            if (!mkdir($directory, 0700))
+            {
+                throw new RuntimeException('Failed to create download directory: ' . $directory);
+            }
+
+            $this->tempFiles[] = $directory;
+            return $directory;
         }
 
         private function createTestFile(string $fileName, string $content): string

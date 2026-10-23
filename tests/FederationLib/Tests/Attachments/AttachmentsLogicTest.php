@@ -184,7 +184,7 @@
             $originalInfo = $this->client->getAttachmentInfo($attachmentUuid);
             $this->assertNotNull($originalInfo);
 
-            $downloadPath = sys_get_temp_dir();
+            $downloadPath = $this->createDownloadDirectory();
             $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
             $this->tempFiles[] = $downloadedFile;
             $this->assertTrue(file_exists($downloadedFile));
@@ -264,7 +264,7 @@
             $downloadPaths = [];
             for ($i = 1; $i <= 3; $i++)
             {
-                $downloadPath = sys_get_temp_dir();
+                $downloadPath = $this->createDownloadDirectory();
                 $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
                 $this->tempFiles[] = $downloadedFile;
                 $downloadPaths[] = $downloadedFile;
@@ -297,7 +297,7 @@
             $attachmentInfo = $this->client->getAttachmentInfo($attachmentUuid);
             $this->assertEquals(strlen($sourceContent), $attachmentInfo->getFileSize());
 
-            $downloadPath = sys_get_temp_dir();
+            $downloadPath = $this->createDownloadDirectory();
             $downloadedFile = $this->client->downloadAttachment($attachmentUuid, $downloadPath);
             $this->tempFiles[] = $downloadedFile;
 
@@ -377,7 +377,7 @@
                 $info = $this->client->getAttachmentInfo($uploadResult->getUuid());
                 $this->assertEquals(strlen($content), $info->getFileSize());
 
-                $downloadPath = sys_get_temp_dir();
+                $downloadPath = $this->createDownloadDirectory();
                 $downloadedFile = $this->client->downloadAttachment($uploadResult->getUuid(), $downloadPath);
                 $this->tempFiles[] = $downloadedFile;
                 $this->assertEquals($content, file_get_contents($downloadedFile));
@@ -421,6 +421,21 @@
                     'Download with non-existent UUID should return 404 or server error'
                 );
             }
+        }
+
+        /**
+         * Each download needs a fresh destination because existing files must not be overwritten.
+         */
+        private function createDownloadDirectory(): string
+        {
+            $directory = sys_get_temp_dir() . '/federation_download_' . bin2hex(random_bytes(16));
+            if (!mkdir($directory, 0700))
+            {
+                throw new RuntimeException('Failed to create download directory: ' . $directory);
+            }
+
+            $this->tempFiles[] = $directory;
+            return $directory;
         }
 
         private function createTestFile(string $fileName, string $content): string
