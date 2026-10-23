@@ -2,7 +2,6 @@
 
     namespace FederationLib\Classes\Managers;
 
-    use DomainException;
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
     use FederationLib\Classes\PluginManager;
@@ -15,7 +14,9 @@
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\EvidenceOrderType;
     use FederationLib\Enums\RecordChangeType;
+    use FederationLib\Exceptions\CacheOperationException;
     use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Exceptions\OperationRejectedException;
     use FederationLib\Objects\EvidenceRecord;
     use InvalidArgumentException;
     use PDO;
@@ -221,7 +222,7 @@
          *
          * @param string $uuid The UUID of the evidence record to delete.
          * @throws InvalidArgumentException If the UUID is not provided or is empty.
-         * @throws DomainException If declassification would expose evidence of illegal content.
+         * @throws OperationRejectedException If declassification would expose evidence of illegal content.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
@@ -237,9 +238,7 @@
                 throw new InvalidArgumentException('Evidence UUID must be valid');
             }
 
-            // The record as it was is handed to the EVIDENCE_DELETED event handlers, eg; to forget its content
             $deletedRecord = self::getEvidence($uuid);
-            // The database deletes the attachments of the evidence, but not their stored files
             $attachmentUuids = FileAttachmentManager::getUuidsByEvidenceColumn('uuid', $uuid);
 
             try
@@ -778,8 +777,9 @@
          *
          * @param string $evidenceUuid The UUID of the evidence record to update.
          * @param bool $confidential The new confidentiality status (true for confidential, false for non-confidential).
-         * @throws InvalidArgumentException If the UUID is not provided or is empty.
+         * @throws CacheOperationException Thrown if there was a caching operation error.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @throws OperationRejectedException Thrown if the operation is rejected.
          */
         public static function updateConfidentiality(string $evidenceUuid, bool $confidential): void
         {
@@ -801,7 +801,7 @@
                 $lock->execute([':uuid' => $evidenceUuid]);
                 if(!$confidential && $lock->fetchColumn() === 'ILLEGAL_CONTENT')
                 {
-                    throw new DomainException('Evidence linked to an ILLEGAL_CONTENT report must remain confidential');
+                    throw new OperationRejectedException('Evidence linked to an ILLEGAL_CONTENT report must remain confidential');
                 }
 
                 $stmt = DatabaseConnection::getConnection()->prepare("UPDATE evidence SET confidential = :confidential WHERE uuid = :uuid");

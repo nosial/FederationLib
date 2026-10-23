@@ -4,12 +4,11 @@
 
     use FederationLib\Classes\Managers\AuditLogManager;
     use FederationLib\Classes\Managers\EvidenceManager;
-    use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
-    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Exceptions\OperationRejectedException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestSpecificationInterface;
@@ -63,17 +62,6 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                // Evidence of illegal content must stay confidential while it is linked to the report (OFD "Confidential
-                // Evidence")
-                if(!$confidential && $evidenceRecord->getReport() !== null)
-                {
-                    $reportRecord = ReportManager::getReport($evidenceRecord->getReport());
-                    if($reportRecord !== null && $reportRecord->getIncidentType() === IncidentType::ILLEGAL_CONTENT)
-                    {
-                        throw new RequestException(self::ERROR_ILLEGAL_CONTENT, 409);
-                    }
-                }
-
                 EvidenceManager::updateConfidentiality($evidenceUuid, $confidential);
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, sprintf(
                     'Evidence %s made %s by operator %s',
@@ -81,6 +69,10 @@
                     $confidential ? 'confidential' : 'non-confidential',
                     $authenticatedOperator->getName()
                 ), $authenticatedOperator->getUuid(), $evidenceRecord->getEntityUuid(), null, $evidenceUuid);
+            }
+            catch(OperationRejectedException $e)
+            {
+                throw new RequestException(self::ERROR_ILLEGAL_CONTENT, 409, $e);
             }
             catch(DatabaseOperationException $e)
             {

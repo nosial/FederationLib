@@ -9,7 +9,6 @@
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Enums\IncidentType;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
@@ -71,13 +70,6 @@
                 }
 
                 EvidenceManager::updateEvidenceReport($evidenceUuid, $reportUuid);
-
-                // Evidence linked to an ILLEGAL_CONTENT report is always confidential
-                if($reportRecord->getIncidentType() === IncidentType::ILLEGAL_CONTENT && !$evidenceRecord->isConfidential())
-                {
-                    EvidenceManager::updateConfidentiality($evidenceUuid, true);
-                }
-
                 AuditLogManager::createEntry(AuditLogType::EVIDENCE_UPDATED, sprintf(
                     'Evidence %s linked to report %s by %s',
                     $evidenceUuid,
