@@ -23,3 +23,9 @@ services:
       - TEST_PLUGIN_GREETING=Hello from the test environment
       # The migration check of the TestPlugin creates (and drops) scratch databases as the root user
       - TEST_PLUGIN_DATABASE_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-federation_root}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
