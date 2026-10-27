@@ -4,16 +4,21 @@
 
     use FederationLib\Classes\Configuration;
     use FederationLib\Classes\DatabaseConnection;
+    use FederationLib\Classes\Logger;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
+    use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\Categories\ReportCategory;
+    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\OrderType;
     use FederationLib\Enums\OrderTypes\ReportOrderType;
     use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\DatabaseOperationException;
+    use FederationLib\Objects\EvidenceRecord;
+    use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
     use PDO;
@@ -281,14 +286,19 @@
             }
         }
 
+
         /**
-         * Closes a report, optionally setting a classification flag.
+         * Closes a report and optionally performs related actions such as classifying evidence or blacklisting an entity.
          *
-         * @param string $reportUuid The UUID of the report to close.
-         * @throws InvalidArgumentException If the UUID is not provided.
-         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         * @param string $reportUuid The UUID of the report to be closed.
+         * @param OperatorRecord $operator The operator closing the report.
+         * @param ClassificationFlag|null $classificationFlag Optional classification flag to assign to evidence records linked to the report.
+         * @param IncidentType|null $blacklistType Optional type of blacklist to apply to the reporting entity of the report.
+         * @param int|null $blacklistExpires Optional UNIX timestamp indicating when the blacklist should expire. Must be in the future if provided.
+         * @return string|null The UUID of the created blacklist if a blacklist was applied, or null if no blacklist was created.
+         * @throws DatabaseOperationException Thrown if there is an issue with the database operation.
          */
-        public static function closeReport(string $reportUuid): void
+        public static function closeReport(string $reportUuid, OperatorRecord $operator, ?ClassificationFlag $classificationFlag=null, ?IncidentType $blacklistType=null, ?int $blacklistExpires=null): ?string
         {
             if(strlen($reportUuid) < 1)
             {
@@ -300,6 +310,85 @@
                 throw new InvalidArgumentException('Invalid Report UUID');
             }
 
+            $report = self::getReport($reportUuid);
+            if($report === null)
+            {
+                throw new InvalidArgumentException('The report does not exist');
+            }
+
+            if(!$report->isOpened())
+            {
+                throw new InvalidArgumentException('The report is already closed');
+            }
+
+            if($report->getAssignedOperator() !== $operator->getUuid())
+            {
+                throw new InvalidArgumentException('Report not assigned to operator');
+            }
+
+            if($blacklistType !== null && $report->getReportingEntity() === null)
+            {
+                throw new InvalidArgumentException('The report concerns no entity to blacklist');
+            }
+
+            if($blacklistType === null)
+            {
+                $blacklistExpires = null;
+            }
+            elseif($blacklistExpires !== null && $blacklistExpires < time())
+            {
+                throw new InvalidArgumentException('Blacklist expiration must be in the future');
+            }
+
+            // Assign classifications before closing the report. The conditional database update preserves existing
+            // classifications.
+            $evidenceRecords = [];
+            if($classificationFlag !== null)
+            {
+                $evidenceRecords = EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true);
+                foreach($evidenceRecords as $evidenceRecord)
+                {
+                    // Evidence that is already classified keeps its classification
+                    EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag);
+                }
+            }
+
+            self::markClosed($reportUuid);
+
+            if($classificationFlag !== null)
+            {
+                self::applyReputation($report->getReportingEntity(), $classificationFlag, $evidenceRecords);
+            }
+
+            $blacklistUuid = null;
+            if($blacklistType !== null)
+            {
+                $blacklistUuid = BlacklistManager::blacklistEntity(
+                    entityUuid: $report->getReportingEntity(),
+                    operatorUuid: $operator->getUuid(),
+                    type: $blacklistType,
+                    expires: $blacklistExpires,
+                    reportUuid: $reportUuid
+                );
+            }
+
+            AuditLogManager::createEntry(AuditLogType::REPORT_CLOSED, sprintf(
+                'Report %s closed by operator %s',
+                $reportUuid,
+                $operator->getName()
+            ), $operator->getUuid(), $report->getReportingEntity(), null, null, null, $reportUuid);
+
+            return $blacklistUuid;
+        }
+
+        /**
+         * Marks a report as closed
+         *
+         * @param string $reportUuid The UUID of the report to close.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        private static function markClosed(string $reportUuid): void
+        {
             $now = date('Y-m-d H:i:s');
 
             try
@@ -328,6 +417,60 @@
             if($changed)
             {
                 PluginManager::dispatchRecordChange(RecordChangeType::REPORT_CLOSED, $reportUuid);
+            }
+        }
+
+        /**
+         * Applies the configured reputation adjustment for the classification flag to the reported entity and,
+         * if enabled, to every existing entity mentioned within the report's evidence. The reported entity is
+         * adjusted only once even if its evidence mentions it.
+         *
+         * @param string|null $reportingEntity The UUID of the reported entity, if any
+         * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
+         * @param EvidenceRecord[] $evidenceRecords The evidence records linked to the report
+         * @throws DatabaseOperationException Thrown if the reported entity's reputation could not be updated
+         */
+        private static function applyReputation(?string $reportingEntity, ClassificationFlag $classificationFlag, array $evidenceRecords): void
+        {
+            $scanningConfiguration = Configuration::getScanningConfiguration();
+
+            $delta = $scanningConfiguration->getReportReputation($classificationFlag);
+            if($reportingEntity !== null && $delta !== 0)
+            {
+                EntitiesManager::updateEntityReputation($reportingEntity, $delta);
+            }
+
+            $namedEntityDelta = $scanningConfiguration->getReportNamedEntityReputation($classificationFlag);
+            if(!$scanningConfiguration->isReportNamedEntityReputationEnabled() || $namedEntityDelta === 0)
+            {
+                return;
+            }
+
+            $namedEntities = [];
+            foreach($evidenceRecords as $evidenceRecord)
+            {
+                if($evidenceRecord->getTextContent() !== null)
+                {
+                    $namedEntities += EntitiesManager::resolveNamedEntities($evidenceRecord->getTextContent());
+                }
+            }
+
+            if($reportingEntity !== null)
+            {
+                unset($namedEntities[$reportingEntity]);
+            }
+
+            foreach(array_keys($namedEntities) as $entityUuid)
+            {
+                try
+                {
+                    EntitiesManager::updateEntityReputation($entityUuid, $namedEntityDelta);
+                }
+                catch(DatabaseOperationException $e)
+                {
+                    // The report is already closed at this point, a failed mention adjustment must not fail the request
+                    Logger::log()->warning(sprintf('Failed to update reputation of mentioned entity %s: %s', $entityUuid, $e->getMessage()), $e);
+                }
             }
         }
 
