@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This is an ongoing update
 
+### Changed
+ - `ReportManager::closeReport()` closes a report the way the Close Report method does: it classifies the report's
+   unclassified evidence, applies the reputation, optionally blacklists the reported entity and records the closure in
+   the audit log, so that plugins closing reports on their own behalf have the same effect as an operator. It takes the
+   closing operator, which the report must be assigned to
+ - The Close Report method closes reports with `ReportManager::closeReport()`
+
 
 ## [2.0.1] - 2026-10-23
 
