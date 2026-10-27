@@ -671,6 +671,13 @@ produce `RECORD_CHANGE` events like FederationLib's own writes do. The most usef
 | `AuditLogManager`       | `createEntry(AuditLogType $type, $message, $operatorUuid, $entityUuid, ...)`, `getEntries()`, `getEntriesByEntity()`                                                                                                                                                       |
 | `SearchManager`         | `search($query, $limit, $page, $operator, $types)`                                                                                                                                                                                                                         |
 
+To close a report on its own behalf, a plugin uses `ReportManager::closeReport($reportUuid, $operator, $classification,
+$blacklistType, $blacklistExpires)`. It has the same effect as the Close Report method: the report's unclassified
+evidence is classified, the configured reputation is applied, the reported entity is optionally blacklisted and the
+closure is recorded in the audit log. The report must be assigned to the operator closing it
+(`ReportManager::assignOperator()`, which the plugin records in the audit log itself like the Assign Operator to Report
+method does: the operator must be enabled and hold management permissions).
+
 A plugin that writes records on its own behalf should attribute them to the system operator
 (`OperatorManager::getSystemOperator()`) and record them with `AuditLogManager::createEntry()`, like FederationLib does
 for its automatic actions. Managers throw a `DatabaseOperationException` when the database fails, and an
