@@ -2,16 +2,9 @@
 
     namespace FederationLib\Methods\Reports;
 
-    use FederationLib\Classes\Configuration;
-    use FederationLib\Classes\Logger;
-    use FederationLib\Classes\Managers\AuditLogManager;
-    use FederationLib\Classes\Managers\BlacklistManager;
-    use FederationLib\Classes\Managers\EntitiesManager;
-    use FederationLib\Classes\Managers\EvidenceManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Validate;
-    use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\HttpResponseCode;
@@ -20,7 +13,6 @@
     use FederationLib\FederationServer;
     use FederationLib\Interfaces\RequestSpecificationInterface;
     use FederationLib\Objects\ErrorResponse;
-    use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\SuccessResponse;
     use InvalidArgumentException;
 
@@ -34,7 +26,6 @@
         private const string ERROR_ALREADY_CLOSED = 'The report is already closed';
         private const string ERROR_NO_REPORTED_ENTITY = 'The report concerns no entity to blacklist';
         private const string ERROR_FAILED_TO_GET = 'Failed to get report record';
-        private const string ERROR_FAILED_UPDATE_CLASSIFICATION = 'Failed to update classification flag for evidence record';
         private const string ERROR_FAILED_CLOSE_REPORT = 'Failed to close the requested report';
 
         /**
@@ -136,63 +127,9 @@
                 throw new RequestException(self::ERROR_NO_REPORTED_ENTITY, HttpResponseCode::BAD_REQUEST);
             }
 
-            // Assign classifications before closing the report. The conditional database update
-            // preserves existing classifications.
-            $evidenceRecords = [];
-            if($classificationFlag !== null)
-            {
-                try
-                {
-                    $evidenceRecords = EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true);
-                }
-                catch(DatabaseOperationException $e)
-                {
-                    throw new RequestException(self::ERROR_FAILED_TO_GET, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-                }
-
-                foreach($evidenceRecords as $evidenceRecord)
-                {
-                    try
-                    {
-                        // Evidence that is already classified keeps its classification
-                        EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag);
-                    }
-                    catch(InvalidArgumentException $e)
-                    {
-                        throw new RequestException($e->getMessage(), HttpResponseCode::BAD_REQUEST, $e);
-                    }
-                    catch(DatabaseOperationException $e)
-                    {
-                        throw new RequestException(self::ERROR_FAILED_UPDATE_CLASSIFICATION, HttpResponseCode::INTERNAL_SERVER_ERROR, $e);
-                    }
-                }
-            }
-
             try
             {
-                ReportManager::closeReport($reportUuid);
-
-                if($classificationFlag !== null)
-                {
-                    self::applyReputation($reportRecord->getReportingEntity(), $classificationFlag, $evidenceRecords);
-                }
-
-                if($blacklistType !== null && $reportRecord->getReportingEntity() !== null)
-                {
-                    BlacklistManager::blacklistEntity(
-                        entityUuid: $reportRecord->getReportingEntity(),
-                        operatorUuid: $authenticatedOperator->getUuid(),
-                        type: $blacklistType,
-                        expires: $blacklistExpires,
-                        reportUuid: $reportUuid
-                    );
-                }
-
-                AuditLogManager::createEntry(AuditLogType::REPORT_CLOSED, sprintf(
-                    'Report %s closed by operator %s',
-                    $reportUuid,
-                    $authenticatedOperator->getName()
-                ), $authenticatedOperator->getUuid(), $reportRecord->getReportingEntity(), null, null, null, $reportUuid);
+                ReportManager::closeReport($reportUuid, $authenticatedOperator, $classificationFlag, $blacklistType, $blacklistExpires);
             }
             catch (InvalidArgumentException $e)
             {
@@ -204,60 +141,6 @@
             }
 
             self::successResponse();
-        }
-
-        /**
-         * Applies the configured reputation adjustment for the classification flag to the reported entity and,
-         * if enabled, to every existing entity mentioned within the report's evidence. The reported entity is
-         * adjusted only once even if its evidence mentions it.
-         *
-         * @param string|null $reportingEntity The UUID of the reported entity, if any
-         * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
-         * @param EvidenceRecord[] $evidenceRecords The evidence records linked to the report
-         * @throws DatabaseOperationException Thrown if the reported entity's reputation could not be updated
-         */
-        private static function applyReputation(?string $reportingEntity, ClassificationFlag $classificationFlag, array $evidenceRecords): void
-        {
-            $scanningConfiguration = Configuration::getScanningConfiguration();
-
-            $delta = $scanningConfiguration->getReportReputation($classificationFlag);
-            if($reportingEntity !== null && $delta !== 0)
-            {
-                EntitiesManager::updateEntityReputation($reportingEntity, $delta);
-            }
-
-            $namedEntityDelta = $scanningConfiguration->getReportNamedEntityReputation($classificationFlag);
-            if(!$scanningConfiguration->isReportNamedEntityReputationEnabled() || $namedEntityDelta === 0)
-            {
-                return;
-            }
-
-            $namedEntities = [];
-            foreach($evidenceRecords as $evidenceRecord)
-            {
-                if($evidenceRecord->getTextContent() !== null)
-                {
-                    $namedEntities += EntitiesManager::resolveNamedEntities($evidenceRecord->getTextContent());
-                }
-            }
-
-            if($reportingEntity !== null)
-            {
-                unset($namedEntities[$reportingEntity]);
-            }
-
-            foreach(array_keys($namedEntities) as $entityUuid)
-            {
-                try
-                {
-                    EntitiesManager::updateEntityReputation($entityUuid, $namedEntityDelta);
-                }
-                catch(DatabaseOperationException $e)
-                {
-                    // The report is already closed at this point, a failed mention adjustment must not fail the request
-                    Logger::log()->warning(sprintf('Failed to update reputation of mentioned entity %s: %s', $entityUuid, $e->getMessage()), $e);
-                }
-            }
         }
 
         /**
