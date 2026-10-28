@@ -2313,6 +2313,35 @@
         }
 
         /**
+         * Sends a request to a route the client has no method for, such as a route provided by a plugin of the host,
+         * authenticated with the client's access token if it has one.
+         *
+         * @param string $method The HTTP method: GET, POST, PUT, PATCH or DELETE
+         * @param string $path The path of the route, relative to the endpoint (eg; "my-plugin/status")
+         * @param array|null $parameters The parameters, sent as the query string of a GET request and as a JSON body
+         *                               otherwise
+         * @return mixed The decoded response of the route
+         * @throws InvalidArgumentException If the method or the path is invalid
+         * @throws RequestException If the request fails or the host responds with an error
+         */
+        public function request(string $method, string $path, ?array $parameters=null): mixed
+        {
+            $method = strtoupper($method);
+            if(!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], true))
+            {
+                throw new InvalidArgumentException('The method must be one of GET, POST, PUT, PATCH or DELETE');
+            }
+
+            $path = trim($path, '/');
+            if($path === '' || str_contains($path, '://'))
+            {
+                throw new InvalidArgumentException('The path must be a non-empty path relative to the endpoint');
+            }
+
+            return $this->makeRequest($method, $path, $parameters, [HttpResponseCode::OK], sprintf('Failed to request %s /%s', $method, $path));
+        }
+
+        /**
          * Blacklists an entity with the given identifier and type, optionally referencing the report supporting the
          * decision, which may concern another entity than the one being blacklisted.
          *
