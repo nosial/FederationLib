@@ -351,4 +351,67 @@
 
             return [implode(',', array_keys($parameters)), $parameters];
         }
+
+        /**
+         * Safely detect the MIME type of a file
+         *
+         * @param string $filePath Path to the file
+         * @return string The detected MIME type
+         */
+        public static function detectMimeType(string $filePath): string
+        {
+            // Using multiple methods for better reliability
+
+            // First try with Fileinfo extension (most reliable)
+            if (function_exists('finfo_open'))
+            {
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $filePath);
+                if ($mimeType)
+                {
+                    return $mimeType;
+                }
+            }
+
+            // Then try with mime_content_type
+            if (function_exists('mime_content_type'))
+            {
+                $mimeType = mime_content_type($filePath);
+                if ($mimeType)
+                {
+                    return $mimeType;
+                }
+            }
+
+            // Fall back to a simple extension-based check as last resort
+            return 'application/octet-stream';
+        }
+
+        /**
+         * Get a safe filename by removing potentially unsafe characters
+         *
+         * @param string $filename Original filename
+         * @return string Sanitized filename
+         */
+        public static function getSafeFileName(string $filename): string
+        {
+            // Remove any path information to avoid directory traversal
+            $filename = basename($filename);
+
+            // Remove null bytes and other control characters
+            $filename = preg_replace('/[\x00-\x1F\x7F]/u', '', $filename);
+
+            // Remove potentially dangerous characters
+            $filename = preg_replace('/[^a-zA-Z0-9._-]/', '_', $filename);
+
+            // Limit length to avoid extremely long filenames
+            if (strlen($filename) > 255)
+            {
+                $extension = pathinfo($filename, PATHINFO_EXTENSION);
+                $baseFilename = pathinfo($filename, PATHINFO_FILENAME);
+                $filename = substr($baseFilename, 0, 245) . '.' . $extension;
+            }
+
+            return $filename;
+        }
     }
