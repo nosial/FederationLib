@@ -264,7 +264,7 @@
                 $this->assertArrayNotHasKey(
                     $key,
                     $entries,
-                    "Duplicate route [$httpMethod] $path for " . $method->name . " and " . $entries[$key]
+                    "Duplicate route [$httpMethod] $path for " . $method->name . " and " . ($entries[$key] ?? '')
                 );
                 $entries[$key] = $method->name;
             }

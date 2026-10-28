@@ -330,7 +330,6 @@
             ]);
             curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            curl_close($ch);
 
             $this->assertEquals(HttpResponseCode::BAD_REQUEST->value, $code, 'Upload with both a file and a URL should be rejected');
         }

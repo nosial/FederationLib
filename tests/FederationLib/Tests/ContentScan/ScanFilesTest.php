@@ -78,7 +78,6 @@
 
             $response = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            curl_close($ch);
 
             return [(int)$code, json_decode((string)$response, true)];
         }

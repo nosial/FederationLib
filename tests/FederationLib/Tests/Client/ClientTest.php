@@ -89,7 +89,6 @@
             ]);
             $response = curl_exec($ch);
             $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-            curl_close($ch);
 
             $this->assertNotFalse($response, 'CORS probe request should return a response');
             $headers = substr((string)$response, 0, $headerSize);

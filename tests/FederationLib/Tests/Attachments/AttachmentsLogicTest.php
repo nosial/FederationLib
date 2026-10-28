@@ -402,7 +402,6 @@
             ]);
             curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            curl_close($ch);
 
             $this->assertContains($code, [400, 404, 422], 'Upload without file should be rejected');
         }

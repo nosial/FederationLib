@@ -5,9 +5,7 @@
     namespace FederationLib\Tests\Entities;
 
     use FederationLib\Enums\IncidentType;
-    use FederationLib\FederationClient;
-    use FederationLib\Helpers\TestHelpers;
-    use PHPUnit\Framework\TestCase;
+    use FederationLib\Helpers\ServerTestCase;
 
     /**
      * Reputation settled from the daily activity of entities (OFD "Reputation"), through the TestPlugin route that
@@ -16,33 +14,11 @@
      * 5 for a day with content that reached the block threshold (80), nothing for a day that warranted caution (60),
      * and mentions by 3 distinct authors.
      */
-    class ReputationSettlementTest extends TestCase
+    class ReputationSettlementTest extends ServerTestCase
     {
-        use TestHelpers;
-
         private const int GAIN = 10;
         private const int LOSS = -5;
-        private const float CAUTION_THRESHOLD = 60.0;
-        private const float BLOCK_THRESHOLD = 80.0;
-        private const string NORMAL_TEXT = 'Hello, are we still meeting for lunch tomorrow at noon?';
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            $this->cleanupRecords();
-        }
+        private const string SAFE_TEXT = 'Hello, are we still meeting for lunch tomorrow at noon? test_plugin_safe';
 
         private function createEntity(string $host, ?string $id = null): string
         {
@@ -57,7 +33,7 @@
         }
 
         /**
-         * Scans content of an author and returns the decoded response
+         * Scans content of an author as the root operator and returns the decoded response
          */
         private function scan(string $text, ?string $author, ?string $token = null): array
         {
@@ -71,16 +47,21 @@
         }
 
         /**
-         * Returns the reputation change a day of the author's content with the given risk score settles into
+         * Scans content that never warrants caution
          */
-        private function expectedAuthorDelta(float $riskScore): int
+        private function scanSafe(string $text, ?string $author, ?string $token = null): void
         {
-            if($riskScore >= self::BLOCK_THRESHOLD)
-            {
-                return self::LOSS;
-            }
+            $body = $this->scan($text . ' test_plugin_safe', $author, $token);
+            $this->assertEquals(0.0, $body['risk_score'], 'The TestPlugin should fix the risk score of the content at the minimum');
+        }
 
-            return $riskScore >= self::CAUTION_THRESHOLD ? 0 : self::GAIN;
+        /**
+         * Scans content that always reaches the block threshold
+         */
+        private function scanBlocked(string $text, ?string $author): void
+        {
+            $body = $this->scan($text . ' test_plugin_block', $author);
+            $this->assertEquals(100.0, $body['risk_score'], 'The TestPlugin should fix the risk score of the content at the maximum');
         }
 
         /**
@@ -88,9 +69,9 @@
          *
          * @return array{days: int, gains: int, losses: int}
          */
-        private function settle(): array
+        private function settle(?string $token = null): array
         {
-            [$code, $body] = $this->jsonRequest('POST', '/test-plugin/settle-reputation', $this->rootToken());
+            [$code, $body] = $this->jsonRequest('POST', '/test-plugin/settle-reputation', $token ?? $this->rootToken());
             $this->assertSame(200, $code, json_encode($body));
             $this->assertArrayHasKey('days', $body);
             $this->assertArrayHasKey('gains', $body);
@@ -105,18 +86,26 @@
 
         public function testSettleRouteRequiresManagementAndOperatorPermissions(): void
         {
-            $client = $this->createLimitedOperator('settle_client', client: true);
-            [$code] = $this->rawRequest('POST', '/test-plugin/settle-reputation', $client->getAccessToken());
-            $this->assertSame(403, $code);
-
             [$code] = $this->rawRequest('POST', '/test-plugin/settle-reputation');
-            $this->assertSame(401, $code);
+            $this->assertSame(401, $code, 'An anonymous request should not settle reputation');
+
+            foreach([
+                'client' => $this->createLimitedOperator('settle_client', client: true),
+                'management' => $this->createLimitedOperator('settle_management', management: true),
+                'operator' => $this->createLimitedOperator('settle_operator', operator: true),
+            ] as $label => $operator)
+            {
+                [$code] = $this->rawRequest('POST', '/test-plugin/settle-reputation', $operator->getAccessToken());
+                $this->assertSame(403, $code, "An operator with only $label permissions should not settle reputation");
+            }
+
+            $this->settle($this->createLimitedOperator('settle_both', management: true, operator: true)->getAccessToken());
         }
 
         public function testNoChangeBeforeSettlement(): void
         {
             $authorUuid = $this->createAuthor();
-            $this->scan(self::NORMAL_TEXT, $authorUuid);
+            $this->scanSafe(self::SAFE_TEXT, $authorUuid);
 
             // Reputation is not adjusted per message
             $this->assertSame(0, $this->getReputation($authorUuid));
@@ -125,30 +114,27 @@
         public function testAuthorGainsOncePerActiveDay(): void
         {
             $authorUuid = $this->createAuthor();
-
-            $riskScores = [];
             for($i = 0; $i < 5; $i++)
             {
-                $riskScores[] = $this->scan(self::NORMAL_TEXT . ' #' . $i, $authorUuid)['risk_score'];
+                $this->scanSafe('Message #' . $i, $authorUuid);
             }
 
             $this->settle();
 
-            // Five messages on one day earn the gain of one day, the worst content of the day decides
-            $this->assertSame($this->expectedAuthorDelta(max($riskScores)), $this->getReputation($authorUuid));
+            // Five messages on one day earn the gain of one day
+            $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
         }
 
         public function testDayIsNeverSettledTwice(): void
         {
             $authorUuid = $this->createAuthor();
-            $riskScore = $this->scan(self::NORMAL_TEXT, $authorUuid)['risk_score'];
+            $this->scanSafe('Message', $authorUuid);
 
             $this->settle();
-            $afterFirst = $this->getReputation($authorUuid);
-            $this->assertSame($this->expectedAuthorDelta($riskScore), $afterFirst);
+            $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
 
             $this->settle();
-            $this->assertSame($afterFirst, $this->getReputation($authorUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
         }
 
         public function testAnonymousScansDoNotAffectReputation(): void
@@ -156,8 +142,9 @@
             $authorUuid = $this->createAuthor();
 
             // Content scanning is public by default
-            [$code, $body] = $this->jsonRequest('POST', '/scan', null, ['evidence' => ['text_content' => self::NORMAL_TEXT], 'author' => $authorUuid]);
+            [$code, $body] = $this->jsonRequest('POST', '/scan', null, ['evidence' => ['text_content' => self::SAFE_TEXT], 'author' => $authorUuid]);
             $this->assertSame(200, $code, json_encode($body));
+            $this->assertEquals(0.0, $body['risk_score']);
 
             $this->settle();
             $this->assertSame(0, $this->getReputation($authorUuid));
@@ -166,9 +153,10 @@
         public function testScansWithoutClientPermissionsDoNotAffectReputation(): void
         {
             $authorUuid = $this->createAuthor();
-            $operator = $this->createLimitedOperator('no_client', operator: true);
+            $operator = $this->createLimitedOperator('no_client', management: true, operator: true);
 
-            $this->jsonRequest('POST', '/scan', $operator->getAccessToken(), ['evidence' => ['text_content' => self::NORMAL_TEXT], 'author' => $authorUuid]);
+            // The scan itself is public, it is only not recorded
+            $this->scanSafe('Message', $authorUuid, $operator->getAccessToken());
 
             $this->settle();
             $this->assertSame(0, $this->getReputation($authorUuid));
@@ -181,18 +169,36 @@
             $mentionedUuid = $this->createEntity($host);
 
             $authors = [];
-            $flagged = false;
             for($i = 0; $i < 3; $i++)
             {
                 $authorUuid = $this->createAuthor();
                 $authors[] = $authorUuid;
-                $riskScore = $this->scan('Have you seen this video on ' . $host . ' yet?', $authorUuid)['risk_score'];
-                $flagged = $flagged || $riskScore >= self::CAUTION_THRESHOLD;
+                $this->scanSafe('Have you seen this video on ' . $host . ' yet?', $authorUuid);
             }
 
             $this->settle();
 
-            $this->assertSame($flagged ? 0 : self::GAIN, $this->getReputation($mentionedUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($mentionedUuid));
+            foreach($authors as $authorUuid)
+            {
+                $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
+            }
+        }
+
+        public function testMentionsInFlaggedContentDoNotCount(): void
+        {
+            $host = $this->uniqueHost('mentioned');
+            $mentionedUuid = $this->createEntity($host);
+
+            for($i = 0; $i < 3; $i++)
+            {
+                $this->scanBlocked('Have you seen this video on ' . $host . ' yet?', $this->createAuthor());
+            }
+
+            $this->settle();
+
+            // Being mentioned in flagged content holds back the gain, it never costs the mentioned entity reputation
+            $this->assertSame(0, $this->getReputation($mentionedUuid));
         }
 
         public function testMentionsByTooFewAuthorsDoNotCount(): void
@@ -205,13 +211,15 @@
             $second = $this->createAuthor();
             for($i = 0; $i < 3; $i++)
             {
-                $this->scan('Check out ' . $host . ' #' . $i, $first);
+                $this->scanSafe('Check out ' . $host . ' #' . $i, $first);
             }
-            $this->scan('Check out ' . $host, $second);
+            $this->scanSafe('Check out ' . $host, $second);
 
             $this->settle();
 
             $this->assertSame(0, $this->getReputation($mentionedUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($first));
+            $this->assertSame(self::GAIN, $this->getReputation($second));
         }
 
         public function testMentionsWithoutAuthorDoNotCount(): void
@@ -221,7 +229,7 @@
 
             for($i = 0; $i < 3; $i++)
             {
-                $this->scan('Check out ' . $host . ' #' . $i, null);
+                $this->scanSafe('Check out ' . $host . ' #' . $i, null);
             }
 
             $this->settle();
@@ -229,16 +237,17 @@
             $this->assertSame(0, $this->getReputation($mentionedUuid));
         }
 
-        public function testAuthorDoesNotGainAsItsOwnMention(): void
+        public function testAuthorDoesNotCountAsItsOwnMention(): void
         {
             $host = $this->uniqueHost('self');
             $authorUuid = $this->createEntity($host);
 
-            $riskScore = $this->scan('Visit my site ' . $host, $host)['risk_score'];
+            // Recorded as a mention, the author's own scan would be replaced by a mention of a single author, which
+            // earns nothing
+            $this->scanSafe('Visit my site ' . $host, $host);
             $this->settle();
 
-            // Only the gain of the author's day, never an additional one for mentioning itself
-            $this->assertSame($this->expectedAuthorDelta($riskScore), $this->getReputation($authorUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
         }
 
         public function testBlacklistedAuthorDoesNotGain(): void
@@ -247,32 +256,24 @@
             $this->createdBlacklistRecords[] = $this->client->blacklistEntity($authorUuid, null, IncidentType::SPAM, time() + 3600);
             $afterBlacklist = $this->getReputation($authorUuid);
 
-            $riskScore = $this->scan(self::NORMAL_TEXT, $authorUuid)['risk_score'];
+            $this->scanSafe('Message', $authorUuid);
             $this->settle();
 
-            // The day is held back, or costs reputation if the content reached the block threshold
-            $expected = $riskScore >= self::BLOCK_THRESHOLD ? self::LOSS : 0;
-            $this->assertSame($afterBlacklist + $expected, $this->getReputation($authorUuid));
+            // Normal content of an author under an active blacklist holds the day back
+            $this->assertSame($afterBlacklist, $this->getReputation($authorUuid));
         }
 
         public function testBlockedContentCostsReputation(): void
         {
             $authorUuid = $this->createAuthor();
-            // A permanently blacklisted author's content reaches the block threshold (see AutoAssignTest)
-            $this->createdBlacklistRecords[] = $this->client->blacklistEntity($authorUuid, null, IncidentType::MALWARE, null);
-            $before = $this->getReputation($authorUuid);
 
-            $riskScore = $this->scan(self::NORMAL_TEXT, $authorUuid)['risk_score'];
-            if($riskScore < self::BLOCK_THRESHOLD)
-            {
-                $this->markTestSkipped(sprintf('The content did not reach the block threshold (risk score %.2f)', $riskScore));
-            }
-
-            $this->scan(self::NORMAL_TEXT . ' again', $authorUuid);
+            $this->scanBlocked('Message', $authorUuid);
+            $this->scanBlocked('Message again', $authorUuid);
+            $this->scanSafe('An ordinary message the same day', $authorUuid);
             $this->settle();
 
-            // One loss for the day, not one per message
-            $this->assertSame($before + self::LOSS, $this->getReputation($authorUuid));
+            // One loss for the day, not one per message, and the ordinary message does not offset it
+            $this->assertSame(self::LOSS, $this->getReputation($authorUuid));
         }
 
         public function testChildCreditsItsParent(): void
@@ -284,13 +285,25 @@
             // Subdomain entities are linked to their registrable domain by default
             $this->assertSame($parentUuid, $this->client->getEntityRecord($childUuid)->getRelationshipEntity());
 
-            $riskScore = $this->scan(self::NORMAL_TEXT, 'shop.' . $parentHost)['risk_score'];
+            $this->scanSafe('Message', 'shop.' . $parentHost);
             $this->settle();
 
-            $expected = $this->expectedAuthorDelta($riskScore);
-            $this->assertSame($expected, $this->getReputation($childUuid));
-            // The parent gains with its child, it never loses for it
-            $this->assertSame(max(0, $expected), $this->getReputation($parentUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($childUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($parentUuid));
+        }
+
+        public function testParentNeverLosesForItsChild(): void
+        {
+            $parentHost = $this->uniqueHost('parent');
+            $parentUuid = $this->createEntity($parentHost);
+            $childUuid = $this->createEntity('shop.' . $parentHost);
+            $this->assertSame($parentUuid, $this->client->getEntityRecord($childUuid)->getRelationshipEntity());
+
+            $this->scanBlocked('Message', 'shop.' . $parentHost);
+            $this->settle();
+
+            $this->assertSame(self::LOSS, $this->getReputation($childUuid));
+            $this->assertSame(0, $this->getReputation($parentUuid));
         }
 
         public function testActivityRecordedAfterASettlementIsSettledByTheNext(): void
@@ -299,11 +312,11 @@
             $this->settle();
 
             $authorUuid = $this->createAuthor();
-            $riskScore = $this->scan(self::NORMAL_TEXT, $authorUuid)['risk_score'];
+            $this->scanSafe('Message', $authorUuid);
             $this->assertSame(0, $this->getReputation($authorUuid));
 
             $this->settle();
-            $this->assertSame($this->expectedAuthorDelta($riskScore), $this->getReputation($authorUuid));
+            $this->assertSame(self::GAIN, $this->getReputation($authorUuid));
         }
 
         public function testManyAuthorsInOneSettlement(): void
@@ -312,21 +325,22 @@
             for($i = 0; $i < 10; $i++)
             {
                 $authorUuid = $this->createAuthor();
-                $authors[$authorUuid] = $this->scan(self::NORMAL_TEXT . ' #' . $i, $authorUuid)['risk_score'];
+                $authors[] = $authorUuid;
+                $this->scanSafe('Message #' . $i, $authorUuid);
             }
 
             $this->settle();
 
-            foreach($authors as $authorUuid => $riskScore)
+            foreach($authors as $authorUuid)
             {
-                $this->assertSame($this->expectedAuthorDelta($riskScore), $this->getReputation($authorUuid), $authorUuid);
+                $this->assertSame(self::GAIN, $this->getReputation($authorUuid), $authorUuid);
             }
         }
 
         public function testClearedReputationDiscardsUnsettledActivity(): void
         {
             $authorUuid = $this->createAuthor();
-            $this->scan(self::NORMAL_TEXT, $authorUuid);
+            $this->scanSafe('Message', $authorUuid);
 
             $this->client->clearEntityReputation($authorUuid);
             $this->settle();
@@ -336,16 +350,14 @@
 
         public function testSettlementResultCountsAdjustments(): void
         {
-            $authorUuid = $this->createAuthor();
-            $riskScore = $this->scan(self::NORMAL_TEXT, $authorUuid)['risk_score'];
+            // Nothing recorded before this test is left over
+            $this->settle();
 
-            $result = $this->settle();
+            $this->scanSafe('Message', $this->createAuthor());
+            $this->scanSafe('Message', $this->createAuthor());
+            $this->scanBlocked('Message', $this->createAuthor());
 
-            $this->assertGreaterThanOrEqual(1, $result['days']);
-            if($this->expectedAuthorDelta($riskScore) > 0)
-            {
-                $this->assertGreaterThanOrEqual(1, $result['gains']);
-            }
+            $this->assertSame(['days' => 1, 'gains' => 2, 'losses' => 1], $this->settle());
 
             // Nothing is left to settle
             $this->assertSame(['days' => 0, 'gains' => 0, 'losses' => 0], $this->settle());
