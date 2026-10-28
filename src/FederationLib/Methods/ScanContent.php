@@ -433,15 +433,16 @@
         }
 
         /**
-         * Resolves the registrable domain of a DNS name or of the host of a URL, when the name itself has no entity
+         * Determines the lookup of the registrable domain of a DNS name or of the host of a URL, used when the name
+         * itself has no entity
          *
          * @param string $entityIdentifier The DNS name or URL
          * @param ResolvedEntityPosition $entityPosition The position of the name or URL in the content
          * @param bool $withPosition Whether the position is returned, false for a name that is not in the content
-         * @return ResolvedEntity|null The resolved registrable domain, null if it has no entity
-         * @throws DatabaseOperationException Thrown if there was a database operation error
+         * @return array{0: string, 1: ResolvedEntityPosition, 2: bool}|null The lookup of the registrable domain, null
+         *                                                                    if the name has no other registrable domain
          */
-        private static function resolveRegistrableDomain(string $entityIdentifier, ResolvedEntityPosition $entityPosition, bool $withPosition): ?ResolvedEntity
+        private static function getRegistrableDomainLookup(string $entityIdentifier, ResolvedEntityPosition $entityPosition, bool $withPosition): ?array
         {
             $host = match($entityPosition->getType())
             {
@@ -469,7 +470,7 @@
                 $position = new ResolvedEntityPosition($entityPosition->getOffset() + $entityPosition->getLength() - strlen($registrableDomain), strlen($registrableDomain), NamedEntityType::DOMAIN);
             }
 
-            return self::resolveEntity($registrableDomain, $position ?? new ResolvedEntityPosition(0, 0, NamedEntityType::DOMAIN), withPosition: $position !== null);
+            return [$registrableDomain, $position ?? new ResolvedEntityPosition(0, 0, NamedEntityType::DOMAIN), $position !== null];
         }
 
         /**
