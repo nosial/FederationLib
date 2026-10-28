@@ -128,7 +128,7 @@ image, in summary the image setups up the following components
 
  - `nginx`: For handling web requests to php-fpm
  - `supervisord`: For managing services
- - PHP Extensions `redis`, `sockets` and `pdo_mysql`
+ - PHP Extensions `redis`, `sockets`, `gd`, `exif` and `pdo_mysql`
  - [`LogLib2Server`](https://github.com/nosial/LogLib2Server): To make logging events visible in the docker container
  - [`BayesianServer`](https://github.com/nosial/BayesianServer): Text classification/learning, used by BayesianPlugin
 
