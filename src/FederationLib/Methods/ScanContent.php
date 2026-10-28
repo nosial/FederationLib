@@ -753,48 +753,69 @@
         }
 
         /**
-         * Resolves the given entity identifier with the optional entity position, returning back a ResolvedEntity
-         * object containing the resolved entity and active blacklist records
+         * Resolves several entity identifiers, each with its optional entity position, at once, returning back a
+         * ResolvedEntity object for each containing the resolved entity, its active blacklist records and its parent
+         * entity. The entities, their parents and their blacklist records are each retrieved with a single query or
+         * cache round trip, however many identifiers are resolved.
          *
-         * @param string $entityIdentifier The target entity identifier
-         * @param ResolvedEntityPosition|null $entityPosition Optional. The entity position, also used to interpret the identifier
-         * @param bool $withPosition Whether the position is included in the ResolvedEntity, false when the entity was
-         *                           not found in the content itself (eg; an address the host resolved)
-         * @return ResolvedEntity|null Returns the ResolvedEntity record, null if the record was not found
+         * @param array<array-key, array{0: string, 1: ResolvedEntityPosition|null, 2: bool}> $lookups The identifier,
+         *        the optional entity position, also used to interpret the identifier, and whether the position is
+         *        included in the ResolvedEntity, false when the entity was not found in the content itself (eg; an
+         *        address the host resolved), of each lookup
+         * @return array<array-key, ResolvedEntity|null> The ResolvedEntity of each lookup, null if the record was not
+         *                                               found, keyed like the lookups
          * @throws DatabaseOperationException Thrown if there was a database operation error
          */
-        private static function resolveEntity(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null, bool $withPosition=true): ?ResolvedEntity
+        private static function resolveEntities(array $lookups): array
         {
-            $entityRecord = EntitiesManager::resolveNamedEntity($entityIdentifier, $entityPosition);
-            if($entityRecord === null)
+            $entityRecords = EntitiesManager::resolveNamedEntityList(array_map(fn(array $lookup) => [$lookup[0], $lookup[1]], $lookups));
+            $foundRecords = array_filter($entityRecords);
+            if($foundRecords === [])
             {
-                return null;
+                return $entityRecords;
             }
 
-            $activeBlacklists = BlacklistManager::getActiveEntriesByEntities([$entityRecord->getUuid()]);
-
-            // Optionally resolve the parent entity if a relationship is defined
-            $parentResolvedEntity = null;
-            $parentUuid = $entityRecord->getRelationshipEntity();
-            if(!empty($parentUuid))
+            // Optionally resolve the parent entities if a relationship is defined
+            $parentUuids = array_values(array_unique(array_filter(array_map(fn(EntityRecord $entityRecord) => $entityRecord->getRelationshipEntity(), $foundRecords))));
+            $parentRecords = [];
+            if($parentUuids !== [])
             {
                 try
                 {
-                    $parentRecord = EntitiesManager::getEntityByUuid($parentUuid);
-                    if($parentRecord !== null)
-                    {
-                        $parentResolvedEntity = new ResolvedEntity($parentRecord,
-                            BlacklistManager::getActiveEntriesByEntities([$parentRecord->getUuid()])
-                        );
-                    }
+                    $parentRecords = EntitiesManager::getEntitiesByUuids($parentUuids);
                 }
                 catch (DatabaseOperationException $e)
                 {
-                    Logger::log()->warning(sprintf('Failed to resolve parent entity %s for %s: %s', $parentUuid, $entityRecord->getUuid(), $e->getMessage()), $e);
+                    Logger::log()->warning(sprintf('Failed to resolve parent entities %s: %s', implode(', ', $parentUuids), $e->getMessage()), $e);
                 }
             }
 
-            return new ResolvedEntity($entityRecord, $activeBlacklists, $withPosition ? $entityPosition : null, $parentResolvedEntity);
+            $activeBlacklists = BlacklistManager::getActiveEntriesPerEntity(array_merge(
+                array_map(fn(EntityRecord $entityRecord) => $entityRecord->getUuid(), array_values($foundRecords)),
+                array_keys($parentRecords)
+            ));
+
+            $results = [];
+            foreach($lookups as $key => [, $entityPosition, $withPosition])
+            {
+                $entityRecord = $entityRecords[$key];
+                if($entityRecord === null)
+                {
+                    $results[$key] = null;
+                    continue;
+                }
+
+                $parentResolvedEntity = null;
+                $parentRecord = $parentRecords[$entityRecord->getRelationshipEntity() ?? ''] ?? null;
+                if($parentRecord !== null)
+                {
+                    $parentResolvedEntity = new ResolvedEntity($parentRecord, $activeBlacklists[$parentRecord->getUuid()] ?? []);
+                }
+
+                $results[$key] = new ResolvedEntity($entityRecord, $activeBlacklists[$entityRecord->getUuid()] ?? [], $withPosition ? $entityPosition : null, $parentResolvedEntity);
+            }
+
+            return $results;
         }
 
         /**
