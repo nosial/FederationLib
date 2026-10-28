@@ -37,7 +37,7 @@
             $this->uuid = $data['uuid'] ?? '';
             $this->entityUuid = $data['entity'] ?? '';
             $this->operatorUuid = $data['operator'] ?? '';
-            $this->confidential = (bool)$data['confidential'] ?? false;
+            $this->confidential = (bool)($data['confidential'] ?? false);
             $this->automated = (bool)($data['automated'] ?? false);
             $this->textContent = $data['text_content'] ?? null;
             $contentType = $data['content_type'] ?? null;
@@ -116,7 +116,7 @@
             }
 
             $this->created = (int)($data['created'] ?? time());
-            $this->updated = (int)$data['updated'] ?? null;
+            $this->updated = (int)$data['updated'];
         }
 
         /**
