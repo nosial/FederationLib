@@ -61,6 +61,8 @@
          */
         private array $defaultConcerns;
         private int $dnsLookupLimit;
+        private int $maxFiles;
+        private int $maxFileSize;
 
         /**
          * Constructs a ScanningConfiguration from a configuration array
@@ -123,6 +125,8 @@
                 fn(IncidentType $concern) => in_array($concern, $this->concerns, true)
             ));
             $this->dnsLookupLimit = max(0, (int)($configuration['dns_lookup_limit'] ?? 10));
+            $this->maxFiles = max(0, (int)($configuration['max_files'] ?? 4));
+            $this->maxFileSize = max(0, (int)($configuration['max_file_size'] ?? 10485760));
         }
 
         /**
@@ -652,6 +656,37 @@
         public function getDnsLookupLimit(): int
         {
             return $this->dnsLookupLimit;
+        }
+
+        /**
+         * Returns whether the files of scan requests are scanned, they are ignored when max_files or max_file_size
+         * is 0
+         *
+         * @return bool True if files are scanned
+         */
+        public function isFilesEnabled(): bool
+        {
+            return $this->maxFiles > 0 && $this->maxFileSize > 0;
+        }
+
+        /**
+         * Returns the maximum number of files a single scan request may carry (max_scan_files)
+         *
+         * @return int The maximum number of files, 0 when files are ignored
+         */
+        public function getMaxFiles(): int
+        {
+            return $this->isFilesEnabled() ? $this->maxFiles : 0;
+        }
+
+        /**
+         * Returns the maximum size in bytes of each file a scan request may carry (max_scan_file_size)
+         *
+         * @return int The maximum file size, 0 when files are ignored
+         */
+        public function getMaxFileSize(): int
+        {
+            return $this->isFilesEnabled() ? $this->maxFileSize : 0;
         }
 
 
