@@ -33,8 +33,8 @@
             $this->host = $data['host'] ?? '';
             $this->id = (isset($data['id']) && $data['id'] !== '') ? $data['id'] : null;
             $this->metadata = null;
-            $this->reputation = (int)$data['reputation'] ?? 0;
-            $this->whitelisted = (bool)$data['whitelisted'] ?? false;
+            $this->reputation = (int)($data['reputation'] ?? 0);
+            $this->whitelisted = (bool)($data['whitelisted'] ?? false);
             $this->relationshipEntity = (isset($data['relationship_entity']) && $data['relationship_entity'] !== '') ? $data['relationship_entity'] : null;
 
             if(isset($data['relationship_type']))
