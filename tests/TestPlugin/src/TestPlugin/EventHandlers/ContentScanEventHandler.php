@@ -17,6 +17,10 @@
      *  - test_plugin_reject: rejects the request (451)
      *  - test_plugin_penalty: adds the TEST_PLUGIN_PENALTY scanning rule (-20 points)
      *  - test_plugin_bonus: adds the TEST_PLUGIN_BONUS scanning rule twice (2 x 2.5 points, accumulated)
+     *  - test_plugin_safe: adds the TEST_PLUGIN_SAFE scanning rule (+1000 points), the risk score is always the
+     *    minimum whatever the other rules (eg; the classification of the content) contribute
+     *  - test_plugin_block: adds the TEST_PLUGIN_BLOCK scanning rule (-1000 points), the risk score is always the
+     *    maximum and so reaches the block threshold
      *  - test_plugin_classify: classifies each evidence item containing it as MALICIOUS (0.9 confidence)
      *  - test_plugin_fail: adds the TEST_PLUGIN_FAILED scanning rule and a classification and then throws, both must
      *    be discarded
@@ -50,6 +54,16 @@
             {
                 $contentScan->addScanResult('TEST_PLUGIN_BONUS', 2.5);
                 $contentScan->addScanResult('TEST_PLUGIN_BONUS', 2.5);
+            }
+
+            if(str_contains($content, 'test_plugin_safe'))
+            {
+                $contentScan->addScanResult('TEST_PLUGIN_SAFE', 1000.0);
+            }
+
+            if(str_contains($content, 'test_plugin_block'))
+            {
+                $contentScan->addScanResult('TEST_PLUGIN_BLOCK', -1000.0);
             }
 
             foreach($contentScan->getEvidence() as $evidenceIndex => $evidence)
