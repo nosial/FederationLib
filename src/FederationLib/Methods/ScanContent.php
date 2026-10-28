@@ -28,6 +28,7 @@
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Objects\ContentInput;
+    use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\ErrorResponse;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\Plugin\ContentScan;
@@ -158,7 +159,7 @@
             {
                 try
                 {
-                    $authorRecord = self::resolveEntity($authorIdentifier);
+                    $authorRecord = self::resolveEntities([[$authorIdentifier, null, true]])[0];
                 }
                 catch (DatabaseOperationException $e)
                 {
@@ -184,50 +185,8 @@
                 $parsedTopK = $topK;
             }
 
-            // Resolve the entities of each evidence item according to its content type, remembering the first item
-            // each entity was found in and whether it was found in the content itself or only in the unverified
-            // context the client asserted
-            /** @var array<string, array{entity: ResolvedEntity, index: int, verified: bool}> $resolved */
-            $resolved = [];
             $resolvedAddresses = [];
-            $dnsLookups = 0;
-            foreach($contentInputs as $index => $contentInput)
-            {
-                foreach(self::resolveContentEntities($contentInput) as [$resolvedEntity, $verified])
-                {
-                    self::addResolvedEntity($resolved, $resolvedEntity, $index, $verified);
-                }
-
-                // The host determines the addresses of the names it is given itself, rather than relying on the client
-                // (OFD "Client Assertions"); retrieving URLs is never done by FederationLib itself
-                $resolvedAddresses[$index] = [];
-                foreach(self::getLookupNames($contentInput) as [$name, $verified])
-                {
-                    if(!Configuration::getScanningConfiguration()->isDnsLookupsEnabled() || $dnsLookups >= Configuration::getScanningConfiguration()->getDnsLookupLimit())
-                    {
-                        break;
-                    }
-
-                    $dnsLookups++;
-                    foreach(self::lookupAddresses($name) as $address)
-                    {
-                        $resolvedAddresses[$index][] = $address;
-                        try
-                        {
-                            $resolvedEntity = self::resolveEntity($address, new ResolvedEntityPosition(0, 0, str_contains($address, ':') ? NamedEntityType::IPv6 : NamedEntityType::IPv4), withPosition: false);
-                            if($resolvedEntity !== null)
-                            {
-                                self::addResolvedEntity($resolved, $resolvedEntity, $index, $verified);
-                            }
-                        }
-                        catch (DatabaseOperationException $e)
-                        {
-                            Logger::log()->warning('Failed to resolve ' . $address . ': ' . $e->getMessage(), $e);
-                        }
-                    }
-                }
-            }
-
+            $resolved = self::resolveScannedEntities($contentInputs, $resolvedAddresses);
             $allResolvedEntities = array_map(fn(array $entry) => $entry['entity'], $resolved);
 
             // Let the plugins scan the content, they may classify it, add their own scanning rules and detections or
@@ -367,15 +326,17 @@
         }
 
         /**
-         * Resolves the entities of an evidence item according to its content type: a HOSTNAME or URL is itself the
-         * entity, the named entities of any other content type are extracted from its text, and the URL a WEB_PAGE
-         * declares in its context is resolved as an assertion of the client.
+         * Determines the entity candidates of an evidence item according to its content type: a HOSTNAME or URL is
+         * itself the entity, the named entities of any other content type are extracted from its text, and the URL a
+         * WEB_PAGE declares in its context is resolved as an assertion of the client.
          *
          * @param ContentInput $contentInput The evidence item
-         * @return array<int, array{0: ResolvedEntity, 1: bool}> The resolved entities, each with whether it was found
-         *                                                        in the content itself rather than only in its context
+         * @return array<int, array{0: string, 1: ResolvedEntityPosition, 2: bool}> The identifier and position of each
+         *                                                                           candidate, with whether it was
+         *                                                                           found in the content itself rather
+         *                                                                           than only in its context
          */
-        private static function resolveContentEntities(ContentInput $contentInput): array
+        private static function getContentCandidates(ContentInput $contentInput): array
         {
             $textContent = $contentInput->getTextContent();
             $candidates = [];
@@ -409,27 +370,66 @@
                 $candidates[] = [$pageUrl, new ResolvedEntityPosition(0, 0, NamedEntityType::URL), false];
             }
 
-            $results = [];
-            foreach($candidates as [$entityIdentifier, $entityPosition, $inContent])
+            return $candidates;
+        }
+
+        /**
+         * Resolves the entity lookups of a scan at once. A name that has no entity of its own may still belong to a
+         * registrable domain that has one, eg; a subdomain of an advertising network looked up on a device, so the
+         * registrable domains of the candidates that may fall back to one and have no entity are resolved in a second
+         * batch. A lookup that cannot be resolved because of a database error is left unresolved.
+         *
+         * @param array<int, array{0: string, 1: ResolvedEntityPosition, 2: bool}> $lookups The identifier, position
+         *        and whether the position is included in the ResolvedEntity of each lookup
+         * @param int[] $fallbacks The keys of the lookups that fall back to their registrable domain
+         * @return array<int, ResolvedEntity> The resolved entity of each lookup that has one, keyed like the lookups
+         */
+        private static function resolveContentLookups(array $lookups, array $fallbacks): array
+        {
+            if($lookups === [])
+            {
+                return [];
+            }
+
+            try
+            {
+                $resolvedEntities = self::resolveEntities($lookups);
+            }
+            catch (DatabaseOperationException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to resolve %d entities: %s', count($lookups), $e->getMessage()), $e);
+                return [];
+            }
+
+            $registrableLookups = [];
+            foreach($fallbacks as $key)
+            {
+                if($resolvedEntities[$key] === null)
+                {
+                    $registrableLookup = self::getRegistrableDomainLookup(...$lookups[$key]);
+                    if($registrableLookup !== null)
+                    {
+                        $registrableLookups[$key] = $registrableLookup;
+                    }
+                }
+            }
+
+            if($registrableLookups !== [])
             {
                 try
                 {
-                    // A name that has no entity of its own may still belong to a registrable domain that has one, eg; a
-                    // subdomain of an advertising network looked up on a device
-                    $resolvedEntity = self::resolveEntity($entityIdentifier, $entityPosition, withPosition: $inContent)
-                        ?? self::resolveRegistrableDomain($entityIdentifier, $entityPosition, $inContent);
-                    if($resolvedEntity !== null)
+                    foreach(self::resolveEntities($registrableLookups) as $key => $resolvedEntity)
                     {
-                        $results[] = [$resolvedEntity, $inContent];
+                        $resolvedEntities[$key] = $resolvedEntity;
                     }
                 }
                 catch (DatabaseOperationException $e)
                 {
-                    Logger::log()->warning('Failed to resolve ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                    Logger::log()->warning(sprintf('Failed to resolve %d registrable domains: %s', count($registrableLookups), $e->getMessage()), $e);
                 }
             }
 
-            return $results;
+            return array_filter($resolvedEntities);
         }
 
         /**
