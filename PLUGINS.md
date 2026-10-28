@@ -26,6 +26,7 @@ FederationLib only needs to know which plugins to load. Each plugin is responsib
     * [Event handlers](#event-handlers)
       * [AUDIT_LOG](#audit_log)
       * [CONTENT_SCAN](#content_scan)
+        * [Scanned files](#scanned-files)
       * [QUERY_ENTITY](#query_entity)
       * [RECORD_CHANGE](#record_change)
       * [STARTUP](#startup)
@@ -387,9 +388,11 @@ about the scan is recorded or returned. The `ContentScan` provides the request a
 | `getConcerns()`                | The effective concerns of the request (`IncidentType[]`), requested or the server's default                         |
 | `isConcernEffective($type)`    | Whether a concern is effective, contributions for any other concern are discarded                                   |
 | `getResolvedAddresses($index)` | The public IP addresses the server resolved itself for a `HOSTNAME`, `URL` or `WEB_PAGE` item                       |
+| `getFiles($index)`             | The files submitted with an evidence item (`ScanFile[]`), empty if it carries none                                  |
+| `hasFiles()`                   | Whether any evidence item carries files                                                                             |
 | `isUrlRetrievalAllowed()`      | Whether the server permits retrieving submitted URLs (`remote_retrieval.scans`, off by default)                     |
 | `getDetections()`              | The detections added so far, including FederationLib's own blacklist detections                                     |
-| `getTextContents()`            | The text content of every evidence item that has any                                                                |
+| `getTextContents()`            | The text content of every evidence item that has any, an item that only carries files has none                      |
 | `getAuthorIdentifier()`        | The author as provided in the request, `null` if none was provided                                                  |
 | `getAuthorEntity()`            | The resolved author (`ResolvedEntity`: the entity, its parent and their active blacklists)                          |
 | `getResolvedEntities()`        | Every entity found in the content (`ResolvedEntity[]`)                                                              |
@@ -405,10 +408,10 @@ evidence item (`getContext()`) is what the client asserts, not something the ser
 
 The handler may optionally:
 
- - **Add a detection** with `addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid, ?float $confidence, bool $verified)`,
+ - **Add a detection** with `addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid, ?float $confidence, bool $verified, ?int $fileIndex)`,
    eg; a match of a `HOSTNAME` against an advertising filter list. `$source` names the mechanism (eg; `easylist`), and
    `$verified` must be `false` when the detection relies on the context or anything else the client asserted that the
-   plugin did not verify itself.
+   plugin did not verify itself. `$fileIndex` is the `getIndex()` of the file the detection relates to, if any.
  - **Classify the content** with `addClassification(ContentClassification $classification, ?int $evidenceIndex, IncidentType $concern)`. The
    response's `classification` is the worst flag of all the classifications with their average confidence, and the
    matching `CLASSIFICATION_*` scanning rule is weighted by the confidence. The evidence index (of `getEvidence()`)
@@ -425,6 +428,24 @@ A plugin that must never let content through on failure (eg; illegal content det
 and reject the request. A plugin must not retrieve submitted URLs unless `isUrlRetrievalAllowed()` returns `true`, and
 a plugin that stores the content it scans (or records derived from it) must declare `collects_scan_content: true` in
 its `federationlib` package option, so that the server publishes `collects_public_scan_content` correctly.
+
+##### Scanned files
+
+Clients may submit files, such as the images of a message, with the content they scan. Plugins only receive them when
+the server scans files for the requester, otherwise `ContentScan::getFiles()` is empty. Each `ScanFile` provides its
+`getIndex()`, `getFileName()` (supplied by the client, made safe), `getSize()`, `getMimeType()` (determined by the
+server from the content, never the client's), `getSha256()` and `getPath()`. A file is never stored by FederationLib:
+it stays in PHP's temporary upload directory and is deleted when the request ends, unless the scan generates a report,
+in which case it is kept as an attachment of the report's evidence. Files are hostile content chosen by the requester:
+
+ - Only interpret the media types the plugin supports, determined by `getMimeType()`, and ignore any other file. A file
+   that can not be interpreted is never an error, the scan continues without it, so that content consisting only of such
+   files keeps the neutral risk score of `50`.
+ - Only read the file at `getPath()`. Never execute, move, modify or serve it, and never retrieve what it refers to.
+ - Decode files (eg; with GD) in an isolated process with limited memory, time and image dimensions, never in the
+   server's own process, as decoders are a common target of malformed files and decompression bombs.
+ - A plugin that copies a file elsewhere stores scanned content and must declare `collects_scan_content: true`.
+ - Image metadata (eg; EXIF location) is personal information, do not record more of it than the plugin needs.
 
 ```php
 use FederationLib\Enums\HttpResponseCode;

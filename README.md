@@ -18,7 +18,7 @@ The implementation is based of the [Open Federated Database](https://github.com/
 ## Table of Contents
 
 <!-- TOC -->
-* [FederationLib](#federationlib)
+* * [FederationLib](#federationlib)
   * [Features](#features)
   * [Table of Contents](#table-of-contents)
   * [Building & Installing](#building--installing)
@@ -438,20 +438,23 @@ stored at and what limits should be applied.
 The production Docker image sets `display_errors = Off` and `display_startup_errors = Off`. PHP errors remain available
 to registered handlers such as LogLib2, but are not emitted into HTTP responses.
 
-| Name                             | Environment Variable                 | Type   | Default                                                                                      | Description                                                                                                              |
-|----------------------------------|--------------------------------------|--------|----------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `server.base_url`                | `FEDERATION_BASE_URL`                | string | `http://127.0.0.1:7000`                                                                      | The base URL the server is served at                                                                                     |
-| `server.name`                    | `FEDERATION_NAME`                    | string | `Federation Server`                                                                          | The name of the server                                                                                                   |
-| `server.access_token`            | `FEDERATION_ACCESS_TOKEN`            | string | Randomly generated                                                                           | The root access token                                                                                                    |
-| `server.max_upload_size`         | `FEDERATION_MAX_UPLOAD_SIZE`         | int    | `52428800` (50 MB)                                                                           | The maximum size of an uploaded file in bytes                                                                            |
-| `server.storage_path`            | `FEDERATION_STORAGE_PATH`            | string | `/var/www/uploads`                                                                           | Where uploaded files are stored                                                                                          |
-| `server.max_page_size`           | `FEDERATION_MAX_PAGE_SIZE`           | int    | `100`                                                                                        | The maximum number of records a list returns, and its default page size                                                  |
-| `server.public`                  | `FEDERATION_PUBLIC`                  | list   | `AUDIT_LOGS`, `EVIDENCE`, `BLACKLIST`, `ENTITIES`, `REPORTS`, `SCAN_CONTENT`, `QUERY_ENTITY` | What is accessible without authentication, also `ENTITY_METADATA`, `SEARCH` (the global search) and `TELEPHONE_ENTITIES` |
-| `server.public_audit_entries`    | `FEDERATION_PUBLIC_AUDIT_ENTRIES`    | list   | The default public audit log types                                                           | The audit log entry types visible without authentication when `AUDIT_LOGS` is public                                     |
-| `server.top_threats_limit`       | `FEDERATION_TOP_THREATS_LIMIT`       | int    | `25`                                                                                         | The maximum number of entities returned by top threats                                                                   |
-| `server.min_blacklist_time`      | `FEDERATION_MIN_BLACKLIST_TIME`      | int    | `1800` (30 min)                                                                              | The shortest temporary blacklist in seconds                                                                              |
-| `server.allow_illegal_content`   | `FEDERATION_ALLOW_ILLEGAL_CONTENT`   | bool   | `true`                                                                                       | Whether reports of illegal content are accepted                                                                          |
-| `server.link_subdomain_entities` | `FEDERATION_LINK_SUBDOMAIN_ENTITIES` | bool   | `true`                                                                                       | Automatically link new subdomain host entities (e.g. `sub.example.com`) to their registrable domain entity as `CHILD`    |
+| Name                             | Environment Variable                 | Type   | Default                                                                                      | Description                                                                                                                            |
+|----------------------------------|--------------------------------------|--------|----------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `server.base_url`                | `FEDERATION_BASE_URL`                | string | `http://127.0.0.1:7000`                                                                      | The base URL the server is served at                                                                                                   |
+| `server.name`                    | `FEDERATION_NAME`                    | string | `Federation Server`                                                                          | The name of the server                                                                                                                 |
+| `server.access_token`            | `FEDERATION_ACCESS_TOKEN`            | string | Randomly generated                                                                           | The root access token                                                                                                                  |
+| `server.max_upload_size`         | `FEDERATION_MAX_UPLOAD_SIZE`         | int    | `52428800` (50 MB)                                                                           | The maximum size of an uploaded file in bytes                                                                                          |
+| `server.storage_path`            | `FEDERATION_STORAGE_PATH`            | string | `/var/www/uploads`                                                                           | Where uploaded files are stored                                                                                                        |
+| `server.max_page_size`           | `FEDERATION_MAX_PAGE_SIZE`           | int    | `100`                                                                                        | The maximum number of records a list returns, and its default page size                                                                |
+| `server.public`                  | `FEDERATION_PUBLIC`                  | list   | `AUDIT_LOGS`, `EVIDENCE`, `BLACKLIST`, `ENTITIES`, `REPORTS`, `SCAN_CONTENT`, `QUERY_ENTITY` | What is accessible without authentication, also `ENTITY_METADATA`, `SEARCH` (the global search), `TELEPHONE_ENTITIES` and `SCAN_FILES` |
+| `server.public_audit_entries`    | `FEDERATION_PUBLIC_AUDIT_ENTRIES`    | list   | The default public audit log types                                                           | The audit log entry types visible without authentication when `AUDIT_LOGS` is public                                                   |
+| `server.top_threats_limit`       | `FEDERATION_TOP_THREATS_LIMIT`       | int    | `25`                                                                                         | The maximum number of entities returned by top threats                                                                                 |
+| `server.min_blacklist_time`      | `FEDERATION_MIN_BLACKLIST_TIME`      | int    | `1800` (30 min)                                                                              | The shortest temporary blacklist in seconds                                                                                            |
+| `server.allow_illegal_content`   | `FEDERATION_ALLOW_ILLEGAL_CONTENT`   | bool   | `true`                                                                                       | Whether reports of illegal content are accepted                                                                                        |
+| `server.link_subdomain_entities` | `FEDERATION_LINK_SUBDOMAIN_ENTITIES` | bool   | `true`                                                                                       | Automatically link new subdomain host entities (e.g. `sub.example.com`) to their registrable domain entity as `CHILD`                  |
+
+`SCAN_FILES` scans the files of unauthenticated scan requests when `SCAN_CONTENT` is public as well; without it the
+files of requests without client permissions are ignored, the rest of the content is scanned as usual.
 
 `TELEPHONE_ENTITIES` exposes telephone entities (`<number>@e164.arpa`) to unauthenticated requests like other entities;
 without it they are only returned to requests that already know the number.
@@ -495,6 +498,13 @@ rules it names, eg; `FEDERATION_SCANNING_MODIFIERS=AUTHOR_BLACKLISTED=-25,AUTHOR
 | `scanning.concerns`                       | `FEDERATION_SCANNING_CONCERNS`                       | list     | every incident type                           | Concerns (incident types) the server can assess, published as `concerns`                                                                   |
 | `scanning.default_concerns`               | `FEDERATION_SCANNING_DEFAULT_CONCERNS`               | list     | all except `ADVERTISING`, `TRACKING`          | Concerns assessed when a scan or entity query names none, published as `default_concerns`                                                  |
 | `scanning.dns_lookup_limit`               | `FEDERATION_SCANNING_DNS_LOOKUP_LIMIT`               | int      | `10`                                          | Maximum DNS lookups of `HOSTNAME`, `URL` and `WEB_PAGE` names per scan request, `0` disables DNS lookups                                   |
+| `scanning.max_files`                      | `FEDERATION_SCANNING_MAX_FILES`                      | int      | `4`                                           | Maximum files a scan request may carry, `0` disables the scanning of files                                                                 |
+| `scanning.max_file_size`                  | `FEDERATION_SCANNING_MAX_FILE_SIZE`                  | int      | `10485760` (10 MB)                            | Maximum size in bytes of each file a scan request carries                                                                                  |
+
+Scan requests may carry files, such as the images of a message, in a `multipart/form-data` body (OFD "Scanned files").
+FederationLib interprets no file itself: files are accepted, ignored by the scan unless a plugin interprets their media
+type, and deleted when the request ends, unless the scan generates a report, in which case they are kept as attachments
+of its evidence. The docker image includes the PHP `gd` and `exif` extensions for plugins that interpret images.
 
 Reputation is built from scans by authenticated clients over time, never from anonymous scans. The activity of each
 entity is recorded per day (UTC), and every completed day is applied by `federationlib reputation settle` (run every hour
