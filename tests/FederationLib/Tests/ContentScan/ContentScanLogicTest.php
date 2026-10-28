@@ -2,850 +2,220 @@
 
     namespace FederationLib\Tests\ContentScan;
 
-    use FederationLib\Classes\Utilities;
-    use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\IncidentType;
     use FederationLib\Enums\ScanningRules;
-    use FederationLib\Exceptions\RequestException;
-    use FederationLib\FederationClient;
-    use FederationLib\Helpers\TextGenerator;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Objects\ContentInput;
-    use FederationLib\Objects\ScannedContent\ContentClassification;
-    use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
+    use FederationLib\Enums\SuggestedActionType;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\ScannedContent;
 
-    class ContentScanLogicTest extends TestCase
+    /**
+     * How blacklists of the author and of the entities found in the content decide the scanning rules, the risk score
+     * and the suggested action of a scan. The content is made of random tokens the classifier does not know, so it is
+     * never classified (see BayesianPluginTest) and only the rules under test contribute: the risk score is the neutral
+     * point (50) minus 2.3 times the points of the rules, within 0 and 100. Every blacklist also lowers the reputation
+     * of the entity, which only adds to the risk, so the risk scores asserted are lower bounds.
+     *
+     * The classification of content is tested by BayesianPluginTest and PluginRequestsTest.
+     */
+    class ContentScanLogicTest extends ServerTestCase
     {
-        private const string BENIGN_SAMPLE_TEXT = 'This is a simple, benign message used for scanning tests.';
+        private const float NEUTRAL_POINT = 50.0;
+        private const float SCALING_FACTOR = 2.3;
 
-        private FederationClient $client;
-        private array $createdEntities = [];
-        private array $createdOperators = [];
-        private array $createdReports = [];
-        private array $createdEvidenceRecords = [];
-
-        private static ?FederationClient $trainingClient = null;
-        private static ?string $trainingEntityUuid = null;
-        private static array $createdTrainingReports = [];
-        private static array $createdTrainingEvidence = [];
-
-        public static function setUpBeforeClass(): void
+        /**
+         * Returns content the classifier has never seen
+         */
+        private static function unknownText(): string
         {
-            self::$trainingClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-            self::$trainingEntityUuid = self::$trainingClient->pushEntity('scan-training.com', 'scan_training');
-
-            foreach (TextGenerator::trainingSet() as $sample)
-            {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
-                $reportUuid = $submission->getReport()->getUuid();
-                self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
-                self::$trainingClient->assignOperatorToReport($reportUuid, self::$trainingClient->getSelf()->getUuid());
-                self::$trainingClient->closeReport($reportUuid, $sample['flag']);
-            }
-
-            sleep(3);
+            return implode(' ', array_map(fn() => bin2hex(random_bytes(6)), range(1, 12)));
         }
 
-        public static function tearDownAfterClass(): void
+        /**
+         * Returns the risk score of content that only the given rule points contribute to
+         */
+        private static function riskScore(float $points): float
         {
-            foreach (self::$createdTrainingReports as $reportUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach (self::$createdTrainingEvidence as $evidenceUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training evidence $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            if (self::$trainingEntityUuid !== null)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEntity(self::$trainingEntityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training entity " . self::$trainingEntityUuid . ": " . $e->getMessage());
-                }
-            }
-
-            self::$trainingClient = null;
-            self::$trainingEntityUuid = null;
-            self::$createdTrainingReports = [];
-            self::$createdTrainingEvidence = [];
+            return max(0.0, min(100.0, self::NEUTRAL_POINT - $points * self::SCALING_FACTOR));
         }
 
-        protected function setUp(): void
+        private function createEntity(string $host, ?string $id = null): string
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdEntities = [];
-            $this->createdOperators = [];
-            $this->createdReports = [];
-            $this->createdEvidenceRecords = [];
-        }
-
-        public function testScanContentClassificationMayBeNullWhenUntrained(): void
-        {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT);
-
-            $this->assertNotNull($scanned);
-            $classification = $scanned->getClassification();
-
-            if ($classification !== null)
-            {
-                $this->assertInstanceOf(ContentClassification::class, $classification);
-                $this->assertInstanceOf(ClassificationFlag::class, $classification->getClassificationFlag());
-                $this->assertIsFloat($classification->getConfidence());
-                $this->assertGreaterThanOrEqual(0.0, $classification->getConfidence());
-                $this->assertLessThanOrEqual(1.0, $classification->getConfidence());
-            }
-            else
-            {
-                $this->addToAssertionCount(1);
-            }
-        }
-
-        public function testScanContentAuthorWithGoodReputation(): void
-        {
-            $host = 'scan-good-reputation.com';
-            $id = 'scan_good_reputation';
             $entityUuid = $this->client->pushEntity($host, $id);
             $this->createdEntities[] = $entityUuid;
-
-            for ($i = 0; $i < 5; $i++)
-            {
-                $evidenceUuid = $this->client->submitEvidence(
-                    $entityUuid,
-                    self::BENIGN_SAMPLE_TEXT,
-                    'Good reputation evidence',
-                    'reputation'
-                );
-                $this->createdEvidenceRecords[] = $evidenceUuid;
-            }
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertIsArray($scanned->getScanResults());
+            return $entityUuid;
         }
 
-        public function testScanContentBatch(): void
+        private function blacklist(string $entityUuid, IncidentType $type, ?int $expires): string
         {
-            $samples = TextGenerator::batch(perClass: 3);
-
-            foreach ($samples as $sample)
-            {
-                $scanned = $this->client->scanContent($sample['text']);
-                $this->assertNotNull($scanned, 'Scan result should not be null');
-                $this->assertIsArray($scanned->getResolvedEntities());
-                $this->assertIsFloat($scanned->getRiskScore());
-                $this->assertGreaterThanOrEqual(0.0, $scanned->getRiskScore());
-            }
+            $blacklistUuid = $this->client->blacklistEntity($entityUuid, null, $type, $expires);
+            $this->createdBlacklistRecords[] = $blacklistUuid;
+            return $blacklistUuid;
         }
 
-        public function testScanContentWithTrainingAndClassification(): void
+        /**
+         * Asserts the points of the rules, every rule not given must not contribute
+         *
+         * @param array<string, float> $expected The points of the rules expected to contribute
+         * @param string[] $ignored Rules whose points are not asserted (the reputation rules affected by a blacklist)
+         */
+        private function assertRules(array $expected, ScannedContent $scanned, array $ignored = []): void
         {
-            foreach (ClassificationFlag::cases() as $flag)
+            $results = $scanned->getScanResults();
+            foreach (ScanningRules::cases() as $rule)
             {
-                $text = TextGenerator::testText($flag);
-                $scanned = $this->client->scanContent($text);
-
-                $this->assertNotNull($scanned);
-                $this->assertIsArray($scanned->getResolvedEntities());
-                $this->assertIsFloat($scanned->getRiskScore());
-            }
-        }
-
-        public function testScanContentClassifiesNormalContent(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-normal.com', 'scan_classify_normal');
-            $this->createdEntities[] = $entityUuid;
-
-            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $classification = $scanned->getClassification();
-
-            if ($classification !== null)
-            {
-                $this->assertEquals(ClassificationFlag::NORMAL->value, $classification->getClassificationFlag()->value);
-                $this->assertIsFloat($classification->getConfidence());
-                $this->assertGreaterThan(0.0, $classification->getConfidence());
-                $this->assertIsString($classification->getDetectedLanguage());
-            }
-            else
-            {
-                $this->addToAssertionCount(1);
-            }
-        }
-
-        public function testScanContentClassifiesSuspiciousContent(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-suspicious.com', 'scan_classify_suspicious');
-            $this->createdEntities[] = $entityUuid;
-
-            $text = TextGenerator::testText(ClassificationFlag::SUSPICIOUS);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $classification = $scanned->getClassification();
-
-            if ($classification !== null)
-            {
-                $this->assertNotEquals(
-                    ClassificationFlag::NORMAL,
-                    $classification->getClassificationFlag(),
-                    'Suspicious test content must be distinguished from normal content'
-                );
-            }
-            else
-            {
-                $this->addToAssertionCount(1);
-            }
-        }
-
-        public function testScanContentClassifiesMaliciousContent(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-malicious.com', 'scan_classify_malicious');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $classification = $scanned->getClassification();
-
-            if ($classification !== null)
-            {
-                $this->assertNotEquals(
-                    ClassificationFlag::NORMAL,
-                    $classification->getClassificationFlag(),
-                    'Malicious test content must be distinguished from normal content'
-                );
-            }
-            else
-            {
-                $this->addToAssertionCount(1);
-            }
-        }
-
-        public function testScanContentClassificationAffectsRiskScore(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-risk.com', 'scan_classify_risk');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $normalText = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $maliciousText = TextGenerator::testText(ClassificationFlag::MALICIOUS);
-
-            $normalScan = $this->client->scanContent($normalText, $entityUuid);
-            $maliciousScan = $this->client->scanContent($maliciousText, $entityUuid);
-
-            $normalClassification = $normalScan->getClassification();
-            $maliciousClassification = $maliciousScan->getClassification();
-
-            if ($normalClassification !== null && $maliciousClassification !== null)
-            {
-                $this->assertEquals(ClassificationFlag::NORMAL, $normalClassification->getClassificationFlag());
-                $this->assertNotEquals(
-                    ClassificationFlag::NORMAL,
-                    $maliciousClassification->getClassificationFlag(),
-                    'Malicious test content must be distinguished from normal content'
-                );
-
-                $this->assertLessThan(
-                    $maliciousScan->getRiskScore(),
-                    $normalScan->getRiskScore(),
-                    'Normal classification should produce a lower risk score than malicious classification'
-                );
-            }
-            else
-            {
-                $this->addToAssertionCount(3);
-            }
-        }
-
-        public function testScanContentMultipleEvidenceSummedClassification(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-multi-evidence.com', 'scan_multi_evidence');
-            $this->createdEntities[] = $entityUuid;
-
-            $normalText = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $maliciousText = TextGenerator::testText(ClassificationFlag::MALICIOUS);
-
-            $singleMaliciousScan = $this->client->scanContent($maliciousText, $entityUuid);
-            $multipleMaliciousScan = $this->client->scanContent([
-                new ContentInput($maliciousText),
-                new ContentInput($maliciousText),
-                new ContentInput($normalText),
-            ], $entityUuid);
-
-            $singleClassification = $singleMaliciousScan->getClassification();
-            $multipleClassification = $multipleMaliciousScan->getClassification();
-
-            if ($singleClassification !== null && $multipleClassification !== null)
-            {
-                $this->assertNotEquals(ClassificationFlag::NORMAL, $multipleClassification->getClassificationFlag());
-
-                $this->assertLessThanOrEqual(
-                    $singleMaliciousScan->getRiskScore(),
-                    $multipleMaliciousScan->getRiskScore(),
-                    'Multiple malicious messages should produce a risk score at least as high as a single malicious message'
-                );
-            }
-            else
-            {
-                $this->addToAssertionCount(2);
-            }
-        }
-
-        public function testScanContentClassificationAppearsInScanResults(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-results.com', 'scan_classify_results');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('CLASSIFICATION_NORMAL', $scanResults);
-            $this->assertArrayHasKey('CLASSIFICATION_SUSPICIOUS', $scanResults);
-            $this->assertArrayHasKey('CLASSIFICATION_MALICIOUS', $scanResults);
-
-            $classification = $scanned->getClassification();
-            if ($classification !== null)
-            {
-                $flag = $classification->getClassificationFlag();
-                $this->assertNotEquals(ClassificationFlag::NORMAL, $flag, 'Threat test content must be distinguished from normal content');
-
-                $ruleName = 'CLASSIFICATION_' . $flag->value;
-                $this->assertNotEquals(0.0, $scanResults[$ruleName], 'Expected non-zero points for the matching classification rule');
-            }
-            else
-            {
-                $this->addToAssertionCount(3);
-            }
-        }
-
-        public function testScanContentBlacklistOverridesClassification(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-blacklist.com', 'scan_classify_blacklist');
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence for classification override', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, null);
-
-
-            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertGreaterThanOrEqual(1, count($scanned->getAuthorEntity()->getActiveBlacklists()));
-            $this->assertEquals('PERMANENTLY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
-        }
-
-        public function testScanContentClassificationWithTopKAndThreshold(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-topk-threshold.com', 'scan_topk_threshold');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $scanned = $this->client->scanContent($text, $entityUuid, 2, 0.25);
-
-            $this->assertNotNull($scanned);
-            if ($scanned->getClassification() !== null)
-            {
-                $this->assertInstanceOf(ContentClassification::class, $scanned->getClassification());
-            }
-        }
-
-        public function testScanContentClassificationConfidenceIsValid(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-classify-confidence.com', 'scan_classify_confidence');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $text = TextGenerator::testText(ClassificationFlag::SUSPICIOUS);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $classification = $scanned->getClassification();
-            if ($classification !== null)
-            {
-                $this->assertGreaterThanOrEqual(0.0, $classification->getConfidence());
-                $this->assertLessThanOrEqual(1.0, $classification->getConfidence());
-            }
-            else
-            {
-                $this->addToAssertionCount(2);
-            }
-        }
-
-        public function testScanContentResolvedEntityBlacklistContributesToRiskScore(): void
-        {
-            $host = 'scan-resolved-blacklist.com';
-            $entityUuid = $this->client->pushEntity($host);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence for resolved entity', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
-
-
-            $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
+                if (in_array($rule->name, $ignored, true))
                 {
-                    $found = true;
-                    $this->assertGreaterThanOrEqual(1, count($resolvedEntity->getActiveBlacklists()));
-                    break;
+                    continue;
                 }
+
+                $this->assertEquals($expected[$rule->name] ?? 0.0, $results[$rule->name], $rule->name);
             }
-            $this->assertTrue($found, 'Expected the blacklisted entity to be resolved');
-
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('NAMED_ENTITY_PERMANENTLY_BLACKLISTED', $scanResults);
-            $this->assertLessThan(0.0, $scanResults['NAMED_ENTITY_PERMANENTLY_BLACKLISTED']);
         }
 
-        public function testScanContentSuggestedActionForHighRisk(): void
+        public function testCleanContentHasNoRulesAndNoSuggestedAction(): void
         {
-            $host = 'scan-high-risk.com';
-            $id = 'scan_high_risk';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
+            $scanned = $this->client->scanContent(self::unknownText());
 
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence for high risk', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $this->assertNull($scanned->getClassification());
 
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
+            // Every rule is reported, none contributes
+            $names = array_map(fn(ScanningRules $rule) => $rule->name, ScanningRules::cases());
+            $resultNames = array_keys($scanned->getScanResults());
+            sort($names);
+            sort($resultNames);
+            $this->assertSame($names, $resultNames);
+            $this->assertRules([], $scanned);
 
-            $text = TextGenerator::testText(ClassificationFlag::MALICIOUS);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $this->assertNotNull($scanned->getSuggestedAction());
-            $this->assertEquals('PERMANENTLY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
-        }
-
-        public function testScanContentAuthorWithActiveBlacklist(): void
-        {
-            $host = 'scan-blacklisted-author.com';
-            $id = 'scan_blacklisted_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence for author', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $blacklistUuid = $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertNotNull($scanned);
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertGreaterThanOrEqual(1, count($scanned->getAuthorEntity()->getActiveBlacklists()));
-
-            $suggestedAction = $scanned->getSuggestedAction();
-            $this->assertNotNull($suggestedAction);
-            $this->assertContains($suggestedAction->value, ['TEMPORARILY_BLOCK_ENTITY', 'PERMANENTLY_BLOCK_ENTITY']);
-        }
-
-        public function testScanContentResolvedEntityParentRelationship(): void
-        {
-            $parentHost = 'scan-parent.com';
-            $parentUuid = $this->client->pushEntity($parentHost);
-            $this->createdEntities[] = $parentUuid;
-
-            $childHost = 'child.scan-parent.com';
-            $childUuid = $this->client->pushEntity($childHost);
-            $this->createdEntities[] = $childUuid;
-
-            $this->client->setEntityRelationship($childUuid, $parentUuid, EntityRelationshipType::CHILD);
-
-            $text = "Check $childHost for updates. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $foundChild = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $childUuid)
-                {
-                    $foundChild = true;
-                    $this->assertNotNull($resolvedEntity->getParentEntity());
-                    $this->assertEquals($parentUuid, $resolvedEntity->getParentEntity()->getEntity()->getUuid());
-                    break;
-                }
-            }
-            $this->assertTrue($foundChild, 'Expected the child entity to be resolved with its parent');
-        }
-
-        public function testScanContentSuggestedActionForTemporarilyBlacklistedAuthor(): void
-        {
-            $host = 'scan-temp-blacklist-author.com';
-            $id = 'scan_temp_blacklist_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Temporary spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $expires = time() + 3600;
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, $expires);
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertGreaterThanOrEqual(1, count($scanned->getAuthorEntity()->getActiveBlacklists()));
-            $this->assertEquals('TEMPORARILY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
-            $this->assertGreaterThanOrEqual($expires - 5, $scanned->getSuggestedLiftTimestamp());
-            $this->assertLessThanOrEqual($expires + 5, $scanned->getSuggestedLiftTimestamp());
-        }
-
-        public function testScanContentSuggestedActionForPermanentlyBlacklistedAuthor(): void
-        {
-            $host = 'scan-perm-blacklist-author.com';
-            $id = 'scan_perm_blacklist_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Permanent spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, null);
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertGreaterThanOrEqual(1, count($scanned->getAuthorEntity()->getActiveBlacklists()));
-            $this->assertEquals('PERMANENTLY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
+            $this->assertEquals(self::NEUTRAL_POINT, $scanned->getRiskScore());
+            $this->assertNull($scanned->getSuggestedAction());
             $this->assertNull($scanned->getSuggestedLiftTimestamp());
         }
 
-        public function testScanContentMultipleAuthorBlacklistsPermanentWins(): void
+        public function testPermanentlyBlacklistedAuthor(): void
         {
-            $host = 'scan-multi-blacklist-author.com';
-            $id = 'scan_multi_blacklist_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
+            $authorUuid = $this->createEntity($this->uniqueHost('perm-author'), 'perm_author');
+            $this->blacklist($authorUuid, IncidentType::MALWARE, null);
 
-            $tempSubmission = $this->client->submitReport($entityUuid, new ContentInput('Temporary evidence', 'Test note', 'spam'), IncidentType::SPAM);
-            $tempReportUuid = $tempSubmission->getReport()->getUuid();
-            $this->createdReports[] = $tempReportUuid;
-            $this->createdEvidenceRecords[] = $tempSubmission->getEvidence()[0]->getUuid();
+            $scanned = $this->client->scanContent(self::unknownText(), $authorUuid);
 
-            $permSubmission = $this->client->submitReport($entityUuid, new ContentInput('Permanent evidence', 'Test note', 'malware'), IncidentType::MALWARE);
-            $permReportUuid = $permSubmission->getReport()->getUuid();
-            $this->createdReports[] = $permReportUuid;
-            $this->createdEvidenceRecords[] = $permSubmission->getEvidence()[0]->getUuid();
+            $this->assertCount(1, $scanned->getAuthorEntity()->getActiveBlacklists());
+            $this->assertRules(['AUTHOR_PERMANENTLY_BLACKLISTED' => ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier()], $scanned, ['AUTHOR_BAD_REPUTATION']);
+            $this->assertEquals(100.0, $scanned->getRiskScore());
+            $this->assertSame(SuggestedActionType::PERMANENTLY_BLOCK_ENTITY, $scanned->getSuggestedAction());
+            $this->assertNull($scanned->getSuggestedLiftTimestamp());
+        }
 
-            $this->client->blacklistEntity($entityUuid, $tempReportUuid, IncidentType::SPAM, time() + 3600);
-            $this->client->blacklistEntity($entityUuid, $permReportUuid, IncidentType::MALWARE, null);
+        public function testTemporarilyBlacklistedAuthor(): void
+        {
+            $authorUuid = $this->createEntity($this->uniqueHost('temp-author'), 'temp_author');
+            $expires = time() + 3600;
+            $this->blacklist($authorUuid, IncidentType::SPAM, $expires - 600);
+            $this->blacklist($authorUuid, IncidentType::SPAM, $expires);
 
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
+            $scanned = $this->client->scanContent(self::unknownText(), $authorUuid);
 
-            $this->assertNotNull($scanned->getAuthorEntity());
             $this->assertCount(2, $scanned->getAuthorEntity()->getActiveBlacklists());
-            $this->assertEquals('PERMANENTLY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
+            $this->assertRules(['AUTHOR_BLACKLISTED' => 2 * ScanningRules::AUTHOR_BLACKLISTED->getModifier()], $scanned, ['AUTHOR_BAD_REPUTATION']);
+            $this->assertGreaterThanOrEqual(self::riskScore(2 * ScanningRules::AUTHOR_BLACKLISTED->getModifier()), $scanned->getRiskScore());
+            $this->assertSame(SuggestedActionType::TEMPORARILY_BLOCK_ENTITY, $scanned->getSuggestedAction());
+
+            // The block lasts until the longest of the blacklists expires
+            $this->assertSame($expires, $scanned->getSuggestedLiftTimestamp());
         }
 
-        public function testScanContentAuthorParentBlacklistAffectsSuggestedAction(): void
+        public function testPermanentBlacklistOfAuthorOutweighsTemporaryOne(): void
         {
-            $parentHost = 'scan-author-parent.com';
-            $childHost = 'child.scan-author-parent.com';
-            $childId = 'scan_author_child';
+            $authorUuid = $this->createEntity($this->uniqueHost('mixed-author'), 'mixed_author');
+            $this->blacklist($authorUuid, IncidentType::SPAM, time() + 3600);
+            $this->blacklist($authorUuid, IncidentType::MALWARE, null);
 
-            $parentUuid = $this->client->pushEntity($parentHost);
-            $childUuid = $this->client->pushEntity($childHost, $childId);
-            $this->createdEntities[] = $parentUuid;
-            $this->createdEntities[] = $childUuid;
+            $scanned = $this->client->scanContent(self::unknownText(), $authorUuid);
 
+            $this->assertCount(2, $scanned->getAuthorEntity()->getActiveBlacklists());
+            $this->assertRules([
+                'AUTHOR_BLACKLISTED' => ScanningRules::AUTHOR_BLACKLISTED->getModifier(),
+                'AUTHOR_PERMANENTLY_BLACKLISTED' => ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED->getModifier(),
+            ], $scanned, ['AUTHOR_BAD_REPUTATION']);
+            $this->assertSame(SuggestedActionType::PERMANENTLY_BLOCK_ENTITY, $scanned->getSuggestedAction());
+            $this->assertNull($scanned->getSuggestedLiftTimestamp());
+        }
+
+        public function testBlacklistedParentOfAuthorBlocksTheContent(): void
+        {
+            $parentHost = $this->uniqueHost('author-parent');
+            $parentUuid = $this->createEntity($parentHost);
+            $childUuid = $this->createEntity('child.' . $parentHost, 'author_child');
             $this->client->setEntityRelationship($childUuid, $parentUuid, EntityRelationshipType::CHILD);
+            $this->blacklist($parentUuid, IncidentType::MALWARE, null);
 
-            $submission = $this->client->submitReport($parentUuid, new ContentInput('Parent is malicious', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $scanned = $this->client->scanContent(self::unknownText(), $childUuid);
 
-            $this->client->blacklistEntity($parentUuid, $reportUuid, IncidentType::MALWARE, null);
+            $author = $scanned->getAuthorEntity();
+            $this->assertSame([], $author->getActiveBlacklists());
+            $this->assertSame($parentUuid, $author->getParentEntity()->getEntity()->getUuid());
+            $this->assertCount(1, $author->getParentEntity()->getActiveBlacklists());
 
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $childUuid);
-
-            $this->assertNotNull($scanned->getAuthorEntity());
-            $this->assertNotNull($scanned->getAuthorEntity()->getParentEntity());
-            $this->assertEquals($parentUuid, $scanned->getAuthorEntity()->getParentEntity()->getEntity()->getUuid());
-            $this->assertGreaterThanOrEqual(1, count($scanned->getAuthorEntity()->getParentEntity()->getActiveBlacklists()));
-
-            $this->assertEquals('BLOCK_CONTENT', $scanned->getSuggestedAction()->value);
+            $this->assertRules(['AUTHOR_PARENT_PERMANENTLY_BLACKLISTED' => ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED->getModifier()], $scanned, ['AUTHOR_BAD_REPUTATION', 'AUTHOR_PARENT_BAD_REPUTATION']);
             $this->assertEquals(100.0, $scanned->getRiskScore());
 
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('AUTHOR_PARENT_PERMANENTLY_BLACKLISTED', $scanResults);
-            $this->assertLessThan(0.0, $scanResults['AUTHOR_PARENT_PERMANENTLY_BLACKLISTED']);
+            // Only a blacklist of the author itself blocks the entity, its parent's blacklist blocks the content
+            $this->assertSame(SuggestedActionType::BLOCK_CONTENT, $scanned->getSuggestedAction());
+            $this->assertNull($scanned->getSuggestedLiftTimestamp());
         }
 
-        public function testScanContentResolvedEntityParentBlacklistContributesToRiskScore(): void
+        public function testPermanentlyBlacklistedNamedEntity(): void
         {
-            $parentHost = 'scan-resolved-parent.com';
-            $childHost = 'child.scan-resolved-parent.com';
+            $host = $this->uniqueHost('perm-named');
+            $entityUuid = $this->createEntity($host);
+            $this->blacklist($entityUuid, IncidentType::MALWARE, null);
 
-            $parentUuid = $this->client->pushEntity($parentHost);
-            $childUuid = $this->client->pushEntity($childHost);
-            $this->createdEntities[] = $parentUuid;
-            $this->createdEntities[] = $childUuid;
+            $scanned = $this->client->scanContent("Visit $host " . self::unknownText());
 
+            $this->assertCount(1, $scanned->getResolvedEntities());
+            $this->assertSame($entityUuid, $scanned->getResolvedEntities()[0]->getEntity()->getUuid());
+            $this->assertCount(1, $scanned->getResolvedEntities()[0]->getActiveBlacklists());
+            $this->assertRules(['NAMED_ENTITY_PERMANENTLY_BLACKLISTED' => ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier()], $scanned, ['NAMED_ENTITY_BAD_REPUTATION']);
+            $this->assertGreaterThanOrEqual(self::riskScore(ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED->getModifier()), $scanned->getRiskScore());
+
+            // A blacklisted entity found in the content never blocks an author, there is none
+            $this->assertContains($scanned->getSuggestedAction(), [SuggestedActionType::CAUTION, SuggestedActionType::BLOCK_CONTENT]);
+        }
+
+        public function testTemporarilyBlacklistedNamedEntity(): void
+        {
+            $host = $this->uniqueHost('temp-named');
+            $entityUuid = $this->createEntity($host);
+            $this->blacklist($entityUuid, IncidentType::SPAM, time() + 3600);
+
+            $scanned = $this->client->scanContent("Visit $host " . self::unknownText());
+
+            $activeBlacklists = $scanned->getResolvedEntities()[0]->getActiveBlacklists();
+            $this->assertCount(1, $activeBlacklists);
+            $this->assertNotNull($activeBlacklists[0]->getExpires());
+            $this->assertRules(['NAMED_ENTITY_BLACKLISTED' => ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier()], $scanned, ['NAMED_ENTITY_BAD_REPUTATION']);
+            $this->assertGreaterThanOrEqual(self::riskScore(ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier()), $scanned->getRiskScore());
+        }
+
+        public function testBlacklistedParentOfNamedEntity(): void
+        {
+            $parentHost = $this->uniqueHost('named-parent');
+            $childHost = 'child.' . $parentHost;
+            $parentUuid = $this->createEntity($parentHost);
+            $childUuid = $this->createEntity($childHost);
             $this->client->setEntityRelationship($childUuid, $parentUuid, EntityRelationshipType::CHILD);
+            $this->blacklist($parentUuid, IncidentType::MALWARE, null);
 
-            $submission = $this->client->submitReport($parentUuid, new ContentInput('Parent malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
+            $scanned = $this->client->scanContent("Visit $childHost " . self::unknownText());
 
-            $this->client->blacklistEntity($parentUuid, $reportUuid, IncidentType::MALWARE, null);
+            $this->assertCount(1, $scanned->getResolvedEntities());
+            $resolved = $scanned->getResolvedEntities()[0];
+            $this->assertSame($childUuid, $resolved->getEntity()->getUuid());
+            $this->assertSame([], $resolved->getActiveBlacklists());
+            $this->assertSame($parentUuid, $resolved->getParentEntity()->getEntity()->getUuid());
+            $this->assertCount(1, $resolved->getParentEntity()->getActiveBlacklists());
 
-            $text = "Visit $childHost for updates. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $childUuid)
-                {
-                    $found = true;
-                    $this->assertNotNull($resolvedEntity->getParentEntity());
-                    $this->assertEquals($parentUuid, $resolvedEntity->getParentEntity()->getEntity()->getUuid());
-                    $this->assertGreaterThanOrEqual(1, count($resolvedEntity->getParentEntity()->getActiveBlacklists()));
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the child entity to be resolved');
-
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED', $scanResults);
-            $this->assertLessThan(0.0, $scanResults['NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED']);
+            $this->assertRules(['NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED' => ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier()], $scanned, ['NAMED_ENTITY_BAD_REPUTATION', 'NAMED_ENTITY_PARENT_BAD_REPUTATION']);
+            $this->assertGreaterThanOrEqual(self::riskScore(ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED->getModifier()), $scanned->getRiskScore());
         }
-
-        public function testScanContentResolvedEntityTemporaryBlacklistContributes(): void
-        {
-            $host = 'scan-temp-blacklist-resolved.com';
-            $entityUuid = $this->client->pushEntity($host);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Temporary spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
-
-            $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    $activeBlacklists = $resolvedEntity->getActiveBlacklists();
-                    $this->assertGreaterThanOrEqual(1, count($activeBlacklists));
-                    $this->assertNotNull($activeBlacklists[0]->getExpires());
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the blacklisted entity to be resolved');
-
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('NAMED_ENTITY_BLACKLISTED', $scanResults);
-            $this->assertLessThan(0.0, $scanResults['NAMED_ENTITY_BLACKLISTED']);
-            $this->assertEquals(0.0, $scanResults['NAMED_ENTITY_PERMANENTLY_BLACKLISTED']);
-        }
-
-        public function testScanContentRiskScoreWithPermanentlyBlacklistedAuthor(): void
-        {
-            $host = 'scan-risk-perm-author.com';
-            $id = 'scan_risk_perm_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertEquals('PERMANENTLY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
-            $this->assertEquals(100.0, $scanned->getRiskScore());
-        }
-
-        public function testScanContentRiskScoreWithTemporarilyBlacklistedAuthor(): void
-        {
-            $host = 'scan-risk-temp-author.com';
-            $id = 'scan_risk_temp_author';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Spam evidence', 'Test note', 'spam'), IncidentType::SPAM);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $baselineScan = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-            $baselineRisk = $baselineScan->getRiskScore();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
-
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, $entityUuid);
-
-            $this->assertEquals('TEMPORARILY_BLOCK_ENTITY', $scanned->getSuggestedAction()->value);
-            $this->assertGreaterThan($baselineRisk, $scanned->getRiskScore(), 'Temporary blacklist should raise the risk score');
-            $this->assertGreaterThanOrEqual(90.0, $scanned->getRiskScore());
-        }
-
-        public function testScanContentRiskScoreWithBlacklistedNamedEntity(): void
-        {
-            $host = 'scan-risk-resolved.com';
-            $entityUuid = $this->client->pushEntity($host);
-            $this->createdEntities[] = $entityUuid;
-
-            $submission = $this->client->submitReport($entityUuid, new ContentInput('Malware evidence', 'Test note', 'malware'), IncidentType::MALWARE);
-            $reportUuid = $submission->getReport()->getUuid();
-            $this->createdReports[] = $reportUuid;
-            $this->createdEvidenceRecords[] = $submission->getEvidence()[0]->getUuid();
-
-            $this->client->blacklistEntity($entityUuid, $reportUuid, IncidentType::MALWARE, null);
-
-            $text = "Visit $host for updates. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertGreaterThanOrEqual(60.0, $scanned->getRiskScore());
-
-            $scanResults = $scanned->getScanResults();
-            $this->assertArrayHasKey('NAMED_ENTITY_PERMANENTLY_BLACKLISTED', $scanResults);
-            $this->assertLessThan(0.0, $scanResults['NAMED_ENTITY_PERMANENTLY_BLACKLISTED']);
-        }
-
-        public function testScanContentSuggestedActionNullForCleanContent(): void
-        {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT);
-
-            $this->assertNull($scanned->getSuggestedAction());
-            $this->assertGreaterThanOrEqual(0.0, $scanned->getRiskScore());
-            $this->assertLessThanOrEqual(100.0, $scanned->getRiskScore());
-        }
-
-        public function testScanContentScanResultsContainAllRuleKeys(): void
-        {
-            $entityUuid = $this->client->pushEntity('scan-rule-keys.com', 'scan_rule_keys');
-            $this->createdEntities[] = $entityUuid;
-
-
-            $text = TextGenerator::testText(ClassificationFlag::NORMAL);
-            $scanned = $this->client->scanContent($text, $entityUuid);
-
-            $scanResults = $scanned->getScanResults();
-            foreach (ScanningRules::cases() as $rule)
-            {
-                $this->assertArrayHasKey($rule->name, $scanResults, "Missing scanning rule: {$rule->name}");
-                $this->assertIsFloat($scanResults[$rule->name]);
-            }
-        }
-
     }

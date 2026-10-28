@@ -9,151 +9,46 @@
     use FederationLib\Enums\RecordType;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\EntityRecord;
     use FederationLib\Objects\SearchResult;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
-    use Symfony\Component\Uid\Uuid;
 
-    class EntitiesTest extends TestCase
+    class EntitiesTest extends ServerTestCase
     {
-        use TestHelpers;
         private const array TEST_METADATA = ['source' => 'metadata_visibility_test', 'sensitive' => true];
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityId)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityId);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
 
         public function testPushEntity(): void
         {
-            $userEntityUuid = $this->client->pushEntity('example.com', 'john123');
+            $host = $this->uniqueHost('push');
+
+            // A named entity (an account of the host) and the host itself are distinct entities
+            $userEntityUuid = $this->client->pushEntity($host, 'john123');
             $this->createdEntities[] = $userEntityUuid;
-            $this->assertNotEmpty($userEntityUuid);
-
-            $userEntityRecordUuid = $this->client->getEntityRecord($userEntityUuid);
-            $this->assertEquals($userEntityUuid, $userEntityRecordUuid->getUuid());
-            $this->assertEquals('john123', $userEntityRecordUuid->getId());
-            $this->assertEquals('example.com', $userEntityRecordUuid->getHost());
-
-            $userEntityRecordHash = $this->client->getEntityRecord(Utilities::hashEntity('example.com', 'john123'));
-            $this->assertEquals($userEntityUuid, $userEntityRecordHash->getUuid());
-            $this->assertEquals('john123', $userEntityRecordHash->getId());
-            $this->assertEquals('example.com', $userEntityRecordHash->getHost());
-
-            $globalEntityUuid = $this->client->pushEntity('example.com');
+            $globalEntityUuid = $this->client->pushEntity($host);
             $this->createdEntities[] = $globalEntityUuid;
-            $this->assertNotEmpty($globalEntityUuid);
+            $this->assertNotEquals($userEntityUuid, $globalEntityUuid);
 
-            $globalEntityRecordUuid = $this->client->getEntityRecord($globalEntityUuid);
-            $this->assertEquals($globalEntityUuid, $globalEntityRecordUuid->getUuid());
-            $this->assertEquals('example.com', $globalEntityRecordUuid->getHost());
+            // Each is resolved by its UUID and by its SHA-256 identifier
+            foreach ([[$userEntityUuid, 'john123'], [$globalEntityUuid, null]] as [$entityUuid, $id])
+            {
+                foreach ([$entityUuid, Utilities::hashEntity($host, $id)] as $identifier)
+                {
+                    $record = $this->client->getEntityRecord($identifier);
+                    $this->assertEquals($entityUuid, $record->getUuid());
+                    $this->assertEquals($host, $record->getHost());
+                    $this->assertSame($id, $record->getId());
+                }
+            }
 
-            $globalEntityRecordHash = $this->client->getEntityRecord(Utilities::hashEntity('example.com'));
-            $this->assertEquals($globalEntityUuid, $globalEntityRecordHash->getUuid());
-            $this->assertEquals('example.com', $globalEntityRecordHash->getHost());
+            // Pushing an existing entity returns it
+            $this->assertEquals($userEntityUuid, $this->client->pushEntity($host, 'john123'));
+            $this->assertEquals($globalEntityUuid, $this->client->pushEntity($host));
 
-            $duplicateUserEntityUuid = $this->client->pushEntity('example.com', 'john123');
-            $this->assertEquals($userEntityUuid, $duplicateUserEntityUuid);
-            $duplicateGlobalEntityUuid = $this->client->pushEntity('example.com');
-            $this->assertEquals($globalEntityUuid, $duplicateGlobalEntityUuid);
-
-            $ipAddressEntityUuid = $this->client->pushEntity('127.0.0.1');
+            $ipAddressEntityUuid = $this->client->pushEntity('203.0.113.201');
             $this->createdEntities[] = $ipAddressEntityUuid;
-            $this->assertNotEmpty($ipAddressEntityUuid);
-
             $ipAddressEntityRecord = $this->client->getEntityRecord($ipAddressEntityUuid);
-            $this->assertNotNull($ipAddressEntityRecord);
-            $this->assertEquals($ipAddressEntityUuid, $ipAddressEntityRecord->getUuid());
-            $this->assertEquals('127.0.0.1', $ipAddressEntityRecord->getHost());
+            $this->assertEquals('203.0.113.201', $ipAddressEntityRecord->getHost());
             $this->assertNull($ipAddressEntityRecord->getId());
         }
 
@@ -291,12 +186,6 @@
             $this->client->pushEntity('invalid_domain@');
         }
 
-        public function testPushEntityMissingHost(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->pushEntity('');
-        }
-
         public function testUpdateEntity(): void
         {
             $uuid = $this->client->pushEntity('update-test.com', 'user1');
@@ -380,7 +269,7 @@
         {
             $this->expectException(RequestException::class);
             $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->updateEntity(Uuid::v7()->toRfc4122(), ['key' => 'value']);
+            $this->client->updateEntity($this->randomUuid(), ['key' => 'value']);
         }
 
         public function testUpdateEntityInvalidMetadata(): void
@@ -393,34 +282,41 @@
             $this->client->updateEntity($uuid, ['']);
         }
 
-        public function testUpdateEntityMissingIdentifier(): void
+        public function testClientValidatesArguments(): void
         {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->updateEntity('', ['key' => 'value']);
+            $calls = [
+                fn() => $this->client->pushEntity(''),
+                fn() => $this->client->pushEntity('', ''),
+                fn() => $this->client->pushEntity('', 'someid'),
+                fn() => $this->client->pushEntity('example.com', ''),
+                fn() => $this->client->updateEntity('', ['key' => 'value']),
+                fn() => $this->client->listEntities(page: -10000),
+                fn() => $this->client->listEntities(limit: -1),
+            ];
+
+            foreach ($calls as $index => $call)
+            {
+                try
+                {
+                    $call();
+                    $this->fail("Call $index should have been rejected before reaching the server");
+                }
+                catch (InvalidArgumentException)
+                {
+                    $this->addToAssertionCount(1);
+                }
+            }
         }
 
         public function testDeleteEntity(): void
         {
-            $entityUuid = $this->client->pushEntity('example.com', 'john123');
-            $this->createdEntities[] = $entityUuid;
-
-            $entityRecord = $this->client->getEntityRecord($entityUuid);
-            $this->assertEquals($entityUuid, $entityRecord->getUuid());
+            $entityUuid = $this->createSecurityEntity();
 
             $this->client->deleteEntity($entityUuid);
+            $this->removeFromCleanup($this->createdEntities, $entityUuid);
 
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->getEntityRecord($entityUuid);
-
-            array_pop($this->createdEntities);
-        }
-
-        public function testDeleteNonExistentEntity(): void
-        {
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->deleteEntity(Uuid::v7()->toRfc4122());
+            $this->expectRequestFailure(fn() => $this->client->getEntityRecord($entityUuid), [HttpResponseCode::NOT_FOUND->value]);
+            $this->expectRequestFailure(fn() => $this->client->deleteEntity($entityUuid), [HttpResponseCode::NOT_FOUND->value], 'An entity is not deleted twice');
         }
 
         public function testListEntities(): void
@@ -428,57 +324,21 @@
             $entityUuids = [];
             for ($i = 0; $i < 5; $i++)
             {
-                $entityUuid = $this->client->pushEntity('example.com', 'user' . $i);
-                $this->createdEntities[] = $entityUuid;
-                $entityUuids[] = $entityUuid;
+                $entityUuids[] = $this->createSecurityEntity();
             }
 
-            $fetchedUuids = [];
-            $page = 1;
-            do
-            {
-                $entitiesPage = $this->client->listEntities($page, 2);
-                foreach ($entitiesPage as $entity)
-                {
-                    $fetchedUuids[] = $entity->getUuid();
-                }
-                $page++;
-            } while (count($entitiesPage) > 0);
-
+            // The newest entities are listed first
+            $newest = array_map(fn(EntityRecord $entity) => $entity->getUuid(), $this->client->listEntities(1, 100, null, 'created', 'DESC'));
             foreach ($entityUuids as $pushedUuid)
             {
-                $this->assertContains($pushedUuid, $fetchedUuids);
+                $this->assertContains($pushedUuid, $newest);
             }
-        }
 
-        public function testListEntitiesInvalidPage(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listEntities(page: -10000);
-        }
-
-        public function testListEntitiesInvalidLimit(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listEntities(limit: -1);
-        }
-
-        public function testPushEmptyEntity(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->pushEntity('', '');
-        }
-
-        public function testPushEmptyEntityHost(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->pushEntity('', 'someid');
-        }
-
-        public function testPushEmptyEntityId(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->pushEntity('example.com', '');
+            $pageOne = array_map(fn(EntityRecord $entity) => $entity->getUuid(), $this->client->listEntities(1, 2));
+            $pageTwo = array_map(fn(EntityRecord $entity) => $entity->getUuid(), $this->client->listEntities(2, 2));
+            $this->assertCount(2, $pageOne);
+            $this->assertCount(2, $pageTwo);
+            $this->assertSame([], array_intersect($pageOne, $pageTwo));
         }
 
         public function testEntityCreationAndRetrievalConsistency(): void
@@ -644,8 +504,8 @@
         public function testEntityClearReputationRequiresExistingEntity(): void
         {
             $this->expectRequestFailure(
-                fn() => $this->client->clearEntityReputation('00000000-0000-0000-0000-000000000000'),
-                [HttpResponseCode::NOT_FOUND->value, HttpResponseCode::BAD_REQUEST->value],
+                fn() => $this->client->clearEntityReputation($this->randomUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
                 'Clearing reputation for non-existent entity should fail'
             );
 
@@ -709,50 +569,14 @@
         }
 
         /**
-         * Determines whether the server hides entity metadata from unauthenticated users by
-         * probing the anonymous response of the given entity record.
-         *
-         * @param string $entityUuid The UUID of the entity to probe
-         * @return bool True if the server nulls the metadata for anonymous users, false otherwise
+         * Asserts the default visibility of the test environment, which the metadata tests rely on: entities are public,
+         * their metadata is only disclosed to authenticated operators (OFD "Entity Metadata")
          */
-        private function isEntityMetadataHidden(string $entityUuid): bool
+        private function assertDefaultVisibility(): void
         {
-            [$code, $body] = $this->rawRequest('GET', 'entities/' . $entityUuid);
-            if ($code !== 200)
-            {
-                return false;
-            }
-
-            $data = json_decode($body, true);
-            return is_array($data) && array_key_exists('metadata', $data) && $data['metadata'] === null;
-        }
-
-        /**
-         * Skips the test unless the server hides entity metadata from unauthenticated users.
-         *
-         * @param string $entityUuid The UUID of the entity to probe
-         * @return void
-         */
-        private function requireHiddenEntityMetadata(string $entityUuid): void
-        {
-            if (!$this->isEntityMetadataHidden($entityUuid))
-            {
-                $this->markTestSkipped('Server is configured to expose entity metadata to unauthenticated users');
-            }
-        }
-
-        /**
-         * Skips the test unless the server exposes entity metadata to unauthenticated users.
-         *
-         * @param string $entityUuid The UUID of the entity to probe
-         * @return void
-         */
-        private function requirePublicEntityMetadata(string $entityUuid): void
-        {
-            if ($this->isEntityMetadataHidden($entityUuid))
-            {
-                $this->markTestSkipped('Server is configured to hide entity metadata from unauthenticated users');
-            }
+            $information = $this->client->getServerInformation();
+            $this->assertTrue($information->isPublicEntities(), 'The test environment must expose entities publicly');
+            $this->assertFalse($information->isPublicEntityMetadata(), 'The test environment must hide entity metadata from unauthenticated requests');
         }
 
         public function testAuthenticatedGetEntityRecordIncludesMetadata(): void
@@ -771,13 +595,9 @@
 
         public function testAnonymousGetEntityRecordOmitsMetadata(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $entity = $this->createEntityWithMetadata('user_anon_get');
-            $this->requireHiddenEntityMetadata($entity['uuid']);
 
             [$code, $body] = $this->rawRequest('GET', 'entities/' . $entity['uuid']);
             $this->assertEquals(200, $code);
@@ -811,13 +631,9 @@
 
         public function testAnonymousListEntitiesOmitsMetadata(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $entity = $this->createEntityWithMetadata('user_anon_list');
-            $this->requireHiddenEntityMetadata($entity['uuid']);
 
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
             $found = false;
@@ -867,23 +683,12 @@
 
         public function testAnonymousSearchEntitiesOmitsMetadata(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $entity = $this->createEntityWithMetadata('user_anon_search');
-            $this->requireHiddenEntityMetadata($entity['uuid']);
 
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
-            try
-            {
-                $results = $anonymousClient->searchEntities($entity['host'], 1, 10);
-            }
-            catch (RequestException $e)
-            {
-                $this->markTestSkipped('Anonymous entity search is not available: ' . $e->getMessage());
-            }
+            $results = $anonymousClient->searchEntities($entity['host'], 1, 10);
 
             foreach ($results as $record)
             {
@@ -899,10 +704,7 @@
 
         public function testGlobalSearchEntityResultsIncludeMetadataForAuthenticatedClient(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $entity = $this->createEntityWithMetadata('user_global_search');
 
@@ -926,10 +728,7 @@
 
         public function testAnonymousTopThreatsOmitMetadata(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $this->createEntityWithMetadata();
             $this->createEntityWithMetadata();
@@ -940,10 +739,7 @@
 
             foreach ($topThreats as $threat)
             {
-                if ($this->isEntityMetadataHidden($threat->getUuid()))
-                {
-                    $this->assertNull($threat->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
-                }
+                $this->assertNull($threat->getMetadata(), 'Entity metadata must be nulled out for unauthenticated users');
             }
         }
 
@@ -971,23 +767,13 @@
 
         public function testAnonymousScanContentOmitsResolvedEntityMetadata(): void
         {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Server does not expose entities publicly');
-            }
+            $this->assertDefaultVisibility();
 
             $entity = $this->createEntityWithMetadata();
-            $this->requireHiddenEntityMetadata($entity['uuid']);
 
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
-            try
-            {
-                $scanned = $anonymousClient->scanContent('Check out ' . $entity['host'] . ' for details.');
-            }
-            catch (RequestException $e)
-            {
-                $this->markTestSkipped('Anonymous content scanning is not available: ' . $e->getMessage());
-            }
+            // Content scanning is public by default
+            $scanned = $anonymousClient->scanContent('Check out ' . $entity['host'] . ' for details.');
 
             $this->assertNotNull($scanned);
             $this->assertNotEmpty($scanned->getResolvedEntities());

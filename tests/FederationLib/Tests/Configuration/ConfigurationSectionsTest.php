@@ -156,6 +156,48 @@
             $this->assertSame(ScanningRules::NAMED_ENTITY_BLACKLISTED->getModifier(), $scanning->getModifierNamedEntityBlacklisted());
         }
 
+        public function testEveryScanningRuleModifierCanBeConfigured(): void
+        {
+            $getters = [
+                'getModifierAuthorBlacklisted' => ScanningRules::AUTHOR_BLACKLISTED,
+                'getModifierAuthorPermanentlyBlacklisted' => ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED,
+                'getModifierAuthorWhitelisted' => ScanningRules::AUTHOR_WHITELISTED,
+                'getModifierAuthorGoodReputation' => ScanningRules::AUTHOR_GOOD_REPUTATION,
+                'getModifierAuthorBadReputation' => ScanningRules::AUTHOR_BAD_REPUTATION,
+                'getModifierAuthorParentBlacklisted' => ScanningRules::AUTHOR_PARENT_BLACKLISTED,
+                'getModifierAuthorParentPermanentlyBlacklisted' => ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED,
+                'getModifierAuthorParentWhitelisted' => ScanningRules::AUTHOR_PARENT_WHITELISTED,
+                'getModifierAuthorParentGoodReputation' => ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION,
+                'getModifierAuthorParentBadReputation' => ScanningRules::AUTHOR_PARENT_BAD_REPUTATION,
+                'getModifierNamedEntityBlacklisted' => ScanningRules::NAMED_ENTITY_BLACKLISTED,
+                'getModifierNamedEntityPermanentlyBlacklisted' => ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED,
+                'getModifierNamedEntityWhitelisted' => ScanningRules::NAMED_ENTITY_WHITELISTED,
+                'getModifierNamedEntityGoodReputation' => ScanningRules::NAMED_ENTITY_GOOD_REPUTATION,
+                'getModifierNamedEntityBadReputation' => ScanningRules::NAMED_ENTITY_BAD_REPUTATION,
+                'getModifierNamedEntityParentBlacklisted' => ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED,
+                'getModifierNamedEntityParentPermanentlyBlacklisted' => ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED,
+                'getModifierNamedEntityParentWhitelisted' => ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED,
+                'getModifierNamedEntityParentGoodReputation' => ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION,
+                'getModifierNamedEntityParentBadReputation' => ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION,
+                'getModifierClassificationNormal' => ScanningRules::CLASSIFICATION_NORMAL,
+                'getModifierClassificationSuspicious' => ScanningRules::CLASSIFICATION_SUSPICIOUS,
+                'getModifierClassificationMalicious' => ScanningRules::CLASSIFICATION_MALICIOUS,
+            ];
+
+            // A distinct value for every rule, so that a getter reading another rule's modifier is caught
+            $modifiers = [];
+            foreach(array_values($getters) as $index => $rule)
+            {
+                $modifiers[$rule->name] = 1.5 + $index;
+            }
+
+            $scanning = new ScanningConfiguration(['modifiers' => $modifiers]);
+            foreach($getters as $getter => $rule)
+            {
+                $this->assertSame($modifiers[$rule->name], $scanning->$getter(), "$getter must use the modifier of " . $rule->name);
+            }
+        }
+
         public function testScanningReputationClamps(): void
         {
             $scanning = new ScanningConfiguration([

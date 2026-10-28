@@ -4,107 +4,12 @@
 
     use FederationLib\Enums\EntityRelationshipType;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
 
-    class EntitiesSecurityTest extends TestCase
+    class EntitiesSecurityTest extends ServerTestCase
     {
-        use TestHelpers;
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityId)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityId);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityId: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
         public function testSecurityUpdateEntityRequiresClientPermissions(): void
         {
             $entityUuid = $this->createSecurityEntity();
@@ -146,10 +51,10 @@
             $recordB = $this->client->getEntityRecord($entityB);
             $this->assertEquals($entityA, $recordB->getRelationshipEntity());
 
-            // Relationship to a non-existent target must fail (the server currently maps this to 400).
+            // A relationship to a non-existent target references no record (OFD "Error Responses")
             $this->expectRequestFailure(
                 fn() => $this->client->setEntityRelationship($entityA, $this->randomUuid(), EntityRelationshipType::ALTERNATIVE),
-                [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
+                [HttpResponseCode::NOT_FOUND->value],
                 'Relationship to non-existent target should fail'
             );
 
@@ -285,16 +190,8 @@
             $entityUuid = $this->createSecurityEntity();
             $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
 
-            try
-            {
-                $anonymousClient->setEntityWhitelist($entityUuid, true);
-                $this->fail('Expected RequestException for anonymous setWhitelist');
-            }
-            catch (RequestException $e)
-            {
-                $this->assertContains($e->getCode(), [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
-                    'Anonymous request should be rejected');
-            }
+            $this->expectRequestFailure(fn() => $anonymousClient->setEntityWhitelist($entityUuid, true), [HttpResponseCode::UNAUTHORIZED->value], 'Anonymous request should be rejected');
+            $this->assertFalse($this->client->getEntityRecord($entityUuid)->isWhitelisted());
         }
 
         public function testSecuritySetWhitelistNonExistentEntity(): void
@@ -308,30 +205,15 @@
 
         public function testSecuritySetWhitelistInvalidIdentifier(): void
         {
-            $invalidIdentifiers = [
-                '',
-                'not-a-valid-identifier',
-                'short',
-                '12345',
-            ];
-
-            foreach ($invalidIdentifiers as $identifier)
+            // A malformed identifier is a client error, a well-formed entity address of no entity is not found
+            foreach (['Not_A_Valid_Identifier', 'Example.COM'] as $identifier)
             {
-                try
-                {
-                    $this->client->setEntityWhitelist($identifier, true);
-                    $this->fail("Expected RequestException for invalid identifier: $identifier");
-                }
-                catch (InvalidArgumentException)
-                {
-                    // Client-side validation rejected it — acceptable.
-                }
-                catch (RequestException $e)
-                {
-                    $this->assertContains($e->getCode(), [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value],
-                        "Invalid identifier '$identifier' should trigger 400 or 404, got {$e->getCode()}");
-                }
+                $this->expectRequestFailure(fn() => $this->client->setEntityWhitelist($identifier, true), [HttpResponseCode::BAD_REQUEST->value], "Malformed identifier $identifier should be rejected");
             }
+            $this->expectRequestFailure(fn() => $this->client->setEntityWhitelist($this->uniqueHost('unregistered'), true), [HttpResponseCode::NOT_FOUND->value], 'An unregistered entity address should not be found');
+
+            $this->expectException(InvalidArgumentException::class);
+            $this->client->setEntityWhitelist('', true);
         }
 
         public function testSecuritySetWhitelistMissingParameter(): void
@@ -381,129 +263,32 @@
             $this->assertTrue($record->isWhitelisted());
         }
 
-        public function testGetEntityAsAnonymousClient(): void
+        public function testEntitiesArePublicButOnlyClientsPushThem(): void
         {
-            $entityUuid = $this->client->pushEntity('example.com', 'john123');
+            $this->assertTrue($this->client->getServerInformation()->isPublicEntities(), 'The test environment must expose entities publicly');
+            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+
+            $host = $this->uniqueHost('anonymous');
+            $entityUuid = $this->client->pushEntity($host, 'john123');
             $this->createdEntities[] = $entityUuid;
 
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Skipping because server is configured to keep entities private from anonymous users');
-            }
-
-            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
             $entityRecord = $anonymousClient->getEntityRecord($entityUuid);
             $this->assertEquals($entityUuid, $entityRecord->getUuid());
             $this->assertEquals('john123', $entityRecord->getId());
-            $this->assertEquals('example.com', $entityRecord->getHost());
-        }
+            $this->assertEquals($host, $entityRecord->getHost());
 
-        public function testPushEntityAsAnonymousClient(): void
-        {
-            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $listed = array_map(fn($entity) => $entity->getUuid(), $anonymousClient->listEntities(1, 100, null, 'created', 'DESC'));
+            $this->assertContains($entityUuid, $listed);
 
-            try
-            {
-                $anonymousClient->pushEntity('example.com', 'john123');
-                $this->fail('Expected RequestException for unauthenticated pushEntity');
-            }
-            catch (RequestException $e)
-            {
-                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
-            }
-        }
+            $blacklistedUuid = $this->createSecurityEntity();
+            $this->createSecurityBlacklist($blacklistedUuid);
+            $this->assertContains($blacklistedUuid, array_map(fn($entity) => $entity->getUuid(), $anonymousClient->getTopThreats(100)));
 
-        public function testListEntitiesAsAnonymousClient(): void
-        {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Skipping because server is configured to keep entities private from anonymous users');
-            }
-
-            $entityUuids = [];
-            for ($i = 0; $i < 5; $i++)
-            {
-                $entityUuid = $this->client->pushEntity('example.com', 'user' . $i);
-                $this->createdEntities[] = $entityUuid;
-                $entityUuids[] = $entityUuid;
-            }
-
-            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
-            $fetchedUuids = [];
-            $page = 1;
-
-            do
-            {
-                $entitiesPage = $anonymousClient->listEntities($page, 2);
-                foreach ($entitiesPage as $entity)
-                {
-                    $fetchedUuids[] = $entity->getUuid();
-                }
-                $page++;
-            } while (count($entitiesPage) > 0);
-
-            foreach ($entityUuids as $pushedUuid)
-            {
-                $this->assertContains($pushedUuid, $fetchedUuids);
-            }
-        }
-
-        public function testGetTopThreatsAsAnonymousClient(): void
-        {
-            if (!$this->client->getServerInformation()->isPublicEntities())
-            {
-                $this->markTestSkipped('Skipping because server is configured to keep entities private from anonymous users');
-            }
-
-            for ($i = 0; $i < 3; $i++)
-            {
-                $uuid = $this->client->pushEntity("top-threats-anon-$i.com", "anon_$i");
-                $this->createdEntities[] = $uuid;
-            }
-
-            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
-            $topThreats = $anonymousClient->getTopThreats();
-
-            $this->assertIsArray($topThreats);
-            $this->assertNotEmpty($topThreats);
-
-            foreach ($topThreats as $threat)
-            {
-                $this->assertInstanceOf(\FederationLib\Objects\EntityRecord::class, $threat);
-                $this->assertNotEmpty($threat->getUuid());
-            }
-        }
-
-        public function testCrossOperatorEntityIsolation(): void
-        {
-            $operatorA = $this->createLimitedOperator('entity_owner_a', client: true);
-            $operatorB = $this->createLimitedOperator('entity_owner_b', client: true);
-
-            $entityA = $operatorA->pushEntity('operator-a-private.com', 'user_a');
-            $this->createdEntities[] = $entityA;
-
-            $entityB = $operatorB->pushEntity('operator-b-private.com', 'user_b');
-            $this->createdEntities[] = $entityB;
-
-            // Operator B can retrieve entity A if entities are public; otherwise it needs any valid token.
-            $recordByB = $operatorB->getEntityRecord($entityA);
-            $this->assertEquals($entityA, $recordByB->getUuid());
-
-            // Anonymous client follows public-entities setting.
-            $anonymousClient = new FederationClient(getenv('SERVER_ENDPOINT'));
-            if ($this->client->getServerInformation()->isPublicEntities())
-            {
-                $anonymousRecord = $anonymousClient->getEntityRecord($entityA);
-                $this->assertEquals($entityA, $anonymousRecord->getUuid());
-            }
-            else
-            {
-                $this->expectRequestFailure(
-                    fn() => $anonymousClient->getEntityRecord($entityA),
-                    [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
-                    'Anonymous access should respect public_entities setting'
-                );
-            }
+            $this->expectRequestFailure(
+                fn() => $anonymousClient->pushEntity($this->uniqueHost('anonymous-push'), 'john123'),
+                [HttpResponseCode::UNAUTHORIZED->value],
+                'An anonymous client should not push entities'
+            );
         }
 
         public function testQueryEntityIsPublicByDefaultAndExcludesSelfReferences(): void

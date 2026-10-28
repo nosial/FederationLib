@@ -2,169 +2,28 @@
 
     namespace FederationLib\Tests\ContentScan;
 
-    use FederationLib\Classes\Configuration\ScanningConfiguration;
     use FederationLib\Classes\Utilities;
-    use FederationLib\Enums\ClassificationFlag;
-    use FederationLib\Enums\EntityRelationshipType;
-    use FederationLib\Enums\IncidentType;
-    use FederationLib\Enums\ScanningRules;
-    use FederationLib\Exceptions\RequestException;
-    use FederationLib\FederationClient;
-    use FederationLib\Helpers\TextGenerator;
-    use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\ContentInput;
-    use FederationLib\Objects\ScannedContent\ContentClassification;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
 
-    class ContentScanTest extends TestCase
+    class ContentScanTest extends ServerTestCase
     {
         private const string BENIGN_SAMPLE_TEXT = 'This is a simple, benign message used for scanning tests.';
 
-        private FederationClient $client;
-        private array $createdEntities = [];
-        private array $createdOperators = [];
-        private array $createdReports = [];
-        private array $createdEvidenceRecords = [];
-
-        private static ?FederationClient $trainingClient = null;
-        private static ?string $trainingEntityUuid = null;
-        private static array $createdTrainingReports = [];
-        private static array $createdTrainingEvidence = [];
-
-        public static function setUpBeforeClass(): void
-        {
-            self::$trainingClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-            self::$trainingEntityUuid = self::$trainingClient->pushEntity('scan-training.com', 'scan_training');
-
-            foreach (TextGenerator::trainingSet() as $sample)
-            {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
-                $reportUuid = $submission->getReport()->getUuid();
-                self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
-                self::$trainingClient->assignOperatorToReport($reportUuid, self::$trainingClient->getSelf()->getUuid());
-                self::$trainingClient->closeReport($reportUuid, $sample['flag']);
-            }
-
-            sleep(3);
-        }
-
-        public static function tearDownAfterClass(): void
-        {
-            foreach (self::$createdTrainingReports as $reportUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach (self::$createdTrainingEvidence as $evidenceUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training evidence $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            if (self::$trainingEntityUuid !== null)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEntity(self::$trainingEntityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training entity " . self::$trainingEntityUuid . ": " . $e->getMessage());
-                }
-            }
-
-            self::$trainingClient = null;
-            self::$trainingEntityUuid = null;
-            self::$createdTrainingReports = [];
-            self::$createdTrainingEvidence = [];
-        }
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdEntities = [];
-            $this->createdOperators = [];
-            $this->createdReports = [];
-            $this->createdEvidenceRecords = [];
-        }
-
         public function testScanContentBasic(): void
         {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT);
+            // Content may be given as a string or as a ContentInput, both scan the same text content
+            foreach ([self::BENIGN_SAMPLE_TEXT, new ContentInput(self::BENIGN_SAMPLE_TEXT)] as $evidence)
+            {
+                $scanned = $this->client->scanContent($evidence);
 
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertNull($scanned->getAuthorEntity());
-            $this->assertIsFloat($scanned->getRiskScore());
-            $this->assertGreaterThanOrEqual(0.0, $scanned->getRiskScore());
-            $this->assertIsArray($scanned->getScanResults());
+                $this->assertSame([], $scanned->getResolvedEntities());
+                $this->assertNull($scanned->getAuthorEntity());
+                $this->assertGreaterThanOrEqual(0.0, $scanned->getRiskScore());
+                $this->assertLessThanOrEqual(100.0, $scanned->getRiskScore());
+                $this->assertNotEmpty($scanned->getScanResults());
+            }
         }
 
         public function testScanContentEmptyContent(): void
@@ -230,164 +89,6 @@
             $this->assertNull($scanned->getAuthorEntity());
         }
 
-        public function testScanContentResolvesDomain(): void
-        {
-            $host = 'scan-domain.com';
-            $entityUuid = $this->client->pushEntity($host);
-            $this->createdEntities[] = $entityUuid;
-
-            $text = "Check out $host for more information. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(1, count($scanned->getResolvedEntities()), 'Expected at least one resolved entity for the domain');
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the pushed domain to be resolved from the content');
-        }
-
-        public function testScanContentResolvesUrl(): void
-        {
-            $host = 'scan-url.com';
-            $entityUuid = $this->client->pushEntity($host);
-            $this->createdEntities[] = $entityUuid;
-
-            $text = "Visit https://$host/path?q=test for details. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(1, count($scanned->getResolvedEntities()), 'Expected at least one resolved entity for the URL');
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the pushed domain to be resolved from the URL');
-        }
-
-        public function testScanContentResolvesEmail(): void
-        {
-            $host = 'scan-email.com';
-            $id = 'scan_email_user';
-            $entityUuid = $this->client->pushEntity($host, $id);
-            $this->createdEntities[] = $entityUuid;
-
-            $email = $id . '@' . $host;
-            $text = "Contact me at $email for more info. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(1, count($scanned->getResolvedEntities()), 'Expected at least one resolved entity for the email');
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the pushed email entity to be resolved from the content');
-        }
-
-        public function testScanContentResolvesIpv4(): void
-        {
-            $ip = '192.168.55.42';
-            $entityUuid = $this->client->pushEntity($ip);
-            $this->createdEntities[] = $entityUuid;
-
-            $text = "Server is located at $ip today. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(1, count($scanned->getResolvedEntities()), 'Expected at least one resolved entity for the IPv4 address');
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the pushed IPv4 entity to be resolved from the content');
-        }
-
-        public function testScanContentResolvesIpv6(): void
-        {
-            // OFD requires the lowercase compressed form of an IPv6 entity host
-            $ip = '2001:db8:85a3::8a2e:370:7334';
-            $entityUuid = $this->client->pushEntity($ip);
-            $this->createdEntities[] = $entityUuid;
-
-            $text = "The server address is $ip please note it. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(1, count($scanned->getResolvedEntities()), 'Expected at least one resolved entity for the IPv6 address');
-
-            $found = false;
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                if ($resolvedEntity->getEntity()->getUuid() === $entityUuid)
-                {
-                    $found = true;
-                    break;
-                }
-            }
-            $this->assertTrue($found, 'Expected the pushed IPv6 entity to be resolved from the content');
-        }
-
-        public function testScanContentResolvesMultipleEntities(): void
-        {
-            $domainHost = 'scan-multi-domain.com';
-            $emailHost = 'scan-multi-email.com';
-            $emailId = 'multi_user';
-            $ip = '203.0.113.10';
-
-            $domainUuid = $this->client->pushEntity($domainHost);
-            $emailUuid = $this->client->pushEntity($emailHost, $emailId);
-            $ipUuid = $this->client->pushEntity($ip);
-
-            $this->createdEntities[] = $domainUuid;
-            $this->createdEntities[] = $emailUuid;
-            $this->createdEntities[] = $ipUuid;
-
-            $text = sprintf(
-                "Visit %s and contact %s@%s or %s for details. %s",
-                $domainHost,
-                $emailId,
-                $emailHost,
-                $ip,
-                self::BENIGN_SAMPLE_TEXT
-            );
-
-            $scanned = $this->client->scanContent($text);
-
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(3, count($scanned->getResolvedEntities()), 'Expected at least three resolved entities');
-
-            $resolvedUuids = array_map(fn($entity) => $entity->getEntity()->getUuid(), $scanned->getResolvedEntities());
-            $this->assertContains($domainUuid, $resolvedUuids);
-            $this->assertContains($emailUuid, $resolvedUuids);
-            $this->assertContains($ipUuid, $resolvedUuids);
-        }
-
         public function testScanContentEntityPositions(): void
         {
             $host = 'scan-position.com';
@@ -407,138 +108,33 @@
             $this->assertEquals(strlen($host), $position->getLength());
         }
 
-        public function testScanContentWithTopK(): void
+        public function testScanContentRejectsInvalidTopKAndThreshold(): void
         {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, null, 1);
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertIsFloat($scanned->getRiskScore());
-        }
-
-        public function testScanContentWithThreshold(): void
-        {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, null, null, 0.5);
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertIsFloat($scanned->getRiskScore());
-        }
-
-        public function testScanContentWithTopKAndThreshold(): void
-        {
-            $scanned = $this->client->scanContent(self::BENIGN_SAMPLE_TEXT, null, 2, 0.25);
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertIsFloat($scanned->getRiskScore());
-        }
-
-        public function testScanContentWithMetadata(): void
-        {
-            $metadata = ['source' => 'ContentScanTest', 'batch_id' => uniqid('scan_')];
-
-            $scanned = $this->client->scanContent(
-                new ContentInput(self::BENIGN_SAMPLE_TEXT, null, null, false, $metadata)
-            );
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-        }
-
-        public function testScanContentWithSingleContentInput(): void
-        {
-            $scanned = $this->client->scanContent(new ContentInput(self::BENIGN_SAMPLE_TEXT));
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertIsFloat($scanned->getRiskScore());
-        }
-
-        public function testScanContentWithMultipleEvidence(): void
-        {
-            $evidence = [
-                new ContentInput(self::BENIGN_SAMPLE_TEXT),
-                new ContentInput('Another benign message for scanning.'),
-                new ContentInput('A third message that is also benign.'),
+            // top_k and threshold are handed to the plugins that classify the content (see PluginRequestsTest), the
+            // server only validates them
+            $invalid = [
+                ['top_k' => 'two'],
+                ['top_k' => 1.5],
+                ['threshold' => 'high'],
+                ['threshold' => true],
             ];
 
-            $scanned = $this->client->scanContent($evidence);
-
-            $this->assertNotNull($scanned);
-            $this->assertIsArray($scanned->getResolvedEntities());
-            $this->assertIsFloat($scanned->getRiskScore());
-
-            $classification = $scanned->getClassification();
-            if ($classification !== null)
+            foreach ($invalid as $parameters)
             {
-                $this->assertInstanceOf(ContentClassification::class, $classification);
+                [$code, $body] = $this->jsonRequest('POST', '/scan', $this->rootToken(), ['evidence' => ['text_content' => self::BENIGN_SAMPLE_TEXT]] + $parameters);
+                $this->assertSame(400, $code, json_encode($parameters) . ' should be rejected: ' . json_encode($body));
             }
-            else
-            {
-                $this->addToAssertionCount(1);
-            }
+
+            [$code, $body] = $this->jsonRequest('POST', '/scan', $this->rootToken(), ['evidence' => ['text_content' => self::BENIGN_SAMPLE_TEXT], 'top_k' => '2', 'threshold' => '0.25']);
+            $this->assertSame(200, $code, 'Numeric strings should be accepted: ' . json_encode($body));
         }
 
         public function testScanContentDoesNotResolveUnknownEntities(): void
         {
             $unknownHost = 'unknown-domain-' . uniqid() . '.test';
-            $text = "Visit $unknownHost for details. " . self::BENIGN_SAMPLE_TEXT;
-            $scanned = $this->client->scanContent($text);
+            $scanned = $this->client->scanContent("Visit $unknownHost for details. " . self::BENIGN_SAMPLE_TEXT);
 
-            $this->assertNotNull($scanned);
-
-            foreach ($scanned->getResolvedEntities() as $resolvedEntity)
-            {
-                $this->assertNotEquals($unknownHost, $resolvedEntity->getEntity()->getHost(), 'Unknown domain should not be resolved as an entity');
-            }
-        }
-
-        public function testEveryScanningRuleModifierCanBeConfigured(): void
-        {
-            $rules = [
-                'author_blacklisted' => ['getModifierAuthorBlacklisted', ScanningRules::AUTHOR_BLACKLISTED],
-                'author_permanently_blacklisted' => ['getModifierAuthorPermanentlyBlacklisted', ScanningRules::AUTHOR_PERMANENTLY_BLACKLISTED],
-                'author_whitelisted' => ['getModifierAuthorWhitelisted', ScanningRules::AUTHOR_WHITELISTED],
-                'author_good_reputation' => ['getModifierAuthorGoodReputation', ScanningRules::AUTHOR_GOOD_REPUTATION],
-                'author_bad_reputation' => ['getModifierAuthorBadReputation', ScanningRules::AUTHOR_BAD_REPUTATION],
-                'author_parent_blacklisted' => ['getModifierAuthorParentBlacklisted', ScanningRules::AUTHOR_PARENT_BLACKLISTED],
-                'author_parent_permanently_blacklisted' => ['getModifierAuthorParentPermanentlyBlacklisted', ScanningRules::AUTHOR_PARENT_PERMANENTLY_BLACKLISTED],
-                'author_parent_whitelisted' => ['getModifierAuthorParentWhitelisted', ScanningRules::AUTHOR_PARENT_WHITELISTED],
-                'author_parent_good_reputation' => ['getModifierAuthorParentGoodReputation', ScanningRules::AUTHOR_PARENT_GOOD_REPUTATION],
-                'author_parent_bad_reputation' => ['getModifierAuthorParentBadReputation', ScanningRules::AUTHOR_PARENT_BAD_REPUTATION],
-                'named_entity_blacklisted' => ['getModifierNamedEntityBlacklisted', ScanningRules::NAMED_ENTITY_BLACKLISTED],
-                'named_entity_permanently_blacklisted' => ['getModifierNamedEntityPermanentlyBlacklisted', ScanningRules::NAMED_ENTITY_PERMANENTLY_BLACKLISTED],
-                'named_entity_whitelisted' => ['getModifierNamedEntityWhitelisted', ScanningRules::NAMED_ENTITY_WHITELISTED],
-                'named_entity_good_reputation' => ['getModifierNamedEntityGoodReputation', ScanningRules::NAMED_ENTITY_GOOD_REPUTATION],
-                'named_entity_bad_reputation' => ['getModifierNamedEntityBadReputation', ScanningRules::NAMED_ENTITY_BAD_REPUTATION],
-                'named_entity_parent_blacklisted' => ['getModifierNamedEntityParentBlacklisted', ScanningRules::NAMED_ENTITY_PARENT_BLACKLISTED],
-                'named_entity_parent_permanently_blacklisted' => ['getModifierNamedEntityParentPermanentlyBlacklisted', ScanningRules::NAMED_ENTITY_PARENT_PERMANENTLY_BLACKLISTED],
-                'named_entity_parent_whitelisted' => ['getModifierNamedEntityParentWhitelisted', ScanningRules::NAMED_ENTITY_PARENT_WHITELISTED],
-                'named_entity_parent_good_reputation' => ['getModifierNamedEntityParentGoodReputation', ScanningRules::NAMED_ENTITY_PARENT_GOOD_REPUTATION],
-                'named_entity_parent_bad_reputation' => ['getModifierNamedEntityParentBadReputation', ScanningRules::NAMED_ENTITY_PARENT_BAD_REPUTATION],
-                'classification_normal' => ['getModifierClassificationNormal', ScanningRules::CLASSIFICATION_NORMAL],
-                'classification_suspicious' => ['getModifierClassificationSuspicious', ScanningRules::CLASSIFICATION_SUSPICIOUS],
-                'classification_malicious' => ['getModifierClassificationMalicious', ScanningRules::CLASSIFICATION_MALICIOUS],
-            ];
-
-            $values = [];
-            $expectedValues = [];
-            $value = 1.5;
-            // The points of every rule are overridden through the combined scanning.modifiers setting, keyed by rule name
-            foreach($rules as $key => [$getter, $rule])
-            {
-                $this->assertSame(strtoupper($key), $rule->name);
-                $values[$rule->name] = $value;
-                $expectedValues[$getter] = $value;
-                $value += 1.0;
-            }
-
-            $configuration = new ScanningConfiguration(['modifiers' => $values]);
-            foreach($expectedValues as $getter => $expectedValue)
-            {
-                $this->assertSame($expectedValue, $configuration->$getter(), "$getter must use its configured modifier");
-            }
+            $this->assertSame([], $scanned->getResolvedEntities(), 'A host without an entity should not be resolved');
         }
 
         public function testScanContentEntityPositionsForUrlEmailAndIps(): void
@@ -569,9 +165,7 @@
 
             $scanned = $this->client->scanContent($text);
 
-            $this->assertNotNull($scanned);
-            $this->assertGreaterThanOrEqual(4, count($scanned->getResolvedEntities()));
-
+            // The domain of a URL, an email address and IPv4 and IPv6 addresses are each resolved where they appear
             $expected = [
                 $domainUuid => strlen($urlPrefix),
                 $emailUuid => strlen($urlPrefix . $url . $emailPrefix),
@@ -579,25 +173,16 @@
                 $ipv6Uuid => strlen($urlPrefix . $url . $emailPrefix . $email . $ipv4Prefix . $ipv4 . $ipv6Prefix),
             ];
 
+            $offsets = [];
             foreach ($scanned->getResolvedEntities() as $resolvedEntity)
             {
-                $uuid = $resolvedEntity->getEntity()->getUuid();
                 $position = $resolvedEntity->getEntityPosition();
-                $this->assertNotNull($position, "Expected position for resolved entity $uuid");
-                $this->assertArrayHasKey($uuid, $expected, 'Unexpected resolved entity');
-                $this->assertEquals($expected[$uuid], $position->getOffset(), "Wrong offset for entity $uuid");
+                $this->assertNotNull($position, 'Expected a position for resolved entity ' . $resolvedEntity->getEntity()->getUuid());
+                $offsets[$resolvedEntity->getEntity()->getUuid()] = $position->getOffset();
             }
-        }
 
-        public function testGetSpecification(): void
-        {
-            $spec = $this->client->getSpecification();
-            $this->assertNotNull($spec);
-            $this->assertIsArray($spec);
-            $this->assertArrayHasKey('openapi', $spec);
-            $this->assertArrayHasKey('info', $spec);
-            $this->assertArrayHasKey('paths', $spec);
-            $this->assertArrayHasKey('/scan', $spec['paths']);
+            ksort($expected);
+            ksort($offsets);
+            $this->assertSame($expected, $offsets);
         }
-
     }

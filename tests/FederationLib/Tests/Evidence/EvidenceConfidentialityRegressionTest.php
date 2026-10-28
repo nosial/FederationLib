@@ -1,142 +1,133 @@
 <?php
 
-namespace FederationLib\Tests\Evidence;
+    namespace FederationLib\Tests\Evidence;
 
-use FederationLib\Enums\IncidentType;
-use FederationLib\FederationClient;
-use FederationLib\Helpers\TestHelpers;
-use FederationLib\Objects\ContentInput;
-use PHPUnit\Framework\TestCase;
+    use FederationLib\Enums\HttpResponseCode;
+    use FederationLib\Enums\IncidentType;
+    use FederationLib\FederationClient;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\ContentInput;
 
-/**
- * Exercises the installed server and its real managers through HTTP, including competing requests.
- * No extracted SQL, replacement schemas, Python runtime, or separately named Docker container.
- */
-class EvidenceConfidentialityRegressionTest extends TestCase
-{
-    use TestHelpers;
-
-    private FederationClient $client;
-    private FederationClient $limitedClient;
-    private array $createdOperators = [];
-    private array $createdEntities = [];
-    private array $createdEvidenceRecords = [];
-    private array $createdBlacklistRecords = [];
-    private array $createdReports = [];
-    private array $tempFiles = [];
-
-    protected function setUp(): void
+    /**
+     * Regression tests of the confidentiality of evidence linked to ILLEGAL_CONTENT reports (always confidential), through
+     * the server's HTTP interface, including competing requests
+     */
+    class EvidenceConfidentialityRegressionTest extends ServerTestCase
     {
-        $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        self::assertTrue($this->client->getServerInformation()->isAllowIllegalContent(),
-            'The integration environment must enable FEDERATION_ALLOW_ILLEGAL_CONTENT.');
-        $this->limitedClient = $this->createLimitedOperator('confidentiality', client: true);
-    }
+        private FederationClient $limitedClient;
 
-    protected function tearDown(): void
-    {
-        $this->cleanupRecords();
-    }
-
-    private function report(string $entity, IncidentType $type): string
-    {
-        $submission = $this->client->submitReport($entity,
-            new ContentInput('Synthetic confidentiality regression fixture'), $type);
-        $uuid = $submission->getReport()->getUuid();
-        $this->createdReports[] = $uuid;
-        foreach($submission->getEvidence() as $evidence)
+        protected function setUp(): void
         {
-            $this->createdEvidenceRecords[] = $evidence->getUuid();
+            parent::setUp();
+
+            $this->assertTrue($this->client->getServerInformation()->isAllowIllegalContent(), 'The test environment must enable FEDERATION_ALLOW_ILLEGAL_CONTENT');
+            $this->limitedClient = $this->createLimitedOperator('confidentiality', client: true);
         }
-        return $uuid;
-    }
 
-    private function assertProtected(string $evidence, string $report): void
-    {
-        // A new client performs a separate read after the writes have completed.
-        $reader = new FederationClient(getenv('SERVER_ENDPOINT'), $this->rootToken());
-        $record = $reader->getEvidenceRecord($evidence);
-        self::assertSame($report, $record->getReport());
-        self::assertTrue($record->isConfidential());
-        [$status] = $this->jsonRequest('GET', '/evidence/' . $evidence, $this->limitedClient->getAccessToken());
-        self::assertSame(403, $status, 'Client-only operators must not see confidential evidence');
-    }
-
-    public function testLinkingPublicEvidenceMakesItConfidential(): void
-    {
-        $entity = $this->createSecurityEntity();
-        $evidence = $this->createSecurityEvidence($entity);
-        $report = $this->report($entity, IncidentType::ILLEGAL_CONTENT);
-        self::assertFalse($this->client->getEvidenceRecord($evidence)->isConfidential());
-        $this->client->addEvidenceToReport($evidence, $report);
-        $this->assertProtected($evidence, $report);
-    }
-
-    public function testDeclassificationBeforeLinkingCannotLeaveIllegalContentPublic(): void
-    {
-        $entity = $this->createSecurityEntity();
-        $evidence = $this->createSecurityEvidence($entity, true);
-        $ordinary = $this->report($entity, IncidentType::OTHER);
-        $illegal = $this->report($entity, IncidentType::ILLEGAL_CONTENT);
-        $this->client->addEvidenceToReport($evidence, $ordinary);
-        $this->client->updateEvidenceConfidentiality($evidence, false);
-        self::assertFalse($this->client->getEvidenceRecord($evidence)->isConfidential());
-        $this->client->addEvidenceToReport($evidence, $illegal);
-        $this->assertProtected($evidence, $illegal);
-    }
-
-    public function testDeclassificationAfterLinkingIsRejectedAndPreservesConfidentiality(): void
-    {
-        $entity = $this->createSecurityEntity();
-        $evidence = $this->createSecurityEvidence($entity);
-        $report = $this->report($entity, IncidentType::ILLEGAL_CONTENT);
-        $this->client->addEvidenceToReport($evidence, $report);
-        $this->expectRequestFailure(fn() => $this->client->updateEvidenceConfidentiality($evidence, false), [409]);
-        $this->assertProtected($evidence, $report);
-        // Retaining confidentiality remains a valid operation.
-        $this->client->updateEvidenceConfidentiality($evidence, true);
-        $this->assertProtected($evidence, $report);
-    }
-
-    public function testConcurrentLinkAndDeclassificationPreserveConfidentiality(): void
-    {
-        $entity = $this->createSecurityEntity();
-        $ordinary = $this->report($entity, IncidentType::OTHER);
-        $illegal = $this->report($entity, IncidentType::ILLEGAL_CONTENT);
-        // Alternate submission order. The HTTP scheduler decides actual lock acquisition order;
-        // both allowed outcomes of declassification must leave the committed evidence private.
-        for($iteration = 0; $iteration < 6; $iteration++)
+        private function report(string $entityUuid, IncidentType $type): string
         {
-            $evidence = $this->createSecurityEvidence($entity, true);
-            $this->client->addEvidenceToReport($evidence, $ordinary);
-            $requests = [
-                'link' => ['method' => 'PATCH', 'path' => '/evidence/' . $evidence . '/link-report',
-                    'token' => $this->rootToken(), 'body' => json_encode(['report_uuid' => $illegal])],
-                'declassify' => ['method' => 'PATCH', 'path' => '/evidence/' . $evidence . '/update-confidentiality',
-                    'token' => $this->rootToken(), 'body' => json_encode(['confidential' => false])],
-            ];
-            if($iteration % 2 !== 0)
+            $submission = $this->client->submitReport($entityUuid, new ContentInput('Synthetic confidentiality regression fixture'), $type);
+            $reportUuid = $submission->getReport()->getUuid();
+            $this->createdReports[] = $reportUuid;
+            foreach ($submission->getEvidence() as $evidence)
             {
-                $requests = array_reverse($requests, true);
+                $this->createdEvidenceRecords[] = $evidence->getUuid();
             }
-            $results = $this->concurrentRawRequests($requests);
-            self::assertSame(200, $results['link'][0], $results['link'][1]);
-            self::assertContains($results['declassify'][0], [200, 409], $results['declassify'][1]);
-            $this->assertProtected($evidence, $illegal);
-        }
-    }
 
-    public function testMalformedConfidentialityUpdatesCannotExposeEvidence(): void
-    {
-        $entity = $this->createSecurityEntity();
-        $evidence = $this->createSecurityEvidence($entity, true);
-        foreach(['{}', '{"confidential":null}', '{"confidential":"invalid"}', '{"confidential":[]}',
-            '{"confidential":42}', 'null', '[]', '{'] as $body)
+            return $reportUuid;
+        }
+
+        private function assertProtected(string $evidenceUuid, string $reportUuid): void
         {
-            [$status, $response] = $this->rawRequest('PATCH', '/evidence/' . $evidence . '/update-confidentiality',
-                $this->rootToken(), $body);
-            self::assertSame(400, $status, $response);
-            self::assertTrue($this->client->getEvidenceRecord($evidence)->isConfidential(), $body);
+            // A new client performs a separate read after the writes have completed
+            $record = new FederationClient(getenv('SERVER_ENDPOINT'), $this->rootToken())->getEvidenceRecord($evidenceUuid);
+            $this->assertSame($reportUuid, $record->getReport());
+            $this->assertTrue($record->isConfidential());
+
+            [$status] = $this->jsonRequest('GET', '/evidence/' . $evidenceUuid, $this->limitedClient->getAccessToken());
+            $this->assertSame(HttpResponseCode::FORBIDDEN->value, $status, 'Client-only operators must not see confidential evidence');
+        }
+
+        public function testLinkingPublicEvidenceMakesItConfidential(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->report($entityUuid, IncidentType::ILLEGAL_CONTENT);
+            $this->assertFalse($this->client->getEvidenceRecord($evidenceUuid)->isConfidential());
+
+            $this->client->addEvidenceToReport($evidenceUuid, $reportUuid);
+            $this->assertProtected($evidenceUuid, $reportUuid);
+        }
+
+        public function testDeclassificationBeforeLinkingCannotLeaveIllegalContentPublic(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid, true);
+            $ordinary = $this->report($entityUuid, IncidentType::OTHER);
+            $illegal = $this->report($entityUuid, IncidentType::ILLEGAL_CONTENT);
+
+            $this->client->addEvidenceToReport($evidenceUuid, $ordinary);
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, false);
+            $this->assertFalse($this->client->getEvidenceRecord($evidenceUuid)->isConfidential());
+
+            $this->client->addEvidenceToReport($evidenceUuid, $illegal);
+            $this->assertProtected($evidenceUuid, $illegal);
+        }
+
+        public function testDeclassificationAfterLinkingIsRejectedAndPreservesConfidentiality(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid);
+            $reportUuid = $this->report($entityUuid, IncidentType::ILLEGAL_CONTENT);
+            $this->client->addEvidenceToReport($evidenceUuid, $reportUuid);
+
+            $this->expectRequestFailure(fn() => $this->client->updateEvidenceConfidentiality($evidenceUuid, false), [HttpResponseCode::CONFLICT->value]);
+            $this->assertProtected($evidenceUuid, $reportUuid);
+
+            // Retaining confidentiality remains a valid operation
+            $this->client->updateEvidenceConfidentiality($evidenceUuid, true);
+            $this->assertProtected($evidenceUuid, $reportUuid);
+        }
+
+        public function testConcurrentLinkAndDeclassificationPreserveConfidentiality(): void
+        {
+            $entityUuid = $this->createSecurityEntity();
+            $ordinary = $this->report($entityUuid, IncidentType::OTHER);
+            $illegal = $this->report($entityUuid, IncidentType::ILLEGAL_CONTENT);
+
+            // The submission order alternates and the server decides which request acquires the lock first, the
+            // declassification either succeeds before the link or conflicts after it; either way the evidence ends up
+            // confidential
+            for ($iteration = 0; $iteration < 6; $iteration++)
+            {
+                $evidenceUuid = $this->createSecurityEvidence($entityUuid, true);
+                $this->client->addEvidenceToReport($evidenceUuid, $ordinary);
+
+                $requests = [
+                    'link' => ['method' => 'PATCH', 'path' => '/evidence/' . $evidenceUuid . '/link-report', 'token' => $this->rootToken(), 'body' => json_encode(['report_uuid' => $illegal])],
+                    'declassify' => ['method' => 'PATCH', 'path' => '/evidence/' . $evidenceUuid . '/update-confidentiality', 'token' => $this->rootToken(), 'body' => json_encode(['confidential' => false])],
+                ];
+                if ($iteration % 2 !== 0)
+                {
+                    $requests = array_reverse($requests, true);
+                }
+
+                $results = $this->concurrentRawRequests($requests);
+                $this->assertSame(200, $results['link'][0], $results['link'][1]);
+                $this->assertContains($results['declassify'][0], [200, HttpResponseCode::CONFLICT->value], $results['declassify'][1]);
+                $this->assertProtected($evidenceUuid, $illegal);
+            }
+        }
+
+        public function testMalformedConfidentialityUpdatesCannotExposeEvidence(): void
+        {
+            $evidenceUuid = $this->createSecurityEvidence($this->createSecurityEntity(), true);
+
+            foreach (['{}', '{"confidential":null}', '{"confidential":"invalid"}', '{"confidential":[]}', '{"confidential":42}', 'null', '[]', '{'] as $body)
+            {
+                [$status, $response] = $this->rawRequest('PATCH', '/evidence/' . $evidenceUuid . '/update-confidentiality', $this->rootToken(), $body);
+                $this->assertSame(HttpResponseCode::BAD_REQUEST->value, $status, $response);
+                $this->assertTrue($this->client->getEvidenceRecord($evidenceUuid)->isConfidential(), $body);
+            }
         }
     }
-}

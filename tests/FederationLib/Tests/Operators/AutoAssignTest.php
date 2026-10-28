@@ -4,177 +4,14 @@
 
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TextGenerator;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\OperatorRecord;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
 
-    class AutoAssignTest extends TestCase
+    class AutoAssignTest extends ServerTestCase
     {
-        use TestHelpers;
         private const string BENIGN_SAMPLE_TEXT = 'This is a simple, benign message used for scanning tests.';
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        private static ?FederationClient $trainingClient = null;
-        private static ?string $trainingEntityUuid = null;
-        private static array $createdTrainingReports = [];
-        private static array $createdTrainingEvidence = [];
-
-        public static function setUpBeforeClass(): void
-        {
-            self::$trainingClient = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-            self::$trainingEntityUuid = self::$trainingClient->pushEntity('auto-assign-training.com', 'auto_assign_training');
-
-            foreach (TextGenerator::trainingSet() as $sample)
-            {
-                $submission = self::$trainingClient->submitReport(self::$trainingEntityUuid, ['text_content' => $sample['text']], IncidentType::OTHER);
-                $reportUuid = $submission->getReport()->getUuid();
-                self::$createdTrainingReports[] = $reportUuid;
-                self::$createdTrainingEvidence[] = $submission->getEvidence()[0]->getUuid();
-                self::$trainingClient->assignOperatorToReport($reportUuid, self::$trainingClient->getSelf()->getUuid());
-                self::$trainingClient->closeReport($reportUuid, $sample['flag']);
-            }
-
-            sleep(3);
-        }
-
-        public static function tearDownAfterClass(): void
-        {
-            foreach (self::$createdTrainingReports as $reportUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach (self::$createdTrainingEvidence as $evidenceUuid)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training evidence $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            if (self::$trainingEntityUuid !== null)
-            {
-                try
-                {
-                    self::$trainingClient?->deleteEntity(self::$trainingEntityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete training entity " . self::$trainingEntityUuid . ": " . $e->getMessage());
-                }
-            }
-
-            self::$trainingClient = null;
-            self::$trainingEntityUuid = null;
-            self::$createdTrainingReports = [];
-            self::$createdTrainingEvidence = [];
-        }
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
 
         public function testAutoAssignDefaultsToFalse(): void
         {
@@ -207,31 +44,6 @@
                 }
             }
             $this->assertTrue($found, 'Created operator should be present in the operator list');
-        }
-
-        public function testAutoAssignCanBeEnabled(): void
-        {
-            $createdOperator = $this->client->createOperator(substr('auto_assign_enable_' . uniqid(), 0, 32));
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setAutoAssign($operatorUuid, true);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertTrue($operatorRecord->isAutoAssigned(), 'Auto assign should be enabled after enabling it');
-        }
-
-        public function testAutoAssignCanBeDisabled(): void
-        {
-            $createdOperator = $this->client->createOperator(substr('auto_assign_disable_' . uniqid(), 0, 32));
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setAutoAssign($operatorUuid, true);
-            $this->client->setAutoAssign($operatorUuid, false);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertFalse($operatorRecord->isAutoAssigned(), 'Auto assign should be disabled after disabling it');
         }
 
         public function testAutoAssignTogglesPersistAcrossRequests(): void
@@ -351,12 +163,6 @@
         public function testAutoAssignSystemOperatorCannotBeModified(): void
         {
             $systemOperator = $this->findSystemOperator();
-
-            if ($systemOperator === null)
-            {
-                $this->markTestSkipped('System operator not present in this environment');
-            }
-
             $attacker = $this->createLimitedOperator('auto_assign_system', operator: true);
 
             $this->expectRequestFailure(
@@ -431,9 +237,9 @@
         }
 
         /**
-         * Returns the built-in system operator record, or null if it is not present.
+         * Returns the built-in system operator record, which the server creates when it is initialized
          */
-        private function findSystemOperator(): ?OperatorRecord
+        private function findSystemOperator(): OperatorRecord
         {
             foreach ($this->client->listOperators(1, 1000) as $operator)
             {
@@ -443,17 +249,12 @@
                 }
             }
 
-            return null;
+            $this->fail('The server has no system operator');
         }
 
         public function testScanContentAssignsGeneratedReportToAutoAssignOperator(): void
         {
             $systemOperator = $this->findSystemOperator();
-            if ($systemOperator === null)
-            {
-                $this->markTestSkipped('System operator not present in this environment');
-            }
-
             $autoAssignOperator = $this->createLimitedOperator('auto_assign_report', management: true);
             $this->client->setAutoAssign($autoAssignOperator->getSelf()->getUuid(), true);
 
@@ -532,15 +333,13 @@
 
         public function testScanContentDoesNotGenerateReportWithoutAutoAssignOperators(): void
         {
-            // The mechanism can only be tested if no operator is currently eligible for automatic assignment
-            foreach ($this->client->listOperators(1, 1000) as $operator)
-            {
-                // Generated reports are automated, only operators opted in to automated reports are eligible
-                if ($operator->isAutoAssignAutomatedReports() && $operator->hasManagementPermissions() && !$operator->isDisabled())
-                {
-                    $this->markTestSkipped('An eligible auto assign operator already exists in this environment');
-                }
-            }
+            // Generated reports are automated, only operators opted in to automated reports are eligible. Every test
+            // removes the operators it creates, so one left over is a leak of an earlier test
+            $eligible = array_filter(
+                $this->client->listOperators(1, 1000),
+                fn(OperatorRecord $operator) => $operator->isAutoAssignAutomatedReports() && $operator->hasManagementPermissions() && !$operator->isDisabled()
+            );
+            $this->assertSame([], array_map(fn(OperatorRecord $operator) => $operator->getName(), array_values($eligible)), 'No operator should be eligible for automated reports');
 
             $entityUuid = $this->client->pushEntity('auto-assign-missing.com', 'auto_assign_missing_user');
             $this->createdEntities[] = $entityUuid;

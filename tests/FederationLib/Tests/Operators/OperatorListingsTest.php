@@ -3,104 +3,15 @@
     namespace FederationLib\Tests\Operators;
 
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
-    use Symfony\Component\Uid\Uuid;
 
     /**
      * Client to server tests of the listings scoped to an operator, each operator acting through its own client
      */
-    class OperatorListingsTest extends TestCase
+    class OperatorListingsTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
         public function testListOperatorEvidenceOnlyReturnsOwnEvidence(): void
         {
             $firstClient = $this->createLimitedOperator('evidence_owner_a', client: true);
@@ -316,7 +227,7 @@
 
         public function testOperatorListingsOfNonExistentOperator(): void
         {
-            $operatorUuid = Uuid::v7()->toRfc4122();
+            $operatorUuid = $this->randomUuid();
             $listings = [
                 'listOperatorEvidence' => fn() => $this->client->listOperatorEvidence($operatorUuid),
                 'listOperatorBlacklist' => fn() => $this->client->listOperatorBlacklist($operatorUuid),
@@ -356,8 +267,9 @@
         {
             foreach (['evidence', 'blacklist', 'reports', 'reports/assigned'] as $listing)
             {
-                [$code] = $this->rawRequest('GET', 'operators/not-a-valid-uuid/' . $listing, getenv('SERVER_ACCESS_TOKEN'));
-                $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value], "operators/{uuid}/$listing returned $code for a malformed UUID");
+                // A path with a malformed UUID matches no method, a client error (OFD "Error Responses")
+                [$code] = $this->rawRequest('GET', 'operators/not-a-valid-uuid/' . $listing, $this->rootToken());
+                $this->assertSame(HttpResponseCode::BAD_REQUEST->value, $code, "operators/{uuid}/$listing returned $code for a malformed UUID");
             }
         }
 
@@ -374,14 +286,15 @@
 
         public function testOperatorListingsValidateArgumentsClientSide(): void
         {
+            $uuid = $this->randomUuid();
             $calls = [
                 fn() => $this->client->listOperatorEvidence(''),
-                fn() => $this->client->listOperatorEvidence(Uuid::v7()->toRfc4122(), 0),
+                fn() => $this->client->listOperatorEvidence($uuid, 0),
                 fn() => $this->client->listOperatorBlacklist(''),
-                fn() => $this->client->listOperatorBlacklist(Uuid::v7()->toRfc4122(), 1, 0),
+                fn() => $this->client->listOperatorBlacklist($uuid, 1, 0),
                 fn() => $this->client->listOperatorReports(''),
                 fn() => $this->client->listAssignedOperatorReports(''),
-                fn() => $this->client->listAssignedOperatorReports(Uuid::v7()->toRfc4122(), 0),
+                fn() => $this->client->listAssignedOperatorReports($uuid, 0),
             ];
 
             foreach ($calls as $index => $call)

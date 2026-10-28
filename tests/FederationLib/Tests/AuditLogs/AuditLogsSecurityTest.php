@@ -4,94 +4,44 @@
 
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
-    use PHPUnit\Framework\TestCase;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\AuditLog;
 
-    class AuditLogsSecurityTest extends TestCase
+    class AuditLogsSecurityTest extends ServerTestCase
     {
-        use TestHelpers;
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-
-        protected function setUp(): void
+        public function testAnonymousClientsOnlySeePublicEntries(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
+            // OPERATOR_CREATED is public by default, OPERATOR_UPDATED (a change of permissions) is not
+            $operatorName = substr(uniqid('audit_public_'), 0, 32);
+            $operatorUuid = $this->client->createOperator($operatorName)->getUuid();
+            $this->createdOperators[] = $operatorUuid;
+            $this->client->setClientPermissions($operatorUuid, true);
 
-        protected function tearDown(): void
-        {
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
+            // Both entries name the operator
+            $mentionsOperator = fn(AuditLog $log) => str_contains($log->getMessage(), $operatorName);
+            $rootEntries = array_filter($this->client->listAuditLogs(1, 100), $mentionsOperator);
+            $created = array_values(array_filter($rootEntries, fn(AuditLog $log) => $log->getType() === AuditLogType::OPERATOR_CREATED));
+            $updated = array_values(array_filter($rootEntries, fn(AuditLog $log) => $log->getType() === AuditLogType::OPERATOR_UPDATED));
+            $this->assertCount(1, $created);
+            $this->assertNotEmpty($updated);
 
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
+            $anonymous = new FederationClient(getenv('SERVER_ENDPOINT'));
+            $anonymousEntries = array_filter($anonymous->listAuditLogs(1, 100), $mentionsOperator);
+            $this->assertSame([$created[0]->getUuid()], array_values(array_map(fn(AuditLog $log) => $log->getUuid(), $anonymousEntries)));
+            $this->assertEquals($created[0]->getMessage(), $anonymous->getAuditLogRecord($created[0]->getUuid())->getMessage());
 
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-        }
-
-        public function testSecurityUnauthenticatedAuditLogAccessIsPublic(): void
-        {
-            $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), null);
-
-            // Audit logs are public by default; unauthenticated clients can list and view
-            // public entries, so these calls succeed rather than fail.
-            $logs = $unauthenticatedClient->listAuditLogs();
-            $this->assertIsArray($logs);
-
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $unauthenticatedClient->getAuditLogRecord('00000000-0000-0000-0000-000000000000');
+            // A private entry is not disclosed, not even its existence
+            $this->expectRequestFailure(
+                fn() => $anonymous->getAuditLogRecord($updated[0]->getUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
+                'A private audit log entry should not be found by an anonymous client'
+            );
+            $this->expectRequestFailure(
+                fn() => $anonymous->getAuditLogRecord($this->randomUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
+                'An unknown audit log entry should not be found'
+            );
         }
 
         public function testSecurityOperatorAuditLogsOfOthersFollowPublicAccess(): void

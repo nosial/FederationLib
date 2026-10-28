@@ -3,91 +3,15 @@
     namespace FederationLib\Tests\Client;
 
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
 
     /**
-     * Client to server tests of how a single client authenticates as it changes its endpoint and access token
+     * Client to server tests of how a single client authenticates as it changes its access token
      */
-    class ClientSessionTest extends TestCase
+    class ClientSessionTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
-        public function testEndpointIsNormalized(): void
-        {
-            $endpoint = rtrim(getenv('SERVER_ENDPOINT'), '/');
-
-            $this->assertEquals($endpoint, new FederationClient($endpoint . '/')->getEndpoint());
-            $this->assertEquals($endpoint, new FederationClient($endpoint . '///')->getEndpoint());
-            $this->assertEquals($endpoint, new FederationClient($endpoint)->getEndpoint());
-        }
-
-        public function testInvalidEndpointsAreRejected(): void
-        {
-            foreach (['', 'not a url', '172.17.0.1:7000', '/relative/path'] as $endpoint)
-            {
-                try
-                {
-                    new FederationClient($endpoint);
-                    $this->fail("Endpoint '$endpoint' should be rejected");
-                }
-                catch (InvalidArgumentException)
-                {
-                    $this->addToAssertionCount(1);
-                }
-            }
-        }
 
         public function testInvalidAccessTokensAreRejectedClientSide(): void
         {

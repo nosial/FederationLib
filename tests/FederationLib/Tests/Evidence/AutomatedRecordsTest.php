@@ -4,39 +4,19 @@
 
     namespace FederationLib\Tests\Evidence;
 
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\EvidenceRecord;
-    use PHPUnit\Framework\TestCase;
 
     /**
      * Automated records (OFD "Automated Records"): the evidence and reports submitted by bot operators are automated,
      * automated evidence is created confidential and a manager may make it non-confidential afterwards
      */
-    class AutomatedRecordsTest extends TestCase
+    class AutomatedRecordsTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            $this->cleanupRecords();
-        }
-
         private function createBot(): FederationClient
         {
             $bot = $this->createLimitedOperator('bot', client: true);
@@ -126,7 +106,8 @@
             $evidenceUuid = $bot->submitEvidence($entityUuid, 'Bot evidence');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
-            $this->expectRequestFailure(fn() => $bot->updateEvidenceConfidentiality($evidenceUuid, false), [401, 403]);
+            // Changing the confidentiality requires management permissions
+            $this->expectRequestFailure(fn() => $bot->updateEvidenceConfidentiality($evidenceUuid, false), [HttpResponseCode::FORBIDDEN->value]);
             $this->assertTrue($this->client->getEvidenceRecord($evidenceUuid)->isConfidential());
         }
 
@@ -211,7 +192,12 @@
             $evidenceUuid = $bot->submitEvidence($entityUuid, 'Hidden from clients');
             $this->createdEvidenceRecords[] = $evidenceUuid;
 
+            // Automated evidence is confidential: hidden from anonymous clients (401) and other clients (403)
             $client = $this->createLimitedOperator('other_client', client: true);
-            $this->expectRequestFailure(fn() => $client->getEvidenceRecord($evidenceUuid), [401, 403, 404]);
+            $this->expectRequestFailure(fn() => $client->getEvidenceRecord($evidenceUuid), [HttpResponseCode::FORBIDDEN->value]);
+            $this->expectRequestFailure(fn() => new FederationClient(getenv('SERVER_ENDPOINT'))->getEvidenceRecord($evidenceUuid), [HttpResponseCode::UNAUTHORIZED->value]);
+
+            $manager = $this->createLimitedOperator('bot_manager', management: true);
+            $this->assertTrue($manager->getEvidenceRecord($evidenceUuid)->isConfidential());
         }
     }

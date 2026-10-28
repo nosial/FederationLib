@@ -6,36 +6,15 @@
 
     use FederationLib\Enums\IncidentType;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\ContentInput;
-    use PHPUnit\Framework\TestCase;
 
     /**
      * The permissions and configuration of operators (OFD 2.0): Update Operator Permissions, Update Operator
      * Configuration, the visibility of the configuration, and the automatic assignment of each kind of report
      */
-    class OperatorPermissionsConfigurationTest extends TestCase
+    class OperatorPermissionsConfigurationTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            $this->cleanupRecords();
-        }
-
         /**
          * Creates an operator without any permissions
          *
@@ -172,8 +151,9 @@
             [$code] = $this->patchPermissions($this->randomUuid(), ['client' => true]);
             $this->assertSame(404, $code);
 
+            // A path with a malformed UUID matches no method, a client error (OFD "Error Responses")
             [$code] = $this->rawRequest('PATCH', '/operators/not-a-uuid/permissions', $this->rootToken(), json_encode(['client' => true]));
-            $this->assertContains($code, [400, 404]);
+            $this->assertSame(400, $code);
 
             [$code] = $this->patchPermissions($this->getRootUuid(), ['operator' => false]);
             $this->assertSame(403, $code);

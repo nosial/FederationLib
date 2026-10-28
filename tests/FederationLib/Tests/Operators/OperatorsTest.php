@@ -3,270 +3,78 @@
     namespace FederationLib\Tests\Operators;
 
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use PHPUnit\Framework\TestCase;
-    use Symfony\Component\Uid\Uuid;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\OperatorRecord;
 
-    class OperatorsTest extends TestCase
+    class OperatorsTest extends ServerTestCase
     {
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
+        public function testCreateOperator(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            $name = substr(uniqid('test_operator_'), 0, 32);
+            $created = $this->client->createOperator($name);
+            $this->createdOperators[] = $created->getUuid();
+
+            // The access token is only returned when the operator is created, and authenticates it
+            $this->assertSame(32, strlen($created->getAccessToken()));
+            $this->assertEquals($created->getUuid(), new FederationClient(getenv('SERVER_ENDPOINT'), $created->getAccessToken())->getSelf()->getUuid());
+
+            // A new operator has no permissions
+            $record = $this->client->getOperator($created->getUuid());
+            $this->assertEquals($name, $record->getName());
+            $this->assertFalse($record->hasManagementPermissions());
+            $this->assertFalse($record->hasOperatorPermissions());
+            $this->assertFalse($record->hasClientPermissions());
+            $this->assertFalse($record->isDisabled());
+            $this->assertEmpty($record->getAccessToken());
         }
 
-        protected function tearDown(): void
+        public function testCreateOperatorRejectsInvalidName(): void
         {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
-        public function testCreateOperatorNoPermissions(): void
-        {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->assertNotEmpty($operatorUuid);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertNotNull($operatorRecord);
-            $this->assertFalse($operatorRecord->hasManagementPermissions());
-            $this->assertFalse($operatorRecord->hasOperatorPermissions());
-            $this->assertFalse($operatorRecord->hasClientPermissions());
-            $this->assertEmpty($operatorRecord->getAccessToken());
-        }
-
-        public function testCreateOperatorWithManagementPermission(): void
-        {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setManagementPermissions($operatorUuid, true);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertTrue($operatorRecord->hasManagementPermissions());
-            $this->assertFalse($operatorRecord->hasOperatorPermissions());
-            $this->assertTrue($operatorRecord->hasClientPermissions());
-        }
-
-        public function testCreateOperatorWithOperatorPermission(): void
-        {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setOperatorPermissions($operatorUuid, true);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertFalse($operatorRecord->hasManagementPermissions());
-            $this->assertTrue($operatorRecord->hasOperatorPermissions());
-            $this->assertFalse($operatorRecord->hasClientPermissions());
-        }
-
-        public function testCreateOperatorWithClientPermission(): void
-        {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertFalse($operatorRecord->hasManagementPermissions());
-            $this->assertFalse($operatorRecord->hasOperatorPermissions());
-            $this->assertTrue($operatorRecord->hasClientPermissions());
-        }
-
-        public function testCreateOperatorWithAllPermissions(): void
-        {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setManagementPermissions($operatorUuid, true);
-            $this->client->setOperatorPermissions($operatorUuid, true);
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertTrue($operatorRecord->hasManagementPermissions());
-            $this->assertTrue($operatorRecord->hasOperatorPermissions());
-            $this->assertTrue($operatorRecord->hasClientPermissions());
+            $this->expectRequestFailure(
+                fn() => $this->client->createOperator(str_repeat('a', 256)),
+                [HttpResponseCode::BAD_REQUEST->value],
+                'An operator name that is too long should be rejected'
+            );
         }
 
         public function testDeleteOperator(): void
         {
-            $name = uniqid('test operator');
-            $createdOperator = $this->client->createOperator($name);
-            $operatorUuid = $createdOperator->getUuid();
-            $this->assertNotEmpty($operatorUuid);
-
-            $operatorRecord = $this->client->getOperator($operatorUuid);
-            $this->assertNotNull($operatorRecord);
-            $this->assertEquals($name, $operatorRecord->getName());
+            $operatorUuid = $this->client->createOperator(substr(uniqid('deleted_'), 0, 32))->getUuid();
+            $this->createdOperators[] = $operatorUuid;
 
             $this->client->deleteOperator($operatorUuid);
+            $this->removeFromCleanup($this->createdOperators, $operatorUuid);
 
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->getOperator($operatorUuid);
+            $this->expectRequestFailure(fn() => $this->client->getOperator($operatorUuid), [HttpResponseCode::NOT_FOUND->value]);
         }
 
-        public function testCreateInvalidOperatorName(): void
+        public function testUnknownOperatorIsNotFound(): void
         {
-            $name = str_repeat('a', 256);
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::BAD_REQUEST->value);
-            $this->client->createOperator($name);
-        }
-
-        public function testDeleteNonExistentOperator(): void
-        {
-            $nonExistentOperatorUuid = Uuid::v7()->toRfc4122();
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->deleteOperator($nonExistentOperatorUuid);
-        }
-
-        public function testGetNonExistentOperator(): void
-        {
-            $nonExistentOperatorUuid = Uuid::v7()->toRfc4122();
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->getOperator($nonExistentOperatorUuid);
+            $uuid = $this->randomUuid();
+            $this->expectRequestFailure(fn() => $this->client->getOperator($uuid), [HttpResponseCode::NOT_FOUND->value]);
+            $this->expectRequestFailure(fn() => $this->client->deleteOperator($uuid), [HttpResponseCode::NOT_FOUND->value]);
         }
 
         public function testListOperators(): void
         {
-            $createdOperators = [];
-            for ($i = 0; $i < 10; $i++)
+            $created = [];
+            for ($i = 0; $i < 3; $i++)
             {
-                $name = uniqid('test operator');
-                $createdOperator = $this->client->createOperator($name);
-                $operatorUuid = $createdOperator->getUuid();
-                $this->createdOperators[] = $operatorUuid;
-                $createdOperators[] = $operatorUuid;
+                $created[] = $this->client->createOperator(substr(uniqid('listed_'), 0, 32))->getUuid();
+                $this->createdOperators[] = end($created);
             }
 
-            $operators = $this->client->listOperators();
-            $this->assertNotNull($operators);
-            $this->assertGreaterThanOrEqual(10, count($operators));
-
-            foreach ($operators as $operator)
+            $listed = array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $this->client->listOperators(1, 1000));
+            foreach ($created as $uuid)
             {
-                $this->assertNotEmpty($operator->getUuid());
-                $this->assertNotEmpty($operator->getName());
+                $this->assertContains($uuid, $listed);
             }
 
-            $found = false;
-            $currentPage = 1;
-            while (true)
-            {
-                $currentPageResults = $this->client->listOperators(page: $currentPage);
-                if (count($currentPageResults) === 0)
-                {
-                    break;
-                }
-
-                foreach ($currentPageResults as $operator)
-                {
-                    if (in_array($operator->getUuid(), $createdOperators, true))
-                    {
-                        $found = true;
-                        break 2;
-                    }
-                }
-
-                $currentPage++;
-            }
-
-            $this->assertTrue($found, 'No created operators were found in the database');
+            $pageOne = array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $this->client->listOperators(1, 2));
+            $pageTwo = array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $this->client->listOperators(2, 2));
+            $this->assertCount(2, $pageOne);
+            $this->assertNotEmpty($pageTwo);
+            $this->assertSame([], array_intersect($pageOne, $pageTwo));
         }
     }

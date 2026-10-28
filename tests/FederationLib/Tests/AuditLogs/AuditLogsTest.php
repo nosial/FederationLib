@@ -2,213 +2,131 @@
 
     namespace FederationLib\Tests\AuditLogs;
 
+    use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
-    use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\AuditLog;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
 
-    class AuditLogsTest extends TestCase
+    class AuditLogsTest extends ServerTestCase
     {
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-
-        protected function setUp(): void
+        /**
+         * Creates an operator with client permissions that pushes the given number of entities
+         *
+         * @return array{0: string, 1: string[]} The UUID of the operator and the UUIDs of the entities it pushed
+         */
+        private function createActivity(int $entities = 1): array
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
+            $operator = $this->createLimitedOperator('audit_actor', client: true);
+            $entityUuids = [];
+            for ($i = 0; $i < $entities; $i++)
             {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
+                $entityUuids[] = $this->createSecurityEntity($operator);
             }
 
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
+            return [$operator->getSelf()->getUuid(), $entityUuids];
         }
 
-        private function generateSampleAuditLogs(bool &$operatorUuid=null): void
+        /**
+         * @param AuditLog[] $logs
+         * @return string[]
+         */
+        private static function uuids(array $logs): array
         {
-            $createdOperator = $this->client->createOperator('sample-audit-operator');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
-
-            $entityUuid = $operatorClient->pushEntity('sample-audit.com', 'sample_user');
-            $this->createdEntities[] = $entityUuid;
+            return array_map(fn(AuditLog $log) => $log->getUuid(), $logs);
         }
 
-        public function testListAuditLogs(): void
+        public function testListAuditLogsIncludesNewEntries(): void
         {
-            $this->generateSampleAuditLogs();
+            $before = time();
+            [$operatorUuid, [$entityUuid]] = $this->createActivity();
 
-            $auditLogs = $this->client->listAuditLogs();
-            $this->assertIsArray($auditLogs);
-            $this->assertNotEmpty($auditLogs);
+            $entries = array_values(array_filter(
+                $this->client->listAuditLogs(1, 100),
+                fn(AuditLog $log) => $log->getType() === AuditLogType::ENTITY_PUSHED && $log->getEntityUuid() === $entityUuid
+            ));
 
-            foreach ($auditLogs as $auditLog)
-            {
-                $this->assertNotEmpty($auditLog->getUuid());
-                $this->assertNotNull($auditLog->getType());
-                $this->assertNotEmpty($auditLog->getMessage());
-                $this->assertIsInt($auditLog->getTimestamp());
-                $this->assertGreaterThan(0, $auditLog->getTimestamp());
-            }
-        }
-
-        public function testListAuditLogsWithPagination(): void
-        {
-            $this->generateSampleAuditLogs();
-
-            $page1 = $this->client->listAuditLogs(1, 3);
-            $page2 = $this->client->listAuditLogs(2, 3);
-
-            $this->assertIsArray($page1);
-            $this->assertIsArray($page2);
-            $this->assertLessThanOrEqual(3, count($page1));
-            $this->assertLessThanOrEqual(3, count($page2));
-
-            if (count($page1) > 0 && count($page2) > 0)
-            {
-                $page1Uuids = array_map(fn($log) => $log->getUuid(), $page1);
-                $page2Uuids = array_map(fn($log) => $log->getUuid(), $page2);
-                $this->assertCount(0, array_intersect($page1Uuids, $page2Uuids), 'Pages should contain different records');
-            }
-        }
-
-        public function testListAuditLogsInvalidPage(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listAuditLogs(-1);
-        }
-
-        public function testListAuditLogsInvalidLimit(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listAuditLogs(1, -1);
-        }
-
-        public function testGetAuditLogRecordInvalidUuid(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->getAuditLogRecord('');
-        }
-
-        public function testGetNonExistentAuditLogRecord(): void
-        {
-            $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->getAuditLogRecord($fakeUuid);
-        }
-
-        public function testListOperatorAuditLogsInvalidOperatorUuid(): void
-        {
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listOperatorAuditLogs('');
-        }
-
-        public function testListOperatorAuditLogsNonExistentOperator(): void
-        {
-            $fakeUuid = '0198f41f-45c7-78eb-a2a7-86de4e99991a';
-            $this->expectException(RequestException::class);
-            $this->expectExceptionCode(HttpResponseCode::NOT_FOUND->value);
-            $this->client->listOperatorAuditLogs($fakeUuid);
-        }
-
-        public function testListOperatorAuditLogsInvalidPage(): void
-        {
-            $createdOperator = $this->client->createOperator('invalid-page-test');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listOperatorAuditLogs($operatorUuid, -1);
-        }
-
-        public function testListOperatorAuditLogsInvalidLimit(): void
-        {
-            $createdOperator = $this->client->createOperator('invalid-limit-test');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-
-            $this->expectException(InvalidArgumentException::class);
-            $this->client->listOperatorAuditLogs($operatorUuid, 1, -1);
+            $this->assertCount(1, $entries, 'The push of the entity should be recorded once');
+            $this->assertEquals($operatorUuid, $entries[0]->getOperatorUuid());
+            $this->assertNotEmpty($entries[0]->getMessage());
+            $this->assertGreaterThanOrEqual($before, $entries[0]->getTimestamp());
+            $this->assertLessThanOrEqual(time(), $entries[0]->getTimestamp());
         }
 
         public function testAuditLogEntryRetrievableByUuid(): void
         {
-            $createdOperator = $this->client->createOperator('uuid-audit-test');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
-
-            $entityUuid = $operatorClient->pushEntity('uuid-audit.com', 'uuid_audit_user');
-            $this->createdEntities[] = $entityUuid;
+            [$operatorUuid] = $this->createActivity();
 
             $logs = $this->client->listOperatorAuditLogs($operatorUuid);
             $this->assertNotEmpty($logs);
 
-            $firstLog = reset($logs);
-            $retrieved = $this->client->getAuditLogRecord($firstLog->getUuid());
-            $this->assertEquals($firstLog->getUuid(), $retrieved->getUuid());
-            $this->assertEquals($firstLog->getMessage(), $retrieved->getMessage());
-            $this->assertEquals($firstLog->getType(), $retrieved->getType());
+            foreach ($logs as $log)
+            {
+                $retrieved = $this->client->getAuditLogRecord($log->getUuid());
+                $this->assertEquals($log->getUuid(), $retrieved->getUuid());
+                $this->assertEquals($log->getType(), $retrieved->getType());
+                $this->assertEquals($log->getMessage(), $retrieved->getMessage());
+                $this->assertEquals($log->getTimestamp(), $retrieved->getTimestamp());
+                $this->assertEquals($log->getOperatorUuid(), $retrieved->getOperatorUuid());
+                $this->assertEquals($log->getEntityUuid(), $retrieved->getEntityUuid());
+            }
+        }
+
+        public function testListAuditLogsPagination(): void
+        {
+            [$operatorUuid] = $this->createActivity(4);
+
+            foreach ([
+                'all' => fn(int $page) => $this->client->listAuditLogs($page, 2),
+                'operator' => fn(int $page) => $this->client->listOperatorAuditLogs($operatorUuid, $page, 2),
+            ] as $listing => $list)
+            {
+                $pageOne = self::uuids($list(1));
+                $pageTwo = self::uuids($list(2));
+
+                $this->assertCount(2, $pageOne, $listing);
+                $this->assertCount(2, $pageTwo, $listing);
+                $this->assertSame([], array_intersect($pageOne, $pageTwo), "The pages of the $listing listing should not overlap");
+            }
+        }
+
+        public function testClientValidatesArguments(): void
+        {
+            $operatorUuid = $this->randomUuid();
+            $calls = [
+                fn() => $this->client->listAuditLogs(-1),
+                fn() => $this->client->listAuditLogs(1, -1),
+                fn() => $this->client->getAuditLogRecord(''),
+                fn() => $this->client->listOperatorAuditLogs(''),
+                fn() => $this->client->listOperatorAuditLogs($operatorUuid, -1),
+                fn() => $this->client->listOperatorAuditLogs($operatorUuid, 1, -1),
+            ];
+
+            foreach ($calls as $index => $call)
+            {
+                try
+                {
+                    $call();
+                    $this->fail("Call $index should have been rejected before reaching the server");
+                }
+                catch (InvalidArgumentException)
+                {
+                    $this->addToAssertionCount(1);
+                }
+            }
+        }
+
+        public function testUnknownRecordsAreNotFound(): void
+        {
+            $this->expectRequestFailure(
+                fn() => $this->client->getAuditLogRecord($this->randomUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
+                'An unknown audit log entry should not be found'
+            );
+            $this->expectRequestFailure(
+                fn() => $this->client->listOperatorAuditLogs($this->randomUuid()),
+                [HttpResponseCode::NOT_FOUND->value],
+                'The audit log of an unknown operator should not be found'
+            );
         }
     }

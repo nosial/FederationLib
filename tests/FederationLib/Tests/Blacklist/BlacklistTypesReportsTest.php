@@ -5,38 +5,16 @@
     namespace FederationLib\Tests\Blacklist;
 
     use FederationLib\Enums\IncidentType;
-    use FederationLib\FederationClient;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\BlacklistRecord;
     use FederationLib\Objects\ContentInput;
-    use PHPUnit\Framework\TestCase;
 
     /**
      * The ADVERTISING and TRACKING blacklist types, the type filter of List Blacklist and Search Blacklist, and blacklist
      * records supported by a report about another entity (OFD 2.0)
      */
-    class BlacklistTypesReportsTest extends TestCase
+    class BlacklistTypesReportsTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            $this->cleanupRecords();
-        }
-
         private function createEntity(string $prefix): string
         {
             $entityUuid = $this->client->pushEntity($this->uniqueHost($prefix));
@@ -199,7 +177,8 @@
             $this->assertSame(200, $code, json_encode($body));
             $this->assertArrayNotHasKey('evidence_uuid', $body);
             $this->assertArrayNotHasKey('evidence', $body);
-            $this->assertSame($submission->getReport()->getUuid(), $body['report_uuid'] ?? $body['report'] ?? null);
+            // The report is the "report" member of a BlacklistRecord ("report_uuid" is only the request parameter)
+            $this->assertSame($submission->getReport()->getUuid(), $body['report']);
         }
 
         public function testDeletingTheReportKeepsTheBlacklistRecord(): void

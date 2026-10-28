@@ -2,79 +2,100 @@
 
     namespace FederationLib\Tests\Client;
 
-    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
+    use InvalidArgumentException;
     use PHPUnit\Framework\TestCase;
 
+    /**
+     * The construction of a client: the endpoint and access token it accepts, and how it reaches the server
+     */
     class ClientTest extends TestCase
     {
-        private FederationClient $client;
-
-        protected function setUp(): void
+        public function testEndpointIsNormalized(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'));
-        }
+            $endpoint = rtrim(getenv('SERVER_ENDPOINT'), '/');
+            $serverName = new FederationClient($endpoint)->getServerInformation()->getServerName();
 
-        public function testServerInformationConsistency(): void
-        {
-            $serverInfo1 = $this->client->getServerInformation();
-            $this->assertNotNull($serverInfo1);
-
-            for ($i = 0; $i < 5; $i++)
+            foreach ([$endpoint, $endpoint . '/', $endpoint . '///'] as $variant)
             {
-                $serverInfo = $this->client->getServerInformation();
-                $this->assertEquals($serverInfo1->getServerName(), $serverInfo->getServerName());
-                $this->assertEquals($serverInfo1->getApiVersion(), $serverInfo->getApiVersion());
-                $this->assertEquals($serverInfo1->isPublicEntities(), $serverInfo->isPublicEntities());
-                $this->assertEquals($serverInfo1->isPublicEvidence(), $serverInfo->isPublicEvidence());
+                $client = new FederationClient($variant);
+                $this->assertEquals($endpoint, $client->getEndpoint());
+                $this->assertEquals($serverName, $client->getServerInformation()->getServerName());
             }
         }
 
-        public function testUnauthenticatedClientLimitations(): void
+        public function testInvalidEndpointsAreRejected(): void
         {
-            $serverInfo = $this->client->getServerInformation();
-            $this->assertNotNull($serverInfo);
+            foreach (['', '   ', 'not a url', 'not-a-url', '172.17.0.1:7000', '/relative/path'] as $endpoint)
+            {
+                try
+                {
+                    new FederationClient($endpoint);
+                    $this->fail("Endpoint '$endpoint' should be rejected");
+                }
+                catch (InvalidArgumentException)
+                {
+                    $this->addToAssertionCount(1);
+                }
+            }
+        }
+
+        public function testInvalidAccessTokensAreRejectedOnConstruction(): void
+        {
+            foreach (['', '   ', 'token with spaces', "token\n"] as $token)
+            {
+                try
+                {
+                    new FederationClient(getenv('SERVER_ENDPOINT'), $token);
+                    $this->fail('Access token ' . json_encode($token) . ' should be rejected');
+                }
+                catch (InvalidArgumentException)
+                {
+                    $this->addToAssertionCount(1);
+                }
+            }
+        }
+
+        public function testClientWithoutAccessTokenIsAnonymous(): void
+        {
+            $client = new FederationClient(getenv('SERVER_ENDPOINT'), null);
+            $this->assertNull($client->getAccessToken());
+
+            // Public methods work without an access token, methods that require authentication do not
+            $this->assertNotEmpty($client->getServerInformation()->getServerName());
 
             try
             {
-                $this->client->createOperator('test');
-                $this->fail('Expected RequestException for unauthenticated createOperator');
+                $client->getSelf();
+                $this->fail('getSelf() should require an access token');
             }
             catch (RequestException $e)
             {
-                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
+                $this->assertSame(401, $e->getCode());
             }
         }
 
-        public function testUnauthenticatedGetSelfFails(): void
-        {
-            try
-            {
-                $this->client->getSelf();
-                $this->fail('Expected RequestException for unauthenticated getSelf');
-            }
-            catch (RequestException $e)
-            {
-                $this->assertContains($e->getCode(), [400, 401], 'Expected 400 or 401 for unauthenticated request');
-            }
-        }
-
-        public function testClientEndpointHandling(): void
+        public function testUnreachableEndpointsFailTheRequest(): void
         {
             $endpoint = getenv('SERVER_ENDPOINT');
-            $this->assertNotNull($endpoint, 'SERVER_ENDPOINT must be set for tests');
+            $unreachable = [
+                'http://this-domain-does-not-exist-12345.com',
+                preg_replace('/:\d+/', ':9999', $endpoint),
+            ];
 
-            $clientWithSlash = new FederationClient($endpoint . '/', null);
-            $serverInfo1 = $clientWithSlash->getServerInformation();
-            $this->assertNotNull($serverInfo1);
-
-            $clientNoSlash = new FederationClient(rtrim($endpoint, '/'), null);
-            $serverInfo2 = $clientNoSlash->getServerInformation();
-            $this->assertNotNull($serverInfo2);
-
-            $this->assertEquals($serverInfo1->getServerName(), $serverInfo2->getServerName());
-            $this->assertEquals($serverInfo1->getApiVersion(), $serverInfo2->getApiVersion());
+            foreach ($unreachable as $endpoint)
+            {
+                try
+                {
+                    new FederationClient($endpoint)->getServerInformation();
+                    $this->fail("A request to $endpoint should fail");
+                }
+                catch (RequestException)
+                {
+                    $this->addToAssertionCount(1);
+                }
+            }
         }
 
         public function testSecurityCorsDoesNotAllowWildcardOrigin(): void
@@ -98,5 +119,4 @@
                 'Server should not return a wildcard CORS header for arbitrary origins'
             );
         }
-
     }

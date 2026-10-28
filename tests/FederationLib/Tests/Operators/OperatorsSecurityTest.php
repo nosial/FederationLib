@@ -4,204 +4,133 @@
 
     use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
-    use PHPUnit\Framework\TestCase;
+    use FederationLib\Helpers\ServerTestCase;
+    use FederationLib\Objects\OperatorRecord;
 
-    class OperatorsSecurityTest extends TestCase
+    class OperatorsSecurityTest extends ServerTestCase
     {
-        use TestHelpers;
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
-        public function testSecurityUnauthenticatedRequestsAreRejected(): void
+        public function testUnauthenticatedOperatorActionsAreRejected(): void
         {
             $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), null);
-            $fakeUuid = '00000000-0000-0000-0000-000000000000';
+            $uuid = $this->randomUuid();
 
             $operations = [
                 'getSelf' => fn() => $unauthenticatedClient->getSelf(),
                 'createOperator' => fn() => $unauthenticatedClient->createOperator('unauthorized'),
-                'disableOperator' => fn() => $unauthenticatedClient->disableOperator($fakeUuid),
-                'deleteOperator' => fn() => $unauthenticatedClient->deleteOperator($fakeUuid),
-                'setOperatorPermissions' => fn() => $unauthenticatedClient->setOperatorPermissions($fakeUuid, true),
-                'setManagementPermissions' => fn() => $unauthenticatedClient->setManagementPermissions($fakeUuid, true),
-                'setClientPermissions' => fn() => $unauthenticatedClient->setClientPermissions($fakeUuid, true),
-                'setAutoAssign' => fn() => $unauthenticatedClient->setAutoAssign($fakeUuid, true),
-                'generateOperatorAccessToken' => fn() => $unauthenticatedClient->generateOperatorAccessToken($fakeUuid),
+                'disableOperator' => fn() => $unauthenticatedClient->disableOperator($uuid),
+                'deleteOperator' => fn() => $unauthenticatedClient->deleteOperator($uuid),
+                'setOperatorPermissions' => fn() => $unauthenticatedClient->setOperatorPermissions($uuid, true),
+                'setManagementPermissions' => fn() => $unauthenticatedClient->setManagementPermissions($uuid, true),
+                'setClientPermissions' => fn() => $unauthenticatedClient->setClientPermissions($uuid, true),
+                'setAutoAssign' => fn() => $unauthenticatedClient->setAutoAssign($uuid, true),
+                'generateOperatorAccessToken' => fn() => $unauthenticatedClient->generateOperatorAccessToken($uuid),
             ];
 
             foreach ($operations as $name => $callback)
             {
-                $this->expectRequestFailure($callback, [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value], "Unauthenticated $name should be rejected");
+                $this->expectRequestFailure($callback, [HttpResponseCode::UNAUTHORIZED->value], "Unauthenticated $name should be rejected");
             }
         }
 
-        public function testSecurityOperatorRecordsArePublic(): void
+        public function testAccessTokensAreNeverExposed(): void
         {
-            $createdOperator = $this->client->createOperator(substr(uniqid('public_op_'), 0, 32));
-            $this->createdOperators[] = $createdOperator->getUuid();
-            $unauthenticatedClient = new FederationClient(getenv('SERVER_ENDPOINT'), null);
+            $operatorName = substr(uniqid('public_op_'), 0, 32);
+            $created = $this->client->createOperator($operatorName);
+            $operatorUuid = $created->getUuid();
+            $this->createdOperators[] = $operatorUuid;
 
-            $operator = $unauthenticatedClient->getOperator($createdOperator->getUuid());
-            $this->assertEquals($createdOperator->getUuid(), $operator->getUuid());
-            $this->assertEmpty($operator->getAccessToken(), 'Public operator records should not expose access tokens');
+            // Only the creation returns the access token
+            $this->assertSame(32, strlen($created->getAccessToken()));
 
-            $listed = $unauthenticatedClient->listOperators(1, 1000);
-            $this->assertContains($operator->getUuid(), array_map(fn($r) => $r->getUuid(), $listed));
-            foreach ($listed as $listedOperator)
-            {
-                $this->assertEmpty($listedOperator->getAccessToken(), 'Public operator list should not expose access tokens');
-            }
+            $viewers = [
+                'anonymous' => new FederationClient(getenv('SERVER_ENDPOINT'), null),
+                'client' => $this->createLimitedOperator('token_no_viewer', client: true),
+                'operator' => $this->createLimitedOperator('token_viewer_manager', management: true, operator: true),
+                'root' => $this->client,
+            ];
 
-            try
+            foreach ($viewers as $label => $viewer)
             {
-                $results = $unauthenticatedClient->searchOperators($operator->getName());
-            }
-            catch (RequestException $e)
-            {
-                if ($e->getCode() === HttpResponseCode::NOT_FOUND->value)
+                // Operator records are public by default
+                $record = $viewer->getOperator($operatorUuid);
+                $this->assertEquals($operatorUuid, $record->getUuid(), $label);
+                $this->assertEmpty($record->getAccessToken(), "The operator record should not expose the access token to the $label viewer");
+
+                $listed = $viewer->listOperators(1, 1000);
+                $this->assertContains($operatorUuid, array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $listed), $label);
+                foreach ($listed as $listedOperator)
                 {
-                    $this->markTestSkipped('Operator search is disabled on the server');
+                    $this->assertEmpty($listedOperator->getAccessToken(), "The operator list should not expose access tokens to the $label viewer");
                 }
 
-                throw $e;
-            }
-
-            $this->assertContains($operator->getUuid(), array_map(fn($r) => $r->getUuid(), $results));
-            foreach ($results as $result)
-            {
-                $this->assertEmpty($result->getAccessToken(), 'Public operator search should not expose access tokens');
+                $results = $viewer->searchOperators($operatorName);
+                $this->assertContains($operatorUuid, array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $results), $label);
+                foreach ($results as $result)
+                {
+                    $this->assertEmpty($result->getAccessToken(), "The operator search should not expose access tokens to the $label viewer");
+                }
             }
         }
 
-        public function testSecurityMalformedAccessTokensAreRejected(): void
+        public function testAccessTokenValidity(): void
         {
-            $shortTokenClient = new FederationClient(getenv('SERVER_ENDPOINT'), 'short');
-            $this->expectRequestFailure(
-                fn() => $shortTokenClient->getSelf(),
-                [HttpResponseCode::BAD_REQUEST->value],
-                'Too-short access token should be rejected'
-            );
+            // OFD "Access Tokens": a token that is not 32 characters is malformed (400), a well-formed token of no
+            // operator is not authenticated (401); whitespace around the token is not part of it
+            $cases = [
+                'short' => HttpResponseCode::BAD_REQUEST,
+                'none' => HttpResponseCode::BAD_REQUEST,
+                str_repeat('a', 31) => HttpResponseCode::BAD_REQUEST,
+                str_repeat('a', 33) => HttpResponseCode::BAD_REQUEST,
+                bin2hex(random_bytes(16)) => HttpResponseCode::UNAUTHORIZED,
+                str_repeat('a', 32) . ' ' => HttpResponseCode::UNAUTHORIZED,
+                ' ' . str_repeat('a', 32) => HttpResponseCode::UNAUTHORIZED,
+            ];
 
-            $fake32CharToken = bin2hex(random_bytes(16));
-            $nonExistentTokenClient = new FederationClient(getenv('SERVER_ENDPOINT'), $fake32CharToken);
-            $this->expectRequestFailure(
-                fn() => $nonExistentTokenClient->getSelf(),
-                [HttpResponseCode::UNAUTHORIZED->value],
-                'Non-existent 32-character access token should be rejected'
-            );
+            foreach ($cases as $token => $expected)
+            {
+                // Bypasses the client's validation so the server itself rejects the token
+                [$code] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: Bearer ' . $token]);
+                $this->assertSame($expected->value, $code, 'Token ' . json_encode($token));
+            }
         }
 
-        public function testSecurityClientOnlyOperatorCannotPerformPrivilegedActions(): void
+        public function testAuthorizationHeaderVariations(): void
+        {
+            // A header that does not carry a bearer token authenticates nobody
+            foreach (['Authorization: ' . $this->rootToken(), 'Authorization: Basic ' . base64_encode('user:pass'), 'Authorization: Bearer '] as $header)
+            {
+                [$code] = $this->rawRequest('GET', 'operators/self', null, null, [$header]);
+                $this->assertSame(HttpResponseCode::UNAUTHORIZED->value, $code, $header);
+            }
+
+            // The authentication scheme is case-insensitive
+            foreach (['Bearer', 'bearer', 'BEARER'] as $scheme)
+            {
+                [$code] = $this->rawRequest('GET', 'operators/self', null, null, ["Authorization: $scheme " . $this->rootToken()]);
+                $this->assertSame(200, $code, $scheme);
+            }
+        }
+
+        public function testClientOnlyOperatorCannotPerformPrivilegedActions(): void
         {
             $clientOnly = $this->createLimitedOperator('client_only', client: true);
             $entityUuid = $this->createSecurityEntity();
             $reportUuid = $this->createReportForEntity($entityUuid);
             $blacklistUuid = $this->createSecurityBlacklist($entityUuid);
-            $report = $this->createSecurityReport();
 
             $privilegedOperations = [
                 'createOperator' => fn() => $clientOnly->createOperator('child'),
                 'blacklistEntity' => fn() => $clientOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM),
-                'deleteReport' => fn() => $clientOnly->deleteReport($report['report']),
-                'assignOperatorToReport' => fn() => $clientOnly->assignOperatorToReport($report['report'], $this->client->getSelf()->getUuid()),
-                'closeReport' => fn() => $clientOnly->closeReport($report['report']),
+                'deleteReport' => fn() => $clientOnly->deleteReport($reportUuid),
+                'assignOperatorToReport' => fn() => $clientOnly->assignOperatorToReport($reportUuid, $this->client->getSelf()->getUuid()),
+                'closeReport' => fn() => $clientOnly->closeReport($reportUuid),
                 'deleteEntity' => fn() => $clientOnly->deleteEntity($entityUuid),
                 'clearEntityReputation' => fn() => $clientOnly->clearEntityReputation($entityUuid),
                 'deleteBlacklistRecord' => fn() => $clientOnly->deleteBlacklistRecord($blacklistUuid),
                 'liftBlacklistRecord' => fn() => $clientOnly->liftBlacklistRecord($blacklistUuid),
                 'listAttachments' => fn() => $clientOnly->listAttachments(),
+                'updateEvidenceTag' => fn() => $clientOnly->updateEvidenceTag($this->createSecurityEvidence($entityUuid), 'client_tag'),
             ];
 
             foreach ($privilegedOperations as $name => $callback)
@@ -210,86 +139,54 @@
             }
         }
 
-        public function testSecurityOperatorOnlyOperatorCannotPerformClientActions(): void
+        public function testOperatorOnlyOperatorCannotPerformClientOrManagementActions(): void
         {
             $operatorOnly = $this->createLimitedOperator('operator_only', operator: true);
             $entityUuid = $this->createSecurityEntity();
+            $report = $this->createSecurityReport();
 
-            $clientActions = [
-                'pushEntity' => fn() => $operatorOnly->pushEntity('example.com', 'user'),
+            $actions = [
+                'pushEntity' => fn() => $operatorOnly->pushEntity($this->uniqueHost('operator-only'), 'user'),
                 'submitEvidence' => fn() => $operatorOnly->submitEvidence($entityUuid, 'text', 'note', 'tag'),
                 'submitReport' => fn() => $operatorOnly->submitReport($entityUuid, ['text_content' => 'content'], IncidentType::SPAM),
-                'uploadNoteAttachment' => fn() => $operatorOnly->uploadNoteAttachment('00000000-0000-0000-0000-000000000000', 'note.txt', 'content'),
+                'uploadNoteAttachment' => fn() => $operatorOnly->uploadNoteAttachment($report['evidence'], 'note.txt', 'content'),
+                'assignOperatorToReport' => fn() => $operatorOnly->assignOperatorToReport($report['report'], $operatorOnly->getSelf()->getUuid()),
             ];
 
-            foreach ($clientActions as $name => $callback)
+            foreach ($actions as $name => $callback)
             {
                 $this->expectRequestFailure($callback, [HttpResponseCode::FORBIDDEN->value], "Operator-only account should not be able to $name");
             }
         }
 
-        public function testSecurityManagementOnlyOperatorCanManageRecordsAndClientActionsButNotOperatorActions(): void
+        public function testManagementOnlyOperatorCanManageRecordsButNotOperators(): void
         {
             $managementOnly = $this->createLimitedOperator('management_only', management: true);
-            $entityUuid = $this->createSecurityEntity();
-            $reportUuid = $this->createReportForEntity($entityUuid);
+            $managementUuid = $managementOnly->getSelf()->getUuid();
 
-            $blacklistUuid = $managementOnly->blacklistEntity($entityUuid, $reportUuid, IncidentType::SPAM, time() + 3600);
-            $this->createdBlacklistRecords[] = $blacklistUuid;
-            $this->assertNotEmpty($blacklistUuid);
+            // Management permissions include client permissions (OFD "Permission Groups")
+            $this->assertTrue($managementOnly->getSelf()->hasClientPermissions());
+            $entityUuid = $this->createSecurityEntity($managementOnly);
+            $this->createSecurityEvidence($entityUuid, client: $managementOnly);
 
-            // Management permissions inherit client permissions, so a management-only operator can perform client actions.
-            $pushedEntityUuid = $managementOnly->pushEntity('mgmt-inherits-client.com', 'user');
-            $this->createdEntities[] = $pushedEntityUuid;
-            $this->assertNotEmpty($pushedEntityUuid);
-
-            $evidenceUuid = $managementOnly->submitEvidence($entityUuid, 'text', 'note', 'tag');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
-            $this->assertNotEmpty($evidenceUuid);
+            $this->createdBlacklistRecords[] = $managementOnly->blacklistEntity($entityUuid, null, IncidentType::SPAM, time() + 3600);
 
             $report = $this->createSecurityReport();
-            $managementOnly->assignOperatorToReport($report['report'], $managementOnly->getSelf()->getUuid());
+            $managementOnly->assignOperatorToReport($report['report'], $managementUuid);
             $managementOnly->closeReport($report['report']);
-            $closedReport = $this->client->getReport($report['report']);
-            $this->assertFalse($closedReport->isOpened());
+            $this->assertFalse($this->client->getReport($report['report'])->isOpened());
 
-            $forbiddenActions = [
+            foreach ([
                 'createOperator' => fn() => $managementOnly->createOperator('child'),
-            ];
-
-            foreach ($forbiddenActions as $name => $callback)
+                'updateEvidenceTag' => fn() => $managementOnly->updateEvidenceTag($report['evidence'], 'management_tag'),
+                'setClientPermissions' => fn() => $managementOnly->setClientPermissions($managementUuid, true),
+            ] as $name => $callback)
             {
                 $this->expectRequestFailure($callback, [HttpResponseCode::FORBIDDEN->value], "Management-only operator should not be able to $name");
             }
         }
 
-        public function testSecurityConfidentialEvidenceRequiresManagementPermission(): void
-        {
-            $entityUuid = $this->createSecurityEntity();
-            $confidentialEvidenceUuid = $this->createSecurityEvidence($entityUuid, true);
-
-            $clientOnly = $this->createLimitedOperator('confidential_client', client: true);
-            $operatorOnly = $this->createLimitedOperator('confidential_operator', operator: true);
-            $managementOnly = $this->createLimitedOperator('confidential_management', management: true);
-
-            $this->expectRequestFailure(
-                fn() => $clientOnly->getEvidenceRecord($confidentialEvidenceUuid),
-                [HttpResponseCode::FORBIDDEN->value],
-                'Client-only operator should not view confidential evidence'
-            );
-
-            $this->expectRequestFailure(
-                fn() => $operatorOnly->getEvidenceRecord($confidentialEvidenceUuid),
-                [HttpResponseCode::FORBIDDEN->value],
-                'Operator-only account should not view confidential evidence'
-            );
-
-            $evidenceRecord = $managementOnly->getEvidenceRecord($confidentialEvidenceUuid);
-            $this->assertEquals($confidentialEvidenceUuid, $evidenceRecord->getUuid());
-            $this->assertTrue($evidenceRecord->isConfidential());
-        }
-
-        public function testSecurityRootOperatorCannotBeModified(): void
+        public function testBuiltinOperatorsAreProtected(): void
         {
             $root = $this->client->getSelf();
             $attacker = $this->createLimitedOperator('root_attacker', operator: true, management: true, client: true);
@@ -308,143 +205,39 @@
             {
                 $this->expectRequestFailure($callback, [HttpResponseCode::FORBIDDEN->value], "Root operator should be protected from $name");
             }
-        }
 
-        public function testSecurityReservedOperatorNamesAreRejected(): void
-        {
-            $reservedNames = ['root', 'system', 'ROOT', 'System'];
-
-            foreach ($reservedNames as $name)
+            foreach (['root', 'system', 'ROOT', 'System'] as $name)
             {
-                $this->expectRequestFailure(
-                    fn() => $this->client->createOperator($name),
-                    [HttpResponseCode::BAD_REQUEST->value],
-                    "Reserved operator name '$name' should be rejected"
-                );
+                $this->expectRequestFailure(fn() => $this->client->createOperator($name), [HttpResponseCode::BAD_REQUEST->value], "Reserved operator name '$name' should be rejected");
             }
         }
 
-        public function testSecurityPermissionRevocationIsEffective(): void
+        public function testDisabledOperatorTokenIsRejected(): void
         {
-            $clientOperator = $this->createLimitedOperator('revocation_test', client: true);
-            $operatorUuid = $clientOperator->getSelf()->getUuid();
-
-            $firstEntityUuid = $clientOperator->pushEntity('revocation-test.com', 'user1');
-            $this->createdEntities[] = $firstEntityUuid;
-            $this->assertNotEmpty($firstEntityUuid);
-
-            $this->client->setClientPermissions($operatorUuid, false);
-
-            $this->expectRequestFailure(
-                fn() => $clientOperator->pushEntity('revocation-test2.com', 'user2'),
-                [HttpResponseCode::FORBIDDEN->value],
-                'Revoked client permission should prevent pushing entities'
-            );
-
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $secondEntityUuid = $clientOperator->pushEntity('revocation-test3.com', 'user3');
-            $this->createdEntities[] = $secondEntityUuid;
-            $this->assertNotEmpty($secondEntityUuid);
-        }
-
-        public function testSecurityDisabledOperatorCannotAuthenticate(): void
-        {
-            $createdOperator = $this->client->createOperator('disabled_auth_test');
-            $operatorUuid = $createdOperator->getUuid();
+            $created = $this->client->createOperator(substr(uniqid('disabled_all_'), 0, 32));
+            $operatorUuid = $created->getUuid();
             $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermissions($operatorUuid, true);
-
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
-            $this->assertNotEmpty($operatorClient->getSelf()->getUuid());
-
-            $this->client->disableOperator($operatorUuid);
-
-            $this->expectRequestFailure(
-                fn() => $operatorClient->getSelf(),
-                [HttpResponseCode::FORBIDDEN->value],
-                'Disabled operator should not be able to call getSelf'
-            );
-        }
-
-        public function testAuthorizationHeaderVariationsAreHandled(): void
-        {
-            $token = getenv('SERVER_ACCESS_TOKEN');
-
-            // Missing Bearer prefix should be rejected.
-            [$noBearerCode] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: ' . $token]);
-            $this->assertContains($noBearerCode, [400, 401], 'Token without Bearer prefix should be rejected');
-
-            // Wrong scheme should be rejected.
-            [$basicCode] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: Basic ' . base64_encode('user:pass')]);
-            $this->assertContains($basicCode, [400, 401], 'Basic auth should be rejected');
-
-            // Empty Bearer token should be treated as unauthenticated.
-            [$emptyCode] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: Bearer ']);
-            $this->assertContains($emptyCode, [400, 401], 'Empty Bearer token should be rejected');
-
-            // Valid Bearer token should succeed.
-            [$validCode] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: Bearer ' . $token]);
-            $this->assertEquals(200, $validCode, 'Valid Bearer token should succeed');
-        }
-
-        public function testInvalidAccessTokenFormatsAreRejected(): void
-        {
-            $invalidTokens = [
-                'short',
-                'exactly31characterslong1234567',
-                'exactly33characterslong12345678',
-                str_repeat('a', 32) . ' ',
-                str_repeat('a', 32) . "\n",
-                ' ' . str_repeat('a', 32),
-            ];
-
-            foreach ($invalidTokens as $token)
-            {
-                // Bypass client-side validation so the server itself rejects the malformed token.
-                [$code] = $this->rawRequest('GET', 'operators/self', null, null, ['Authorization: Bearer ' . $token]);
-                $this->assertContains(
-                    $code,
-                    [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::UNAUTHORIZED->value],
-                    "Invalid token format '$token' should be rejected by server"
-                );
-            }
-        }
-
-        public function testDisabledOperatorTokenRejectedAcrossAllEndpoints(): void
-        {
-            $createdOperator = $this->client->createOperator('disabled_all_endpoints');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermissions($operatorUuid, true);
-            $this->client->setOperatorPermissions($operatorUuid, true);
             $this->client->setManagementPermissions($operatorUuid, true);
+            $this->client->setOperatorPermissions($operatorUuid, true);
 
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
-            $this->assertNotEmpty($operatorClient->getSelf()->getUuid());
+            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $created->getAccessToken());
+            $entityUuid = $this->createSecurityEntity($operatorClient);
+            $evidenceUuid = $this->createSecurityEvidence($entityUuid, client: $operatorClient);
 
             $this->client->disableOperator($operatorUuid);
 
-            $endpoints = [
+            foreach ([
                 'getSelf' => fn() => $operatorClient->getSelf(),
-                'pushEntity' => fn() => $operatorClient->pushEntity('disabled-endpoints.com', 'user'),
+                'pushEntity' => fn() => $operatorClient->pushEntity($this->uniqueHost('disabled-endpoints'), 'user'),
                 'listAttachments' => fn() => $operatorClient->listAttachments(),
-            ];
-
-            foreach ($endpoints as $name => $callback)
+            ] as $name => $callback)
             {
-                $this->expectRequestFailure(
-                    $callback,
-                    [HttpResponseCode::FORBIDDEN->value],
-                    "Disabled operator should be rejected for $name"
-                );
+                $this->expectRequestFailure($callback, [HttpResponseCode::FORBIDDEN->value], "Disabled operator should be rejected for $name");
             }
 
-            // Public methods process the token of a disabled operator as unauthenticated
-            $this->assertIsArray($operatorClient->listOperators());
+            // Public methods process the token of a disabled operator as unauthenticated...
+            $this->assertContains($operatorUuid, array_map(fn(OperatorRecord $operator) => $operator->getUuid(), $operatorClient->listOperators(1, 1000)));
             $this->assertIsArray($operatorClient->listEvidence());
-            $this->assertIsArray($operatorClient->listReports());
-            $this->assertIsArray($operatorClient->listBlacklistRecords());
 
             // ...and never with the permissions the disabled operator held
             $this->expectRequestFailure(
@@ -452,63 +245,9 @@
                 [HttpResponseCode::UNAUTHORIZED->value],
                 'A disabled operator should not list confidential evidence through a public method'
             );
-        }
 
-        public function testSystemOperatorCannotAuthenticate(): void
-        {
-            // The system operator has token 'none' and cannot authenticate.
-            $systemClient = new FederationClient(getenv('SERVER_ENDPOINT'), 'none');
-            $this->expectRequestFailure(
-                fn() => $systemClient->getSelf(),
-                [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::UNAUTHORIZED->value],
-                'System operator token should not authenticate'
-            );
-        }
-
-        public function testSecurityListOperatorsDoesNotExposeOtherOperatorTokens(): void
-        {
-            $manager = $this->createLimitedOperator('token_leak_manager', operator: true);
-            $this->createLimitedOperator('token_leak_victim', client: true);
-
-            $operators = $manager->listOperators(1, 1000);
-            $managerUuid = $manager->getSelf()->getUuid();
-
-            foreach ($operators as $operator)
-            {
-                if ($operator->getUuid() === $managerUuid)
-                {
-                    continue;
-                }
-
-                $this->assertEmpty(
-                    $operator->getAccessToken(),
-                    sprintf('Operator list should not expose access tokens for operator %s', $operator->getName())
-                );
-            }
-        }
-
-        public function testSecurityDisabledOperatorDataIsolation(): void
-        {
-            $createdOperator = $this->client->createOperator('disabled_isolation');
-            $operatorUuid = $createdOperator->getUuid();
-            $this->createdOperators[] = $operatorUuid;
-            $this->client->setClientPermissions($operatorUuid, true);
-            $this->client->setManagementPermissions($operatorUuid, true);
-
-            $operatorClient = new FederationClient(getenv('SERVER_ENDPOINT'), $createdOperator->getAccessToken());
-
-            $entityUuid = $operatorClient->pushEntity('disabled-isolation.com', 'di_user');
-            $this->createdEntities[] = $entityUuid;
-
-            $evidenceUuid = $operatorClient->submitEvidence($entityUuid, 'Disabled operator evidence', 'Note', 'di');
-            $this->createdEvidenceRecords[] = $evidenceUuid;
-
-            $this->client->disableOperator($operatorUuid);
-
-            $record = $this->client->getEntityRecord($entityUuid);
-            $this->assertNotNull($record, 'Entity created by now-disabled operator should still be readable by management');
-
-            $evidenceRecord = $this->client->getEvidenceRecord($evidenceUuid);
-            $this->assertNotNull($evidenceRecord, 'Evidence created by now-disabled operator should still be readable by management');
+            // Disabling an operator preserves its records (OFD "Delete Operator")
+            $this->assertEquals($entityUuid, $this->client->getEntityRecord($entityUuid)->getUuid());
+            $this->assertEquals($evidenceUuid, $this->client->getEvidenceRecord($evidenceUuid)->getUuid());
         }
     }

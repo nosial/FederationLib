@@ -4,107 +4,14 @@
 
     use FederationLib\Enums\AuditLogType;
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
-    use PHPUnit\Framework\TestCase;
+    use FederationLib\Helpers\ServerTestCase;
 
-    class GenerateAccessTokenTest extends TestCase
+    /**
+     * An operator refreshing its own access token (Generate Access Token)
+     */
+    class GenerateAccessTokenTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdReports as $reportUuid)
-            {
-                try
-                {
-                    $this->client->deleteReport($reportUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete report $reportUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdBlacklistRecords as $blacklistUuid)
-            {
-                try
-                {
-                    $this->client->deleteBlacklistRecord($blacklistUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete blacklist record $blacklistUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->tempFiles = [];
-        }
-
         public function testGenerateAccessTokenRefreshesOwnToken(): void
         {
             // An operator with no permissions at all can still refresh its own token.
@@ -127,7 +34,7 @@
             // The old token must no longer authenticate.
             $this->expectRequestFailure(
                 fn() => (new FederationClient(getenv('SERVER_ENDPOINT'), $originalToken))->getSelf(),
-                [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
+                [HttpResponseCode::UNAUTHORIZED->value],
                 'Old access token should be revoked after refreshing via /operators/refresh'
             );
         }
@@ -149,7 +56,7 @@
             // The server has rotated the token, so the stale client token is revoked.
             $this->expectRequestFailure(
                 fn() => $operator->getSelf(),
-                [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
+                [HttpResponseCode::UNAUTHORIZED->value],
                 'Original token should be revoked server-side even when the client does not update its token'
             );
 
@@ -187,7 +94,7 @@
 
             $this->expectRequestFailure(
                 fn() => $unauthenticatedClient->generateAccessToken(),
-                [HttpResponseCode::UNAUTHORIZED->value, HttpResponseCode::FORBIDDEN->value],
+                [HttpResponseCode::UNAUTHORIZED->value],
                 'Unauthenticated operator should be rejected when generating an Access Token'
             );
         }
@@ -203,8 +110,9 @@
 
         public function testGenerateAccessTokenEndpointRequiresPost(): void
         {
-            [$code] = $this->rawRequest('GET', 'operators/refresh', getenv('SERVER_ACCESS_TOKEN'));
-            $this->assertNotEquals(200, $code, 'GET /operators/refresh should not be accepted');
+            // GET /operators/refresh matches no method, a client error (OFD "Error Responses")
+            [$code] = $this->rawRequest('GET', 'operators/refresh', $this->rootToken());
+            $this->assertSame(HttpResponseCode::BAD_REQUEST->value, $code, 'GET /operators/refresh should not be accepted');
         }
 
         public function testGenerateAccessTokenIsLoggedInAuditTrail(): void

@@ -7,38 +7,23 @@
     use FederationLib\Enums\ContentType;
     use FederationLib\Enums\IncidentType;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\EntityRecord;
-    use PHPUnit\Framework\TestCase;
 
     /**
      * Telephone entities (<international number>@e164.arpa, OFD "Telephone Entities"): hidden from unauthenticated
      * requests that do not already know the number, and the evidence about them is always confidential. The server is
      * assumed to use its defaults: entities, entity queries and content scanning are public, telephone entities are not.
      */
-    class TelephoneEntitiesTest extends TestCase
+    class TelephoneEntitiesTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
         private FederationClient $anonymous;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $tempFiles = [];
 
         protected function setUp(): void
         {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
+            parent::setUp();
             $this->anonymous = new FederationClient(getenv('SERVER_ENDPOINT'));
-        }
-
-        protected function tearDown(): void
-        {
-            $this->cleanupRecords();
         }
 
         /**
@@ -162,7 +147,8 @@
 
             // Evidence is public by default, confidential evidence is not
             [$code] = $this->rawRequest('GET', '/evidence/' . $evidenceUuid);
-            $this->assertContains($code, [403, 404]);
+            // OFD "Get Evidence Record": confidential evidence requires authentication
+            $this->assertSame(401, $code);
         }
 
         public function testReportEvidenceAboutTelephoneEntityIsConfidential(): void

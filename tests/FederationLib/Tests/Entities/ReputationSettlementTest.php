@@ -4,7 +4,9 @@
 
     namespace FederationLib\Tests\Entities;
 
+    use FederationLib\Enums\HttpResponseCode;
     use FederationLib\Enums\IncidentType;
+    use FederationLib\FederationClient;
     use FederationLib\Helpers\ServerTestCase;
 
     /**
@@ -71,8 +73,7 @@
          */
         private function settle(?string $token = null): array
         {
-            [$code, $body] = $this->jsonRequest('POST', '/test-plugin/settle-reputation', $token ?? $this->rootToken());
-            $this->assertSame(200, $code, json_encode($body));
+            $body = new FederationClient(getenv('SERVER_ENDPOINT'), $token ?? $this->rootToken())->request('POST', 'test-plugin/settle-reputation');
             $this->assertArrayHasKey('days', $body);
             $this->assertArrayHasKey('gains', $body);
             $this->assertArrayHasKey('losses', $body);
@@ -86,8 +87,11 @@
 
         public function testSettleRouteRequiresManagementAndOperatorPermissions(): void
         {
-            [$code] = $this->rawRequest('POST', '/test-plugin/settle-reputation');
-            $this->assertSame(401, $code, 'An anonymous request should not settle reputation');
+            $this->expectRequestFailure(
+                fn() => new FederationClient(getenv('SERVER_ENDPOINT'))->request('POST', 'test-plugin/settle-reputation'),
+                [HttpResponseCode::UNAUTHORIZED->value],
+                'An anonymous request should not settle reputation'
+            );
 
             foreach([
                 'client' => $this->createLimitedOperator('settle_client', client: true),
@@ -95,8 +99,11 @@
                 'operator' => $this->createLimitedOperator('settle_operator', operator: true),
             ] as $label => $operator)
             {
-                [$code] = $this->rawRequest('POST', '/test-plugin/settle-reputation', $operator->getAccessToken());
-                $this->assertSame(403, $code, "An operator with only $label permissions should not settle reputation");
+                $this->expectRequestFailure(
+                    fn() => $operator->request('POST', 'test-plugin/settle-reputation'),
+                    [HttpResponseCode::FORBIDDEN->value],
+                    "An operator with only $label permissions should not settle reputation"
+                );
             }
 
             $this->settle($this->createLimitedOperator('settle_both', management: true, operator: true)->getAccessToken());
@@ -153,7 +160,9 @@
         public function testScansWithoutClientPermissionsDoNotAffectReputation(): void
         {
             $authorUuid = $this->createAuthor();
-            $operator = $this->createLimitedOperator('no_client', management: true, operator: true);
+            // Management permissions include client permissions, so only operator permissions are granted
+            $operator = $this->createLimitedOperator('no_client', operator: true);
+            $this->assertFalse($operator->getSelf()->hasClientPermissions());
 
             // The scan itself is public, it is only not recorded
             $this->scanSafe('Message', $authorUuid, $operator->getAccessToken());
@@ -361,5 +370,34 @@
 
             // Nothing is left to settle
             $this->assertSame(['days' => 0, 'gains' => 0, 'losses' => 0], $this->settle());
+        }
+
+        public function testSettledReputationAppliesTheReputationScanningRules(): void
+        {
+            $host = $this->uniqueHost('mentioned');
+            $mentionedUuid = $this->createEntity($host);
+            $authors = [$this->createAuthor(), $this->createAuthor(), $this->createAuthor()];
+            foreach($authors as $authorUuid)
+            {
+                $this->scanSafe('Have you seen ' . $host . ' yet?', $authorUuid);
+            }
+
+            $blockedUuid = $this->createAuthor();
+            $this->scanBlocked('Message', $blockedUuid);
+            $this->settle();
+
+            $this->assertSame(self::GAIN, $this->getReputation($authors[0]));
+            $this->assertSame(self::GAIN, $this->getReputation($mentionedUuid));
+            $this->assertSame(self::LOSS, $this->getReputation($blockedUuid));
+
+            // The default modifier of each rule, scaled by the cube root of the share of the reputation bound (1000)
+            $goodAuthor = $this->scan('Have you seen ' . $host . ' yet?', $authors[0])['scan_results'];
+            $this->assertEqualsWithDelta(20.0 * (self::GAIN / 1000) ** (1 / 3), $goodAuthor['AUTHOR_GOOD_REPUTATION'], 0.0001);
+            $this->assertEqualsWithDelta(5.0 * (self::GAIN / 1000) ** (1 / 3), $goodAuthor['NAMED_ENTITY_GOOD_REPUTATION'], 0.0001);
+            $this->assertEquals(0.0, $goodAuthor['AUTHOR_BAD_REPUTATION']);
+
+            $badAuthor = $this->scan('Message', $blockedUuid)['scan_results'];
+            $this->assertEqualsWithDelta(-25.0 * (abs(self::LOSS) / 1000) ** (1 / 3), $badAuthor['AUTHOR_BAD_REPUTATION'], 0.0001);
+            $this->assertEquals(0.0, $badAuthor['AUTHOR_GOOD_REPUTATION']);
         }
     }

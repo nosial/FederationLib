@@ -3,102 +3,18 @@
     namespace FederationLib\Tests\Attachments;
 
     use FederationLib\Enums\HttpResponseCode;
-    use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationClient;
-    use FederationLib\Helpers\Logger;
-    use FederationLib\Helpers\TestHelpers;
+    use FederationLib\Helpers\AttachmentFiles;
+    use FederationLib\Helpers\ServerTestCase;
     use FederationLib\Objects\FileAttachmentRecord;
     use InvalidArgumentException;
-    use PHPUnit\Framework\TestCase;
-    use Symfony\Component\Uid\Uuid;
 
     /**
      * Client to server tests of the attachments of evidence records uploaded by operators acting through their own client
      */
-    class EvidenceAttachmentsTest extends TestCase
+    class EvidenceAttachmentsTest extends ServerTestCase
     {
-        use TestHelpers;
-
-        private FederationClient $client;
-        private array $createdOperators = [];
-        private array $createdEntities = [];
-        private array $createdEvidenceRecords = [];
-        private array $createdBlacklistRecords = [];
-        private array $createdReports = [];
-        private array $createdAttachments = [];
-        private array $tempFiles = [];
-
-        protected function setUp(): void
-        {
-            $this->client = new FederationClient(getenv('SERVER_ENDPOINT'), getenv('SERVER_ACCESS_TOKEN'));
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->createdAttachments as $attachmentUuid)
-            {
-                try
-                {
-                    $this->client->deleteAttachment($attachmentUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete attachment $attachmentUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEvidenceRecords as $evidenceUuid)
-            {
-                try
-                {
-                    $this->client->deleteEvidence($evidenceUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete evidence record $evidenceUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdEntities as $entityUuid)
-            {
-                try
-                {
-                    $this->client->deleteEntity($entityUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete entity record $entityUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->createdOperators as $operatorUuid)
-            {
-                try
-                {
-                    $this->client->deleteOperator($operatorUuid);
-                }
-                catch (RequestException $e)
-                {
-                    Logger::getLogger()->warning("Failed to delete operator record $operatorUuid: " . $e->getMessage());
-                }
-            }
-
-            foreach ($this->tempFiles as $tempFile)
-            {
-                if (file_exists($tempFile))
-                {
-                    unlink($tempFile);
-                }
-            }
-
-            $this->createdOperators = [];
-            $this->createdEntities = [];
-            $this->createdEvidenceRecords = [];
-            $this->createdBlacklistRecords = [];
-            $this->createdReports = [];
-            $this->createdAttachments = [];
-            $this->tempFiles = [];
-        }
+        use AttachmentFiles;
 
         public function testEvidenceAttachmentsOnlyListOwnAttachments(): void
         {
@@ -150,8 +66,7 @@
             $this->assertEquals($attachments[0]->getFileName(), $info->getFileName());
             $this->assertEquals($evidenceUuid, $info->getEvidenceUuid());
 
-            $downloadedFile = $this->client->downloadAttachment($upload->getUuid(), sys_get_temp_dir());
-            $this->tempFiles[] = $downloadedFile;
+            $downloadedFile = $this->client->downloadAttachment($upload->getUuid(), $this->createTemporaryDirectory());
             $this->assertEquals($content, file_get_contents($downloadedFile));
         }
 
@@ -211,27 +126,28 @@
         public function testEvidenceAttachmentsOfMissingEvidence(): void
         {
             $this->expectRequestFailure(
-                fn() => $this->client->getEvidenceAttachments(Uuid::v7()->toRfc4122()),
+                fn() => $this->client->getEvidenceAttachments($this->randomUuid()),
                 [HttpResponseCode::NOT_FOUND->value],
                 'Attachments of a non-existent evidence record should not be found'
             );
 
             $this->expectRequestFailure(
-                fn() => $this->client->uploadNoteAttachment(Uuid::v7()->toRfc4122(), 'missing', 'Missing evidence note'),
+                fn() => $this->client->uploadNoteAttachment($this->randomUuid(), 'missing', 'Missing evidence note'),
                 [HttpResponseCode::NOT_FOUND->value],
                 'A note should not be attached to a non-existent evidence record'
             );
 
-            [$code] = $this->rawRequest('GET', 'evidence/not-a-valid-uuid/attachments', getenv('SERVER_ACCESS_TOKEN'));
-            $this->assertContains($code, [HttpResponseCode::BAD_REQUEST->value, HttpResponseCode::NOT_FOUND->value]);
+            // A path with a malformed UUID matches no method, a client error (OFD "Errors")
+            [$code] = $this->rawRequest('GET', 'evidence/not-a-valid-uuid/attachments', $this->rootToken());
+            $this->assertSame(HttpResponseCode::BAD_REQUEST->value, $code);
         }
 
         public function testNoteAttachmentValidatesArgumentsClientSide(): void
         {
             $calls = [
                 fn() => $this->client->uploadNoteAttachment('', 'note', 'content'),
-                fn() => $this->client->uploadNoteAttachment(Uuid::v7()->toRfc4122(), '', 'content'),
-                fn() => $this->client->uploadNoteAttachment(Uuid::v7()->toRfc4122(), 'note', ''),
+                fn() => $this->client->uploadNoteAttachment($this->randomUuid(), '', 'content'),
+                fn() => $this->client->uploadNoteAttachment($this->randomUuid(), 'note', ''),
                 fn() => $this->client->getEvidenceAttachments(''),
             ];
 
