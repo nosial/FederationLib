@@ -35,6 +35,8 @@
         private array $detections;
         /** @var array<int, string[]> */
         private array $resolvedAddresses;
+        /** @var array<int, ScanFile[]> */
+        private array $files;
 
         /**
          * ContentScan constructor.
@@ -48,10 +50,13 @@
          * @param float|null $threshold The threshold parameter that was provided, if any
          * @param IncidentType[]|null $concerns The effective concerns of the request, null to accept every concern
          * @param array<int, string[]> $resolvedAddresses The addresses the host resolved for each evidence item itself
+         * @param array<int, ScanFile[]> $files The files submitted with each evidence item, keyed by evidence index
          */
         public function __construct(array $evidence, ?string $authorIdentifier, ?ResolvedEntity $authorEntity, array $resolvedEntities,
-            ?OperatorRecord $authenticatedOperator=null, ?int $topK=null, ?float $threshold=null, ?array $concerns=null, array $resolvedAddresses=[])
+            ?OperatorRecord $authenticatedOperator=null, ?int $topK=null, ?float $threshold=null, ?array $concerns=null, array $resolvedAddresses=[],
+            array $files=[])
         {
+            $this->files = array_map(fn(array $evidenceFiles) => array_values($evidenceFiles), $files);
             $this->resolvedAddresses = $resolvedAddresses;
             $this->concerns = $concerns !== null ? array_values($concerns) : null;
             $this->detections = [];
@@ -192,6 +197,29 @@
         }
 
         /**
+         * Returns the files submitted with an evidence item, in the order the client named them, eg; the images of a
+         * message. FederationLib interprets none of them itself; a handler that interprets files must treat every file
+         * as hostile (see ScanFile::getPath()). A file the handler cannot interpret is ignored, never an error.
+         *
+         * @param int $evidenceIndex The index of the evidence item (see getEvidence())
+         * @return ScanFile[] The files, empty if the evidence item carries none
+         */
+        public function getFiles(int $evidenceIndex): array
+        {
+            return $this->files[$evidenceIndex] ?? [];
+        }
+
+        /**
+         * Returns whether any evidence item carries files
+         *
+         * @return bool True if files were submitted for scanning
+         */
+        public function hasFiles(): bool
+        {
+            return array_any($this->files, fn(array $evidenceFiles) => count($evidenceFiles) > 0);
+        }
+
+        /**
          * Returns whether the host permits retrieving the URLs submitted for scanning, which makes it contact addresses
          * chosen by the requester. Disabled by default; a handler must not retrieve a URL unless this returns true, and
          * must then guard the retrieval as URL uploads are guarded (OFD "Remote Retrieval").
@@ -216,14 +244,21 @@
          * @param string|null $entityUuid Optional. The UUID of the entity the detection relates to
          * @param float|null $confidence Optional. The confidence of the detection
          * @param bool $verified Whether the detection relies only on information that was verified
+         * @param int|null $fileIndex Optional. The index of the file of the evidence item (see getFiles()) the detection
+         *                            relates to, null when it does not relate to a file
          * @return void
-         * @throws InvalidArgumentException If the evidence index does not exist or the source is empty
+         * @throws InvalidArgumentException If the evidence index or the file index does not exist or the source is empty
          */
-        public function addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid=null, ?float $confidence=null, bool $verified=true): void
+        public function addDetection(IncidentType $concern, int $evidenceIndex, string $source, ?string $entityUuid=null, ?float $confidence=null, bool $verified=true, ?int $fileIndex=null): void
         {
             if(!isset($this->evidence[$evidenceIndex]))
             {
                 throw new InvalidArgumentException(sprintf('The evidence index %d does not exist, %d evidence item(s) were provided', $evidenceIndex, count($this->evidence)));
+            }
+
+            if($fileIndex !== null && !isset($this->getFiles($evidenceIndex)[$fileIndex]))
+            {
+                throw new InvalidArgumentException(sprintf('The file index %d does not exist, the evidence item %d carries %d file(s)', $fileIndex, $evidenceIndex, count($this->getFiles($evidenceIndex))));
             }
 
             if(trim($source) === '')
@@ -241,7 +276,7 @@
                 return;
             }
 
-            $this->detections[] = new Detection($concern, $evidenceIndex, $source, $entityUuid, $confidence, $verified);
+            $this->detections[] = new Detection($concern, $evidenceIndex, $source, $entityUuid, $confidence, $verified, $fileIndex);
         }
 
         /**
