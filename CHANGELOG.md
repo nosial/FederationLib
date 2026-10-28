@@ -5,11 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.2] - Ongoing
+## [2.1.0] - 2026-10-28
 
-This is an ongoing update
+This update introduces support for OFD Specification version 2.1
+
+### Added
+ - Implements the scanned files of version 2.1 of the OFD Specification, the server reports `2.1` as its `api_version`.
+   Scan requests may carry files in a `multipart/form-data` body whose `evidence` part carries the JSON text of the
+   evidence, each evidence object naming the parts of its files in a `files` member; an evidence object with files may
+   omit `text_content`. FederationLib interprets no file itself: a file is accepted and ignored unless a plugin
+   interprets its media type, so content consisting only of such files keeps the neutral risk score of `50`
+ - Files are validated against `scanning.max_files` (`4` by default, `0` disables the scanning of files) and
+   `scanning.max_file_size` (10 MB by default), their media type is determined from their content, and they are left in
+   PHP's temporary upload directory so that nothing is stored, unless the scan generates a report: the files of each
+   evidence item are then kept as attachments of its evidence, with an `ATTACHMENT_UPLOADED` audit log entry
+ - Every server accepts files: when `scanning.max_files` is `0`, or the request is unauthenticated (or lacks client
+   permissions) and the `SCAN_FILES` item of `server.public` is not set, the files are validated and ignored, as if
+   no plugin interpreted them. `SCAN_FILES` is off by default
+ - The server information publishes `max_scan_files` and `max_scan_file_size`, and detections carry a `file_index`
+ - Plugins read the files of an evidence item with `ContentScan::getFiles()` (`ScanFile` objects), interpret the media
+   types they support and ignore the rest, and relate detections to a file with the new `$fileIndex` parameter of
+   `ContentScan::addDetection()`
+ - `FileAttachmentManager::storeFile()` stores a copy of a file as an attachment of an evidence record
+ - The docker images include the PHP `gd` and `exif` extensions, for plugins that interpret images
 
 ### Changed
+ - `Utilities::detectMimeType()` and `Utilities::getSafeFileName()` replace the private helpers of the Upload Attachment
+   method, so that scanned files are handled like uploaded attachments
  - `ReportManager::closeReport()` closes a report the way the Close Report method does: it classifies the report's
    unclassified evidence, applies the reputation, optionally blacklists the reported entity and records the closure in
    the audit log, so that plugins closing reports on their own behalf have the same effect as an operator. It takes the
