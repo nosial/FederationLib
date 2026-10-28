@@ -31,9 +31,9 @@
             $this->submittingOperator = $data['submitting_operator'];
             $this->reportingEntity = $data['reporting_entity'] ?? null;
             $this->assignedOperator = $data['assigned_operator'] ?? null;
-            $this->automated = (bool)$data['automated'] ?? false;
+            $this->automated = (bool)($data['automated'] ?? false);
             $this->incidentType = $data['incident_type'] instanceof IncidentType ? $data['incident_type'] : IncidentType::fromResponse((string)$data['incident_type']);
-            $this->opened = (bool)$data['opened'] ?? false;
+            $this->opened = (bool)($data['opened'] ?? false);
             $this->message = $data['message'] ?? null;
 
             // Parse SQL datetime string to timestamp if necessary for created
@@ -67,7 +67,7 @@
             }
 
             $this->created = (int)($data['created'] ?? time());
-            $this->updated = (int)$data['updated'] ?? null;
+            $this->updated = (int)$data['updated'];
         }
 
         /**
