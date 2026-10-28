@@ -334,7 +334,7 @@
                 $errorCode = curl_errno($ch);
                 $error = curl_error($ch);
                 $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-                curl_close($ch);
+                unset($ch);
                 fclose($handle);
 
                 if ($exceeded || $errorCode === CURLE_FILESIZE_EXCEEDED)
