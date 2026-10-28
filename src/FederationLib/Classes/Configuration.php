@@ -631,6 +631,8 @@
             self::$configuration->setDefault('scanning.concerns', array_map(fn($type) => $type->value, ScanningConfiguration::getAllConcerns()), 'FEDERATION_SCANNING_CONCERNS');
             self::$configuration->setDefault('scanning.default_concerns', array_map(fn($type) => $type->value, ScanningConfiguration::getStandardDefaultConcerns()), 'FEDERATION_SCANNING_DEFAULT_CONCERNS');
             self::$configuration->setDefault('scanning.dns_lookup_limit', 10, 'FEDERATION_SCANNING_DNS_LOOKUP_LIMIT');
+            self::$configuration->setDefault('scanning.max_files', 4, 'FEDERATION_SCANNING_MAX_FILES');
+            self::$configuration->setDefault('scanning.max_file_size', 10485760, 'FEDERATION_SCANNING_MAX_FILE_SIZE'); // 10MB default
 
             // Maintenance configuration, how long records of each type are kept (eg; 2y, 30d, or off to keep them)
             self::$configuration->setDefault('maintenance.enabled', true, 'FEDERATION_MAINTENANCE_ENABLED');
