@@ -14,6 +14,7 @@
         private string $source;
         private ?float $confidence;
         private bool $verified;
+        private ?int $fileIndex;
 
         /**
          * Detection constructor
@@ -26,9 +27,12 @@
          * @param bool $verified False when the detection relies on context or other assertions of the client that the
          *                       host has not verified, true when it relies only on the submitted content, the records
          *                       of the host and information the host determined itself
+         * @param int|null $fileIndex Optional. The zero-based position of the file, within the files of the ContentInput
+         *                            object, the detection relates to, null when it does not relate to a file
          */
-        public function __construct(IncidentType $concern, int $contentIndex, string $source, ?string $entity=null, ?float $confidence=null, bool $verified=true)
+        public function __construct(IncidentType $concern, int $contentIndex, string $source, ?string $entity=null, ?float $confidence=null, bool $verified=true, ?int $fileIndex=null)
         {
+            $this->fileIndex = $fileIndex;
             $this->concern = $concern;
             $this->contentIndex = $contentIndex;
             $this->source = $source;
@@ -55,6 +59,17 @@
         public function getContentIndex(): int
         {
             return $this->contentIndex;
+        }
+
+        /**
+         * Returns the zero-based position of the file, within the files of the ContentInput object, the detection
+         * relates to
+         *
+         * @return int|null The file index, null if the detection does not relate to a file
+         */
+        public function getFileIndex(): ?int
+        {
+            return $this->fileIndex;
         }
 
         /**
@@ -106,6 +121,7 @@
             return [
                 'concern' => $this->concern->value,
                 'content_index' => $this->contentIndex,
+                'file_index' => $this->fileIndex,
                 'entity' => $this->entity,
                 'source' => $this->source,
                 'confidence' => $this->confidence,
@@ -124,7 +140,8 @@
                 (string)($array['source'] ?? ''),
                 $array['entity'] ?? null,
                 isset($array['confidence']) ? (float)$array['confidence'] : null,
-                (bool)($array['verified'] ?? false)
+                (bool)($array['verified'] ?? false),
+                isset($array['file_index']) ? (int)$array['file_index'] : null
             );
         }
 
@@ -148,6 +165,7 @@
                     'description' => 'The concern the detection relates to, one of the effective concerns of the request',
                 ],
                 'content_index' => ['type' => 'integer', 'description' => 'The zero-based position, in the evidence member of the request, of the content the detection relates to'],
+                'file_index' => ['type' => ['integer', 'null'], 'description' => 'The zero-based position of the file, within the files of that content, the detection relates to; null when it does not relate to a file'],
                 'entity' => ['type' => ['string', 'null'], 'format' => 'uuid', 'description' => 'The UUID of the entity the detection relates to, when it relates to an entity resolved from the content'],
                 'source' => ['type' => 'string', 'description' => 'A host-defined name of the mechanism that made the detection, clients must not rely on particular values'],
                 'confidence' => ['type' => ['number', 'null'], 'description' => 'A host-defined confidence of the detection, when the mechanism provides one'],
@@ -160,7 +178,7 @@
          */
         public static function getObjectRequired(): array
         {
-            return ['concern', 'content_index', 'entity', 'source', 'confidence', 'verified'];
+            return ['concern', 'content_index', 'file_index', 'entity', 'source', 'confidence', 'verified'];
         }
 
         /**
