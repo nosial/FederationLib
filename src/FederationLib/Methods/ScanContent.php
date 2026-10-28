@@ -287,6 +287,61 @@
         }
 
         /**
+         * Resolves the entities of each evidence item according to its content type, remembering the first item each
+         * entity was found in and whether it was found in the content itself or only in the unverified context the
+         * client asserted. Every entity of the scan is resolved at once, and then added in the order it was found in.
+         *
+         * @param ContentInput[] $contentInputs The evidence items
+         * @param array<int, string[]> $resolvedAddresses Receives the addresses the host resolved for each evidence item
+         * @return array<string, array{entity: ResolvedEntity, index: int, verified: bool}> The resolved entities keyed
+         *                                                                                  by entity UUID
+         */
+        private static function resolveScannedEntities(array $contentInputs, array &$resolvedAddresses): array
+        {
+            $lookups = [];
+            $origins = [];
+            $dnsLookups = 0;
+            foreach($contentInputs as $index => $contentInput)
+            {
+                foreach(self::getContentCandidates($contentInput) as [$entityIdentifier, $entityPosition, $inContent])
+                {
+                    $lookups[] = [$entityIdentifier, $entityPosition, $inContent];
+                    $origins[] = ['index' => $index, 'verified' => $inContent, 'fallback' => true];
+                }
+
+                $resolvedAddresses[$index] = [];
+                foreach(self::getLookupNames($contentInput) as [$name, $verified])
+                {
+                    if(!Configuration::getScanningConfiguration()->isDnsLookupsEnabled() || $dnsLookups >= Configuration::getScanningConfiguration()->getDnsLookupLimit())
+                    {
+                        break;
+                    }
+
+                    $dnsLookups++;
+                    foreach(self::lookupAddresses($name) as $address)
+                    {
+                        $resolvedAddresses[$index][] = $address;
+                        $lookups[] = [$address, new ResolvedEntityPosition(0, 0, str_contains($address, ':') ? NamedEntityType::IPv6 : NamedEntityType::IPv4), false];
+                        $origins[] = ['index' => $index, 'verified' => $verified, 'fallback' => false];
+                    }
+                }
+            }
+
+            $resolvedEntities = self::resolveContentLookups($lookups, array_keys(array_filter($origins, fn(array $origin) => $origin['fallback'])));
+
+            $resolved = [];
+            foreach($origins as $key => $origin)
+            {
+                if(isset($resolvedEntities[$key]))
+                {
+                    self::addResolvedEntity($resolved, $resolvedEntities[$key], $origin['index'], $origin['verified']);
+                }
+            }
+
+            return $resolved;
+        }
+
+        /**
          * Parses the concerns parameter into the effective concerns of the request: the default concerns of the host
          * when it is absent, otherwise a non-empty array of concerns the host can assess (OFD "Concerns")
          *
