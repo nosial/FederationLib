@@ -19,6 +19,7 @@
         private const string ERROR_UUID_REQUIRED = 'Evidence UUID is required';
         private const string ERROR_INVALID_UUID = 'Invalid evidence UUID';
         private const string ERROR_NOT_FOUND = 'Evidence not found';
+        private const string ERROR_CONFIDENTIAL_AUTH_REQUIRED = 'You must be authenticated to view confidential evidence';
         private const string ERROR_CONFIDENTIAL_RESTRICTED = 'Confidential evidence access is restricted';
         private const string ERROR_UNABLE_TO_RETRIEVE = 'Unable to get evidence';
 
@@ -52,9 +53,17 @@
                     throw new RequestException(self::ERROR_NOT_FOUND, 404);
                 }
 
-                if($evidenceRecord->isConfidential() && ($authenticatedOperator === null || !$authenticatedOperator->hasManagementPermissions()))
+                if($evidenceRecord->isConfidential())
                 {
-                    throw new RequestException(self::ERROR_CONFIDENTIAL_RESTRICTED, 403);
+                    if($authenticatedOperator === null)
+                    {
+                        throw new RequestException(self::ERROR_CONFIDENTIAL_AUTH_REQUIRED, 401);
+                    }
+
+                    if(!$authenticatedOperator->hasManagementPermissions())
+                    {
+                        throw new RequestException(self::ERROR_CONFIDENTIAL_RESTRICTED, 403);
+                    }
                 }
             }
             catch(DatabaseOperationException $e)
