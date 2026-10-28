@@ -85,40 +85,57 @@
             usort($cases, fn(self $a, self $b) => $b->getPriority() <=> $a->getPriority());
 
             $results = [];
-            $reservedRanges = [];
+            $reservedOffsets = [];
+            $reservedEnds = [];
 
             foreach ($cases as $type)
             {
                 foreach (self::findMatches($type, $content, $region) as [$match, $offset, $length])
                 {
-
-                    $overlaps = false;
-                    foreach ($reservedRanges as [$rOffset, $rLength])
-                    {
-                        if ($offset < $rOffset + $rLength && $offset + $length > $rOffset)
-                        {
-                            $overlaps = true;
-                            break;
-                        }
-                    }
-
-                    if ($overlaps)
+                    $position = self::findReservedPosition($reservedOffsets, $offset);
+                    if (($position > 0 && $reservedEnds[$position - 1] > $offset) || ($position < count($reservedOffsets) && $reservedOffsets[$position] < $offset + $length))
                     {
                         continue;
                     }
 
-                    if (isset($results[$match]))
-                    {
-                        $reservedRanges[] = [$offset, $length];
-                        continue;
-                    }
+                    array_splice($reservedOffsets, $position, 0, [$offset]);
+                    array_splice($reservedEnds, $position, 0, [$offset + $length]);
 
-                    $results[$match] = new ResolvedEntityPosition($offset, $length, $type);
-                    $reservedRanges[] = [$offset, $length];
+                    if (!isset($results[$match]))
+                    {
+                        $results[$match] = new ResolvedEntityPosition($offset, $length, $type);
+                    }
                 }
             }
 
             return $results;
+        }
+
+        /**
+         * Finds the position of the first reserved range that starts at or after the given offset
+         *
+         * @param int[] $reservedOffsets The offsets of the reserved ranges, in ascending order
+         * @param int $offset The offset
+         * @return int The position, the number of reserved ranges if every range starts before the offset
+         */
+        private static function findReservedPosition(array $reservedOffsets, int $offset): int
+        {
+            $low = 0;
+            $high = count($reservedOffsets);
+            while ($low < $high)
+            {
+                $middle = ($low + $high) >> 1;
+                if ($reservedOffsets[$middle] < $offset)
+                {
+                    $low = $middle + 1;
+                }
+                else
+                {
+                    $high = $middle;
+                }
+            }
+
+            return $low;
         }
 
         /**
