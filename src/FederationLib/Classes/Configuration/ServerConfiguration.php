@@ -11,7 +11,7 @@
          */
         public const array PUBLIC_ITEMS = [
             'AUDIT_LOGS', 'EVIDENCE', 'BLACKLIST', 'ENTITIES', 'ENTITY_METADATA', 'REPORTS', 'SCAN_CONTENT',
-            'QUERY_ENTITY', 'SEARCH', 'TELEPHONE_ENTITIES',
+            'SCAN_FILES', 'QUERY_ENTITY', 'SEARCH', 'TELEPHONE_ENTITIES',
         ];
 
         /**
@@ -286,6 +286,17 @@
         public function isScanContentPublic(): bool
         {
             return $this->isPublic('SCAN_CONTENT');
+        }
+
+        /**
+         * Checks if files are scanned for requests without client permissions, which also requires scan content to be
+         * public; otherwise the files of such requests are ignored (OFD "Scanned files")
+         *
+         * @return bool True if the files of unauthenticated scan requests are scanned
+         */
+        public function isScanFilesPublic(): bool
+        {
+            return $this->isPublic('SCAN_FILES') && $this->isScanContentPublic();
         }
 
         /**
