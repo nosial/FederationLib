@@ -66,7 +66,8 @@
                 }
 
                 $relationshipGroupUuid = $entityRecord->getRelationshipEntity() ?? $entityRecord->getUuid();
-                $relatedEntities = EntitiesManager::getEntitiesByRelationshipEntity($relationshipGroupUuid);
+                $relationships = EntitiesManager::getEntitiesByRelationshipEntities([$relationshipGroupUuid, $entityRecord->getUuid()]);
+                $relatedEntities = $relationships[$relationshipGroupUuid];
                 if($entityRecord->getRelationshipEntity() !== null)
                 {
                     $parentEntity = EntitiesManager::getEntityByUuid($relationshipGroupUuid);
@@ -75,8 +76,7 @@
                         $relatedEntities[] = $parentEntity;
                     }
 
-                    // The relationship group always includes the entities that reference the queried entity
-                    array_push($relatedEntities, ...EntitiesManager::getEntitiesByRelationshipEntity($entityRecord->getUuid()));
+                    array_push($relatedEntities, ...$relationships[$entityRecord->getUuid()]);
                 }
 
                 $relatedEntities = array_values(array_filter($relatedEntities,
