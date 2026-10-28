@@ -29,6 +29,8 @@
          * @var ContentType[]
          */
         private array $scanContentTypes;
+        private int $maxScanFiles;
+        private int $maxScanFileSize;
         /**
          * @var IncidentType[]|null
          */
@@ -67,7 +69,7 @@
         public function __construct(array $config)
         {
             $this->serverName = $config['name'] ?? $config['server_name'] ?? 'Federation Server';
-            $this->apiVersion = $config['api_version'] ?? '2.0';
+            $this->apiVersion = $config['api_version'] ?? '2.1';
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
@@ -89,6 +91,8 @@
                 }
             }
             $this->scanContentTypes = array_values($scanContentTypes);
+            $this->maxScanFiles = max(0, (int)($config['max_scan_files'] ?? 0));
+            $this->maxScanFileSize = max(0, (int)($config['max_scan_file_size'] ?? 0));
             $this->concerns = isset($config['concerns']) && is_array($config['concerns']) ? self::parseConcerns($config['concerns']) : null;
             $this->defaultConcerns = isset($config['default_concerns']) && is_array($config['default_concerns']) ? self::parseConcerns($config['default_concerns']) : [];
             $this->searchEnabled = $config['search_enabled'] ?? true;
@@ -159,6 +163,26 @@
         public function getScanContentTypes(): array
         {
             return $this->scanContentTypes;
+        }
+
+        /**
+         * Returns the maximum number of files a single scan request may carry
+         *
+         * @return int The maximum number of files, 0 when the host ignores files
+         */
+        public function getMaxScanFiles(): int
+        {
+            return $this->maxScanFiles;
+        }
+
+        /**
+         * Returns the maximum size in bytes of each file a scan request may carry
+         *
+         * @return int The maximum file size, 0 when the host ignores files
+         */
+        public function getMaxScanFileSize(): int
+        {
+            return $this->maxScanFileSize;
         }
 
         /**
@@ -445,6 +469,8 @@
                 'allow_url_uploads' => $this->allowUrlUploads,
                 'public_telephone_entities' => $this->publicTelephoneEntities,
                 'scan_content_types' => array_map(fn(ContentType $type) => $type->value, $this->scanContentTypes),
+                'max_scan_files' => $this->maxScanFiles,
+                'max_scan_file_size' => $this->maxScanFileSize,
                 'concerns' => $this->concerns !== null ? array_map(fn(IncidentType $type) => $type->value, $this->concerns) : [],
                 'default_concerns' => array_map(fn(IncidentType $type) => $type->value, $this->defaultConcerns),
                 'search_enabled' => $this->searchEnabled,
@@ -506,6 +532,8 @@
                     'items' => ['type' => 'string', 'enum' => array_map(fn(ContentType $type) => $type->value, ContentType::cases())],
                     'description' => 'The content types that content scanning interprets according to their type, always including TEXT',
                 ],
+                'max_scan_files' => ['type' => 'integer', 'description' => 'The maximum number of files a scan request may carry, 0 when the server ignores the files of scan requests'],
+                'max_scan_file_size' => ['type' => 'integer', 'description' => 'The maximum size in bytes of each file a scan request may carry, 0 when the server ignores the files of scan requests'],
                 'concerns' => [
                     'type' => 'array',
                     'items' => ['type' => 'string', 'enum' => array_map(fn(IncidentType $type) => $type->value, IncidentType::cases())],
@@ -564,6 +592,8 @@
                 'allow_url_uploads',
                 'public_telephone_entities',
                 'scan_content_types',
+                'max_scan_files',
+                'max_scan_file_size',
                 'concerns',
                 'default_concerns',
                 'search_enabled',
