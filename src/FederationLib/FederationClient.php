@@ -167,6 +167,20 @@
                     break;
             }
 
+            return $this->executeRequest($ch, $expectedStatusCodes, $errorMessage);
+        }
+
+        /**
+         * Executes a prepared request and decodes its JSON response
+         *
+         * @param CurlHandle $ch The prepared request
+         * @param int[] $expectedStatusCodes Expected successful HTTP status codes
+         * @param string $errorMessage Custom error message prefix
+         * @return mixed Response data from successful request
+         * @throws RequestException On request failure or unexpected status code
+         */
+        private function executeRequest(CurlHandle $ch, array $expectedStatusCodes, string $errorMessage): mixed
+        {
             $response = curl_exec($ch);
 
             // Handle cURL errors
@@ -207,6 +221,38 @@
         }
 
         /**
+         * Makes a POST request with a multipart/form-data body
+         *
+         * @param array<string, string|CURLFile> $fields The parts of the body
+         * @param array $expectedStatusCodes Expected successful HTTP status codes
+         * @param string $errorMessage Custom error message prefix
+         * @return mixed Response data from successful request
+         * @throws RequestException On request failure or unexpected status code
+         */
+        private function makeMultipartRequest(array $fields, array $expectedStatusCodes = [200], string $errorMessage='Request failed'): mixed
+        {
+            $path = ltrim('scan', '/');
+            $expectedStatusCodes = array_map(fn($code) => $code instanceof HttpResponseCode ? $code->value : $code, $expectedStatusCodes);
+            Logger::log()->debug(sprintf("POST multipart Request to %s", $this->buildUrl($path)));
+
+            // cURL sets the multipart Content-Type with its boundary itself
+            $ch = $this->buildCurl($path);
+            $headers = ['Accept: application/json'];
+            if($this->accessToken !== null)
+            {
+                $headers[] = 'Authorization: Bearer ' . $this->accessToken;
+            }
+
+            curl_setopt_array($ch, [
+                CURLOPT_HTTPHEADER => $headers,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $fields,
+            ]);
+
+            return $this->executeRequest($ch, $expectedStatusCodes, $errorMessage);
+        }
+
+        /**
          * Scans one or more content messages and attempts to identify entities within the text content such as URLs,
          * email addresses, ip addresses, etc.
          *
@@ -217,10 +263,13 @@
          * @param IncidentType[]|null $concerns Optional. The concerns to assess, only these affect the result; the server
          *                                      assesses its default concerns when omitted. Only supply concerns to a
          *                                      server that publishes them in its server information.
+         * @param array<int, string[]> $files Optional. The local paths of the files of each evidence item, keyed by the
+         *                                    index of the item, eg; [0 => ['/tmp/photo.jpg']]. Files are sent in a
+         *                                    multipart/form-data request, a server that does not scan them ignores them.
          * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $concerns = null): ScannedContent
+        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $concerns = null, array $files = []): ScannedContent
         {
             if(is_string($evidence))
             {
@@ -280,9 +329,37 @@
                 $evidenceArrays[] = $item;
             }
 
+            // Each file is carried in a part of its own, named in the files member of its evidence item
+            $fileParts = [];
+            foreach($files as $index => $paths)
+            {
+                if(!is_int($index) || !isset($evidenceArrays[$index]))
+                {
+                    throw new InvalidArgumentException(sprintf('The files are keyed by an evidence index that does not exist: %s', $index));
+                }
+
+                if(!is_array($paths) || count($paths) === 0)
+                {
+                    throw new InvalidArgumentException(sprintf('The files of the evidence at index %d must be a non-empty array of file paths', $index));
+                }
+
+                foreach(array_values($paths) as $fileIndex => $path)
+                {
+                    if(!is_string($path) || !is_file($path) || !is_readable($path))
+                    {
+                        throw new InvalidArgumentException('File does not exist or is not readable: ' . (is_string($path) ? $path : gettype($path)));
+                    }
+
+                    $part = sprintf('file_%d_%d', $index, $fileIndex);
+                    $evidenceArrays[$index]['files'][] = $part;
+                    $fileParts[$part] = new CURLFile($path, mime_content_type($path) ?: 'application/octet-stream', basename($path));
+                    $hasContent = true;
+                }
+            }
+
             if(!$hasContent)
             {
-                throw new InvalidArgumentException('At least one evidence record must contain text content');
+                throw new InvalidArgumentException('At least one evidence record must contain text content or a file');
             }
 
             $params = ['evidence' => count($evidenceArrays) === 1 ? $evidenceArrays[0] : $evidenceArrays];
@@ -309,6 +386,20 @@
                 }
 
                 $params['concerns'] = self::concernValues($concerns);
+            }
+
+            if(count($fileParts) > 0)
+            {
+                // A multipart request carries the evidence and concerns as the JSON text of their values
+                $fields = [];
+                foreach($params as $name => $value)
+                {
+                    $fields[$name] = is_array($value) ? json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : (string)$value;
+                }
+
+                return ScannedContent::fromArray($this->makeMultipartRequest($fields + $fileParts, [HttpResponseCode::OK],
+                    'Failed to scan content'
+                ));
             }
 
             return ScannedContent::fromArray($this->makeRequest('POST', 'scan', $params, [HttpResponseCode::OK],
