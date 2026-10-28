@@ -34,6 +34,7 @@
     require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'TextGenerator.php';
     require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'Logger.php';
     require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'TestHelpers.php';
+    require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'ServerTestCase.php';
     require __DIR__ . DIRECTORY_SEPARATOR . 'FederationLib' . DIRECTORY_SEPARATOR . 'Helpers' . DIRECTORY_SEPARATOR . 'InMemoryConfiguration.php';
 
     // LogLib2's handlers may interfere with tests, so we unregister them here.
