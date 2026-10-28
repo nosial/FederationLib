@@ -36,7 +36,7 @@ COPY docker-entrypoint.sh docker-healthcheck.sh bayesian_recovery/start_bayesian
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends nginx supervisor ca-certificates curl libpq5 openjdk-21-jdk-headless \
     && rm -rf /var/lib/apt/lists/* \
-    && install-php-extensions sockets apcu \
+    && install-php-extensions sockets apcu gd exif \
     && echo "apc.enable_cli=1" >> /usr/local/etc/php/conf.d/docker-php-ext-apcu.ini \
     && docker-php-ext-install -j$(nproc) pdo_mysql \
     && pecl install redis && docker-php-ext-enable redis \
