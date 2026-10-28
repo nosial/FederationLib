@@ -579,6 +579,32 @@
          */
         public static function getActiveEntriesByEntities(array $entityUuids): array
         {
+            $groups = self::getActiveEntriesPerEntity($entityUuids);
+            if(count($groups) <= 1)
+            {
+                return array_values($groups)[0] ?? [];
+            }
+
+            $results = array_merge(...array_values($groups));
+            usort($results, fn(BlacklistRecord $a, BlacklistRecord $b) => [$b->getCreated(), $b->getUuid()] <=> [$a->getCreated(), $a->getUuid()]);
+            return $results;
+        }
+
+        /**
+         * Retrieves the active blacklist entries of each of the supplied entities at once. The entries of each entity
+         * are cached on their own, so that every scan and query that involves an entity shares them; the cached ones
+         * are served in one round trip and the others are retrieved with a single query.
+         *
+         * Active records have not been lifted and have not expired.
+         *
+         * @param string[] $entityUuids Entity UUIDs to query.
+         * @return array<string, BlacklistRecord[]> The active blacklist records of each entity, newest first, keyed by
+         *                                          the entity UUID.
+         * @throws InvalidArgumentException If an entity UUID is invalid.
+         * @throws DatabaseOperationException If the query fails.
+         */
+        public static function getActiveEntriesPerEntity(array $entityUuids): array
+        {
             $entityUuids = array_values(array_unique($entityUuids));
             if(empty($entityUuids))
             {
@@ -593,54 +619,76 @@
                 }
             }
 
-            $cacheKey = null;
+            $groups = [];
+            $cacheKeys = [];
             if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
             {
-                $sortedUuids = $entityUuids;
-                sort($sortedUuids);
-                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['active_entries', $sortedUuids]);
-                $cached = RedisConnection::getCachedSearchResults($cacheKey);
-                if($cached !== null)
+                $cacheKeys = RedisConnection::getSearchCacheKeys(self::CACHE_PREFIX, array_combine($entityUuids,
+                    array_map(fn(string $entityUuid) => ['active_entries', [$entityUuid]], $entityUuids)
+                ));
+
+                foreach(RedisConnection::getCachedSearchResultsMany($cacheKeys) as $entityUuid => $cached)
                 {
-                    return array_map(fn(array $data) => new BlacklistRecord($data), $cached);
+                    $groups[$entityUuid] = array_map(fn(array $data) => new BlacklistRecord($data), $cached);
                 }
+            }
+
+            $missing = array_values(array_diff($entityUuids, array_keys($groups)));
+            if($missing === [])
+            {
+                return $groups;
             }
 
             try
             {
-                $placeholders = implode(', ', array_fill(0, count($entityUuids), '?'));
+                $placeholders = implode(', ', array_fill(0, count($missing), '?'));
                 $stmt = DatabaseConnection::getConnection()->prepare(
                     "SELECT * FROM blacklist WHERE entity IN ($placeholders) AND lifted=0 AND (expires IS NULL OR expires > NOW()) ORDER BY created DESC, uuid DESC"
                 );
-                $stmt->execute($entityUuids);
-
-                $results = array_map(fn(array $blacklist) => new BlacklistRecord($blacklist), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $stmt->execute($missing);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch(PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve active blacklist entries by entities: ' . $e->getMessage(), 0, $e);
             }
 
-            if($cacheKey !== null)
+            $loaded = array_fill_keys($missing, []);
+            $entities = array_combine(array_map('strtolower', $missing), $missing);
+            foreach($rows as $row)
             {
-                // Expiring is not a change that invalidates the cache, so the result is cached no longer than until the
-                // first of its entries expires, less the second that time() truncates
-                $ttl = RedisConnection::getResultCacheTtl();
-                foreach($results as $record)
+                $entityUuid = $entities[strtolower((string)$row['entity'])] ?? null;
+                if($entityUuid !== null)
                 {
-                    if($record->getExpires() !== null)
-                    {
-                        $ttl = min($ttl, $record->getExpires() - time() - 1);
-                    }
-                }
-
-                if($ttl > 0)
-                {
-                    RedisConnection::cacheSearchResults($cacheKey, array_map(fn(BlacklistRecord $record) => $record->toArray(), $results), $ttl);
+                    $loaded[$entityUuid][] = new BlacklistRecord($row);
                 }
             }
 
-            return $results;
+            if($cacheKeys !== [])
+            {
+                // Expiring is not a change that invalidates the cache, so each result is cached no longer than until
+                // the first of its entries expires, less the second that time() truncates
+                $serialized = [];
+                $ttls = [];
+                foreach($loaded as $entityUuid => $records)
+                {
+                    $ttl = RedisConnection::getResultCacheTtl();
+                    foreach($records as $record)
+                    {
+                        if($record->getExpires() !== null)
+                        {
+                            $ttl = min($ttl, $record->getExpires() - time() - 1);
+                        }
+                    }
+
+                    $serialized[$cacheKeys[$entityUuid]] = array_map(fn(BlacklistRecord $record) => $record->toArray(), $records);
+                    $ttls[$cacheKeys[$entityUuid]] = $ttl;
+                }
+
+                RedisConnection::cacheSearchResultsMany($serialized, $ttls);
+            }
+
+            return $groups + $loaded;
         }
 
         /**
