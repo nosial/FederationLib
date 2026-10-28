@@ -489,43 +489,96 @@
          */
         public static function getEntitiesByRelationshipEntity(string $entityUuid): array
         {
-            if(!Validate::uuid($entityUuid))
-            {
-                throw new InvalidArgumentException('A valid Entity UUID must be provided');
-            }
+            return self::getEntitiesByRelationshipEntities([$entityUuid])[$entityUuid];
+        }
 
-            // Every query of an entity looks up its relationship group, the result is cached in the entity search
-            // namespace, which every change to an entity invalidates
-            $cacheKey = null;
-            if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
+        /**
+         * Retrieves the entities that directly reference each of the given entities as their relationship target at
+         * once: the cached groups are served from the cache in one round trip, the others are retrieved with a single
+         * query.
+         *
+         * @param string[] $entityUuids The relationship target UUIDs.
+         * @return array<string, EntityRecord[]> The entities that reference each target UUID, keyed by the target UUID.
+         * @throws InvalidArgumentException If a UUID is invalid.
+         * @throws DatabaseOperationException If the query fails.
+         */
+        public static function getEntitiesByRelationshipEntities(array $entityUuids): array
+        {
+            $entityUuids = array_values(array_unique($entityUuids));
+            foreach($entityUuids as $entityUuid)
             {
-                $cacheKey = RedisConnection::getSearchCacheKey(self::CACHE_PREFIX, ['relationship_entity', $entityUuid]);
-                $cached = RedisConnection::getCachedSearchResults($cacheKey);
-                if($cached !== null)
+                if(!is_string($entityUuid) || !Validate::uuid($entityUuid))
                 {
-                    return array_map(fn(array $data) => new EntityRecord($data), $cached);
+                    throw new InvalidArgumentException('A valid Entity UUID must be provided');
                 }
             }
 
+            if($entityUuids === [])
+            {
+                return [];
+            }
+
+            // Every query of an entity looks up its relationship group, each group is cached in the entity search
+            // namespace, which every change to an entity invalidates
+            $groups = [];
+            $cacheKeys = [];
+            if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
+            {
+                $cacheKeys = RedisConnection::getSearchCacheKeys(self::CACHE_PREFIX, array_combine($entityUuids,
+                    array_map(fn(string $entityUuid) => ['relationship_entity', $entityUuid], $entityUuids)
+                ));
+
+                foreach(RedisConnection::getCachedSearchResultsMany($cacheKeys) as $entityUuid => $cached)
+                {
+                    $groups[$entityUuid] = array_map(fn(array $data) => new EntityRecord($data), $cached);
+                }
+            }
+
+            $missing = array_values(array_diff($entityUuids, array_keys($groups)));
+            if($missing === [])
+            {
+                return $groups;
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($missing, 'relationship_entity');
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare('SELECT * FROM entities WHERE relationship_entity = :relationship_entity');
-                $stmt->bindParam(':relationship_entity', $entityUuid);
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE relationship_entity IN ($placeholders)");
+                foreach($parameters as $placeholder => $value)
+                {
+                    $stmt->bindValue($placeholder, $value);
+                }
                 $stmt->execute();
-
-                $results = array_map(fn(array $entity) => new EntityRecord($entity), $stmt->fetchAll(PDO::FETCH_ASSOC));
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch(PDOException $e)
             {
                 throw new DatabaseOperationException('Failed to retrieve entities by relationship target: ' . $e->getMessage(), $e->getCode(), $e);
             }
 
-            if($cacheKey !== null)
+            $loaded = array_fill_keys($missing, []);
+            $targets = array_combine(array_map('strtolower', $missing), $missing);
+            foreach($rows as $row)
             {
-                RedisConnection::cacheSearchResults($cacheKey, array_map(fn(EntityRecord $entity) => $entity->toArray(), $results));
+                $target = $targets[strtolower((string)$row['relationship_entity'])] ?? null;
+                if($target !== null)
+                {
+                    $loaded[$target][] = new EntityRecord($row);
+                }
             }
 
-            return $results;
+            if($cacheKeys !== [])
+            {
+                $serialized = [];
+                foreach($loaded as $entityUuid => $entities)
+                {
+                    $serialized[$cacheKeys[$entityUuid]] = array_map(fn(EntityRecord $entity) => $entity->toArray(), $entities);
+                }
+
+                RedisConnection::cacheSearchResultsMany($serialized);
+            }
+
+            return $groups + $loaded;
         }
 
         /**
@@ -760,78 +813,142 @@
          */
         public static function getEntityByHash(string $hash): ?EntityRecord
         {
-            if(strlen($hash) < 1 || !preg_match('/^[a-f0-9]{64}$/', $hash))
+            return self::getEntitiesByHashes([$hash])[$hash] ?? null;
+        }
+
+        /**
+         * Retrieves several entities by their SHA-256 hashes at once: the cached ones are served from the cache, the
+         * hashes known to have no entity are not queried again, and the others are retrieved with a single query and
+         * cached like getEntityByUuid() caches them. The number of round trips does not depend on the number of hashes.
+         *
+         * @param string[] $hashes The SHA-256 hashes of the entities.
+         * @return array<string, EntityRecord> The entities that exist, keyed by their hash.
+         * @throws InvalidArgumentException If a hash is invalid.
+         * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
+         */
+        public static function getEntitiesByHashes(array $hashes): array
+        {
+            $hashes = array_values(array_unique($hashes));
+            foreach($hashes as $hash)
             {
-                throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+                if(!is_string($hash) || !preg_match('/^[a-f0-9]{64}$/', $hash))
+                {
+                    throw new InvalidArgumentException("Entity hash must be a valid SHA-256 hash.");
+                }
+            }
+
+            $entities = [];
+            $pointerKeys = [];
+            if($hashes === [])
+            {
+                return $entities;
             }
 
             if(self::isCachingEnabled())
             {
-                $cachedUuid = RedisConnection::getConnection()->get(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                if($cachedUuid !== false && strlen($cachedUuid) > 0)
+                // Each hash points to the UUID of its cached entity record
+                $pointerKeys = array_combine($hashes, array_map(fn(string $hash) => sprintf("%s%s", self::CACHE_PREFIX, $hash), $hashes));
+                $pointers = array_filter(RedisConnection::getValues($pointerKeys), fn(string $uuid) => $uuid !== '');
+                if($pointers !== [])
                 {
-                    $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $cachedUuid));
-                    if($data !== null)
+                    $records = RedisConnection::getRecords(array_map(fn(string $uuid) => sprintf("%s%s", self::CACHE_PREFIX, $uuid), $pointers));
+                    $stalePointers = [];
+                    foreach($pointers as $hash => $uuid)
                     {
-                        return new EntityRecord($data);
+                        $data = $records[sprintf("%s%s", self::CACHE_PREFIX, $uuid)] ?? null;
+                        if($data !== null)
+                        {
+                            $entities[$hash] = new EntityRecord($data);
+                        }
+                        else
+                        {
+                            // Hash pointer exists but entity record is missing from cache
+                            // Remove the stale hash pointer to prevent future inconsistencies
+                            $stalePointers[] = $pointerKeys[$hash];
+                        }
                     }
-                    else
-                    {
-                        // Hash pointer exists but entity record is missing from cache
-                        // Remove the stale hash pointer to prevent future inconsistencies
-                        RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $hash));
-                    }
+
+                    RedisConnection::deleteKeys($stalePointers);
                 }
             }
 
-            // Most names extracted from scanned content have no entity, a hash known to be missing is not queried again
-            $missingCacheKey = self::getMissingCacheKey($hash);
-            if($missingCacheKey !== null && RedisConnection::getCachedSearchResults($missingCacheKey) !== null)
+            $remaining = array_values(array_diff($hashes, array_keys($entities)));
+            if($remaining === [])
             {
-                return null;
+                return $entities;
             }
 
+            $missingCacheKeys = [];
+            if(self::isCachingEnabled() && RedisConnection::getResultCacheTtl() > 0)
+            {
+                $missingCacheKeys = RedisConnection::getSearchCacheKeys(self::MISSING_CACHE_PREFIX, array_combine($remaining,
+                    array_map(fn(string $hash) => [$hash], $remaining)
+                ));
+
+                $knownMissing = RedisConnection::getCachedSearchResultsMany($missingCacheKeys);
+                $remaining = array_values(array_diff($remaining, array_keys($knownMissing)));
+                if($remaining === [])
+                {
+                    return $entities;
+                }
+            }
+
+            [$placeholders, $parameters] = Utilities::getInPlaceholders($remaining, 'hash');
             try
             {
-                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash = :hash");
-                $stmt->bindParam(':hash', $hash);
-                $stmt->execute();
-                $data = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if(!$data)
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM entities WHERE hash IN ($placeholders)");
+                foreach($parameters as $placeholder => $value)
                 {
-                    if($missingCacheKey !== null)
-                    {
-                        RedisConnection::cacheSearchResults($missingCacheKey, []);
-                    }
-
-                    return null;
+                    $stmt->bindValue($placeholder, $value);
                 }
-
-                $data = new EntityRecord($data);
+                $stmt->execute();
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             }
             catch (PDOException $e)
             {
                 throw new DatabaseOperationException("Failed to retrieve entity by hash: " . $e->getMessage(), $e->getCode(), $e);
             }
 
-            if(self::isCachingEnabled() && !RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getEntitiesCacheLimit()))
+            $requested = array_flip($remaining);
+            $loaded = [];
+            foreach($rows as $row)
             {
-                RedisConnection::setRecord(
-                    record: $data, cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $data->getUuid()),
-                    ttl: Configuration::getRedisConfiguration()->getEntitiesCacheTtl() ?? 0,
-                );
+                $hash = strtolower((string)$row['hash']);
+                if(!isset($requested[$hash]))
+                {
+                    continue;
+                }
 
-                // Create a pointer from hash to UUID for quick lookups
-                // Only set the hash pointer if the entity record was successfully cached
-                RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::CACHE_PREFIX, $hash),
-                    expire: Configuration::getRedisConfiguration()->getEntitiesCacheTtl(),
-                    value: $data->getUuid()
-                );
+                $entities[$hash] = new EntityRecord($row);
+                $loaded[$hash] = $entities[$hash];
             }
 
-            return $data;
+            if(self::isCachingEnabled() && $loaded !== [])
+            {
+                $ttl = Configuration::getRedisConfiguration()->getEntitiesCacheTtl();
+                $cachedCount = RedisConnection::setRecords(
+                    records: array_values($loaded), prefix: self::CACHE_PREFIX, propertyName: 'getUuid',
+                    limit: Configuration::getRedisConfiguration()->getEntitiesCacheLimit(), ttl: $ttl
+                );
+
+                $pointers = [];
+                foreach(array_slice($loaded, 0, $cachedCount, true) as $hash => $entity)
+                {
+                    $pointers[$pointerKeys[$hash]] = $entity->getUuid();
+                }
+                RedisConnection::setPointers($pointers, $ttl);
+            }
+
+            if($missingCacheKeys !== [])
+            {
+                $absent = array_diff($remaining, array_keys($loaded));
+                if($absent !== [])
+                {
+                    RedisConnection::cacheSearchResultsMany(array_fill_keys(array_map(fn(string $hash) => $missingCacheKeys[$hash], array_values($absent)), []));
+                }
+            }
+
+            return $entities;
         }
 
         /**
@@ -1335,25 +1452,94 @@
          */
         public static function resolveNamedEntity(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition=null): ?EntityRecord
         {
+            return self::resolveNamedEntityList([[$entityIdentifier, $entityPosition]])[0];
+        }
+
+        /**
+         * Resolves several identifiers extracted from content at once, the same way resolveNamedEntity() resolves
+         * each of them, retrieving the entities with a number of queries and round trips that does not depend on the
+         * number of identifiers.
+         *
+         * @param array<array-key, array{0: string, 1: ResolvedEntityPosition|null}> $candidates The identifiers to
+         *        resolve, each with its optional position metadata carrying the named entity type
+         * @return array<array-key, EntityRecord|null> The matching entity record of each identifier, or null if none
+         *                                             exists, keyed like the candidates
+         * @throws InvalidArgumentException If an identifier is a SHA-256 hash that is not in lowercase
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function resolveNamedEntityList(array $candidates): array
+        {
+            $lookups = [];
+            $uuids = [];
+            $hashes = [];
+            foreach($candidates as $key => [$entityIdentifier, $entityPosition])
+            {
+                $lookup = self::getNamedEntityLookup($entityIdentifier, $entityPosition);
+                if($lookup === null)
+                {
+                    continue;
+                }
+
+                $lookups[$key] = $lookup;
+                if($lookup[0] === 'uuid')
+                {
+                    $uuids[] = $lookup[1];
+                }
+                else
+                {
+                    $hashes[] = $lookup[1];
+                }
+            }
+
+            $byUuid = $uuids !== [] ? self::getEntitiesByUuids($uuids) : [];
+            $byHash = $hashes !== [] ? self::getEntitiesByHashes($hashes) : [];
+
+            $results = [];
+            foreach(array_keys($candidates) as $key)
+            {
+                $lookup = $lookups[$key] ?? null;
+                $results[$key] = match($lookup[0] ?? null)
+                {
+                    'uuid' => $byUuid[$lookup[1]] ?? null,
+                    'hash' => $byHash[$lookup[1]] ?? null,
+                    default => null,
+                };
+            }
+
+            return $results;
+        }
+
+        /**
+         * Determines how an identifier extracted from content is looked up (see resolveNamedEntity()): by the UUID of
+         * the entity, or by the hash of its canonical host (and optional id).
+         *
+         * @param string $entityIdentifier The identifier to resolve
+         * @param ResolvedEntityPosition|null $entityPosition Optional position metadata carrying the named entity type
+         * @return array{0: 'uuid'|'hash', 1: string}|null The kind of lookup and the UUID or hash to look up, null if
+         *                                                 the identifier cannot belong to an entity
+         */
+        private static function getNamedEntityLookup(string $entityIdentifier, ?ResolvedEntityPosition $entityPosition): ?array
+        {
             if(strlen($entityIdentifier) < 1)
             {
                 return null;
             }
 
+            // Stored UUIDs are lowercase, and the database matches them regardless of case
             if(Utilities::isUuid($entityIdentifier))
             {
-                return self::getEntityByUuid($entityIdentifier);
+                return ['uuid', strtolower($entityIdentifier)];
             }
 
             if(Utilities::isSha256($entityIdentifier))
             {
-                return self::getEntityByHash($entityIdentifier);
+                return ['hash', $entityIdentifier];
             }
 
             if(Utilities::isEntityAddress($entityIdentifier))
             {
                 $parsedAddress = Utilities::parseEntityAddress($entityIdentifier);
-                return self::getEntityByHash(Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id']));
+                return ['hash', Utilities::hashEntity($parsedAddress['host'], $parsedAddress['id'])];
             }
 
             $host = null;
@@ -1397,20 +1583,12 @@
                 $host = $entityIdentifier;
             }
 
-            if($host === null || $host === '')
+            if(!is_string($host) || $host === '')
             {
                 return null;
             }
 
-            try
-            {
-                return self::getEntityByHash(Utilities::hashEntity($host, $id));
-            }
-            catch (InvalidArgumentException $e)
-            {
-                Logger::log()->warning('Failed to resolve entity by identifier ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
-                return null;
-            }
+            return ['hash', Utilities::hashEntity($host, $id)];
         }
 
         /**
@@ -1422,20 +1600,28 @@
          */
         public static function resolveNamedEntities(string $textContent): array
         {
-            $resolved = [];
+            $candidates = [];
             foreach(NamedEntityType::extract($textContent) as $entityIdentifier => $entityPosition)
             {
-                try
+                $candidates[] = [(string)$entityIdentifier, $entityPosition];
+            }
+
+            try
+            {
+                $entityRecords = self::resolveNamedEntityList($candidates);
+            }
+            catch (DatabaseOperationException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to resolve %d named entities: %s', count($candidates), $e->getMessage()), $e);
+                return [];
+            }
+
+            $resolved = [];
+            foreach($entityRecords as $entityRecord)
+            {
+                if($entityRecord !== null)
                 {
-                    $entityRecord = self::resolveNamedEntity($entityIdentifier, $entityPosition);
-                    if($entityRecord !== null)
-                    {
-                        $resolved[$entityRecord->getUuid()] = $entityRecord;
-                    }
-                }
-                catch (DatabaseOperationException $e)
-                {
-                    Logger::log()->warning('Failed to resolve ' . $entityIdentifier . ': ' . $e->getMessage(), $e);
+                    $resolved[$entityRecord->getUuid()] = $entityRecord;
                 }
             }
 
@@ -1854,25 +2040,7 @@
         }
 
         /**
-         * Returns the cache key marking an entity hash as having no entity, the key is versioned so that a lookup that
-         * started before the entity was registered never marks it as missing afterwards
-         *
-         * @param string $hash The entity hash
-         * @return string|null The cache key, null if missing entities are not cached
-         * @throws CacheOperationException If there is an error during the operation.
-         */
-        private static function getMissingCacheKey(string $hash): ?string
-        {
-            if(!self::isCachingEnabled() || RedisConnection::getResultCacheTtl() <= 0)
-            {
-                return null;
-            }
-
-            return RedisConnection::getSearchCacheKey(self::MISSING_CACHE_PREFIX, [$hash]);
-        }
-
-        /**
-         * Invalidates every entity hash marked as having no entity (see getMissingCacheKey())
+         * Invalidates every entity hash marked as having no entity (see getEntitiesByHashes())
          *
          * @return void
          * @throws CacheOperationException If there is an error during the operation.
