@@ -8,6 +8,7 @@
     use FederationLib\Classes\Managers\BlacklistManager;
     use FederationLib\Classes\Managers\EntitiesManager;
     use FederationLib\Classes\Managers\EvidenceManager;
+    use FederationLib\Classes\Managers\FileAttachmentManager;
     use FederationLib\Classes\Managers\OperatorManager;
     use FederationLib\Classes\Managers\ReportManager;
     use FederationLib\Classes\Managers\ReputationManager;
@@ -28,7 +29,9 @@
     use FederationLib\FederationServer;
     use FederationLib\Objects\ContentInput;
     use FederationLib\Objects\ErrorResponse;
+    use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\Plugin\ContentScan;
+    use FederationLib\Objects\Plugin\ScanFile;
     use FederationLib\Objects\ScannedContent;
     use FederationLib\Objects\ScannedContent\ResolvedEntity;
     use FederationLib\Objects\ScannedContent\ResolvedEntityPosition;
@@ -41,7 +44,9 @@
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to scan content, client permissions are required';
         private const string ERROR_EVIDENCE_REQUIRED = 'Evidence is required';
         private const string ERROR_EVIDENCE_INVALID = 'Evidence must be a single evidence object or an array of evidence objects';
-        private const string ERROR_CONTENT_EMPTY = 'At least one evidence record must contain text content';
+        private const string ERROR_CONTENT_EMPTY = 'At least one evidence record must contain text content or a file';
+        private const string ERROR_EVIDENCE_JSON = 'The evidence part of a multipart request must carry the JSON text of the evidence';
+        private const array PARAMETERS = ['author', 'evidence', 'top_k', 'threshold', 'concerns'];
         private const string ERROR_INVALID_AUTHOR = 'The author must be an entity identifier, and a telephone entity the international number as 1 to 15 digits without a leading + or separators, such as 15550123456@e164.arpa';
         private const string ERROR_CONCERNS_INVALID = 'Concerns must be a non-empty array of concerns this server can assess';
         private const string ERROR_FAILED_RESOLVE_AUTHOR = 'Failed to resolve author entity';
@@ -69,9 +74,28 @@
                 throw new RequestException(self::ERROR_INSUFFICIENT_PERMISSIONS, HttpResponseCode::FORBIDDEN);
             }
 
-            // Get the parameters
+            // Get the parameters, a request that carries files is a multipart/form-data body whose evidence and concerns
+            // parts carry the JSON text of their values (OFD "Scanned files")
             $authorIdentifier = FederationServer::getParameter('author');
             $evidenceInput = FederationServer::getParameter('evidence');
+            $concernsInput = FederationServer::getParameter('concerns');
+            if(str_contains(strtolower($_SERVER['CONTENT_TYPE'] ?? ''), 'multipart/form-data'))
+            {
+                if(is_string($evidenceInput))
+                {
+                    $evidenceInput = json_decode($evidenceInput, true);
+                    if(!is_array($evidenceInput))
+                    {
+                        throw new RequestException(self::ERROR_EVIDENCE_JSON, HttpResponseCode::BAD_REQUEST);
+                    }
+                }
+
+                if(is_string($concernsInput))
+                {
+                    $concernsInput = json_decode($concernsInput, true) ?? $concernsInput;
+                }
+            }
+
             $topK = FederationServer::getIntegerParameter('top_k');
             $threshold = FederationServer::getParameter('threshold');
             if($threshold !== null && !is_int($threshold) && !is_float($threshold) && !(is_string($threshold) && is_numeric($threshold)))
@@ -98,12 +122,20 @@
             }
 
             // Each evidence entry is a ContentInput object, validated with its content type and context. FederationLib
-            // interprets every content type it defines, so every content type is supported for scanning.
+            // interprets every content type it defines, so every content type is supported for scanning. Scan Content
+            // extends the object with the files member, naming the parts that carry its files.
             $contentInputs = [];
+            $fileParts = [];
             foreach($evidenceItems as $index => $item)
             {
                 try
                 {
+                    if(is_array($item) && array_key_exists('files', $item))
+                    {
+                        $fileParts[$index] = self::parseFilesMember($item['files']);
+                        unset($item['files']);
+                    }
+
                     $contentInputs[] = ContentInput::fromRequest($item);
                 }
                 catch(InvalidArgumentException $e)
@@ -112,12 +144,13 @@
                 }
             }
 
-            if(!array_any($contentInputs, fn(ContentInput $input) => $input->getTextContent() !== null))
+            $files = self::collectFiles($fileParts, $authenticatedOperator);
+            if(!array_any($contentInputs, fn(ContentInput $input) => $input->getTextContent() !== null) && count($fileParts) === 0)
             {
                 throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
             }
 
-            $concerns = self::parseConcerns(FederationServer::getParameter('concerns'));
+            $concerns = self::parseConcerns($concernsInput);
 
             // First, resolve the author entity
             $authorRecord = null;
@@ -208,7 +241,8 @@
                 $parsedTopK,
                 $parsedThreshold,
                 $concerns,
-                $resolvedAddresses
+                $resolvedAddresses,
+                $files
             );
 
             // Every active blacklist record of an effective concern on an entity resolved from the content is a detection
@@ -543,6 +577,161 @@
         }
 
         /**
+         * Parses the files member of a ContentInput object: a non-empty array naming the parts that carry its files
+         * (OFD "Scanned files")
+         *
+         * @param mixed $files The files member
+         * @return string[] The names of the parts, in order
+         * @throws InvalidArgumentException If the member is not a non-empty array of permitted part names
+         */
+        private static function parseFilesMember(mixed $files): array
+        {
+            if(!is_array($files) || !array_is_list($files) || count($files) === 0)
+            {
+                throw new InvalidArgumentException('The evidence member "files" must be a non-empty array of part names');
+            }
+
+            foreach($files as $name)
+            {
+                if(!is_string($name) || preg_match('/^[A-Za-z0-9_-]{1,64}$/', $name) !== 1 || in_array($name, self::PARAMETERS, true))
+                {
+                    throw new InvalidArgumentException('The evidence member "files" must name parts of 1 to 64 letters, digits, "_" or "-" that are not parameters of the method');
+                }
+            }
+
+            return $files;
+        }
+
+        /**
+         * Collects the files the request carries for each evidence item, validating them against the files members
+         * of the evidence and the limits of the server. Every server accepts files, but one that does not scan them
+         * (scanning.max_files is 0) or does not scan them for this requester (SCAN_FILES is not public) ignores them,
+         * as it does files of a media type it does not interpret. The files are left in the temporary upload
+         * directory, from which PHP removes them when the request ends, so that nothing is stored unless the server
+         * records the content as evidence (OFD "Scanned files").
+         *
+         * @param array<int, string[]> $fileParts The names of the parts that carry the files of each evidence item
+         * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @return array<int, ScanFile[]> The files of each evidence item that carries files, keyed by evidence index
+         * @throws RequestException If the files are invalid
+         */
+        private static function collectFiles(array $fileParts, ?OperatorRecord $authenticatedOperator): array
+        {
+            if(count($fileParts) === 0 && count($_FILES) === 0)
+            {
+                return [];
+            }
+
+            // Every part that carries a file is named by exactly one files member, exactly once
+            $named = [];
+            foreach($fileParts as $names)
+            {
+                foreach($names as $name)
+                {
+                    if(isset($named[$name]))
+                    {
+                        throw new RequestException(sprintf('The part "%s" is named by more than one file', $name), HttpResponseCode::BAD_REQUEST);
+                    }
+
+                    $named[$name] = true;
+                }
+            }
+
+            foreach(array_keys($_FILES) as $part)
+            {
+                if(!isset($named[$part]))
+                {
+                    throw new RequestException(sprintf('The part "%s" carries a file that no evidence names in its files member', $part), HttpResponseCode::BAD_REQUEST);
+                }
+            }
+
+            foreach(array_keys($named) as $name)
+            {
+                if(!isset($_FILES[$name]))
+                {
+                    throw new RequestException(sprintf('The part "%s" must carry a single file', $name), HttpResponseCode::BAD_REQUEST);
+                }
+            }
+
+            $scanningConfiguration = Configuration::getScanningConfiguration();
+            if(!$scanningConfiguration->isFilesEnabled())
+            {
+                return [];
+            }
+
+            if(!Configuration::getServerConfiguration()->isScanFilesPublic() && ($authenticatedOperator === null || !$authenticatedOperator->hasClientPermissions()))
+            {
+                return [];
+            }
+
+            if(count($named) > $scanningConfiguration->getMaxFiles())
+            {
+                throw new RequestException(sprintf('A scan request may carry at most %d file(s)', $scanningConfiguration->getMaxFiles()), HttpResponseCode::BAD_REQUEST);
+            }
+
+            $files = [];
+            foreach($fileParts as $index => $names)
+            {
+                foreach($names as $fileIndex => $name)
+                {
+                    $files[$index][] = self::createScanFile($name, $fileIndex, $scanningConfiguration->getMaxFileSize());
+                }
+            }
+
+            return $files;
+        }
+
+        /**
+         * Validates the file carried by a part of the request and describes it for the plugins. The media type is
+         * determined from the content of the file, never taken from the client.
+         *
+         * @param string $name The name of the part
+         * @param int $fileIndex The position of the file within the files of its evidence item
+         * @param int $maxFileSize The maximum size of a file in bytes
+         * @return ScanFile The file
+         * @throws RequestException If the part does not carry a single valid file
+         */
+        private static function createScanFile(string $name, int $fileIndex, int $maxFileSize): ScanFile
+        {
+            $file = $_FILES[$name] ?? null;
+            if(!is_array($file) || !isset($file['tmp_name']) || !is_string($file['tmp_name']))
+            {
+                throw new RequestException(sprintf('The part "%s" must carry a single file', $name), HttpResponseCode::BAD_REQUEST);
+            }
+
+            $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+            if($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE || (int)($file['size'] ?? 0) > $maxFileSize)
+            {
+                throw new RequestException(sprintf('The file of the part "%s" exceeds the maximum size of %d bytes', $name, $maxFileSize), HttpResponseCode::BAD_REQUEST);
+            }
+
+            if($error !== UPLOAD_ERR_OK || $file['tmp_name'] === '' || !is_uploaded_file($file['tmp_name']) || is_link($file['tmp_name']))
+            {
+                throw new RequestException(sprintf('The file of the part "%s" could not be received', $name), HttpResponseCode::BAD_REQUEST);
+            }
+
+            clearstatcache(true, $file['tmp_name']);
+            $size = (int)filesize($file['tmp_name']);
+            if($size <= 0)
+            {
+                throw new RequestException(sprintf('The file of the part "%s" is empty', $name), HttpResponseCode::BAD_REQUEST);
+            }
+
+            if($size > $maxFileSize)
+            {
+                throw new RequestException(sprintf('The file of the part "%s" exceeds the maximum size of %d bytes', $name, $maxFileSize), HttpResponseCode::BAD_REQUEST);
+            }
+
+            $fileName = Utilities::getSafeFileName(is_string($file['name'] ?? null) ? $file['name'] : '');
+            if($fileName === '' || $fileName === 'unnamed')
+            {
+                $fileName = $name;
+            }
+
+            return new ScanFile($fileIndex, $fileName, $file['tmp_name'], $size, strtolower(Utilities::detectMimeType($file['tmp_name'])));
+        }
+
+        /**
          * Normalizes the evidence input into a list of evidence parameter arrays.
          *
          * @param array $evidenceInput The raw evidence parameter from the request
@@ -694,12 +883,13 @@
             // confidential (OFD "Population of the Database")
             $authorIsTelephone = $scannedContent->getAuthorEntity()->getEntity()->isTelephone();
 
-            // Create an evidence record for each provided evidence item
+            // Create an evidence record for each provided evidence item that carries text content or files
             $firstEvidenceUuid = null;
             foreach($contentInputs as $evidenceIndex => $contentInput)
             {
                 $textContent = $contentInput->getTextContent();
-                if($textContent === null || strlen($textContent) === 0)
+                $files = $contentScan?->getFiles($evidenceIndex) ?? [];
+                if(($textContent === null || strlen($textContent) === 0) && count($files) === 0)
                 {
                     continue;
                 }
@@ -729,6 +919,28 @@
                     context: $contentInput->getContext(),
                     automated: true
                 );
+
+                // The files submitted with the content are kept only as attachments of the evidence created from it
+                // (OFD "Scanned files"), a file that could not be stored does not prevent the report
+                foreach($files as $file)
+                {
+                    try
+                    {
+                        $attachmentUuid = FileAttachmentManager::storeFile($file->getPath(), $evidenceUuid, $file->getMimeType(), $file->getFileName());
+                        AuditLogManager::createEntry(
+                            type: AuditLogType::ATTACHMENT_UPLOADED,
+                            message: sprintf('File %s recorded from scanned content (size: %d bytes) Type %s', $file->getFileName(), $file->getSize(), $file->getMimeType()),
+                            operatorUuid: $systemOperator->getUuid(),
+                            entityUuid: $scannedContent->getAuthorEntity()->getEntity()->getUuid(),
+                            evidenceUuid: $evidenceUuid,
+                            fileAttachmentUuid: $attachmentUuid
+                        );
+                    }
+                    catch(DatabaseOperationException $e)
+                    {
+                        Logger::log()->error(sprintf('Failed to record the scanned file %s with evidence %s: %s', $file->getFileName(), $evidenceUuid, $e->getMessage()), $e);
+                    }
+                }
 
                 if($firstEvidenceUuid === null)
                 {
@@ -768,7 +980,7 @@
          */
         public static function getDescription(): string
         {
-            return 'Scans one or more content items for entities and blacklist records and classifies the content using the enabled plugins, interpreting each item according to its content type and assessing only the requested concerns. Requires client permissions unless scanning is public.';
+            return 'Scans one or more content items for entities and blacklist records and classifies the content using the enabled plugins, interpreting each item according to its content type and assessing only the requested concerns. Items may carry files, such as the images of a message, in a multipart/form-data request whose evidence part carries the JSON text of the evidence and whose files are named in the files member of each item; files are only interpreted by plugins that support their media type, other files are accepted but do not affect the result, as are all files when the server does not scan files from the requester. Requires client permissions unless scanning is public.';
         }
 
         /**
@@ -792,10 +1004,33 @@
          */
         public static function getRequestBody(): ?array
         {
-
             return [
                 'required' => true,
                 'content' => [
+                    'multipart/form-data' => [
+                        'schema' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'author' => [
+                                    'type' => 'string',
+                                    'description' => 'UUID, SHA-256 hash, or entity address of the author',
+                                ],
+                                'evidence' => [
+                                    'type' => 'string',
+                                    'description' => 'The JSON text of one evidence object or an array of evidence objects; each object may name the parts that carry its files in a files member, an array of part names',
+                                ],
+                                'top_k' => ['type' => 'integer', 'description' => 'Number of top classifications to return'],
+                                'threshold' => ['type' => 'number', 'format' => 'float', 'description' => 'Confidence threshold for classification'],
+                                'concerns' => ['type' => 'string', 'description' => 'The JSON text of the array of concerns to assess'],
+                            ],
+                            'additionalProperties' => [
+                                'type' => 'string',
+                                'format' => 'binary',
+                                'description' => 'A file named in the files member of an evidence object, the part name is 1 to 64 letters, digits, "_" or "-"',
+                            ],
+                            'required' => ['evidence'],
+                        ],
+                    ],
                     'application/json' => [
                         'schema' => [
                             'type' => 'object',
