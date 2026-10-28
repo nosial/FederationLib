@@ -171,6 +171,7 @@
             $this->assertSame([
                 'concern' => 'ADVERTISING',
                 'content_index' => 0,
+                'file_index' => null,
                 'entity' => $entityUuid,
                 'source' => 'blacklist',
                 'confidence' => null,

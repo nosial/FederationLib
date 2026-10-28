@@ -230,6 +230,7 @@
             $this->assertSame([
                 'concern' => 'ADVERTISING',
                 'content_index' => 1,
+                'file_index' => null,
                 'entity' => '01890a5d-ac96-774b-bcce-b302099a8058',
                 'source' => 'ad_filter_list',
                 'confidence' => 0.75,
