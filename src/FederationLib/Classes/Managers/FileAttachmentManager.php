@@ -19,6 +19,7 @@
     use InvalidArgumentException;
     use PDO;
     use PDOException;
+    use Symfony\Component\Uid\Uuid;
 
     class FileAttachmentManager
     {
@@ -68,6 +69,63 @@
             }
 
             PluginManager::dispatchRecordChange(RecordChangeType::ATTACHMENT_CREATED, $uuid);
+        }
+
+        /**
+         * Stores a copy of a file as a file attachment of an evidence record and creates its record, eg; a file
+         * submitted for scanning that the server records with the evidence it creates from the scanned content. The
+         * source file is left in place.
+         *
+         * @param string $sourcePath The path of the file to store
+         * @param string $evidence The UUID of the evidence record the file is attached to
+         * @param string $fileMime The media type of the file, as determined by the server from its content
+         * @param string $fileName The file name, already reduced to a safe form
+         * @return string The UUID of the created file attachment
+         * @throws DatabaseOperationException If the file could not be stored or its record could not be created
+         */
+        public static function storeFile(string $sourcePath, string $evidence, string $fileMime, string $fileName): string
+        {
+            $storagePath = rtrim(Configuration::getServerConfiguration()->getStoragePath(), DIRECTORY_SEPARATOR);
+            if(!is_dir($storagePath) && !mkdir($storagePath, 0750, true) && !is_dir($storagePath))
+            {
+                throw new DatabaseOperationException('The storage directory could not be created');
+            }
+
+            $uuid = Uuid::v7()->toRfc4122();
+            $destinationPath = $storagePath . DIRECTORY_SEPARATOR . $uuid;
+            $tempDestination = $storagePath . DIRECTORY_SEPARATOR . uniqid('tmp_', true);
+
+            try
+            {
+                if(!copy($sourcePath, $tempDestination))
+                {
+                    throw new DatabaseOperationException('The file could not be copied to the storage directory');
+                }
+
+                clearstatcache(true, $tempDestination);
+                $fileSize = (int)filesize($tempDestination);
+                chmod($tempDestination, 0640);
+                if(!rename($tempDestination, $destinationPath))
+                {
+                    throw new DatabaseOperationException('The file could not be moved to its destination');
+                }
+
+                self::createRecord($uuid, $evidence, $fileMime, $fileName, $fileSize);
+            }
+            catch(DatabaseOperationException|InvalidArgumentException $e)
+            {
+                @unlink($destinationPath);
+                throw $e instanceof DatabaseOperationException ? $e : new DatabaseOperationException($e->getMessage(), 0, $e);
+            }
+            finally
+            {
+                if(file_exists($tempDestination))
+                {
+                    @unlink($tempDestination);
+                }
+            }
+
+            return $uuid;
         }
 
         /**
