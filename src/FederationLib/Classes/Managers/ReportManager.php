@@ -510,10 +510,10 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
-
-                    // Blacklist records keep existing with their report reference cleared by the database.
                     RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'report', $reportUuid);
                     RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
+                    RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'report', $reportUuid);
+                    RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
                 }
             }
 
@@ -605,11 +605,14 @@
          * @param string $operatorUuid The UUID of the submitting operator.
          * @param int $limit The maximum number of records to return (default is 100).
          * @param int $page The page number for pagination (default is 1).
+         * @param ReportCategory|null $category Optional. The category to filter the reports by.
+         * @param string|null $by Optional. The field to sort by, one of the ReportOrderType values (default is created).
+         * @param OrderType|null $order Optional. The sort direction (default is descending).
          * @return ReportRecord[] An array of ReportRecord objects.
          * @throws InvalidArgumentException If the operator UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsBySubmittingOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
+        public static function getReportsBySubmittingOperator(string $operatorUuid, int $limit=100, int $page=1, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($operatorUuid) < 1)
             {
@@ -640,7 +643,7 @@
                 {
                     $sql .= " AND $categoryCondition";
                 }
-                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $sql .= " " . self::buildReportSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':operator', $operatorUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
@@ -677,11 +680,14 @@
          * @param string $entityUuid The UUID of the reporting entity.
          * @param int $limit The maximum number of records to return (default is 100).
          * @param int $page The page number for pagination (default is 1).
+         * @param ReportCategory|null $category Optional. The category to filter the reports by.
+         * @param string|null $by Optional. The field to sort by, one of the ReportOrderType values (default is created).
+         * @param OrderType|null $order Optional. The sort direction (default is descending).
          * @return ReportRecord[] An array of ReportRecord objects.
          * @throws InvalidArgumentException If the entity UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
          */
-        public static function getReportsByReportingEntity(string $entityUuid, int $limit=100, int $page=1, ?ReportCategory $category=null): array
+        public static function getReportsByReportingEntity(string $entityUuid, int $limit=100, int $page=1, ?ReportCategory $category=null, ?string $by=null, ?OrderType $order=null): array
         {
             if(strlen($entityUuid) < 1)
             {
@@ -723,7 +729,7 @@
                 {
                     $sql .= " AND $categoryCondition";
                 }
-                $sql .= " ORDER BY created DESC, uuid DESC LIMIT :limit OFFSET :offset";
+                $sql .= " " . self::buildReportSortClause($by, $order) . " LIMIT :limit OFFSET :offset";
                 $stmt = DatabaseConnection::getConnection()->prepare($sql);
                 $stmt->bindParam(':entity', $entityUuid);
                 $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
@@ -765,6 +771,9 @@
          * @param string $operatorUuid The UUID of the assigned operator.
          * @param int $limit The maximum number of records to return (default is 100).
          * @param int $page The page number for pagination (default is 1).
+         * @param ReportCategory|null $category Optional. The category to filter the reports by.
+         * @param string|null $by Optional. The field to sort by, one of the ReportOrderType values (default is created).
+         * @param OrderType|null $order Optional. The sort direction (default is descending).
          * @return ReportRecord[] An array of ReportRecord objects.
          * @throws InvalidArgumentException If the operator UUID is invalid.
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
