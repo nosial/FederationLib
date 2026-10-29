@@ -130,10 +130,15 @@
             [$entityUuid] = $this->createTelephoneEntity();
             $this->createdBlacklistRecords[] = $this->client->blacklistEntity($entityUuid, null, IncidentType::SPAM, time() + 3600);
 
-            foreach($this->anonymous->getTopThreats(100) as $threat)
+            // The blacklisted telephone entity is a top threat, only operators see it as one
+            $anonymousThreats = $this->anonymous->getTopThreats(100);
+            $this->assertNotContains($entityUuid, array_map(fn(EntityRecord $entity) => $entity->getUuid(), $anonymousThreats));
+            foreach($anonymousThreats as $threat)
             {
                 $this->assertNotSame('e164.arpa', $threat->getHost());
             }
+
+            $this->assertContains($entityUuid, array_map(fn(EntityRecord $entity) => $entity->getUuid(), $this->client->getTopThreats(100)));
         }
 
         public function testEvidenceAboutTelephoneEntityIsAlwaysConfidential(): void

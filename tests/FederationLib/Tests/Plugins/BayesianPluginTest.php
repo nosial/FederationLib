@@ -31,6 +31,8 @@
         private const int MINIMUM_DOCUMENTS = 10;
         private const int LEARNING_TIMEOUT = 120;
         private const int LEARN_REQUEST_TIMEOUT = 30;
+        /** BayesianServer checks for changed documents every 60 seconds by default (--retrain-interval) */
+        private const int RETRAIN_TIMEOUT = 180;
 
         private static bool $trained = false;
         /** @var string[] */
@@ -308,7 +310,50 @@
                 $this->assertGreaterThanOrEqual(self::MINIMUM_DOCUMENTS, $labels[$flag->value] ?? 0, sprintf('The model is not ready after training, not enough %s documents', $flag->value));
             }
 
+            $this->waitForRetrain($entityUuid);
             self::$trained = true;
+        }
+
+        /**
+         * Waits until BayesianServer retrained its model with every document it learned so far. The logistic model
+         * stores learned documents and classifies with the weights of its last retrain, which runs in the background
+         * (every 60 seconds by default) once documents changed, so learned samples are not used until then.
+         *
+         * A probe of random words is learned through FederationLib after the other documents were processed, every
+         * word of it is only known to the model (has a trained weight) once the weights were retrained from a store
+         * that includes the probe, and therefore every document learned before it
+         */
+        private function waitForRetrain(string $entityUuid): void
+        {
+            $probe = implode(' ', array_map(fn() => self::randomWord(), range(1, 8)));
+            $before = $this->getLearnRequests();
+            self::$trainingEvidence[] = $this->client->submitEvidence($entityUuid, $probe, classification: ClassificationFlag::NORMAL);
+            $this->waitForLearnRequests($before + 1);
+
+            $deadline = time() + self::RETRAIN_TIMEOUT;
+            while(($unknown = (int)$this->classifyDirectly($probe)['unknown_token_count']) > 0)
+            {
+                if(time() >= $deadline)
+                {
+                    $this->fail(sprintf('BayesianServer did not retrain its model within %d seconds, %d words of the probe are still unknown', self::RETRAIN_TIMEOUT, $unknown));
+                }
+
+                usleep(500000);
+            }
+        }
+
+        /**
+         * Returns a random word of letters only, the placeholders of BayesianServer replace numbers
+         */
+        private static function randomWord(): string
+        {
+            $word = '';
+            for($i = 0; $i < 12; $i++)
+            {
+                $word .= chr(random_int(ord('a'), ord('z')));
+            }
+
+            return $word;
         }
 
         private function createEntity(): string
