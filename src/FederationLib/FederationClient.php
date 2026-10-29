@@ -2669,7 +2669,6 @@
             $ch = $this->buildCurl('attachments/' . $attachmentUuid);
             curl_setopt($ch, CURLOPT_HTTPGET, true);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_FAILONERROR, true);
             curl_setopt($ch, CURLOPT_HEADER, true);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
@@ -2683,13 +2682,20 @@
                 throw new RequestException('Curl error while downloading attachment: ' . $curlError);
             }
 
-            if($httpCode !== HttpResponseCode::OK->value)
-            {
-                throw new RequestException('Failed to download attachment, HTTP code: ' . $httpCode, HttpResponseCode::from($httpCode));
-            }
-
             $headers = substr($response, 0, $headerSize);
             $body = substr($response, $headerSize);
+
+            if($httpCode !== HttpResponseCode::OK->value)
+            {
+                $errorMessage = 'Failed to download attachment, HTTP code: ' . $httpCode;
+                $decodedBody = json_decode($body, true);
+                if(is_array($decodedBody) && isset($decodedBody['message']) && is_string($decodedBody['message']))
+                {
+                    $errorMessage .= ', ' . $decodedBody['message'];
+                }
+
+                throw new RequestException($errorMessage, $httpCode);
+            }
             $suggestedFilename = $this->extractFilenameFromHeaders($headers);
             $filename = $suggestedFilename !== null ? basename(str_replace('\\', '/', $suggestedFilename)) : '';
 
