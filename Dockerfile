@@ -48,12 +48,12 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && echo "post_max_size = 1G" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "max_execution_time = 600" >> /usr/local/etc/php/conf.d/uploads.ini \
-    && printf '%s\n' \ 'display_errors = Off' \ 'display_startup_errors = Off' \ > /usr/local/etc/php/conf.d/errors.ini \
     && rm -f /etc/nginx/sites-enabled/default
 
 COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
 RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
 RUN ncc install --package="nosial/BayesianPlugin@github" --yes
+RUN printf '%s\n' 'display_errors = Off' 'display_startup_errors = Off' > /usr/local/etc/php/conf.d/errors.ini
 
 COPY --from=builder /app/web_entry /var/www/html/index.php
 RUN mkdir -p /var/www/uploads /etc/configlib \
