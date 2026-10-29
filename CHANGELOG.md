@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-10-28
+## [2.1.0] - 2026-10-29
 
 This update introduces support for OFD Specification version 2.1
 
@@ -37,6 +37,15 @@ This update introduces support for OFD Specification version 2.1
    the audit log, so that plugins closing reports on their own behalf have the same effect as an operator. It takes the
    closing operator, which the report must be assigned to
  - The Close Report method closes reports with `ReportManager::closeReport()`
+
+### Fixed
+ - `FederationClient::downloadAttachment()` throws a `RequestException` with the HTTP status code of the server (eg;
+   `404` for an unknown attachment) and its error message, instead of a `500` for every failed download
+ - Deleting a report invalidates the cached evidence records of the report, so its evidence is no longer returned with
+   a reference to the deleted report
+ - The List Entity Reports, List Operator Reports and List Assigned Operator Reports methods accept the `by` and
+   `order` parameters, which `FederationClient` already sent and which were ignored
+
 
 
 ## [2.0.1] - 2026-10-23
