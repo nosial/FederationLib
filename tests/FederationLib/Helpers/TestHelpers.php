@@ -190,7 +190,6 @@
 
             $response = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            curl_close($ch);
 
             return [(int)$code, (string)$response];
         }
@@ -257,7 +256,6 @@
             {
                 $results[$index] = [(int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE), (string)curl_multi_getcontent($ch)];
                 curl_multi_remove_handle($multiHandle, $ch);
-                curl_close($ch);
             }
 
             curl_multi_close($multiHandle);
