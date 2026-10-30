@@ -469,7 +469,7 @@
     
         public function testServerInformationApiVersion(): void
         {
-            $this->assertSame('2.1', $this->client->getServerInformation()->getApiVersion());
+            $this->assertSame('2.2', $this->client->getServerInformation()->getApiVersion());
         }
 
         public function testServerInformationPublishesContentTypesAndConcerns(): void

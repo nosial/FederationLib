@@ -86,7 +86,7 @@
         {
             $serverInformation = $this->client->getServerInformation();
 
-            $this->assertSame('2.1', $serverInformation->getApiVersion());
+            $this->assertSame('2.2', $serverInformation->getApiVersion());
             $this->assertSame(4, $serverInformation->getMaxScanFiles());
             $this->assertSame(10485760, $serverInformation->getMaxScanFileSize());
         }
