@@ -266,10 +266,15 @@
          * @param array<int, string[]> $files Optional. The local paths of the files of each evidence item, keyed by the
          *                                    index of the item, eg; [0 => ['/tmp/photo.jpg']]. Files are sent in a
          *                                    multipart/form-data request, a server that does not scan them ignores them.
+         * @param array<int, string[]> $fileUrls Optional. The URLs of further files of each evidence item, keyed by the
+         *                                       index of the item, eg; [0 => ['https://example.com/photo.jpg']], which
+         *                                       the server retrieves itself or ignores. Only supply file URLs to a
+         *                                       server that reports an api_version of 2.2 or later, earlier servers
+         *                                       reject them.
          * @return ScannedContent The scanned content result
          * @throws RequestException Thrown if the request fails
          */
-        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $concerns = null, array $files = []): ScannedContent
+        public function scanContent(ContentInput|array|string $evidence, ?string $author = null, ?int $topK = null, ?float $threshold = null, ?array $concerns = null, array $files = [], array $fileUrls = []): ScannedContent
         {
             if(is_string($evidence))
             {
@@ -357,9 +362,26 @@
                 }
             }
 
+            // File URLs are named in the file_urls member of their evidence item, the server retrieves the files itself
+            foreach($fileUrls as $index => $urls)
+            {
+                if(!is_int($index) || !isset($evidenceArrays[$index]))
+                {
+                    throw new InvalidArgumentException(sprintf('The file URLs are keyed by an evidence index that does not exist: %s', $index));
+                }
+
+                if(!is_array($urls) || count($urls) === 0 || array_any($urls, fn($url) => !is_string($url) || $url === ''))
+                {
+                    throw new InvalidArgumentException(sprintf('The file URLs of the evidence at index %d must be a non-empty array of URLs', $index));
+                }
+
+                $evidenceArrays[$index]['file_urls'] = array_values($urls);
+                $hasContent = true;
+            }
+
             if(!$hasContent)
             {
-                throw new InvalidArgumentException('At least one evidence record must contain text content or a file');
+                throw new InvalidArgumentException('At least one evidence record must contain text content, a file or a file URL');
             }
 
             $params = ['evidence' => count($evidenceArrays) === 1 ? $evidenceArrays[0] : $evidenceArrays];
