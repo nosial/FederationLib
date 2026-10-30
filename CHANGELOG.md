@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - Ongoing
+
+This update introduces support for OFD Specification version 2.2
+
+### Added
+ - Implements the scanned file URLs of version 2.2 of the OFD Specification, the server reports `2.2` as its
+   `api_version`. Evidence may name files by URL in a `file_urls` member, in JSON and `multipart/form-data` requests,
+   and evidence with file URLs may omit `text_content`. The URLs are always validated (absolute HTTP or HTTPS URLs of at
+   most 2048 characters without credentials), but only retrieved when `remote_retrieval.scan_files` is enabled (`false`
+   by default) and the files of scan requests are as well, and only for requests with client permissions, regardless
+   of the `SCAN_FILES` item of `server.public`. Otherwise they are ignored
+ - Retrieved files count towards `scanning.max_files`, share one `remote_retrieval.timeout` per request and are handed
+   to plugins with `ContentScan::getFiles()` after the files the request carries, their file indexes following those
+   files. A file URL that is not permitted, cannot be retrieved, is empty or exceeds `scanning.max_file_size` is left
+   out without an error, so the result does not reveal why. Retrieved files are deleted when the request ends unless the
+   scan generates a report, in which case they are kept as attachments of its evidence like the files it carries
+ - `FederationClient::scanContent()` sends file URLs with its new `$fileUrls` parameter, keyed by evidence index
+
+### Changed
+ - The retrieval of files from URLs moved from the Upload Attachment method to `RemoteRetrieval`, shared by URL
+   uploads and scanned file URLs with the same protections against server-side request forgery
+
+
+
 ## [2.1.0] - 2026-10-29
 
 This update introduces support for OFD Specification version 2.1
