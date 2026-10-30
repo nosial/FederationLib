@@ -14,6 +14,7 @@
     use FederationLib\Classes\Managers\ReputationManager;
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
+    use FederationLib\Classes\RemoteRetrieval;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
@@ -45,7 +46,7 @@
         private const string ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions to scan content, client permissions are required';
         private const string ERROR_EVIDENCE_REQUIRED = 'Evidence is required';
         private const string ERROR_EVIDENCE_INVALID = 'Evidence must be a single evidence object or an array of evidence objects';
-        private const string ERROR_CONTENT_EMPTY = 'At least one evidence record must contain text content or a file';
+        private const string ERROR_CONTENT_EMPTY = 'At least one evidence record must contain text content, a file or a file URL';
         private const string ERROR_EVIDENCE_JSON = 'The evidence part of a multipart request must carry the JSON text of the evidence';
         private const array PARAMETERS = ['author', 'evidence', 'top_k', 'threshold', 'concerns'];
         private const string ERROR_INVALID_AUTHOR = 'The author must be an entity identifier, and a telephone entity the international number as 1 to 15 digits without a leading + or separators, such as 15550123456@e164.arpa';
@@ -122,11 +123,9 @@
                 throw new RequestException(self::ERROR_EVIDENCE_INVALID, HttpResponseCode::BAD_REQUEST);
             }
 
-            // Each evidence entry is a ContentInput object, validated with its content type and context. FederationLib
-            // interprets every content type it defines, so every content type is supported for scanning. Scan Content
-            // extends the object with the files member, naming the parts that carry its files.
             $contentInputs = [];
             $fileParts = [];
+            $fileUrls = [];
             foreach($evidenceItems as $index => $item)
             {
                 try
@@ -137,19 +136,27 @@
                         unset($item['files']);
                     }
 
+                    if(is_array($item) && array_key_exists('file_urls', $item))
+                    {
+                        $fileUrls[$index] = self::parseFileUrlsMember($item['file_urls']);
+                        unset($item['file_urls']);
+                    }
+
                     $contentInputs[] = ContentInput::fromRequest($item);
                 }
-                catch(InvalidArgumentException $e)
+                catch(InvalidArgumentException|RequestException $e)
                 {
                     throw new RequestException(sprintf('%s at index %d', $e->getMessage(), $index), HttpResponseCode::BAD_REQUEST, $e);
                 }
             }
 
-            $files = self::collectFiles($fileParts, $authenticatedOperator);
-            if(!array_any($contentInputs, fn(ContentInput $input) => $input->getTextContent() !== null) && count($fileParts) === 0)
+            if(!array_any($contentInputs, fn(ContentInput $input) => $input->getTextContent() !== null) && count($fileParts) === 0 && count($fileUrls) === 0)
             {
                 throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
             }
+
+            $files = self::collectFiles($fileParts, $authenticatedOperator, array_sum(array_map('count', $fileUrls)));
+            self::retrieveFileUrls($fileUrls, $fileParts, $authenticatedOperator, $files);
 
             $concerns = self::parseConcerns($concernsInput);
 
@@ -668,12 +675,14 @@
          *
          * @param array<int, string[]> $fileParts The names of the parts that carry the files of each evidence item
          * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @param int $fileUrlCount The number of file URLs of the request, counted towards scanning.max_files when the
+         *                          server retrieves them for this requester
          * @return array<int, ScanFile[]> The files of each evidence item that carries files, keyed by evidence index
          * @throws RequestException If the files are invalid
          */
-        private static function collectFiles(array $fileParts, ?OperatorRecord $authenticatedOperator): array
+        private static function collectFiles(array $fileParts, ?OperatorRecord $authenticatedOperator, int $fileUrlCount=0): array
         {
-            if(count($fileParts) === 0 && count($_FILES) === 0)
+            if(count($fileParts) === 0 && count($_FILES) === 0 && $fileUrlCount === 0)
             {
                 return [];
             }
@@ -720,7 +729,8 @@
                 return [];
             }
 
-            if(count($named) > $scanningConfiguration->getMaxFiles())
+            $total = count($named) + (self::retrievesFileUrls($authenticatedOperator) ? $fileUrlCount : 0);
+            if($total > $scanningConfiguration->getMaxFiles())
             {
                 throw new RequestException(sprintf('A scan request may carry at most %d file(s)', $scanningConfiguration->getMaxFiles()), HttpResponseCode::BAD_REQUEST);
             }
@@ -735,6 +745,110 @@
             }
 
             return $files;
+        }
+
+        /**
+         * Parses the file_urls member of a ContentInput object: a non-empty array of absolute HTTP or HTTPS URLs without
+         * credentials, validated even when the server does not retrieve them (OFD "Scanned file URLs")
+         *
+         * @param mixed $fileUrls The file_urls member
+         * @return string[] The URLs, in order
+         * @throws InvalidArgumentException If the member is not a non-empty array of strings
+         * @throws RequestException If a URL is not valid
+         */
+        private static function parseFileUrlsMember(mixed $fileUrls): array
+        {
+            if(!is_array($fileUrls) || !array_is_list($fileUrls) || count($fileUrls) === 0 || array_any($fileUrls, fn($url) => !is_string($url)))
+            {
+                throw new InvalidArgumentException('The evidence member "file_urls" must be a non-empty array of URLs');
+            }
+
+            foreach($fileUrls as $url)
+            {
+                RemoteRetrieval::validateUrl($url);
+            }
+
+            return $fileUrls;
+        }
+
+        /**
+         * Returns whether the server retrieves the file URLs of a request: the files of scan requests must be enabled
+         * (scanning.max_files), the retrieval of file URLs as well (remote_retrieval.scan_files), and the requester
+         * must hold client permissions, the file URLs of other requests are ignored regardless of SCAN_FILES
+         *
+         * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @return bool True if the file URLs of the request are retrieved
+         */
+        private static function retrievesFileUrls(?OperatorRecord $authenticatedOperator): bool
+        {
+            return Configuration::getScanningConfiguration()->isFilesEnabled()
+                && Configuration::getRemoteRetrievalConfiguration()->isScanFilesEnabled()
+                && $authenticatedOperator !== null && $authenticatedOperator->hasClientPermissions();
+        }
+
+        /**
+         * Retrieves the files that the evidence items name by URL and adds them to the files of their items, after the
+         * files the request carries, so that the file index of a retrieved file is the number of files its item carries
+         * plus its position in the file_urls member. A file that is not permitted, cannot be retrieved, is empty or
+         * exceeds scanning.max_file_size is not an error: it is left out like a file the server cannot interpret, and
+         * the result does not reveal why. The retrievals of a request share one timeout (remote_retrieval.timeout),
+         * and the retrieved files are deleted when the request ends (OFD "Scanned file URLs").
+         *
+         * @param array<int, string[]> $fileUrls The file URLs of each evidence item, keyed by evidence index
+         * @param array<int, string[]> $fileParts The names of the parts that carry the files of each evidence item
+         * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @param array<int, ScanFile[]> $files The files of each evidence item, to which the retrieved files are added
+         */
+        private static function retrieveFileUrls(array $fileUrls, array $fileParts, ?OperatorRecord $authenticatedOperator, array &$files): void
+        {
+            if(count($fileUrls) === 0 || !self::retrievesFileUrls($authenticatedOperator))
+            {
+                return;
+            }
+
+            $maxFileSize = Configuration::getScanningConfiguration()->getMaxFileSize();
+            $deadline = time() + Configuration::getRemoteRetrievalConfiguration()->getTimeout();
+            foreach($fileUrls as $index => $urls)
+            {
+                foreach($urls as $position => $url)
+                {
+                    $fileIndex = count($fileParts[$index] ?? []) + $position;
+                    $path = tempnam(sys_get_temp_dir(), 'fl_scan_');
+                    if($path === false)
+                    {
+                        Logger::log()->warning(sprintf('Unable to create a temporary file to retrieve the file URL %d of evidence %d', $fileIndex, $index));
+                        continue;
+                    }
+
+                    register_shutdown_function(static fn() => @unlink($path));
+                    try
+                    {
+                        $suppliedName = RemoteRetrieval::download($url, $path, $maxFileSize, $deadline);
+                    }
+                    catch(RequestException $e)
+                    {
+                        Logger::log()->debug(sprintf('The file URL %d of evidence %d was not retrieved: %s', $fileIndex, $index, $e->getMessage()));
+                        @unlink($path);
+                        continue;
+                    }
+
+                    clearstatcache(true, $path);
+                    $size = (int)filesize($path);
+                    if($size <= 0 || $size > $maxFileSize)
+                    {
+                        @unlink($path);
+                        continue;
+                    }
+
+                    $fileName = Utilities::getSafeFileName($suppliedName);
+                    if($fileName === '' || $fileName === 'unnamed')
+                    {
+                        $fileName = sprintf('file_%d', $fileIndex);
+                    }
+
+                    $files[$index][] = new ScanFile($fileIndex, $fileName, $path, $size, strtolower(Utilities::detectMimeType($path)));
+                }
+            }
         }
 
         /**
@@ -1053,11 +1167,37 @@
         }
 
         /**
+         * Returns the schema of a ContentInput object as Scan Content extends it in a JSON request, with the file_urls
+         * member naming the files the server retrieves itself
+         *
+         * @return array The schema
+         */
+        private static function getScanContentInputSchema(): array
+        {
+            return [
+                'allOf' => [
+                    ['$ref' => ContentInput::getReference()],
+                    [
+                        'type' => 'object',
+                        'properties' => [
+                            'file_urls' => [
+                                'type' => 'array',
+                                'items' => ['type' => 'string', 'format' => 'uri', 'maxLength' => RemoteRetrieval::URL_MAX_LENGTH],
+                                'minItems' => 1,
+                                'description' => 'The absolute HTTP or HTTPS URLs of the files of the content, which the server retrieves itself or ignores; their file indexes follow those of the files the request carries',
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        /**
          * @inheritDoc
          */
         public static function getDescription(): string
         {
-            return 'Scans one or more content items for entities and blacklist records and classifies the content using the enabled plugins, interpreting each item according to its content type and assessing only the requested concerns. Items may carry files, such as the images of a message, in a multipart/form-data request whose evidence part carries the JSON text of the evidence and whose files are named in the files member of each item; files are only interpreted by plugins that support their media type, other files are accepted but do not affect the result, as are all files when the server does not scan files from the requester. Requires client permissions unless scanning is public.';
+            return 'Scans one or more content items for entities and blacklist records and classifies the content using the enabled plugins, interpreting each item according to its content type and assessing only the requested concerns. Items may carry files, such as the images of a message, in a multipart/form-data request whose evidence part carries the JSON text of the evidence and whose files are named in the files member of each item; files are only interpreted by plugins that support their media type, other files are accepted but do not affect the result, as are all files when the server does not scan files from the requester. Items may also name files by URL in a file_urls member, which the server retrieves itself when it is configured to, only for requests with client permissions; a file URL that is ignored, not permitted or cannot be retrieved is treated like a file the server does not interpret. Requires client permissions unless scanning is public.';
         }
 
         /**
@@ -1094,7 +1234,7 @@
                                 ],
                                 'evidence' => [
                                     'type' => 'string',
-                                    'description' => 'The JSON text of one evidence object or an array of evidence objects; each object may name the parts that carry its files in a files member, an array of part names',
+                                    'description' => 'The JSON text of one evidence object or an array of evidence objects; each object may name the parts that carry its files in a files member, an array of part names, and the URLs of further files in a file_urls member, an array of absolute HTTP or HTTPS URLs',
                                 ],
                                 'top_k' => ['type' => 'integer', 'description' => 'Number of top classifications to return'],
                                 'threshold' => ['type' => 'number', 'format' => 'float', 'description' => 'Confidence threshold for classification'],
@@ -1118,11 +1258,11 @@
                                 ],
                                 'evidence' => [
                                     'oneOf' => [
-                                        ['$ref' => ContentInput::getReference()],
+                                        self::getScanContentInputSchema(),
                                         [
                                             'type' => 'array',
                                             'description' => 'Multiple messages to scan',
-                                            'items' => ['$ref' => ContentInput::getReference()],
+                                            'items' => self::getScanContentInputSchema(),
                                         ],
                                     ],
                                 ],
