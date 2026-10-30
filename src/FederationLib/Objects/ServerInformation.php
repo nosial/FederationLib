@@ -69,7 +69,7 @@
         public function __construct(array $config)
         {
             $this->serverName = $config['name'] ?? $config['server_name'] ?? 'Federation Server';
-            $this->apiVersion = $config['api_version'] ?? '2.1';
+            $this->apiVersion = $config['api_version'] ?? '2.2';
             $this->publicAuditLogs = $config['public_audit_logs'] ?? true;
             $this->publicEvidence = $config['public_evidence'] ?? true;
             $this->publicBlacklist = $config['public_blacklist'] ?? true;
