@@ -461,14 +461,15 @@ without it they are only returned to requests that already know the number.
 
 ### Remote Retrieval Configuration
 
-The server can be made to retrieve URLs chosen by a requester: URL uploads of attachments, and URLs submitted for scanning,
-which FederationLib never retrieves itself but plugins may. Both are guarded against server-side request forgery the same
-way. DNS lookups of scanned names are a separate scanning setting (`scanning.dns_lookup_limit`).
+The server can be made to retrieve URLs chosen by a requester: URL uploads of attachments, the files scanned content names
+by URL, and URLs submitted for scanning, which FederationLib never retrieves itself but plugins may. All are guarded
+against server-side request forgery the same way. DNS lookups of scanned names are a separate scanning setting (`scanning.dns_lookup_limit`).
 
 | Name                             | Environment Variable                        | Type     | Default | Description                                                                                                 |
 |----------------------------------|---------------------------------------------|----------|---------|-------------------------------------------------------------------------------------------------------------|
 | `remote_retrieval.uploads`       | `FEDERATION_REMOTE_RETRIEVAL_UPLOADS`       | bool     | `true`  | Whether attachments may be uploaded from a URL the server retrieves itself                                  |
 | `remote_retrieval.scans`         | `FEDERATION_REMOTE_RETRIEVAL_SCANS`         | bool     | `false` | Whether plugins may retrieve URLs submitted for scanning, a security risk: keep it disabled unless required |
+| `remote_retrieval.scan_files`    | `FEDERATION_REMOTE_RETRIEVAL_SCAN_FILES`    | bool     | `false` | Whether the files scanned content names by URL (`file_urls`) are retrieved, a security risk like `scans`    |
 | `remote_retrieval.timeout`       | `FEDERATION_REMOTE_RETRIEVAL_TIMEOUT`       | duration | `30`    | The maximum time a retrieval may take                                                                       |
 | `remote_retrieval.allow_private` | `FEDERATION_REMOTE_RETRIEVAL_ALLOW_PRIVATE` | bool     | `false` | Whether retrievals may connect to private, loopback, link-local or reserved addresses                       |
 
@@ -505,6 +506,14 @@ Scan requests may carry files, such as the images of a message, in a `multipart/
 FederationLib interprets no file itself: files are accepted, ignored by the scan unless a plugin interprets their media
 type, and deleted when the request ends, unless the scan generates a report, in which case they are kept as attachments
 of its evidence. The docker image includes the PHP `gd` and `exif` extensions for plugins that interpret images.
+
+Evidence may also name files by URL in a `file_urls` member (OFD "Scanned file URLs"), for the server to retrieve
+itself. They are only retrieved when `remote_retrieval.scan_files` is enabled and
+the files of scan requests are as well, and only for requests with client permissions, regardless of `SCAN_FILES`.
+Otherwise they are validated and ignored. Retrieved files count towards `scanning.max_files`, share one
+`remote_retrieval.timeout` per request, follow the files the request carries in the file indexes of their evidence, and
+are otherwise handled like them. A file URL that is not permitted, cannot be retrieved, is empty or exceeds
+`scanning.max_file_size` is left out like a file no plugin interprets, without an error.
 
 Reputation is built from scans by authenticated clients over time, never from anonymous scans. The activity of each
 entity is recorded per day (UTC), and every completed day is applied by `federationlib reputation settle` (run every hour

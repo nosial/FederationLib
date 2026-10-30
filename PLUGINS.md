@@ -436,7 +436,10 @@ the server scans files for the requester, otherwise `ContentScan::getFiles()` is
 `getIndex()`, `getFileName()` (supplied by the client, made safe), `getSize()`, `getMimeType()` (determined by the
 server from the content, never the client's), `getSha256()` and `getPath()`. A file is never stored by FederationLib:
 it stays in PHP's temporary upload directory and is deleted when the request ends, unless the scan generates a report,
-in which case it is kept as an attachment of the report's evidence. Files are hostile content chosen by the requester:
+in which case it is kept as an attachment of the report's evidence. Files the server retrieved from the file URLs of the
+evidence (OFD 2.2) are included after the files the request carries, with the same guarantees, and a file URL that
+could not be retrieved leaves a gap in the file indexes, so always relate a detection to `getIndex()` rather than to the
+position of the file in `getFiles()`. Files are hostile content chosen by the requester:
 
  - Only interpret the media types the plugin supports, determined by `getMimeType()`, and ignore any other file. A file
    that can not be interpreted is never an error, the scan continues without it, so that content consisting only of such
