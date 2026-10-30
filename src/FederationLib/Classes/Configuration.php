@@ -568,7 +568,7 @@
             return match(true)
             {
                 str_starts_with($variable, 'FEDERATION_URL_UPLOAD'), $variable === 'FEDERATION_SCANNING_URL_RETRIEVAL'
-                    => 'use FEDERATION_REMOTE_RETRIEVAL_UPLOADS, _SCANS, _TIMEOUT or _ALLOW_PRIVATE',
+                    => 'use FEDERATION_REMOTE_RETRIEVAL_UPLOADS, _SCANS, _SCAN_FILES, _TIMEOUT or _ALLOW_PRIVATE',
                 str_starts_with($variable, 'FEDERATION_PUBLIC_'), $variable === 'FEDERATION_SEARCH_PUBLIC'
                     => 'use FEDERATION_PUBLIC (eg; ENTITIES,EVIDENCE,BLACKLIST)',
                 str_starts_with($variable, 'FEDERATION_LIST_') => 'use FEDERATION_MAX_PAGE_SIZE',
@@ -612,6 +612,7 @@
             // Retrieval of URLs chosen by requesters: URL uploads, and the URLs submitted for scanning (plugins only)
             self::$configuration->setDefault('remote_retrieval.uploads', true, 'FEDERATION_REMOTE_RETRIEVAL_UPLOADS');
             self::$configuration->setDefault('remote_retrieval.scans', false, 'FEDERATION_REMOTE_RETRIEVAL_SCANS');
+            self::$configuration->setDefault('remote_retrieval.scan_files', false, 'FEDERATION_REMOTE_RETRIEVAL_SCAN_FILES');
             self::$configuration->setDefault('remote_retrieval.timeout', 30, 'FEDERATION_REMOTE_RETRIEVAL_TIMEOUT');
             self::$configuration->setDefault('remote_retrieval.allow_private', false, 'FEDERATION_REMOTE_RETRIEVAL_ALLOW_PRIVATE');
 
