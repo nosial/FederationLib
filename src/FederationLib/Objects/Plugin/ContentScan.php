@@ -37,6 +37,8 @@
         private array $resolvedAddresses;
         /** @var array<int, ScanFile[]> */
         private array $files;
+        /** @var array<int, string[]> */
+        private array $fileUrls;
 
         /**
          * ContentScan constructor.
@@ -51,12 +53,15 @@
          * @param IncidentType[]|null $concerns The effective concerns of the request, null to accept every concern
          * @param array<int, string[]> $resolvedAddresses The addresses the host resolved for each evidence item itself
          * @param array<int, ScanFile[]> $files The files submitted with each evidence item, keyed by evidence index
+         * @param array<int, string[]> $fileUrls The file URLs the server retrieved for each evidence item, keyed by
+         *                                       evidence index, empty when the server doesn't retrieve file URLs
          */
         public function __construct(array $evidence, ?string $authorIdentifier, ?ResolvedEntity $authorEntity, array $resolvedEntities,
             ?OperatorRecord $authenticatedOperator=null, ?int $topK=null, ?float $threshold=null, ?array $concerns=null, array $resolvedAddresses=[],
-            array $files=[])
+            array $files=[], array $fileUrls=[])
         {
             $this->files = array_map(fn(array $evidenceFiles) => array_values($evidenceFiles), $files);
+            $this->fileUrls = array_map(fn(array $evidenceFileUrls) => array_values($evidenceFileUrls), $fileUrls);
             $this->resolvedAddresses = $resolvedAddresses;
             $this->concerns = $concerns !== null ? array_values($concerns) : null;
             $this->detections = [];
@@ -210,6 +215,20 @@
         }
 
         /**
+         * Returns the file URLs of an evidence item that the server retrieved (OFD 2.2), in the order the client named
+         * them. The file of the URL at position N, if it could be retrieved and wasn't denied, is the file whose
+         * ScanFile::getIndex() is the number of files the evidence item carries plus N. Every URL was already seen by
+         * the REMOTE_RETRIEVAL event handlers before it was retrieved. The URLs are assertions of the client
+         *
+         * @param int $evidenceIndex The index of the evidence item (see getEvidence())
+         * @return string[] The URLs, empty if the item names none or the server doesn't retrieve them
+         */
+        public function getFileUrls(int $evidenceIndex): array
+        {
+            return $this->fileUrls[$evidenceIndex] ?? [];
+        }
+
+        /**
          * Returns whether any evidence item carries files
          *
          * @return bool True if files were submitted for scanning
@@ -256,9 +275,9 @@
                 throw new InvalidArgumentException(sprintf('The evidence index %d does not exist, %d evidence item(s) were provided', $evidenceIndex, count($this->evidence)));
             }
 
-            if($fileIndex !== null && !isset($this->getFiles($evidenceIndex)[$fileIndex]))
+            if($fileIndex !== null)
             {
-                throw new InvalidArgumentException(sprintf('The file index %d does not exist, the evidence item %d carries %d file(s)', $fileIndex, $evidenceIndex, count($this->getFiles($evidenceIndex))));
+                $fileIndex = $this->resolveFileIndex($evidenceIndex, $fileIndex);
             }
 
             if(trim($source) === '')
@@ -277,6 +296,36 @@
             }
 
             $this->detections[] = new Detection($concern, $evidenceIndex, $source, $entityUuid, $confidence, $verified, $fileIndex);
+        }
+
+        /**
+         * Resolves the file index of a detection to the OFD file index of the file, ScanFile::getIndex(): its position
+         * among the files the client named, which differs from its position in getFiles() when a file URL of the
+         * evidence item could not be retrieved. A value that is no file's index but a valid position in getFiles(), as
+         * handlers written before file URLs may pass, is translated to the index of the file at that position
+         *
+         * @param int $evidenceIndex The index of the evidence item
+         * @param int $fileIndex The file index given by the handler
+         * @return int The file index of the file
+         * @throws InvalidArgumentException If no file of the evidence item has the index or the position
+         */
+        private function resolveFileIndex(int $evidenceIndex, int $fileIndex): int
+        {
+            $files = $this->getFiles($evidenceIndex);
+            foreach($files as $file)
+            {
+                if($file->getIndex() === $fileIndex)
+                {
+                    return $fileIndex;
+                }
+            }
+
+            if(isset($files[$fileIndex]))
+            {
+                return $files[$fileIndex]->getIndex();
+            }
+
+            throw new InvalidArgumentException(sprintf('The file index %d does not exist, the evidence item %d carries %d file(s)', $fileIndex, $evidenceIndex, count($files)));
         }
 
         /**
