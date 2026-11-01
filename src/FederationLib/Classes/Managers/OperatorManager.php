@@ -222,8 +222,6 @@
          */
         public static function getRootOperator(): OperatorRecord
         {
-            // This method retrieves the root operator from the database.
-            // If the root operator does not exist, it creates one with a predefined Access Token.
             $accessToken = Configuration::getServerConfiguration()->getAccessToken();
 
             if(empty($accessToken))
