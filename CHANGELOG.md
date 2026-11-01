@@ -5,9 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.1] - Ongoing
+## [2.2.1] - 2026-11-01
 
-This is an ongoing update
+This update introduces regular improvements.
+
+### Added
+ - The `REMOTE_RETRIEVAL` plugin event: dispatched by `RemoteRetrieval` before it retrieves a URL a client supplied (URL
+   uploads and the file URLs of content scans) and again for every redirect target, before any connection is made. A
+   handler receives a `RemoteRetrievalRequest` and may deny the URL (a URL upload is rejected with `400`, a scan file URL
+   is left out silently as OFD specifies for URLs that are not permitted) or reject the request. The event fails closed:
+   a URL is denied when the plugins can't be loaded, when a handler fails, or when it's retrieved by a handler during
+   the event. Handlers share the deadline of the retrieval
+ - `RemoteRetrieval::download()` takes a `RemoteRetrievalContext` (the purpose, operator, entity, evidence and file index
+   of a retrieval), retrievals without one are dispatched with the purpose `OTHER`
+ - `ContentScan::getFileUrls()` returns the file URLs of an evidence item the server retrieved
+
+### Fixed
+ - `ContentScan::addDetection()` checked a file index against the position of the file in `getFiles()` instead of its
+   file index (`ScanFile::getIndex()`), which differ when a file URL of the evidence item could not be retrieved: a
+   detection with the correct index was refused, and one with the position reported the wrong file. A position that is
+   no file's index is translated to the index of the file at that position
+ - Changing the root access token (`server.access_token`) left the previous token authenticating the root operator,
+   while the new token failed with HTTP 500 because a second `root` operator couldn't be created. The root operator is
+   now given the configured token, which revokes the previous one
+ - An empty list of public audit log types (`server.public_audit_entries`, also when every listed type is unknown) made
+   every audit log entry public in List Audit Logs, List Entity Audit Logs, List Operator Audit Logs, Search Audit Logs
+   and Search, it now makes no entry public, as View Audit Entry already did
+ - The Docker images failed to notice a download that responded with an HTTP error, `curl` now fails the build
 
 
 
