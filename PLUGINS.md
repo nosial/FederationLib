@@ -29,6 +29,7 @@ FederationLib only needs to know which plugins to load. Each plugin is responsib
         * [Scanned files](#scanned-files)
       * [QUERY_ENTITY](#query_entity)
       * [RECORD_CHANGE](#record_change)
+      * [REMOTE_RETRIEVAL](#remote_retrieval)
       * [STARTUP](#startup)
       * [MAINTENANCE](#maintenance)
     * [Accessing FederationLib](#accessing-federationlib)
@@ -63,6 +64,12 @@ request while it is being handled:
  - `QUERY_ENTITY` happens whenever an entity is queried (`GET /entities/{identifier}/query`). The plugin can add or
    remove related entities and blacklists, add metadata, change the suggested action, or reject the request.
 
+One event lets a plugin check a URL before the server retrieves it:
+
+ - `REMOTE_RETRIEVAL` happens before the server retrieves a URL a client supplied (a URL upload, or a file URL of a content
+   scan), and again for the target of every redirect, before any connection is made. The plugin can deny the URL or
+   reject the request, eg; to refuse URLs that a reputation service knows to serve illegal content.
+
 The other two events let a plugin react to what already happened, without being able to affect it:
 
  - `RECORD_CHANGE` happens after a record is created, changed or deleted, eg; a report was created or an entity was
@@ -85,19 +92,19 @@ When several plugins handle the same route or event, they take turns in the orde
 
 Some example plugins and the building blocks they would use:
 
-| Plugin                                                                  | Building blocks                                                                                                              |
-|-------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|
-| Automatic moderation (eg; blacklisting entities with many reports)      | `RECORD_CHANGE` (`REPORT_CREATED`) with the managers, acting as the system operator                                          |
-| Content classifiers (Bayesian, machine learning models, LLM moderation) | `CONTENT_SCAN` to classify content, `RECORD_CHANGE` (`EVIDENCE_CLASSIFIED`) to learn from the operators' classifications     |
-| External reputation feeds (AbuseIPDB, Spamhaus, phishing lists)         | `CONTENT_SCAN` to add scanning rules to the risk score, `QUERY_ENTITY` to add the feed's blacklists or metadata to queries   |
-| Illegal content filters (eg; CSAM hash matching)                        | `CONTENT_SCAN` to reject the request before anything about the content is recorded                                           |
-| Entity enrichment (WHOIS, GeoIP, ASN)                                   | `QUERY_ENTITY` to add metadata to responses, or `RECORD_CHANGE` (`ENTITY_CREATED`) to store it with the entity               |
-| Notifications (webhooks, Discord, Matrix, email)                        | `RECORD_CHANGE` (eg; `REPORT_CREATED`, `BLACKLIST_CREATED`) or `AUDIT_LOG`                                                   |
-| Audit exports (SIEM, log archives)                                      | `AUDIT_LOG`                                                                                                                  |
-| Federation between servers (mirroring blacklists, sharing reports)      | `RECORD_CHANGE` with `FederationClient` to push to other servers, a new route to receive from them                           |
-| Access control (IP allowlists, rate limiting, extra authentication)     | A `PRE_REQUEST` handler on `/*` that rejects requests before FederationLib handles them                                      |
-| Custom endpoints (statistics, dashboards, exports, admin tools)         | New routes that use the managers                                                                                             |
-| Changing FederationLib's endpoints                                      | `OVERRIDE` to replace a route, `PRE_REQUEST` to validate its input, `POST_REQUEST` for work after the response (eg; metrics) |
+| Plugin                                                                  | Building blocks                                                                                                                               |
+|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| Automatic moderation (eg; blacklisting entities with many reports)      | `RECORD_CHANGE` (`REPORT_CREATED`) with the managers, acting as the system operator                                                           |
+| Content classifiers (Bayesian, machine learning models, LLM moderation) | `CONTENT_SCAN` to classify content, `RECORD_CHANGE` (`EVIDENCE_CLASSIFIED`) to learn from the operators' classifications                      |
+| External reputation feeds (AbuseIPDB, Spamhaus, phishing lists)         | `CONTENT_SCAN` to add scanning rules to the risk score, `QUERY_ENTITY` to add the feed's blacklists or metadata to queries                    |
+| Illegal content filters (eg; CSAM hash matching)                        | `CONTENT_SCAN` to reject the request before anything about the content is recorded, `REMOTE_RETRIEVAL` to check URLs before they're retrieved |
+| Entity enrichment (WHOIS, GeoIP, ASN)                                   | `QUERY_ENTITY` to add metadata to responses, or `RECORD_CHANGE` (`ENTITY_CREATED`) to store it with the entity                                |
+| Notifications (webhooks, Discord, Matrix, email)                        | `RECORD_CHANGE` (eg; `REPORT_CREATED`, `BLACKLIST_CREATED`) or `AUDIT_LOG`                                                                    |
+| Audit exports (SIEM, log archives)                                      | `AUDIT_LOG`                                                                                                                                   |
+| Federation between servers (mirroring blacklists, sharing reports)      | `RECORD_CHANGE` with `FederationClient` to push to other servers, a new route to receive from them                                            |
+| Access control (IP allowlists, rate limiting, extra authentication)     | A `PRE_REQUEST` handler on `/*` that rejects requests before FederationLib handles them                                                       |
+| Custom endpoints (statistics, dashboards, exports, admin tools)         | New routes that use the managers                                                                                                              |
+| Changing FederationLib's endpoints                                      | `OVERRIDE` to replace a route, `PRE_REQUEST` to validate its input, `POST_REQUEST` for work after the response (eg; metrics)                  |
 
 BayesianPlugin, which provides FederationLib's content classification, is a complete production plugin.
 [tests/TestPlugin](tests/TestPlugin) demonstrates every feature of the plugin system.
@@ -344,15 +351,17 @@ class AllowlistHandler extends PluginRequestHandler
 | `class`  | Yes      | The event handler class, it implements the event's interface                                         |
 | `filter` | No       | A list (or comma-separated string) of the values the handler is executed for, every value if omitted |
 
-| Event           | Interface (`FederationLib\Interfaces\`) | Method                                     | Filter values                                       |
-|-----------------|-----------------------------------------|--------------------------------------------|-----------------------------------------------------|
-| `AUDIT_LOG`     | `AuditLogEventHandlerInterface`         | `handleAuditLog(AuditLog $auditLog)`       | Audit log types, eg; `OPERATOR_CREATED`             |
-| `CONTENT_SCAN`  | `ContentScanEventHandlerInterface`      | `handleContentScan(ContentScan $scan)`     | Not supported                                       |
-| `QUERY_ENTITY`  | `QueryEntityEventHandlerInterface`      | `handleQueryEntity(EntityQuery $query)`    | Not supported                                       |
-| `RECORD_CHANGE` | `RecordChangeEventHandlerInterface`     | `handleRecordChange(RecordChange $change)` | [Change types](#record_change), eg; `REPORT_CLOSED` |
+| Event              | Interface (`FederationLib\Interfaces\`) | Method                                                   | Filter values                                       |
+|--------------------|-----------------------------------------|----------------------------------------------------------|-----------------------------------------------------|
+| `AUDIT_LOG`        | `AuditLogEventHandlerInterface`         | `handleAuditLog(AuditLog $auditLog)`                     | Audit log types, eg; `OPERATOR_CREATED`             |
+| `CONTENT_SCAN`     | `ContentScanEventHandlerInterface`      | `handleContentScan(ContentScan $scan)`                   | Not supported                                       |
+| `QUERY_ENTITY`     | `QueryEntityEventHandlerInterface`      | `handleQueryEntity(EntityQuery $query)`                  | Not supported                                       |
+| `RECORD_CHANGE`    | `RecordChangeEventHandlerInterface`     | `handleRecordChange(RecordChange $change)`               | [Change types](#record_change), eg; `REPORT_CLOSED` |
+| `REMOTE_RETRIEVAL` | `RemoteRetrievalEventHandlerInterface`  | `handleRemoteRetrieval(RemoteRetrievalRequest $request)` | Purposes: `ATTACHMENT_UPLOAD`, `SCAN_FILE`, `OTHER` |
 
 `AUDIT_LOG` and `RECORD_CHANGE` handlers only observe: any exception they throw is logged, and the operation that
-produced the event is never affected. `CONTENT_SCAN` and `QUERY_ENTITY` handlers take part in a request and can change
+produced the event is never affected. A `REMOTE_RETRIEVAL` handler that fails denies the URL instead, see
+[REMOTE_RETRIEVAL](#remote_retrieval). `CONTENT_SCAN` and `QUERY_ENTITY` handlers take part in a request and can change
 its response or reject it. If one of them fails with any other exception, its changes are discarded and the request
 continues. Event handlers are executed in the order the plugins are configured, and must never send a response
 themselves.
@@ -439,7 +448,9 @@ it stays in PHP's temporary upload directory and is deleted when the request end
 in which case it is kept as an attachment of the report's evidence. Files the server retrieved from the file URLs of the
 evidence (OFD 2.2) are included after the files the request carries, with the same guarantees, and a file URL that
 could not be retrieved leaves a gap in the file indexes, so always relate a detection to `getIndex()` rather than to the
-position of the file in `getFiles()`. Files are hostile content chosen by the requester:
+position of the file in `getFiles()` (a position that is no file's index is still translated to the index of the file
+at that position, for handlers written before file URLs). `getFileUrls($index)` returns the file URLs of an evidence
+item the server retrieved, every one of them was seen by the `REMOTE_RETRIEVAL` handlers first. Files are hostile content chosen by the requester:
 
  - Only interpret the media types the plugin supports, determined by `getMimeType()`, and ignore any other file. A file
    that can not be interpreted is never an error, the scan continues without it, so that content consisting only of such
@@ -558,6 +569,62 @@ class TrainingHandler implements RecordChangeEventHandlerInterface
     {
         $evidence = $change->getRecord();
         // eg; submit $evidence->getTextContent() labelled $evidence->getClassificationFlag()->value to a classifier
+    }
+}
+```
+
+#### REMOTE_RETRIEVAL
+
+Executed before the server retrieves a URL a client supplied, after FederationLib validated it (an absolute HTTP or
+HTTPS URL without credentials) and resolved its host to an address it may connect to, and before any connection is made
+or anything is written. It's executed again for the target of every redirect, at most 5, since a URL may redirect
+anywhere. The `RemoteRetrievalRequest` provides:
+
+| Method                                   | Returns                                                                                                                                                                                 |
+|------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `getUrl()`                               | The normalized URL about to be retrieved                                                                                                                                                |
+| `getHost()`, `getPort()`, `getAddress()` | Its host and port, and the address the server connects to (`null` for an IP address literal)                                                                                            |
+| `getOriginalUrl()`, `getRedirects()`     | The URL the client supplied, and the number of redirects followed to reach this one                                                                                                     |
+| `getPurpose()`                           | A `RetrievalPurpose`: `ATTACHMENT_UPLOAD`, `SCAN_FILE`, or `OTHER` for a retrieval a plugin made                                                                                        |
+| `getOperator()`                          | The operator that supplied the URL, `null` when anonymous                                                                                                                               |
+| `getContext()`                           | The `RemoteRetrievalContext`: the entity (the evidence's for an upload, the resolved author for a scan), the evidence UUID of an upload, and the evidence and file index of a scan file |
+| `getRemainingTime()`                     | The seconds left before the retrieval's deadline (`remote_retrieval.timeout`, shared by every URL of a request)                                                                         |
+
+The handler may optionally:
+
+ - **Deny the URL** with `deny()`: it's treated as a URL that is not permitted. A URL upload is rejected (`400 The URL
+   is not permitted`) and a file URL of a content scan is left out silently, like a URL that can't be retrieved (OFD
+   "Scanned file URLs"), so the scan doesn't reveal why. The remaining handlers are not executed.
+ - **Reject the request** with `reject('Reason', $code)` (any 4xx, `403` by default) or by throwing a
+   `RequestException`. The client receives an error response, nothing is retrieved, and for a content scan nothing
+   about it is recorded.
+
+The event fails closed, since a retrieval can't be undone: when the plugins can't be loaded, or a handler fails with
+any other exception, the URL is denied. Everything about the URL is chosen by the client, so a handler:
+
+ - **Never retrieves the URL or connects to its address itself**, which would bypass the server's protections against
+   server-side request forgery. Sending the URL to a service that checks it (from that service's network) is fine.
+ - **Finishes within `getRemainingTime()`**, the retrieval fails once its deadline passed, and bounds its own requests
+   with timeouts accordingly. The handlers run synchronously while the client waits.
+ - **Can't retrieve URLs through `RemoteRetrieval` while it's executed**, such a retrieval is denied, so that a handler
+   neither recurses nor retrieves a URL the other handlers haven't seen.
+
+A plugin that retrieves URLs itself through `RemoteRetrieval::download()` passes a `RemoteRetrievalContext`, its
+retrievals are dispatched like FederationLib's own.
+
+```php
+use FederationLib\Interfaces\RemoteRetrievalEventHandlerInterface;
+use FederationLib\Objects\Plugin\RemoteRetrievalRequest;
+
+// Configured with `filter: ATTACHMENT_UPLOAD, SCAN_FILE`
+class UrlReputationHandler implements RemoteRetrievalEventHandlerInterface
+{
+    public static function handleRemoteRetrieval(RemoteRetrievalRequest $request): void
+    {
+        if(self::isKnownBad($request->getUrl(), min(5, $request->getRemainingTime())))
+        {
+            $request->deny();
+        }
     }
 }
 ```
