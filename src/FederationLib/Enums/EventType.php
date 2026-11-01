@@ -8,44 +8,18 @@
     use FederationLib\Interfaces\MaintenanceEventHandlerInterface;
     use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
     use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
+    use FederationLib\Interfaces\RemoteRetrievalEventHandlerInterface;
     use FederationLib\Interfaces\StartupEventHandlerInterface;
 
     enum EventType : string implements CaseSensitiveInterface
     {
-        /**
-         * Produced whenever an audit log entry is created, the handler receives the AuditLog entry
-         */
         case AUDIT_LOG = 'AUDIT_LOG';
-
-        /**
-         * Produced during a content scan request, the handler receives the ContentScan and may add its own scanning
-         * rules to the scan results or reject the request
-         */
         case CONTENT_SCAN = 'CONTENT_SCAN';
-
-        /**
-         * Produced during a query entity request, the handler receives the EntityQuery and may change the response
-         * or reject the request
-         */
         case QUERY_ENTITY = 'QUERY_ENTITY';
-
-        /**
-         * Produced whenever a change is written to the database (eg; a report is created or closed, an evidence
-         * record is classified or an entity is deleted), the handler receives the RecordChange
-         */
         case RECORD_CHANGE = 'RECORD_CHANGE';
-
-        /**
-         * Produced once when the server starts (`federationlib init`, run by the docker entrypoint), after the database
-         * was initialized and migrated and before requests are served, the handler receives the Startup
-         */
         case STARTUP = 'STARTUP';
-
-        /**
-         * Produced by every maintenance run (`federationlib maintenance`, hourly in the docker image), after
-         * FederationLib cleaned its records, the handler receives the Maintenance
-         */
         case MAINTENANCE = 'MAINTENANCE';
+        case REMOTE_RETRIEVAL = 'REMOTE_RETRIEVAL';
 
         /**
          * Returns the interface an event handler class must implement to handle the event
@@ -62,6 +36,7 @@
                 self::RECORD_CHANGE => RecordChangeEventHandlerInterface::class,
                 self::STARTUP => StartupEventHandlerInterface::class,
                 self::MAINTENANCE => MaintenanceEventHandlerInterface::class,
+                self::REMOTE_RETRIEVAL => RemoteRetrievalEventHandlerInterface::class,
             };
         }
 
@@ -78,6 +53,7 @@
                 self::AUDIT_LOG => array_map(fn(AuditLogType $type) => $type->value, AuditLogType::cases()),
                 self::CONTENT_SCAN, self::QUERY_ENTITY, self::STARTUP, self::MAINTENANCE => [],
                 self::RECORD_CHANGE => array_map(fn(RecordChangeType $type) => $type->value, RecordChangeType::cases()),
+                self::REMOTE_RETRIEVAL => array_map(fn(RetrievalPurpose $purpose) => $purpose->value, RetrievalPurpose::cases()),
             };
         }
 
