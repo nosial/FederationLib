@@ -224,7 +224,11 @@
                 $params = [];
                 $conditions = [];
 
-                if ($filterType !== null && count($filterType) > 0)
+                if ($filterType !== null && count($filterType) === 0)
+                {
+                    $conditions[] = '1 = 0';
+                }
+                elseif ($filterType !== null)
                 {
                     foreach ($filterType as $i => $t)
                     {
@@ -324,7 +328,11 @@
                 $params = [':operator' => $operatorUuid];
                 $conditions = [];
 
-                if ($filterType !== null && count($filterType) > 0)
+                if ($filterType !== null && count($filterType) === 0)
+                {
+                    $conditions[] = '1 = 0';
+                }
+                elseif ($filterType !== null)
                 {
                     foreach ($filterType as $i => $t)
                     {
@@ -430,7 +438,11 @@
                 $params = [':entity' => $entityUuid];
                 $conditions = [];
 
-                if ($filterType !== null && count($filterType) > 0)
+                if ($filterType !== null && count($filterType) === 0)
+                {
+                    $conditions[] = '1 = 0';
+                }
+                elseif ($filterType !== null)
                 {
                     foreach ($filterType as $i => $t)
                     {
@@ -642,7 +654,11 @@
                 if (!$public)
                 {
                     $publicEntries = Configuration::getServerConfiguration()->getPublicAuditEntries();
-                    if (!empty($publicEntries))
+                    if (empty($publicEntries))
+                    {
+                        $sql .= " AND 1 = 0";
+                    }
+                    else
                     {
                         $placeholders = [];
                         foreach ($publicEntries as $i => $entry)
