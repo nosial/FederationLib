@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - Ongoing
+
+This is an ongoing update
+
+
+
 ## [2.2.1] - 2026-11-01
 
 This update introduces regular improvements.
 
-### Added
+### Added2
  - The `REMOTE_RETRIEVAL` plugin event: dispatched by `RemoteRetrieval` before it retrieves a URL a client supplied (URL
    uploads and the file URLs of content scans) and again for every redirect target, before any connection is made. A
    handler receives a `RemoteRetrievalRequest` and may deny the URL (a URL upload is rejected with `400`, a scan file URL
