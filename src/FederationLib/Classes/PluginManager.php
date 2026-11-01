@@ -10,12 +10,14 @@
     use FederationLib\Exceptions\ContentScanRejectedException;
     use FederationLib\Exceptions\EntityQueryRejectedException;
     use FederationLib\Exceptions\PluginException;
+    use FederationLib\Exceptions\RemoteRetrievalRejectedException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\Interfaces\AuditLogEventHandlerInterface;
     use FederationLib\Interfaces\ContentScanEventHandlerInterface;
     use FederationLib\Interfaces\MaintenanceEventHandlerInterface;
     use FederationLib\Interfaces\QueryEntityEventHandlerInterface;
     use FederationLib\Interfaces\RecordChangeEventHandlerInterface;
+    use FederationLib\Interfaces\RemoteRetrievalEventHandlerInterface;
     use FederationLib\Interfaces\StartupEventHandlerInterface;
     use FederationLib\Interfaces\RequestHandlerInterface;
     use FederationLib\Objects\AuditLog;
@@ -27,6 +29,7 @@
     use FederationLib\Objects\Plugin\MatchedRequestHandler;
     use FederationLib\Objects\Plugin\PluginRoute;
     use FederationLib\Objects\Plugin\RecordChange;
+    use FederationLib\Objects\Plugin\RemoteRetrievalRequest;
     use FederationLib\Objects\Plugin\Startup;
     use Throwable;
 
@@ -37,6 +40,7 @@
         private static ?MatchedRequestHandler $currentHandler = null;
         private static bool $dispatchingAuditLog = false;
         private static bool $dispatchingRecordChange = false;
+        private static bool $dispatchingRemoteRetrieval = false;
 
         /**
          * Imports and loads all the plugins configured in the plugins configuration, plugins are only loaded once.
@@ -587,6 +591,89 @@
                     }
                 }
             }
+        }
+
+        /**
+         * Dispatches a URL the server is about to retrieve on behalf of a client to the REMOTE_RETRIEVAL event handlers
+         * of the loaded plugins whose filter matches its purpose, in the order the plugins are configured, before any
+         * connection is made. A handler may deny the URL, which stops the remaining handlers, or reject the request.
+         *
+         * The dispatch fails closed: when the plugins can't be loaded or a handler fails with anything but a rejection,
+         * the URL is denied, since a retrieval can't be undone. A retrieval started by a handler during the dispatch is
+         * denied too, so that a handler can neither recurse nor retrieve a URL the other handlers haven't seen.
+         *
+         * @param RemoteRetrievalRequest $request The URL about to be retrieved
+         * @return bool True if the URL may be retrieved, False if it was denied
+         * @throws RequestException If a handler rejected the request
+         */
+        public static function dispatchRemoteRetrieval(RemoteRetrievalRequest $request): bool
+        {
+            if(self::$dispatchingRemoteRetrieval)
+            {
+                Logger::log()->warning(sprintf('Denied the retrieval of %s, it was started by a REMOTE_RETRIEVAL event handler', $request->getHost()));
+                return false;
+            }
+
+            try
+            {
+                $plugins = self::loadPlugins();
+            }
+            catch(PluginException $e)
+            {
+                Logger::log()->error(sprintf('Denied the retrieval of %s, the plugins could not be loaded: %s', $request->getHost(), $e->getMessage()), $e);
+                return false;
+            }
+
+            self::$dispatchingRemoteRetrieval = true;
+
+            try
+            {
+                foreach($plugins as $plugin)
+                {
+                    foreach($plugin->getEventHandlers(EventType::REMOTE_RETRIEVAL) as $definition)
+                    {
+                        if(!$definition->matches($request->getPurpose()->value))
+                        {
+                            continue;
+                        }
+
+                        Logger::log()->debug(sprintf('Executing REMOTE_RETRIEVAL event handler %s of plugin %s for a %s retrieval', $definition->getClass(), $plugin->getPackage(), $request->getPurpose()->value));
+
+                        try
+                        {
+                            /** @var RemoteRetrievalEventHandlerInterface $class */
+                            $class = $definition->getClass();
+                            $class::handleRemoteRetrieval($request);
+                        }
+                        catch(RemoteRetrievalRejectedException $e)
+                        {
+                            Logger::log()->info(sprintf('The retrieval of %s was rejected by the REMOTE_RETRIEVAL event handler %s of plugin %s: %s', $request->getHost(), $definition->getClass(), $plugin->getPackage(), $e->getMessage()));
+                            throw $e;
+                        }
+                        catch(RequestException $e)
+                        {
+                            throw RemoteRetrievalRejectedException::fromRequestException($e);
+                        }
+                        catch(Throwable $e)
+                        {
+                            Logger::log()->error(sprintf('Denied the retrieval of %s, the REMOTE_RETRIEVAL event handler %s of plugin %s failed: %s', $request->getHost(), $definition->getClass(), $plugin->getPackage(), $e->getMessage()), $e);
+                            $request->deny();
+                        }
+
+                        if($request->isDenied())
+                        {
+                            Logger::log()->debug(sprintf('The retrieval of %s was denied by the REMOTE_RETRIEVAL event handler %s of plugin %s', $request->getHost(), $definition->getClass(), $plugin->getPackage()));
+                            return false;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                self::$dispatchingRemoteRetrieval = false;
+            }
+
+            return true;
         }
 
         /**
