@@ -116,6 +116,10 @@ build_configurations:
           -
             event: MAINTENANCE
             class: \TestPlugin\EventHandlers\MaintenanceEventHandler::class
+          # Executed before every URL the server retrieves for a client, only acts on URLs containing its trigger words
+          -
+            event: REMOTE_RETRIEVAL
+            class: \TestPlugin\EventHandlers\RemoteRetrievalEventHandler::class
   -
     name: release
     output: 'target/release/${ASSEMBLY.PACKAGE}.ncc'
