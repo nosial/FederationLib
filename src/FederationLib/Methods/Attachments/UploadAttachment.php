@@ -11,10 +11,12 @@
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
     use FederationLib\Enums\AuditLogType;
+    use FederationLib\Enums\RetrievalPurpose;
     use FederationLib\Exceptions\DatabaseOperationException;
     use FederationLib\Exceptions\RequestException;
     use FederationLib\FederationServer;
     use FederationLib\Objects\ErrorResponse;
+    use FederationLib\Objects\RemoteRetrievalContext;
     use FederationLib\Objects\UploadResult;
     use Symfony\Component\Uid\Uuid;
     use Throwable;
@@ -170,7 +172,8 @@
             {
                 try
                 {
-                    $suppliedName = RemoteRetrieval::download($url, $tempDestination, Configuration::getServerConfiguration()->getMaxUploadSize());
+                    $suppliedName = RemoteRetrieval::download($url, $tempDestination, Configuration::getServerConfiguration()->getMaxUploadSize(), null,
+                        new RemoteRetrievalContext(RetrievalPurpose::ATTACHMENT_UPLOAD, $operator, $evidenceRecord->getEntityUuid(), $evidenceRecord->getUuid()));
                 }
                 catch (Throwable $e)
                 {
