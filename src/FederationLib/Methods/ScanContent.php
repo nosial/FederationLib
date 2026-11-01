@@ -15,6 +15,9 @@
     use FederationLib\Classes\PluginManager;
     use FederationLib\Classes\RedisConnection;
     use FederationLib\Classes\RemoteRetrieval;
+    use FederationLib\Enums\RetrievalPurpose;
+    use FederationLib\Exceptions\RemoteRetrievalRejectedException;
+    use FederationLib\Objects\RemoteRetrievalContext;
     use FederationLib\Classes\RequestHandler;
     use FederationLib\Classes\Utilities;
     use FederationLib\Classes\Validate;
@@ -156,7 +159,7 @@
             }
 
             $files = self::collectFiles($fileParts, $authenticatedOperator, array_sum(array_map('count', $fileUrls)));
-            self::retrieveFileUrls($fileUrls, $fileParts, $authenticatedOperator, $files);
+            self::retrieveFileUrls($fileUrls, $fileParts, $authenticatedOperator, $authorRecord?->getEntity()->getUuid(), $files);
 
             $concerns = self::parseConcerns($concernsInput);
 
@@ -208,7 +211,8 @@
                 $parsedThreshold,
                 $concerns,
                 $resolvedAddresses,
-                $files
+                $files,
+                self::retrievesFileUrls($authenticatedOperator) ? $fileUrls : []
             );
 
             // Every active blacklist record of an effective concern on an entity resolved from the content is a detection
@@ -797,9 +801,11 @@
          * @param array<int, string[]> $fileUrls The file URLs of each evidence item, keyed by evidence index
          * @param array<int, string[]> $fileParts The names of the parts that carry the files of each evidence item
          * @param OperatorRecord|null $authenticatedOperator The authenticated operator, null if the request is anonymous
+         * @param string|null $authorEntityUuid The resolved author of the content, for the plugins
          * @param array<int, ScanFile[]> $files The files of each evidence item, to which the retrieved files are added
+         * @throws RemoteRetrievalRejectedException If a plugin rejected the request, unlike a URL a plugin denied
          */
-        private static function retrieveFileUrls(array $fileUrls, array $fileParts, ?OperatorRecord $authenticatedOperator, array &$files): void
+        private static function retrieveFileUrls(array $fileUrls, array $fileParts, ?OperatorRecord $authenticatedOperator, ?string $authorEntityUuid, array &$files): void
         {
             if(count($fileUrls) === 0 || !self::retrievesFileUrls($authenticatedOperator))
             {
@@ -823,7 +829,13 @@
                     register_shutdown_function(static fn() => @unlink($path));
                     try
                     {
-                        $suppliedName = RemoteRetrieval::download($url, $path, $maxFileSize, $deadline);
+                        $suppliedName = RemoteRetrieval::download($url, $path, $maxFileSize, $deadline,
+                            new RemoteRetrievalContext(RetrievalPurpose::SCAN_FILE, $authenticatedOperator, $authorEntityUuid, null, $index, $fileIndex));
+                    }
+                    catch(RemoteRetrievalRejectedException $e)
+                    {
+                        @unlink($path);
+                        throw $e;
                     }
                     catch(RequestException $e)
                     {
