@@ -212,7 +212,9 @@
          * Retrieve the root operator.
          *
          * This method checks if the root operator exists in the database.
-         * If it does not exist, it creates one with a predefined Access Token.
+         * If it does not exist, it creates one with a predefined Access Token. If it exists with another Access Token,
+         * the configured Access Token was changed: the root operator is given the configured Access Token, so the
+         * previous one no longer authenticates it.
          *
          * @return OperatorRecord The root operator record.
          * @throws DatabaseOperationException If there is an error during the database operation.
@@ -232,11 +234,49 @@
             $operator = self::getOperatorByAccessToken($accessToken);
             if($operator === null)
             {
-                $uuid = self::createRootOperator($accessToken);
+                $uuid = self::getRootOperatorUuid();
+                if($uuid === null)
+                {
+                    $uuid = self::createRootOperator($accessToken);
+                }
+                else
+                {
+                    if(strlen($accessToken) !== 32)
+                    {
+                        throw new InvalidArgumentException('Access Token must be exactly 32 characters long.');
+                    }
+
+                    // The configured Access Token was rotated, which revokes the previous one
+                    self::newAccessToken($uuid, $accessToken);
+                    Logger::log()->warning('The configured root Access Token changed, the previous root Access Token was revoked');
+                }
+
                 $operator = self::getOperator($uuid);
             }
 
             return $operator;
+        }
+
+        /**
+         * Returns the UUID of the root operator, whatever its Access Token
+         *
+         * @return string|null The UUID of the root operator, null if it does not exist
+         * @throws DatabaseOperationException If there is an error during the database operation.
+         */
+        private static function getRootOperatorUuid(): ?string
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT uuid FROM operators WHERE name='root' LIMIT 1");
+                $stmt->execute();
+                $uuid = $stmt->fetchColumn();
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException('Failed to retrieve the root operator', 0, $e);
+            }
+
+            return is_string($uuid) && $uuid !== '' ? $uuid : null;
         }
 
         /**
