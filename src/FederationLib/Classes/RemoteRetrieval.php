@@ -2,12 +2,15 @@
 
     namespace FederationLib\Classes;
 
+    use FederationLib\Enums\RetrievalPurpose;
+    use FederationLib\Exceptions\RemoteRetrievalRejectedException;
     use FederationLib\Exceptions\RequestException;
 
     class RemoteRetrieval
     {
         public const int URL_MAX_LENGTH = 2048;
         private const int URL_MAX_REDIRECTS = 5;
+        public const string ERROR_NOT_PERMITTED = 'The URL is not permitted';
 
         /**
          * Validates the form of a URL for retrieval without resolving it: it must be an absolute HTTP or HTTPS URL
@@ -56,23 +59,45 @@
          * redirect, is validated and pinned to the resolved address so that the server can't be used to reach
          * hosts on non-public networks unless explicitly permitted by the configuration.
          *
+         * Before every connection, redirects included, the URL is dispatched to the REMOTE_RETRIEVAL event handlers of
+         * the plugins, which may deny it (thrown as a RequestException with ERROR_NOT_PERMITTED, before the destination
+         * is opened) or reject the request (thrown as a RemoteRetrievalRejectedException, which a caller that skips a
+         * URL it can't retrieve must rethrow). The handlers share the deadline of the retrieval.
+         *
          * @param string $url The HTTP or HTTPS URL to retrieve
          * @param string $destination The path the retrieved file is written to
          * @param int $maxSize The maximum size of the file in bytes, the retrieval stops once it is exceeded
          * @param int|null $deadline Optional. The UNIX timestamp by which the retrieval must end, so that several
          *                           retrievals can share one timeout; the configured timeout from now when omitted
+         * @param RemoteRetrievalContext|null $context Optional. Why and on whose behalf the URL is retrieved, for the
+         *                                             plugins; a retrieval of purpose OTHER when omitted
          * @return string The file name suggested by the response or the URL path, unsanitized
+         * @throws RemoteRetrievalRejectedException If a plugin rejected the request
          * @throws RequestException If the URL is invalid, not permitted or the file could not be retrieved
          */
-        public static function download(string $url, string $destination, int $maxSize, ?int $deadline=null): string
+        public static function download(string $url, string $destination, int $maxSize, ?int $deadline=null, ?RemoteRetrievalContext $context=null): string
         {
             $deadline ??= time() + Configuration::getRemoteRetrievalConfiguration()->getTimeout();
+            $context ??= new RemoteRetrievalContext(RetrievalPurpose::OTHER);
+            $originalUrl = $url;
 
             for ($redirects = 0; ; $redirects++)
             {
                 $target = self::resolveUrlTarget($url);
                 $url = $target['url'];
 
+                if (time() >= $deadline)
+                {
+                    throw new RequestException('Timed out while retrieving the file from the URL', 400);
+                }
+
+                $request = new RemoteRetrievalRequest($url, $target['host'], (int)$target['port'], $target['address'], $originalUrl, $redirects, $deadline, $context);
+                if (!PluginManager::dispatchRemoteRetrieval($request))
+                {
+                    throw new RequestException(self::ERROR_NOT_PERMITTED, 400);
+                }
+
+                // The handlers share the deadline, a slow handler can't extend the retrieval
                 $remaining = $deadline - time();
                 if ($remaining <= 0)
                 {
