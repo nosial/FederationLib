@@ -825,9 +825,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)]);
                 }
                 if(self::isCachingEnabled())
                 {
