@@ -221,10 +221,8 @@
          * Deletes an evidence record by its UUID.
          *
          * @param string $uuid The UUID of the evidence record to delete.
-         * @throws InvalidArgumentException If the UUID is not provided or is empty.
-         * @throws OperationRejectedException If declassification would expose evidence of illegal content.
+         * @throws CacheOperationException
          * @throws DatabaseOperationException If there is an error preparing or executing the SQL statement.
-         * @throws InvalidArgumentException If the UUID is not a valid UUID format.
          */
         public static function deleteEvidence(string $uuid): void
         {
@@ -257,7 +255,6 @@
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::deleteRecordsByField(FileAttachmentManager::CACHE_PREFIX, 'evidence', $uuid);
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                 }
             }
