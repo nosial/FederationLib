@@ -226,9 +226,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)]);
                 }
                 if(self::isCachingEnabled())
                 {
@@ -280,10 +280,11 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)]);
                 }
+
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
@@ -325,10 +326,11 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $blacklistUuid)]);
                 }
+
                 if(self::isCachingEnabled())
                 {
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
@@ -959,9 +961,6 @@
                 return;
             }
 
-            // The blacklist reflects on the entities that share an actor with the blacklisted entity: the accounts it is
-            // an alternative of and those that are alternatives of it, and the entities that depend on it or that it
-            // depends on (CHILD). A PROXY relays for many actors, so it is neither affected nor affects its target.
             $propagates = fn(?EntityRelationshipType $type) => $type === EntityRelationshipType::ALTERNATIVE || $type === EntityRelationshipType::CHILD;
 
             try
@@ -989,16 +988,14 @@
             }
 
             unset($relatedEntities[$entityUuid]);
-            foreach(array_keys($relatedEntities) as $relatedUuid)
+
+            try
             {
-                try
-                {
-                    EntitiesManager::updateEntityReputation($relatedUuid, $relatedDelta);
-                }
-                catch(DatabaseOperationException $e)
-                {
-                    Logger::log()->warning(sprintf('Failed to update reputation of entity %s related to blacklisted entity %s: %s', $relatedUuid, $entityUuid, $e->getMessage()), $e);
-                }
+                EntitiesManager::updateEntityReputations(array_fill_keys(array_map('strval', array_keys($relatedEntities)), $relatedDelta));
+            }
+            catch(DatabaseOperationException $e)
+            {
+                Logger::log()->warning(sprintf('Failed to update reputation of %d entities related to blacklisted entity %s: %s', count($relatedEntities), $entityUuid, $e->getMessage()), $e);
             }
         }
     }
