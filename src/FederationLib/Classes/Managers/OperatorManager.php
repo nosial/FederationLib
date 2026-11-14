@@ -352,10 +352,9 @@
                 );
 
                 // Create Access Token pointer for quick lookups
-                RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()),
-                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
-                    value: $uuid
+                RedisConnection::setPointers(
+                    [sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operatorRecord->getAccessToken()) => $uuid],
+                    Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                 );
             }
 
@@ -500,10 +499,9 @@
 
                 // Create a pointer from Access Token to UUID for quick lookups
                 // Only set the Access Token pointer if the operator record was successfully cached
-                RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken),
-                    expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
-                    value: $operatorRecord->getUuid()
+                RedisConnection::setPointers(
+                    [sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $storedAccessToken) => $operatorRecord->getUuid()],
+                    Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
                 );
             }
 
@@ -655,15 +653,15 @@
                 }
             }
 
-            // The database also deletes the operator's evidence, submitted reports and blacklist records and clears the
-            // references to the operator, which may be cached even when operators are not
             if(Configuration::getRedisConfiguration()->isEnabled())
             {
-                RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'operator', $uuid);
-                RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'submitting_operator', $uuid);
-                RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'assigned_operator', $uuid);
-                RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'operator', $uuid);
-                RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'lifted_by', $uuid);
+                RedisConnection::deleteRecordsByFields([
+                    [EvidenceManager::CACHE_PREFIX, 'operator', $uuid],
+                    [ReportManager::CACHE_PREFIX, 'submitting_operator', $uuid],
+                    [ReportManager::CACHE_PREFIX, 'assigned_operator', $uuid],
+                    [BlacklistManager::CACHE_PREFIX, 'operator', $uuid],
+                    [BlacklistManager::CACHE_PREFIX, 'lifted_by', $uuid],
+                ]);
                 RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
                 RedisConnection::clearSearchCache(ReportManager::CACHE_PREFIX);
                 RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
@@ -1226,25 +1224,16 @@
             // Pre-cache operators if caching is enabled and pre-caching is enabled
             if(self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
+                // The records and their Access Token pointers are cached in pipelines rather than one by one
+                $ttl = Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0;
+                $cached = array_slice(array_values($operators), 0, RedisConnection::setRecords($operators, self::CACHE_PREFIX, 'getUuid', Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0, $ttl));
+                $pointers = [];
                 /** @var OperatorRecord $operator */
-                foreach($operators as $operator)
+                foreach($cached as $operator)
                 {
-                    if(!RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
-                    {
-                        RedisConnection::setRecord(
-                            record: $operator,
-                            cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
-                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
-                        );
-
-                        // Create access token pointer for quick lookups
-                        RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
-                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
-                            value: $operator->getUuid()
-                        );
-                    }
+                    $pointers[sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken())] = $operator->getUuid();
                 }
+                RedisConnection::setPointers($pointers, $ttl);
             }
 
             return $operators;
@@ -1360,24 +1349,16 @@
 
             if (self::isCachingEnabled() && Configuration::getRedisConfiguration()->isPreCacheEnabled())
             {
+                // The records and their Access Token pointers are cached in pipelines rather than one by one
+                $ttl = Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0;
+                $cached = array_slice(array_values($results), 0, RedisConnection::setRecords($results, self::CACHE_PREFIX, 'getUuid', Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0, $ttl));
+                $pointers = [];
                 /** @var OperatorRecord $operator */
-                foreach ($results as $operator)
+                foreach($cached as $operator)
                 {
-                    if (!RedisConnection::limitReached(self::CACHE_PREFIX, Configuration::getRedisConfiguration()->getOperatorCacheLimit() ?? 0))
-                    {
-                        RedisConnection::setRecord(
-                            record: $operator,
-                            cacheKey: sprintf("%s%s", self::CACHE_PREFIX, $operator->getUuid()),
-                            ttl: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0
-                        );
-
-                        RedisConnection::getConnection()->setex(
-                            key: sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken()),
-                            expire: Configuration::getRedisConfiguration()->getOperatorCacheTtl() ?? 0,
-                            value: $operator->getUuid()
-                        );
-                    }
+                    $pointers[sprintf("%s%s", self::ACCESS_TOKEN_POINTER_PREFIX, $operator->getAccessToken())] = $operator->getUuid();
                 }
+                RedisConnection::setPointers($pointers, $ttl);
             }
 
             return $results;
