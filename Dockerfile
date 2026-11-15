@@ -51,9 +51,10 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -f /etc/nginx/sites-enabled/default
 
 COPY --from=builder /app/target/web/net.nosial.federation.ncc /tmp/package.ncc
-RUN ncc package install --package=/tmp/package.ncc -y && rm /tmp/package.ncc
-RUN ncc install --package="nosial/BayesianPlugin@github" --yes
-RUN printf '%s\n' 'display_errors = Off' 'display_startup_errors = Off' > /usr/local/etc/php/conf.d/errors.ini
+RUN ncc install --package=/tmp/package.ncc --optimized -y && rm /tmp/package.ncc
+RUN ncc install --package="nosial/BayesianPlugin@github" --optimized --yes
+RUN printf '%s\n' 'display_errors = Off' 'display_startup_errors = Off' > /usr/local/etc/php/conf.d/errors.ini \
+    && printf '%s\n' 'opcache.enable = 1' 'opcache.memory_consumption = 256' 'opcache.interned_strings_buffer = 32' 'opcache.max_accelerated_files = 20000' > /usr/local/etc/php/conf.d/opcache-federationlib.ini
 
 COPY --from=builder /app/web_entry /var/www/html/index.php
 RUN mkdir -p /var/www/uploads /etc/configlib \

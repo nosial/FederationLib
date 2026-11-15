@@ -43,7 +43,7 @@ if [ -n "${REQUIRE_PLUGINS:-}" ]; then
         fi
 
         echo "Installing plugin: $PLUGIN"
-        if ! ncc install --package="$PLUGIN" --yes --reinstall; then
+        if ! ncc install --package="$PLUGIN" --optimized --yes --reinstall; then
             echo "Failed to install the plugin $PLUGIN, aborting" >&2
             exit 1
         fi
