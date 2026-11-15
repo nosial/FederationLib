@@ -158,9 +158,6 @@
                 throw new RequestException(self::ERROR_CONTENT_EMPTY, HttpResponseCode::BAD_REQUEST);
             }
 
-            $files = self::collectFiles($fileParts, $authenticatedOperator, array_sum(array_map('count', $fileUrls)));
-            self::retrieveFileUrls($fileUrls, $fileParts, $authenticatedOperator, $authorRecord?->getEntity()->getUuid(), $files);
-
             $concerns = self::parseConcerns($concernsInput);
 
             // First, resolve the author entity
@@ -182,6 +179,9 @@
                     $authorRecord = null;
                 }
             }
+
+            $files = self::collectFiles($fileParts, $authenticatedOperator, array_sum(array_map('count', $fileUrls)));
+            self::retrieveFileUrls($fileUrls, $fileParts, $authenticatedOperator, $authorRecord?->getEntity()->getUuid(), $files);
 
             $parsedThreshold = null;
             $parsedTopK = null;
@@ -271,6 +271,7 @@
             $lookups = [];
             $origins = [];
             $dnsLookups = 0;
+            $lookedUpNames = [];
             foreach($contentInputs as $index => $contentInput)
             {
                 foreach(self::getContentCandidates($contentInput) as [$entityIdentifier, $entityPosition, $inContent])
@@ -282,13 +283,20 @@
                 $resolvedAddresses[$index] = [];
                 foreach(self::getLookupNames($contentInput) as [$name, $verified])
                 {
-                    if(!Configuration::getScanningConfiguration()->isDnsLookupsEnabled() || $dnsLookups >= Configuration::getScanningConfiguration()->getDnsLookupLimit())
+                    // A name found in several evidence items is looked up (and counted against the limit) once
+                    $name = strtolower(rtrim($name, '.'));
+                    if(!isset($lookedUpNames[$name]))
                     {
-                        break;
+                        if(!Configuration::getScanningConfiguration()->isDnsLookupsEnabled() || $dnsLookups >= Configuration::getScanningConfiguration()->getDnsLookupLimit())
+                        {
+                            break;
+                        }
+
+                        $dnsLookups++;
+                        $lookedUpNames[$name] = self::lookupAddresses($name);
                     }
 
-                    $dnsLookups++;
-                    foreach(self::lookupAddresses($name) as $address)
+                    foreach($lookedUpNames[$name] as $address)
                     {
                         $resolvedAddresses[$index][] = $address;
                         $lookups[] = [$address, new ResolvedEntityPosition(0, 0, str_contains($address, ':') ? NamedEntityType::IPv6 : NamedEntityType::IPv4), false];
