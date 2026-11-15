@@ -243,8 +243,43 @@
                 return $rules;
             }
 
+            // Parsing the list takes a few milliseconds, under php-fpm the parsed rules are cached in APCu for as long as the bundled list is unchanged
+            $path = __DIR__ . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'public_suffix_list.dat';
+            $cacheKey = null;
+            if(PHP_SAPI !== 'cli' && function_exists('apcu_fetch') && apcu_enabled())
+            {
+                $stat = @stat($path);
+                if($stat !== false)
+                {
+                    $cacheKey = sprintf('federationlib.public_suffix_rules.%d.%d', $stat['size'], $stat['mtime']);
+                    $cached = apcu_fetch($cacheKey, $success);
+                    if($success && is_array($cached) && count($cached) > 0)
+                    {
+                        $rules = $cached;
+                        return $rules;
+                    }
+                }
+            }
+
+            $rules = self::parsePublicSuffixRules($path);
+            if($cacheKey !== null && count($rules) > 0)
+            {
+                @apcu_store($cacheKey, $rules);
+            }
+
+            return $rules;
+        }
+
+        /**
+         * Parses the Public Suffix List file (see getPublicSuffixRules())
+         *
+         * @param string $path The path of the Public Suffix List
+         * @return array<string, true> The rules, or an empty array if the list could not be loaded
+         */
+        private static function parsePublicSuffixRules(string $path): array
+        {
             $rules = [];
-            $lines = @file(__DIR__ . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'public_suffix_list.dat', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
             if($lines === false)
             {
                 Logger::log()->warning('Unable to load the Public Suffix List, subdomain resolution is disabled');
@@ -365,8 +400,10 @@
             // First try with Fileinfo extension (most reliable)
             if (function_exists('finfo_open'))
             {
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                $mimeType = finfo_file($finfo, $filePath);
+                // The magic database is loaded once rather than for every file
+                static $finfo = null;
+                $finfo ??= finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = $finfo !== false ? finfo_file($finfo, $filePath) : false;
                 if ($mimeType)
                 {
                     return $mimeType;
