@@ -75,7 +75,8 @@
          */
         public static function newTable(): array
         {
-            return array_fill_keys(array_column(self::cases(), 'name'), 0.0);
+            static $table = null;
+            return $table ??= array_fill_keys(array_column(self::cases(), 'name'), 0.0);
         }
 
         /**
