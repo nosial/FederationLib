@@ -673,10 +673,9 @@
 
                 // Create a pointer from hash to UUID for quick lookups
                 // Only set the hash pointer if the entity record was successfully cached
-                RedisConnection::getConnection()->setex(
-                    key: sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($data->getHost(), $data->getId())),
-                    expire: Configuration::getRedisConfiguration()->getEntitiesCacheTtl(),
-                    value: $data->getUuid()
+                RedisConnection::setPointers(
+                    [sprintf("%s%s", self::CACHE_PREFIX, Utilities::hashEntity($data->getHost(), $data->getId())) => $data->getUuid()],
+                    Configuration::getRedisConfiguration()->getEntitiesCacheTtl()
                 );
             }
 
@@ -1126,7 +1125,8 @@
             }
             finally
             {
-                // Remove from cache
+                // Remove from cache, the cached records that reference the entity are deleted in a single pass
+                $cachedReferences = [];
                 if(self::isCachingEnabled())
                 {
                     $data = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
@@ -1137,9 +1137,9 @@
                     }
 
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                    RedisConnection::deleteRecordsByField(self::CACHE_PREFIX, 'relationship_entity', $uuid);
-                    RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'entity', $uuid);
-                    RedisConnection::deleteRecordsByField(AuditLogManager::CACHE_PREFIX, 'entity', $uuid);
+                    $cachedReferences[] = [self::CACHE_PREFIX, 'relationship_entity', $uuid];
+                    $cachedReferences[] = [BlacklistManager::CACHE_PREFIX, 'entity', $uuid];
+                    $cachedReferences[] = [AuditLogManager::CACHE_PREFIX, 'entity', $uuid];
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
                 }
@@ -1148,11 +1148,13 @@
                 // cached even when entities are not
                 if(Configuration::getRedisConfiguration()->isEnabled())
                 {
-                    RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'entity', $uuid);
-                    RedisConnection::deleteRecordsByField(ReportManager::CACHE_PREFIX, 'reporting_entity', $uuid);
+                    $cachedReferences[] = [EvidenceManager::CACHE_PREFIX, 'entity', $uuid];
+                    $cachedReferences[] = [ReportManager::CACHE_PREFIX, 'reporting_entity', $uuid];
                     RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
                     RedisConnection::clearSearchCache(ReportManager::CACHE_PREFIX);
                 }
+
+                RedisConnection::deleteRecordsByFields($cachedReferences);
             }
 
             if($changed)
@@ -1437,6 +1439,97 @@
             if($changed)
             {
                 PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_REPUTATION_UPDATED, $entityUuid);
+            }
+        }
+
+        /**
+         * Updates the reputation score of several entities like updateEntityReputation() does for a single entity,
+         * with one update per distinct delta (rather than one per entity) in a single transaction, and a single
+         * invalidation of the cached entity listings. An ENTITY_REPUTATION_UPDATED record change is dispatched for
+         * every entity whose reputation record changed, in the order of the given deltas.
+         *
+         * @param array<string, int> $deltas The amount to add to the reputation of each entity, keyed by entity UUID
+         * @return void
+         * @throws DatabaseOperationException If there is an error executing the SQL statements, no entity is updated
+         */
+        public static function updateEntityReputations(array $deltas): void
+        {
+            $deltas = array_filter($deltas, fn($delta) => is_int($delta) && $delta !== 0);
+            if($deltas === [])
+            {
+                return;
+            }
+
+            $minBound = Configuration::getScanningConfiguration()->getReputationMinBound();
+            $maxBound = Configuration::getScanningConfiguration()->getReputationMaxBound();
+            $now = date('Y-m-d H:i:s');
+            $groups = [];
+            foreach($deltas as $uuid => $delta)
+            {
+                $groups[$delta][] = (string)$uuid;
+            }
+
+            $pdo = DatabaseConnection::getConnection();
+            $ownsTransaction = !$pdo->inTransaction();
+            $changed = [];
+            try
+            {
+                if($ownsTransaction)
+                {
+                    $pdo->beginTransaction();
+                }
+
+                foreach($groups as $delta => $uuids)
+                {
+                    foreach(array_chunk($uuids, 500) as $chunk)
+                    {
+                        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+
+                        // The rows are read first (and locked) to tell which entities the update changes, as the
+                        // affected row count of a single update can't tell them apart
+                        $select = $pdo->prepare("SELECT uuid, reputation, reputation_last_updated FROM entities WHERE uuid IN ($placeholders) AND whitelisted = 0 FOR UPDATE");
+                        $select->execute($chunk);
+                        foreach($select->fetchAll(PDO::FETCH_ASSOC) as $row)
+                        {
+                            $reputation = max($minBound, min($maxBound, (int)$row['reputation'] + $delta));
+                            if($reputation !== (int)$row['reputation'] || (string)$row['reputation_last_updated'] !== $now)
+                            {
+                                $changed[$row['uuid']] = true;
+                            }
+                        }
+
+                        $update = $pdo->prepare("UPDATE entities SET reputation = GREATEST(?, LEAST(?, reputation + ?)), reputation_last_updated = ? WHERE uuid IN ($placeholders) AND whitelisted = 0");
+                        $update->execute([$minBound, $maxBound, $delta, $now, ...$chunk]);
+                    }
+                }
+
+                if($ownsTransaction)
+                {
+                    $pdo->commit();
+                }
+            }
+            catch (PDOException $e)
+            {
+                if($ownsTransaction && $pdo->inTransaction())
+                {
+                    $pdo->rollBack();
+                }
+
+                throw new DatabaseOperationException("Failed to update entity reputation: " . $e->getMessage(), $e->getCode(), $e);
+            }
+
+            if(self::isCachingEnabled())
+            {
+                RedisConnection::deleteKeys(array_map(fn($uuid) => sprintf("%s%s", self::CACHE_PREFIX, $uuid), array_keys($deltas)));
+                RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+            }
+
+            foreach(array_keys($deltas) as $uuid)
+            {
+                if(isset($changed[(string)$uuid]))
+                {
+                    PluginManager::dispatchRecordChange(RecordChangeType::ENTITY_REPUTATION_UPDATED, (string)$uuid);
+                }
             }
         }
 
