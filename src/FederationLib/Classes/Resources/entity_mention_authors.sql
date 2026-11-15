@@ -12,3 +12,6 @@ create table entity_mention_authors
             on update cascade on delete cascade
 )
     comment 'The distinct authors that mentioned an entity in normal content each day, so that an entity only gains reputation from mentions by several authors';
+
+create index entity_mention_authors_day_index
+    on entity_mention_authors (day);
