@@ -80,18 +80,18 @@
             self::$inputContent = file_get_contents('php://input');
             if (self::$inputContent !== '' && str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json'))
             {
-                $decoded = json_decode(self::$inputContent);
+                $decoded = json_decode(self::$inputContent, true);
                 if (json_last_error() !== JSON_ERROR_NONE)
                 {
                     throw new RequestException(json_last_error_msg(), 400);
                 }
 
-                if(!$decoded instanceof \stdClass)
+                if(!is_array($decoded) || ltrim(self::$inputContent, " \t\n\r")[0] !== '{')
                 {
                     throw new RequestException('The JSON request body must be an object', 400);
                 }
 
-                self::$decodedContent = json_decode(self::$inputContent, true);
+                self::$decodedContent = $decoded;
             }
 
             parse_str((string)parse_url(self::$uri, PHP_URL_QUERY), self::$parameters);
@@ -293,11 +293,11 @@
 
             if($data === null)
             {
-                print(json_encode(new SuccessResponse()->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+                print(json_encode(new SuccessResponse()->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             }
             else
             {
-                print(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+                print(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             }
         }
 
@@ -312,6 +312,11 @@
          */
         private static function normalizeData(mixed $data): mixed
         {
+            if(is_scalar($data) || $data === null)
+            {
+                return $data;
+            }
+
             if($data instanceof StandardObjectInterface)
             {
                 return $data->toStandardArray();
@@ -351,7 +356,7 @@
 
             http_response_code($code);
             self::returnHeaders();
-            print(json_encode(new ErrorResponse($code, $message)->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            print(json_encode(new ErrorResponse($code, $message)->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         /**
@@ -372,7 +377,7 @@
 
             http_response_code($e->getCode() ?: 500);
             self::returnHeaders();
-            print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            print(json_encode(new ErrorResponse($e->getCode() ?: 500, $e->getMessage())->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         /**
