@@ -29,3 +29,6 @@ create index entities_created_index
 create index entities_relationship_entity_index
     on entities (relationship_entity);
 
+create index entities_reputation_uuid_index
+    on entities (reputation asc, uuid desc);
+
