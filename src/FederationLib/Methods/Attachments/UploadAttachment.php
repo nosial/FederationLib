@@ -212,7 +212,7 @@
                 $entityUuid = null;
                 if ($evidenceUuid !== null)
                 {
-                    $entityUuid = EvidenceManager::getEvidence($evidenceUuid)->getEntityUuid();
+                    $entityUuid = $evidenceRecord->getEntityUuid();
                 }
 
                 // Create a record in the database
