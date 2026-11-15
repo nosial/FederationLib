@@ -19,7 +19,7 @@
 
     class DatabaseConnection
     {
-        public const string SCHEMA_VERSION = '1.4';
+        public const string SCHEMA_VERSION = '1.5';
         private const string BASELINE_SCHEMA_VERSION = '1.0';
         private const string SCHEMA_VERSION_KEY = 'version';
         private static ?PDO $pdo = null;
@@ -323,6 +323,13 @@
                     $pdo->exec("ALTER TABLE operators ADD COLUMN IF NOT EXISTS is_bot tinyint(1) default 0 not null comment 'Default: 0, 1=The operator is a bot, the evidence and reports it submits are automated and its evidence is created confidential' AFTER auto_assign_automated_reports");
                     $pdo->exec("ALTER TABLE evidence ADD COLUMN IF NOT EXISTS automated tinyint(1) default 0 not null comment 'Default: 0, 1=The evidence was created by the host itself or submitted by a bot operator' AFTER confidential");
                     $pdo->exec("UPDATE evidence SET automated = 1 WHERE operator IN (SELECT uuid FROM operators WHERE name = 'system')");
+                },
+                // Indexes for the ordering of Top Threats (otherwise a scan and sort of every entity) and for removing
+                // the mention authors of past days (otherwise a scan of the whole table)
+                '1.5' => function(PDO $pdo): void
+                {
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS entities_reputation_uuid_index ON entities (reputation asc, uuid desc)');
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS entity_mention_authors_day_index ON entity_mention_authors (day)');
                 }
             ];
         }
