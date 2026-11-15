@@ -101,8 +101,18 @@
                 return;
             }
 
+            // The activity of the scan is written in a single transaction (one commit) rather than one per row
+            $pdo = null;
+            $ownsTransaction = false;
             try
             {
+                $pdo = DatabaseConnection::getConnection();
+                $ownsTransaction = !$pdo->inTransaction();
+                if($ownsTransaction)
+                {
+                    $pdo->beginTransaction();
+                }
+
                 foreach($increments as $uuid => $column)
                 {
                     self::increment($uuid, $day, $column);
@@ -112,9 +122,19 @@
                 {
                     self::recordMentionAuthor($uuid, $day, $mentionAuthor);
                 }
+
+                if($ownsTransaction)
+                {
+                    $pdo->commit();
+                }
             }
-            catch(DatabaseOperationException $e)
+            catch(DatabaseOperationException|PDOException $e)
             {
+                if($ownsTransaction && $pdo?->inTransaction())
+                {
+                    $pdo->rollBack();
+                }
+
                 Logger::log()->error('Failed to record the reputation activity of a scan: ' . $e->getMessage(), $e);
             }
         }
@@ -289,6 +309,7 @@
             while(count($rows) === self::BATCH_SIZE);
 
             $parents = EntitiesManager::getEntitiesByUuids(array_keys(array_filter($deltas, fn($delta) => $delta === null)));
+            $updates = [];
             foreach($deltas as $uuid => $delta)
             {
                 // A parent credited by its children gains unless its own activity of the day holds the gain back
@@ -308,14 +329,23 @@
                     continue;
                 }
 
+                $updates[(string)$uuid] = $delta;
+            }
+
+            // The reputations are updated in batches (one update per distinct gain) rather than one entity at a time
+            foreach(array_chunk($updates, 1000, true) as $batch)
+            {
                 try
                 {
-                    EntitiesManager::updateEntityReputation($uuid, $delta);
-                    $result[$delta > 0 ? 'gains' : 'losses']++;
+                    EntitiesManager::updateEntityReputations($batch);
+                    foreach($batch as $delta)
+                    {
+                        $result[$delta > 0 ? 'gains' : 'losses']++;
+                    }
                 }
                 catch(DatabaseOperationException $e)
                 {
-                    Logger::log()->warning(sprintf('Failed to settle the reputation of entity %s for %s: %s', $uuid, $day, $e->getMessage()), $e);
+                    Logger::log()->warning(sprintf('Failed to settle the reputation of %d entities for %s: %s', count($batch), $day, $e->getMessage()), $e);
                 }
             }
 
@@ -432,10 +462,26 @@
                 {
                     $counters = [];
                     $authors = [];
+
+                    // The buffers of the whole batch are read and removed in a single transaction (one round trip),
+                    // rather than one transaction per entity
+                    $uuids = array_values($uuids);
+                    $transaction = $redis->multi();
                     foreach($uuids as $uuid)
                     {
                         $key = self::BUFFER_PREFIX . $day . ':' . $uuid;
-                        [$hash, , $members] = $redis->multi()->hGetAll($key)->del($key)->sMembers($key . ':authors')->del($key . ':authors')->exec();
+                        $transaction->hGetAll($key)->del($key)->sMembers($key . ':authors')->del($key . ':authors');
+                    }
+                    $replies = $transaction->exec();
+                    if(!is_array($replies))
+                    {
+                        $replies = [];
+                    }
+
+                    foreach($uuids as $index => $uuid)
+                    {
+                        $hash = $replies[$index * 4] ?? null;
+                        $members = $replies[$index * 4 + 2] ?? null;
                         if(is_array($hash) && count($hash) > 0)
                         {
                             $counters[$uuid] = array_map('intval', array_intersect_key($hash, array_flip(self::COUNTERS)));
@@ -515,11 +561,12 @@
 
                 // The mentions of entities and by authors that still exist, the table references both
                 $mentions = [];
+                $existingKeys = array_flip($existing);
                 foreach($authors as $uuid => $members)
                 {
                     foreach($members as $author)
                     {
-                        if(in_array($uuid, $existing, true) && in_array($author, $existing, true))
+                        if(isset($existingKeys[$uuid], $existingKeys[$author]))
                         {
                             $mentions[] = [$uuid, $author];
                         }
