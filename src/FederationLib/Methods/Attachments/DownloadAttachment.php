@@ -89,44 +89,35 @@
                 throw new RequestException('Attachment file not found', 404);
             }
 
-            $chunkSize = 8192; // 8KB per chunk
             $handle = fopen($fileLocation, 'rb');
-
             if ($handle === false)
             {
                 throw new RequestException('Failed to open attachment file for reading', 500);
             }
 
+            $size = fstat($handle)['size'] ?? filesize($fileLocation);
+
             // Set headers for file download
             header('Content-Type: ' . $attachment->getFileMime());
             header('Content-Disposition: attachment; filename="' . str_replace(['"', '\\', "\n", "\r"], '_', $attachment->getFileName()) . '"');
-            header('Content-Length: ' . filesize($fileLocation));
+            header('Content-Length: ' . $size);
             header('X-Content-Type-Options: nosniff');
             header('Cache-Control: no-cache, no-store, must-revalidate'); // HTTP 1.1
             header('Pragma: no-cache'); // HTTP 1.0
             header('Expires: 0'); // Proxies
 
-            while (!feof($handle))
+            while (ob_get_level() > 0)
             {
-                $buffer = fread($handle, $chunkSize);
-                if ($buffer === false)
-                {
-                    fclose($handle);
-                    throw new RequestException('Error reading attachment file', 500);
-                }
-
-                print($buffer);
-
-                // Flush output buffers to send data immediately
-                if (ob_get_level())
-                {
-                    ob_flush();
-                }
-
-                flush();
+                ob_end_flush();
             }
 
+            $sent = fpassthru($handle);
             fclose($handle);
+
+            if ($sent === false)
+            {
+                throw new RequestException('Error reading attachment file', 500);
+            }
         }
 
         /**
