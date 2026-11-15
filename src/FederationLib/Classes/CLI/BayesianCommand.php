@@ -66,6 +66,12 @@
                 $queueFull = false;
                 $result = BayesianSync::replay($position, function(string $text, string $label) use ($client, &$queueFull): bool
                 {
+                    // Texts the plugin would neither classify nor learn (eg; only a link) are skipped
+                    if(method_exists(Learner::class, 'isLearnable') && !Learner::isLearnable($text))
+                    {
+                        return true;
+                    }
+
                     $queueFull = !Learner::learn($client, $text, $label)->isAccepted();
                     return !$queueFull;
                 });
