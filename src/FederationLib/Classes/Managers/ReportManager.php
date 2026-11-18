@@ -446,6 +446,18 @@
                 return;
             }
 
+            // The text of all the evidence of the report, not only of its first page
+            try
+            {
+                $textContents = EvidenceManager::getReportTextContents($reportUuid);
+            }
+            catch(DatabaseOperationException $e)
+            {
+                // The report is already closed at this point, failing to adjust the mentions must not fail the request
+                Logger::log()->warning(sprintf('Failed to retrieve the evidence of report %s to adjust the reputation of mentioned entities: %s', $reportUuid, $e->getMessage()), $e);
+                return;
+            }
+
             $namedEntities = [];
             foreach($evidenceRecords as $evidenceRecord)
             {
