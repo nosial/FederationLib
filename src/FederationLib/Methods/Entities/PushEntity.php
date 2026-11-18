@@ -61,7 +61,8 @@
 
             try
             {
-                if(!EntitiesManager::entityExists($host, $id))
+                $entity = EntitiesManager::getEntity($host, $id);
+                if($entity === null)
                 {
                     $entityUuid = EntitiesManager::registerEntity($host, $id, $metadata);
                     // The address of a telephone entity never appears in an audit log message (OFD "Telephone Entities")
@@ -73,7 +74,6 @@
                 }
                 else
                 {
-                    $entity = EntitiesManager::getEntity($host, $id);
                     $entityUuid = $entity->getUuid();
 
                     if($metadata !== null && EntitiesManager::updateEntityMetadata($entityUuid, $metadata))
