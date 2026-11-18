@@ -8,6 +8,14 @@
 
     class RemoteRetrieval
     {
+        private const int RESOLVED_HOST_TTL = 30;
+        private const int RESOLVED_HOST_LIMIT = 64;
+
+        /**
+         * @var array<string, array{0: int, 1: string[]}> The time each host was resolved and its addresses
+         */
+        private static array $resolvedHosts = [];
+
         public const int URL_MAX_LENGTH = 2048;
         private const int URL_MAX_REDIRECTS = 5;
         public const string ERROR_NOT_PERMITTED = 'The URL is not permitted';
@@ -83,13 +91,14 @@
 
             for ($redirects = 0; ; $redirects++)
             {
-                $target = self::resolveUrlTarget($url);
-                $url = $target['url'];
-
+                // The deadline is checked before the host is resolved, so that resolving can't start past it
                 if (time() >= $deadline)
                 {
                     throw new RequestException('Timed out while retrieving the file from the URL', 400);
                 }
+
+                $target = self::resolveUrlTarget($url);
+                $url = $target['url'];
 
                 $request = new RemoteRetrievalRequest($url, $target['host'], (int)$target['port'], $target['address'], $originalUrl, $redirects, $deadline, $context);
                 if (!PluginManager::dispatchRemoteRetrieval($request))
@@ -196,6 +205,40 @@
         }
 
         /**
+         * Resolves the IPv4 and IPv6 addresses of a host name. The addresses are reused for a short while, so that
+         * several URLs (and redirects) on the same host are not resolved again
+         *
+         * @param string $host The lowercase host name
+         * @return string[] The addresses, empty if the host could not be resolved
+         */
+        private static function resolveHost(string $host): array
+        {
+            $now = time();
+            if (isset(self::$resolvedHosts[$host]) && $now - self::$resolvedHosts[$host][0] < self::RESOLVED_HOST_TTL)
+            {
+                return self::$resolvedHosts[$host][1];
+            }
+
+            $addresses = gethostbynamel($host) ?: [];
+            foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $record)
+            {
+                if (isset($record['ipv6']))
+                {
+                    $addresses[] = $record['ipv6'];
+                }
+            }
+
+            // Only a handful of hosts are retrieved from in a request, the oldest is forgotten past the limit
+            if (count(self::$resolvedHosts) >= self::RESOLVED_HOST_LIMIT)
+            {
+                array_shift(self::$resolvedHosts);
+            }
+
+            self::$resolvedHosts[$host] = [$now, $addresses];
+            return $addresses;
+        }
+
+        /**
          * Validates a URL for retrieval and resolves its host, rejecting URLs that aren't HTTP or HTTPS, carry
          * credentials, or resolve to an address that isn't publicly routable (unless permitted by the configuration)
          *
@@ -218,14 +261,7 @@
             }
             else
             {
-                $addresses = gethostbynamel($host) ?: [];
-                foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $record)
-                {
-                    if (isset($record['ipv6']))
-                    {
-                        $addresses[] = $record['ipv6'];
-                    }
-                }
+                $addresses = self::resolveHost($host);
             }
 
             if (empty($addresses))
