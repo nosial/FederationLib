@@ -331,11 +331,18 @@
             $this->waitForLearnRequests($before + 1);
 
             $deadline = time() + self::RETRAIN_TIMEOUT;
-            while(($unknown = (int)$this->classifyDirectly($probe)['unknown_token_count']) > 0)
+            while(true)
             {
+                $response = $this->bayesianRequest('POST', '/', ['text' => $probe]);
+                $this->assertSame(200, $response['code'], 'BayesianServer failed to classify the probe: ' . $response['raw']);
+                if(isset($response['body']['top_label'], $response['body']['unknown_token_count']) && (int)$response['body']['unknown_token_count'] === 0)
+                {
+                    break;
+                }
+
                 if(time() >= $deadline)
                 {
-                    $this->fail(sprintf('BayesianServer did not retrain its model within %d seconds, %d words of the probe are still unknown', self::RETRAIN_TIMEOUT, $unknown));
+                    $this->fail(sprintf('BayesianServer did not retrain its model within %d seconds, the last classification of the probe was: %s', self::RETRAIN_TIMEOUT, $response['raw']));
                 }
 
                 usleep(500000);
