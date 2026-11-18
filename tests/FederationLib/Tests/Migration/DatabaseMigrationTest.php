@@ -40,7 +40,7 @@
             $result = $this->getResult();
 
             $this->assertSame('1.0', $result['migrated_from']);
-            $this->assertSame(['1.1', '1.2', '1.3', '1.4'], $result['migrations']);
+            $this->assertSame(['1.1', '1.2', '1.3', '1.4', '1.5'], $result['migrations']);
             $this->assertSame(DatabaseConnection::SCHEMA_VERSION, $result['schema_version']);
         }
 
