@@ -11,9 +11,11 @@
     class RedisConnection
     {
         private const string KEY_COUNT_PREFIX = 'cache_count:';
-        private const int KEY_COUNT_TTL = 10;
+        private const int KEY_COUNT_TTL = 60;
         private const string SEARCH_CACHE_PREFIX = 'search:';
         private const string SEARCH_CACHE_VERSION_PREFIX = 'search:version:';
+        private const float CONNECT_TIMEOUT = 2.5;
+        private const float READ_TIMEOUT = 10.0;
         private static ?Redis $redis = null;
 
         /**
@@ -32,8 +34,10 @@
                     return null;
                 }
 
+                // Without timeouts, an unreachable Redis server would block every request for default_socket_timeout
                 $redis = new Redis();
-                $redis->connect($redisConfig->getHost(), $redisConfig->getPort());
+                $redis->connect($redisConfig->getHost(), $redisConfig->getPort(), self::CONNECT_TIMEOUT);
+                $redis->setOption(Redis::OPT_READ_TIMEOUT, self::READ_TIMEOUT);
                 if ($redisConfig->getPassword() !== null)
                 {
                     $redis->auth($redisConfig->getPassword());
@@ -722,13 +726,35 @@
          */
         public static function deleteRecordsByField(string $prefix, string $field, mixed $value): void
         {
+            self::deleteRecordsByFields([[$prefix, $field, $value]]);
+        }
+
+        /**
+         * Deletes all records that match any of the given conditions, each condition being a key prefix, a field name
+         * and the value of the field.
+         *
+         * SCAN walks the whole keyspace regardless of its MATCH pattern, so all the conditions are evaluated in a
+         * single pass over the keyspace rather than one pass per condition, and each record is read only once even
+         * when several conditions apply to its prefix.
+         *
+         * @param array<array{0: string, 1: string, 2: mixed}> $conditions The prefix, field and value of each condition
+         * @throws CacheOperationException If there is an error during the operation.
+         */
+        public static function deleteRecordsByFields(array $conditions): void
+        {
+            if($conditions === [])
+            {
+                return;
+            }
+
             $redis = self::getConnection();
             if ($redis === null)
             {
                 return;
             }
 
-            $pattern = $prefix . '*';
+            $prefixes = array_values(array_unique(array_map(fn(array $condition) => $condition[0], $conditions)));
+            $pattern = count($prefixes) === 1 ? $prefixes[0] . '*' : null;
             $iterator = null;
             $deletedCount = 0;
 
@@ -738,25 +764,52 @@
                 // delete all matching keys in one command.
                 do
                 {
-                    $keys = $redis->scan($iterator, $pattern, 100);
+                    $keys = $redis->scan($iterator, $pattern, 1000);
                     if ($keys === false || $keys === [])
                     {
                         continue;
                     }
 
-                    $pipeline = $redis->multi(Redis::PIPELINE);
+                    $candidates = [];
                     foreach($keys as $key)
+                    {
+                        foreach($conditions as $condition)
+                        {
+                            if(str_starts_with($key, $condition[0]))
+                            {
+                                $candidates[] = $key;
+                                break;
+                            }
+                        }
+                    }
+
+                    if($candidates === [])
+                    {
+                        continue;
+                    }
+
+                    $pipeline = $redis->multi(Redis::PIPELINE);
+                    foreach($candidates as $key)
                     {
                         $pipeline->hGetAll($key);
                     }
                     $records = $pipeline->exec();
                     $matchingKeys = [];
-                    foreach($keys as $index => $key)
+                    foreach($candidates as $index => $key)
                     {
                         $record = $records[$index] ?? [];
-                        if(isset($record[$field]) && $record[$field] == $value)
+                        if(!is_array($record))
                         {
-                            $matchingKeys[] = $key;
+                            continue;
+                        }
+
+                        foreach($conditions as [$prefix, $field, $value])
+                        {
+                            if(str_starts_with($key, $prefix) && isset($record[$field]) && $record[$field] == $value)
+                            {
+                                $matchingKeys[] = $key;
+                                break;
+                            }
                         }
                     }
                     if($matchingKeys !== [])
@@ -770,11 +823,11 @@
             {
                 if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
                 {
-                    throw new CacheOperationException(sprintf("Failed to delete records by field '%s' from the cache", $field), $e->getCode(), $e);
+                    throw new CacheOperationException(sprintf("Failed to delete records by field '%s' from the cache", implode("', '", array_map(fn(array $condition) => $condition[1], $conditions))), $e->getCode(), $e);
                 }
             }
 
-            Logger::log()->debug(sprintf("Deleted %d records with field '%s' equal to '%s' from cache", $deletedCount, $field, (string)$value));
+            Logger::log()->debug(sprintf("Deleted %d records matching %d conditions from cache", $deletedCount, count($conditions)));
         }
 
         /**
@@ -805,7 +858,20 @@
 
             if($limit > 0)
             {
-                $availableSpace = max(0, $limit - self::approximateKeyCount($prefix));
+                try
+                {
+                    $availableSpace = max(0, $limit - self::approximateKeyCount($prefix));
+                }
+                catch(RedisException $e)
+                {
+                    if(Configuration::getRedisConfiguration()->shouldThrowOnErrors())
+                    {
+                        throw new CacheOperationException(sprintf("Failed to check key limit for prefix '%s'", $prefix), $e->getCode(), $e);
+                    }
+
+                    return 0;
+                }
+
                 $serializableRecords = array_slice($serializableRecords, 0, $availableSpace);
             }
 
