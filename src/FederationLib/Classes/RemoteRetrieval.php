@@ -5,6 +5,7 @@
     use FederationLib\Enums\RetrievalPurpose;
     use FederationLib\Exceptions\RemoteRetrievalRejectedException;
     use FederationLib\Exceptions\RequestException;
+    use FederationLib\Objects\RemoteRetrievalContext;
 
     class RemoteRetrieval
     {
