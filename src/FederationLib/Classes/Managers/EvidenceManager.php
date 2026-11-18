@@ -882,9 +882,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)]);
                 }
                 if(self::isCachingEnabled())
                 {
@@ -941,9 +941,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidence)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidence));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $evidence)]);
                 }
                 if(self::isCachingEnabled())
                 {
@@ -957,6 +957,97 @@
             }
 
             return $updated;
+        }
+
+        /**
+         * Assigns a classification flag to every unclassified evidence record of a report, including confidential
+         * evidence, like updateClassificationFlag() does for a single record: evidence that is already classified keeps
+         * its classification. The records are classified with a single update rather than one update per record, and
+         * an EVIDENCE_CLASSIFIED record change is dispatched for each classified record, in the default evidence order.
+         *
+         * @param string $report The UUID of the report
+         * @param ClassificationFlag $classification The classification flag to assign
+         * @return string[] The UUIDs of the evidence records that were classified
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function classifyReportEvidence(string $report, ClassificationFlag $classification): array
+        {
+            $now = date('Y-m-d H:i:s');
+            $pdo = DatabaseConnection::getConnection();
+            $ownsTransaction = !$pdo->inTransaction();
+            $classified = [];
+
+            try
+            {
+                if($ownsTransaction)
+                {
+                    $pdo->beginTransaction();
+                }
+
+                // The unclassified records are locked so that no concurrent request classifies them in between
+                $select = $pdo->prepare("SELECT uuid FROM evidence WHERE report = :report AND classification_flag IS NULL " . self::buildEvidenceSortClause(null, null) . " FOR UPDATE");
+                $select->execute([':report' => $report]);
+                $classified = $select->fetchAll(PDO::FETCH_COLUMN);
+
+                foreach(array_chunk($classified, 500) as $chunk)
+                {
+                    $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                    $update = $pdo->prepare("UPDATE evidence SET classification_flag = ?, classified = ?, updated = ? WHERE uuid IN ($placeholders) AND classification_flag IS NULL");
+                    $update->execute([$classification->value, $now, $now, ...$chunk]);
+                }
+
+                if($ownsTransaction)
+                {
+                    $pdo->commit();
+                }
+            }
+            catch (PDOException $e)
+            {
+                if($ownsTransaction && $pdo->inTransaction())
+                {
+                    $pdo->rollBack();
+                }
+
+                $classified = [];
+                throw new DatabaseOperationException("Failed to update classification flag: " . $e->getMessage(), $e->getCode(), $e);
+            }
+            finally
+            {
+                if(self::isCachingEnabled())
+                {
+                    RedisConnection::deleteKeys(array_map(fn(string $uuid) => sprintf("%s%s", self::CACHE_PREFIX, $uuid), $classified));
+                    RedisConnection::clearSearchCache(self::CACHE_PREFIX);
+                }
+            }
+
+            foreach($classified as $uuid)
+            {
+                PluginManager::dispatchRecordChange(RecordChangeType::EVIDENCE_CLASSIFIED, $uuid);
+            }
+
+            return $classified;
+        }
+
+        /**
+         * Returns the text content of every evidence record of a report that has text content, including confidential
+         * evidence
+         *
+         * @param string $report The UUID of the report
+         * @return string[] The text content of the evidence records
+         * @throws DatabaseOperationException Thrown if there was a database operation error
+         */
+        public static function getReportTextContents(string $report): array
+        {
+            try
+            {
+                $stmt = DatabaseConnection::getConnection()->prepare("SELECT text_content FROM evidence WHERE report = :report AND text_content IS NOT NULL " . self::buildEvidenceSortClause(null, null));
+                $stmt->execute([':report' => $report]);
+                return $stmt->fetchAll(PDO::FETCH_COLUMN);
+            }
+            catch (PDOException $e)
+            {
+                throw new DatabaseOperationException("Failed to retrieve evidence by report: " . $e->getMessage(), $e->getCode(), $e);
+            }
         }
 
         /**
@@ -1011,9 +1102,9 @@
             }
             finally
             {
-                if(self::isCachingEnabled() && RedisConnection::recordExists(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)))
+                if(self::isCachingEnabled())
                 {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid));
+                    RedisConnection::deleteKeys([sprintf("%s%s", self::CACHE_PREFIX, $evidenceUuid)]);
                 }
                 if(self::isCachingEnabled())
                 {
