@@ -5,9 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.2] - Ongoing
+## [2.1.2] - 2026-11-18
 
-This is an ongoing update
+This update introduces new features and improvements.
+
+### Added
+ - `FederationClient::parallel()` runs operations of the client concurrently: the requests of its tasks are performed
+   together through `curl_multi` (each task runs in a fiber) instead of one after another, and the result or exception
+   of each task is returned under its key. Requests made outside of it are performed exactly as before.
+
+### Changed
+ - The Docker images install FederationLib, the BayesianPlugin and the plugins of `REQUIRE_PLUGINS` with ncc's
+   `--optimized` option so that OPcache can cache their classes (classes loaded through `ncc://` were compiled again on
+   every request), and configure OPcache for the size of FederationLib
+ - Under php-fpm the resolved configuration is cached in APCu (encrypted, with a key derived from the configuration file
+   and the `FEDERATION_*`/`CONFIGLIB_*` environment variables) while the configuration file is unchanged, so that it's
+   no longer located, parsed, migrated and given its defaults on every request; the command-line interface never uses
+   the cache
+ - The parsed Public Suffix List is cached in APCu under php-fpm rather than parsed on every request that resolves a
+   registrable domain
+ - Responses are encoded as compact JSON instead of pretty-printed JSON
+ - The JSON request body is decoded once instead of twice
+ - Routing evaluates the request method before matching the path, and matches the entity identifier routes once
+ - The Redis connection is opened with a connect timeout and a read timeout, an unreachable Redis server no longer blocks
+   every request for `default_socket_timeout`
+ - Deleting an entity, operator or report removes the cached records that reference it in a single pass over the
+   Redis keyspace instead of one pass for each kind of reference, and deleting evidence no longer scans the keyspace for
+   its file attachments (they are removed by their UUIDs)
+ - The approximate key counts of the cache limits are reused for 60 seconds instead of 10
+ - File attachment records are read from the cache, they were cached but always retrieved from the database
+ - Cached records are invalidated with a single `DEL` instead of `EXISTS` followed by `DEL`, and the records and Access
+   Token pointers of listed operators are cached in pipelines
+ - Reputation changes of several entities (settlement, mentioned entities of a closed report, entities related to a
+   blacklisted entity) are written with one update per distinct change in a single transaction, and the buffered
+   reputation activity of a batch is flushed from Redis in a single transaction instead of one per entity
+ - Closing a report classifies its evidence with a single update instead of one update per evidence record
+ - Database schema 1.5 adds indexes for the ordering of Top Threats and the removal of past mention authors
+ - Scan Content looks up a DNS name found in several evidence items once, and counts it once against
+   `scanning.dns_lookup_limit`
+ - Remote retrieval checks its deadline before resolving a host, and reuses the addresses of a host for the URLs and
+   redirects of a request
+ - Attachment downloads are streamed with `fpassthru()` instead of being flushed every 8 KB
+ - Named entity extraction skips patterns whose required characters don't occur in the content, and only validates
+   matches that don't overlap a match of a higher priority
+ - `FederationClient` reuses open connections, DNS lookups and TLS sessions between its requests through a cURL share
+   handle (a persistent one on PHP 8.5 and newer, so long-running workers keep their connections between PHP requests)
+   instead of connecting to the server again for every request, and accepts compressed responses
+
+### Fixed
+ - Closing a report with a classification only classified the first 100 evidence records of the report, and only the
+   text of those records was used to adjust the reputation of the entities they mention
+ - Scan Content never passed the author to the `RemoteRetrievalContext` of the file URLs it retrieved, the author was
+   resolved after the files were retrieved; the concerns are now also validated before any file is retrieved
+ - Caching the Access Token pointer of an operator or the hash pointer of an entity failed when the cache TTL of the
+   record type is 0 (no expiry), and a Redis error while writing the pointer was thrown even when
+   `redis.throw_on_errors` is disabled
 
 
 
