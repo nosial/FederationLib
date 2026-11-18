@@ -18,6 +18,8 @@
     class Configuration
     {
         private static ?\ConfigLib\Configuration $configuration = null;
+        private static ?array $configurationData = null;
+        private static ?string $cacheEnvironment = null;
         private static ?ServerConfiguration $serverConfiguration = null;
         private static ?RemoteRetrievalConfiguration $remoteRetrievalConfiguration = null;
         private static ?ScanningConfiguration $scanningConfiguration = null;
@@ -586,10 +588,36 @@
         }
 
         /**
-         * Initialize the configuration with default values.
+         * The APCu key prefix of the resolved configuration
          */
-        public static function initialize(): void
+        private const string CACHE_PREFIX = 'federationlib.configuration.';
+
+        /**
+         * How long the resolved configuration is cached in APCu, in seconds
+         */
+        private const int CACHE_TTL = 3600;
+
+        /**
+         * Initialize the configuration with default values.
+         *
+         * Under php-fpm (and other web SAPIs) the resolved configuration is cached in APCu, so that the configuration
+         * file is not located, parsed and migrated and the defaults are not applied on every request. The cache entry
+         * is keyed by the environment variables that affect the configuration and is only used while the contents of
+         * the configuration file are unchanged. The cached configuration holds secrets (eg; the database password) and
+         * APCu is shared by every php-fpm pool of the same master, so it's encrypted with a key derived from the contents
+         * of the configuration file and those environment variables. The command-line interface never uses the cache, it
+         * saves the configuration and migrates stored keys.
+         *
+         * @param bool $useCache False to always resolve the configuration from the configuration file
+         */
+        public static function initialize(bool $useCache=true): void
         {
+            $cacheKey = $useCache ? self::getCacheKey() : null;
+            if($cacheKey !== null && self::loadCached($cacheKey))
+            {
+                return;
+            }
+
             self::$configuration = new \ConfigLib\Configuration('federation');
 
             // Keys of earlier releases stored in the configuration file are converted to the settings that replaced them
@@ -598,7 +626,7 @@
             // Server configuration
             self::$configuration->setDefault('server.base_url', 'http://127.0.0.1:7000', 'FEDERATION_BASE_URL');
             self::$configuration->setDefault('server.name', 'Federation Server', 'FEDERATION_NAME');
-            self::$configuration->setDefault('server.access_token', Utilities::generateString(), 'FEDERATION_ACCESS_TOKEN');
+            self::$configuration->setDefault('server.access_token', (self::$configuration->exists('server.access_token') || getenv('FEDERATION_ACCESS_TOKEN') !== false) ? '' : Utilities::generateString(), 'FEDERATION_ACCESS_TOKEN');
             self::$configuration->setDefault('server.max_upload_size', 52428800, 'FEDERATION_MAX_UPLOAD_SIZE'); // 50MB default
             self::$configuration->setDefault('server.storage_path', '/var/www/uploads', 'FEDERATION_STORAGE_PATH');
             self::$configuration->setDefault('server.max_page_size', 100, 'FEDERATION_MAX_PAGE_SIZE');
@@ -707,16 +735,139 @@
                 }
             }
 
-            // Initialize the configuration classes
-            self::$serverConfiguration = new ServerConfiguration(self::$configuration->get('server'));
-            self::$remoteRetrievalConfiguration = new RemoteRetrievalConfiguration(self::$configuration->get('remote_retrieval') ?? []);
-            self::$scanningConfiguration = new ScanningConfiguration(self::$configuration->get('scanning'));
-            self::$databaseConfiguration = new DatabaseConfiguration(self::$configuration->get('database'));
-            self::$redisConfiguration = new RedisConfiguration(self::$configuration->get('redis'));
-            self::$maintenanceConfiguration = new MaintenanceConfiguration(self::$configuration->get('maintenance'));
-            self::$searchConfiguration = new SearchConfiguration(self::$configuration->get('search'), self::$serverConfiguration->isPublic('SEARCH'));
-            self::$pluginsConfiguration = new PluginsConfiguration(self::$configuration->get('plugins'));
-            self::$bayesianModelConfiguration = new BayesianModelConfiguration(self::$configuration->get('bayesian_model'));
+            self::applyConfiguration(self::$configuration->getConfiguration());
+
+            // Migrated keys are cached once the migrated configuration was saved, by the next request
+            if($cacheKey !== null && !$storedMigrated)
+            {
+                self::storeCached($cacheKey, self::$configuration->getPath(), self::$configurationData);
+            }
+        }
+
+        /**
+         * Initializes the configuration classes from the resolved configuration
+         *
+         * @param array $data The resolved configuration
+         * @return void
+         */
+        private static function applyConfiguration(array $data): void
+        {
+            self::$configurationData = $data;
+            self::$serverConfiguration = new ServerConfiguration($data['server'] ?? null);
+            self::$remoteRetrievalConfiguration = new RemoteRetrievalConfiguration($data['remote_retrieval'] ?? []);
+            self::$scanningConfiguration = new ScanningConfiguration($data['scanning'] ?? null);
+            self::$databaseConfiguration = new DatabaseConfiguration($data['database'] ?? null);
+            self::$redisConfiguration = new RedisConfiguration($data['redis'] ?? null);
+            self::$maintenanceConfiguration = new MaintenanceConfiguration($data['maintenance'] ?? null);
+            self::$searchConfiguration = new SearchConfiguration($data['search'] ?? null, self::$serverConfiguration->isPublic('SEARCH'));
+            self::$pluginsConfiguration = new PluginsConfiguration($data['plugins'] ?? null);
+            self::$bayesianModelConfiguration = new BayesianModelConfiguration($data['bayesian_model'] ?? null);
+        }
+
+        /**
+         * Returns the APCu key of the resolved configuration, or null if the cache is not used: from the command-line
+         * interface, or when APCu is not available or disabled. The key is derived from the environment variables
+         * that can change the resolved configuration or the location of the configuration file.
+         *
+         * @return string|null The cache key, or null if the cache is not used
+         */
+        private static function getCacheKey(): ?string
+        {
+            if(PHP_SAPI === 'cli' || !function_exists('apcu_fetch') || !apcu_enabled() || !function_exists('sodium_crypto_secretbox'))
+            {
+                return null;
+            }
+
+            $environment = [];
+            foreach(getenv() as $name => $value)
+            {
+                if(str_starts_with($name, 'FEDERATION_') || str_starts_with($name, 'CONFIGLIB_') || $name === 'HOME')
+                {
+                    $environment[$name] = $value;
+                }
+            }
+
+            ksort($environment);
+            self::$cacheEnvironment = serialize($environment);
+            return self::CACHE_PREFIX . hash('sha256', self::$cacheEnvironment);
+        }
+
+        /**
+         * Initializes the configuration from APCu, if the cached configuration was resolved from a configuration file
+         * whose contents are unchanged (it can't be decrypted otherwise)
+         *
+         * @param string $cacheKey The cache key
+         * @return bool True if the cached configuration was used
+         */
+        private static function loadCached(string $cacheKey): bool
+        {
+            $cached = apcu_fetch($cacheKey, $success);
+            if(!$success || !is_array($cached) || !is_string($cached['path'] ?? null) || !is_string($cached['nonce'] ?? null) || !is_string($cached['data'] ?? null))
+            {
+                return false;
+            }
+
+            // The configuration can only be decrypted while the configuration file is unchanged
+            $contents = @file_get_contents($cached['path']);
+            if($contents === false || strlen($cached['nonce']) !== SODIUM_CRYPTO_SECRETBOX_NONCEBYTES)
+            {
+                return false;
+            }
+
+            $serialized = sodium_crypto_secretbox_open($cached['data'], $cached['nonce'], self::getCacheEncryptionKey($contents));
+            $data = $serialized !== false ? @unserialize($serialized, ['allowed_classes' => false]) : false;
+            if(!is_array($data))
+            {
+                return false;
+            }
+
+            try
+            {
+                self::applyConfiguration($data);
+            }
+            catch(\Throwable $e)
+            {
+                Logger::log()->warning(sprintf('Ignoring the cached configuration: %s', $e->getMessage()), $e);
+                return false;
+            }
+
+            // The ConfigLib instance is created when it's requested (getConfigurationLib())
+            self::$configuration = null;
+            return true;
+        }
+
+        /**
+         * Caches the resolved configuration in APCu, encrypted (see getCacheEncryptionKey()), along with the path of the
+         * configuration file it was resolved from
+         *
+         * @param string $cacheKey The cache key
+         * @param string $path The path of the configuration file
+         * @param array $data The resolved configuration
+         * @return void
+         */
+        private static function storeCached(string $cacheKey, string $path, array $data): void
+        {
+            $contents = @file_get_contents($path);
+            if($contents === false)
+            {
+                return;
+            }
+
+            $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+            $encrypted = sodium_crypto_secretbox(serialize($data), $nonce, self::getCacheEncryptionKey($contents));
+            @apcu_store($cacheKey, ['path' => $path, 'nonce' => $nonce, 'data' => $encrypted], self::CACHE_TTL);
+        }
+
+        /**
+         * Returns the key the cached configuration is encrypted with, derived from the contents of the configuration
+         * file and the environment variables of the cache key, which only the server itself can read
+         *
+         * @param string $contents The contents of the configuration file
+         * @return string The encryption key
+         */
+        private static function getCacheEncryptionKey(string $contents): string
+        {
+            return sodium_crypto_generichash($contents . "\0" . (self::$cacheEnvironment ?? ''), '', SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
         }
 
         /**
@@ -726,12 +877,12 @@
          */
         public static function getConfiguration(): array
         {
-            if(self::$configuration === null)
+            if(self::$configurationData === null)
             {
                 self::initialize();
             }
 
-            return self::$configuration->getConfiguration();
+            return self::$configurationData;
         }
 
         /**
@@ -743,7 +894,8 @@
         {
             if(self::$configuration === null)
             {
-                self::initialize();
+                // Not created when the configuration was initialized from the cache
+                self::initialize(false);
             }
 
             return self::$configuration;
