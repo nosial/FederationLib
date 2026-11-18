@@ -143,6 +143,15 @@
                 throw new InvalidArgumentException('File attachment UUID cannot be empty.');
             }
 
+            if(self::isCachingEnabled())
+            {
+                $cached = RedisConnection::getRecord(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
+                if($cached !== null)
+                {
+                    return new FileAttachmentRecord($cached);
+                }
+            }
+
             try
             {
                 $stmt = DatabaseConnection::getConnection()->prepare("SELECT * FROM file_attachments WHERE uuid = :uuid");
@@ -523,10 +532,7 @@
 
             if(self::isCachingEnabled())
             {
-                foreach($uuids as $uuid)
-                {
-                    RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $uuid));
-                }
+                RedisConnection::deleteKeys(array_map(fn(string $uuid) => sprintf("%s%s", self::CACHE_PREFIX, $uuid), array_values($uuids)));
 
                 RedisConnection::clearSearchCache(self::CACHE_PREFIX);
             }
