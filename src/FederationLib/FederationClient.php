@@ -4,9 +4,11 @@
 
     use CURLFile;
     use CurlHandle;
+    use CurlMultiHandle;
     use CurlShareHandle;
     use CurlSharePersistentHandle;
     use FederationLib\Classes\Logger;
+    use Fiber;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\ContentType;
     use FederationLib\Enums\EntityRelationshipType;
@@ -41,6 +43,12 @@
         private const array SHARED_DATA = [CURL_LOCK_DATA_CONNECT, CURL_LOCK_DATA_DNS, CURL_LOCK_DATA_SSL_SESSION];
         /** @var CurlShareHandle|CurlSharePersistentHandle|false|null The share handle of every request, false when unavailable, null until created. */
         private static mixed $shareHandle = null;
+        /** The handle that performs the requests of the tasks of {@see FederationClient::parallel()}, null outside of it. */
+        private static ?CurlMultiHandle $multiHandle = null;
+        /** @var array<int, true> The fibers of the running tasks, keyed by their ID. */
+        private static array $parallelFibers = [];
+        /** @var array<int, Fiber> The fibers waiting for a request, keyed by the ID of the request's handle. */
+        private static array $waitingFibers = [];
 
         private string $endpoint;
         private ?string $accessToken;
@@ -189,12 +197,12 @@
          */
         private function executeRequest(CurlHandle $ch, array $expectedStatusCodes, string $errorMessage): mixed
         {
-            $response = curl_exec($ch);
+            [$response, $curlErrorCode] = self::perform($ch);
 
             // Handle cURL errors
-            if (curl_errno($ch))
+            if ($curlErrorCode !== 0)
             {
-                $curlError = curl_error($ch);
+                $curlError = curl_error($ch) ?: curl_strerror($curlErrorCode);
                 $httpCode = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
                 throw new RequestException($errorMessage . ': ' . $curlError, HttpResponseCode::from($httpCode));
             }
@@ -3438,6 +3446,175 @@
             }
 
             return self::$shareHandle;
+        }
+
+        /**
+         * Runs operations of the client concurrently. Each task is a callable that uses the client as usual, such as
+         * fn() => $client->getEntityRecord($uuid); while tasks run, the requests they send are performed together
+         * instead of one after another, which saves the time of every round trip but the slowest when the server is far
+         * away. A task may send several requests, which it sends one after another as usual.
+         *
+         * Results are returned rather than thrown, so a failed task does not affect the others. A call made while
+         * tasks of another parallel() call are running runs its own tasks one after another.
+         *
+         * @param array<array-key, callable(): mixed> $tasks The tasks, keyed as the results should be.
+         * @param int $concurrency The maximum number of tasks that run at the same time.
+         * @return array<array-key, mixed> The value of each task, or the Throwable it threw, under the key of the task
+         *                                 and in the order of the tasks.
+         * @throws Throwable Thrown when a task throws.
+         */
+        public function parallel(array $tasks, int $concurrency=8): array
+        {
+            $results = [];
+            if(self::$multiHandle !== null || count($tasks) < 2 || $concurrency < 2)
+            {
+                foreach($tasks as $key => $task)
+                {
+                    try
+                    {
+                        $results[$key] = $task();
+                    }
+                    catch(Throwable $e)
+                    {
+                        $results[$key] = $e;
+                    }
+                }
+
+                return $results;
+            }
+
+            $multiHandle = curl_multi_init();
+            self::$multiHandle = $multiHandle;
+            $pending = $tasks;
+            /** @var array<int, array{0: array-key, 1: Fiber}> $active Running tasks keyed by the ID of their fiber */
+            $active = [];
+
+            // Runs a step of a task: its start, or its continuation after its request completed
+            $step = function(Fiber $fiber, mixed $key, ?int $requestResult) use (&$active, &$results): void
+            {
+                $requestResult === null ? $fiber->start() : $fiber->resume($requestResult);
+                if($fiber->isTerminated())
+                {
+                    // The value of the task, or what it threw
+                    $results[$key] = $fiber->getReturn()[1];
+                    unset($active[spl_object_id($fiber)], self::$parallelFibers[spl_object_id($fiber)]);
+                }
+            };
+
+            try
+            {
+                while(true)
+                {
+                    while(count($active) < $concurrency && count($pending) > 0)
+                    {
+                        $key = array_key_first($pending);
+                        $task = $pending[$key];
+                        unset($pending[$key]);
+
+                        $fiber = new Fiber(static function() use ($task): array
+                        {
+                            try
+                            {
+                                return [true, $task()];
+                            }
+                            catch(Throwable $e)
+                            {
+                                return [false, $e];
+                            }
+                        });
+
+                        $active[spl_object_id($fiber)] = [$key, $fiber];
+                        self::$parallelFibers[spl_object_id($fiber)] = true;
+                        $step($fiber, $key, null);
+                    }
+
+                    if(count($active) === 0)
+                    {
+                        break;
+                    }
+
+                    if(count(self::$waitingFibers) === 0)
+                    {
+                        // A task suspended its fiber for something other than a request, it cannot be resumed
+                        foreach($active as [$key, $fiber])
+                        {
+                            $results[$key] = new RuntimeException('The task was suspended outside of a request');
+                            unset(self::$parallelFibers[spl_object_id($fiber)]);
+                        }
+
+                        $active = [];
+                        continue;
+                    }
+
+                    do
+                    {
+                        $status = curl_multi_exec($multiHandle, $stillRunning);
+                    }
+                    while($status === CURLM_CALL_MULTI_PERFORM);
+
+                    $completed = false;
+                    while(($info = curl_multi_info_read($multiHandle)) !== false)
+                    {
+                        if($info['msg'] !== CURLMSG_DONE)
+                        {
+                            continue;
+                        }
+
+                        $completed = true;
+                        $handle = $info['handle'];
+                        curl_multi_remove_handle($multiHandle, $handle);
+                        $fiber = self::$waitingFibers[spl_object_id($handle)] ?? null;
+                        unset(self::$waitingFibers[spl_object_id($handle)]);
+                        if($fiber !== null && isset($active[spl_object_id($fiber)]))
+                        {
+                            $step($fiber, $active[spl_object_id($fiber)][0], $info['result']);
+                        }
+                    }
+
+                    if(!$completed && curl_multi_select($multiHandle, 1.0) === -1)
+                    {
+                        usleep(1000);
+                    }
+                }
+            }
+            finally
+            {
+                self::$multiHandle = null;
+                self::$parallelFibers = [];
+                self::$waitingFibers = [];
+                curl_multi_close($multiHandle);
+            }
+
+            $ordered = [];
+            foreach(array_keys($tasks) as $key)
+            {
+                $ordered[$key] = $results[$key] ?? null;
+            }
+
+            return $ordered;
+        }
+
+        /**
+         * Performs a prepared request. Within a task of {@see FederationClient::parallel()} the request is performed
+         * together with the requests of the other tasks while the task waits, otherwise it is performed right away.
+         *
+         * @param CurlHandle $ch The prepared request.
+         * @return array{0: string|bool, 1: int} The response, and the cURL error code (0 when the request succeeded).
+         */
+        private static function perform(CurlHandle $ch): array
+        {
+            $fiber = Fiber::getCurrent();
+            if(self::$multiHandle === null || $fiber === null || !isset(self::$parallelFibers[spl_object_id($fiber)]))
+            {
+                $response = curl_exec($ch);
+                return [$response, curl_errno($ch)];
+            }
+
+            curl_multi_add_handle(self::$multiHandle, $ch);
+            self::$waitingFibers[spl_object_id($ch)] = $fiber;
+            $result = (int)Fiber::suspend();
+
+            return [$result === CURLE_OK ? curl_multi_getcontent($ch) : false, $result];
         }
 
         /**
