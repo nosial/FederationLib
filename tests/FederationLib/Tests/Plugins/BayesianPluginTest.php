@@ -247,14 +247,50 @@
             $this->assertSame(ClassificationFlag::MALICIOUS, $scanned->getClassification()->getClassificationFlag());
         }
 
-        public function testScanOfUnknownContentIsNotClassified(): void
+        public function testScanOfUnknownContentIsClassifiedByTheLogisticModel(): void
         {
             $this->ensureTrained();
 
-            // classify_known_tokens (enabled by default) skips content that is mostly unknown to the model
-            $unknown = implode(' ', array_map(fn() => bin2hex(random_bytes(6)), range(1, 12)));
-            $scanned = $this->client->scanContent($unknown);
-            $this->assertNull($scanned->getClassification());
+            // Random letters only, numbers would be replaced by known placeholder words (xnum1..xnum6)
+            $unknown = implode(' ', array_map(fn() => self::randomWord(), range(1, 12)));
+            $expected = $this->classifyDirectly($unknown);
+
+            // classify_known_tokens (enabled by default) skips content that is mostly unknown to a Naive Bayes model,
+            // but not with the logistic model, which also scores the characters of unknown words
+            $this->assertSame('logistic_regression', $expected['scoring_method'] ?? null, 'The bundled BayesianServer does not use the logistic model');
+            $this->assertGreaterThan((int)$expected['known_tokens'], (int)$expected['unknown_token_count'], sprintf('The content is not mostly unknown to the model: %s', json_encode($expected)));
+
+            $classification = $this->client->scanContent($unknown)->getClassification();
+
+            // Classifier::interpret(): a NORMAL top label below the decision threshold falls back to the predicted label
+            $label = $expected['top_label'];
+            $predicted = $expected['predicted_labels'] ?? [];
+            if($label === ClassificationFlag::NORMAL->value && !empty($predicted) && !in_array($label, $predicted, true))
+            {
+                $label = $predicted[0];
+            }
+
+            if($label === ClassificationFlag::NORMAL->value)
+            {
+                $this->assertNotNull($classification, 'The plugin skipped the classification of unknown content');
+                $this->assertSame(ClassificationFlag::NORMAL, $classification->getClassificationFlag());
+                $this->assertEqualsWithDelta(self::expectedConfidence($expected), $classification->getConfidence(), 0.0001);
+                return;
+            }
+
+            if(!in_array($label, $predicted, true))
+            {
+                // A SUSPICIOUS or MALICIOUS top label below the decision threshold is not reported
+                $this->assertNull($classification);
+                return;
+            }
+
+            // minimum_confidence may skip it and spam_severity may change its flag, but it's never reported as NORMAL
+            if($classification !== null)
+            {
+                $this->assertNotSame(ClassificationFlag::NORMAL, $classification->getClassificationFlag());
+                $this->assertEqualsWithDelta(self::expectedConfidence(['top_label' => $label] + $expected), $classification->getConfidence(), 0.0001);
+            }
         }
 
         // ---------------------------------------------------------------------------------------------------------
