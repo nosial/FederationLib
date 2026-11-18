@@ -197,7 +197,7 @@
                     $classification = $scanned->getClassification();
                     $this->assertNotNull($classification, sprintf('The plugin did not classify the %s sample: %s', $flag->value, $sample));
                     $this->assertSame($expected['top_label'], $classification->getClassificationFlag()->value, sprintf('The scan classification differs from BayesianServer for: %s', $sample));
-                    $this->assertEqualsWithDelta(max(0.0, min(1.0, (float)$expected['top_probability'])), $classification->getConfidence(), 0.0001);
+                    $this->assertEqualsWithDelta(self::expectedConfidence($expected), $classification->getConfidence(), 0.0001);
 
                     // FederationLib applies the plugin's classification through its CLASSIFICATION_* scanning rules
                     $this->assertNotEquals(0.0, $scanned->getScanResults()['CLASSIFICATION_' . $classification->getClassificationFlag()->value]);
@@ -390,6 +390,31 @@
             $this->assertSame(200, $response['code'], 'BayesianServer failed to classify the content: ' . $response['raw']);
             $this->assertArrayHasKey('top_label', $response['body']);
             return $response['body'];
+        }
+
+        /**
+         * Returns the confidence BayesianPlugin gives a classification of BayesianServer (Classifier::interpret()):
+         * the top probability for NORMAL, otherwise how likely the content is not NORMAL, the SUSPICIOUS and
+         * MALICIOUS probabilities together (1 - the posterior of NORMAL)
+         *
+         * @param array $classification A classification response of BayesianServer with all of its labels
+         */
+        private static function expectedConfidence(array $classification): float
+        {
+            $confidence = (float)$classification['top_probability'];
+            if($classification['top_label'] !== ClassificationFlag::NORMAL->value)
+            {
+                foreach($classification['labels'] as $label)
+                {
+                    if($label['label'] === ClassificationFlag::NORMAL->value)
+                    {
+                        $confidence = 1.0 - (float)$label['posterior'];
+                        break;
+                    }
+                }
+            }
+
+            return max(0.0, min(1.0, $confidence));
         }
 
         private function getBayesianStatus(): array
