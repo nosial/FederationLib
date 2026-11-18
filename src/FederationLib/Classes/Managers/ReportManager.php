@@ -17,7 +17,6 @@
     use FederationLib\Enums\OrderTypes\ReportOrderType;
     use FederationLib\Enums\RecordChangeType;
     use FederationLib\Exceptions\DatabaseOperationException;
-    use FederationLib\Objects\EvidenceRecord;
     use FederationLib\Objects\OperatorRecord;
     use FederationLib\Objects\ReportRecord;
     use InvalidArgumentException;
@@ -342,22 +341,16 @@
 
             // Assign classifications before closing the report. The conditional database update preserves existing
             // classifications.
-            $evidenceRecords = [];
             if($classificationFlag !== null)
             {
-                $evidenceRecords = EvidenceManager::getEvidenceByReport($reportUuid, includeConfidential: true);
-                foreach($evidenceRecords as $evidenceRecord)
-                {
-                    // Evidence that is already classified keeps its classification
-                    EvidenceManager::updateClassificationFlag($evidenceRecord->getUuid(), $classificationFlag);
-                }
+                EvidenceManager::classifyReportEvidence($reportUuid, $classificationFlag);
             }
 
             self::markClosed($reportUuid);
 
             if($classificationFlag !== null)
             {
-                self::applyReputation($report->getReportingEntity(), $classificationFlag, $evidenceRecords);
+                self::applyReputation($report->getReportingEntity(), $classificationFlag, $reportUuid);
             }
 
             $blacklistUuid = null;
@@ -427,10 +420,10 @@
          *
          * @param string|null $reportingEntity The UUID of the reported entity, if any
          * @param ClassificationFlag $classificationFlag The classification flag the report was closed with
-         * @param EvidenceRecord[] $evidenceRecords The evidence records linked to the report
+         * @param string $reportUuid The UUID of the report, whose evidence mentions the named entities
          * @throws DatabaseOperationException Thrown if the reported entity's reputation could not be updated
          */
-        private static function applyReputation(?string $reportingEntity, ClassificationFlag $classificationFlag, array $evidenceRecords): void
+        private static function applyReputation(?string $reportingEntity, ClassificationFlag $classificationFlag, string $reportUuid): void
         {
             $scanningConfiguration = Configuration::getScanningConfiguration();
 
@@ -459,12 +452,9 @@
             }
 
             $namedEntities = [];
-            foreach($evidenceRecords as $evidenceRecord)
+            foreach($textContents as $textContent)
             {
-                if($evidenceRecord->getTextContent() !== null)
-                {
-                    $namedEntities += EntitiesManager::resolveNamedEntities($evidenceRecord->getTextContent());
-                }
+                $namedEntities += EntitiesManager::resolveNamedEntities($textContent);
             }
 
             if($reportingEntity !== null)
@@ -472,17 +462,14 @@
                 unset($namedEntities[$reportingEntity]);
             }
 
-            foreach(array_keys($namedEntities) as $entityUuid)
+            try
             {
-                try
-                {
-                    EntitiesManager::updateEntityReputation($entityUuid, $namedEntityDelta);
-                }
-                catch(DatabaseOperationException $e)
-                {
-                    // The report is already closed at this point, a failed mention adjustment must not fail the request
-                    Logger::log()->warning(sprintf('Failed to update reputation of mentioned entity %s: %s', $entityUuid, $e->getMessage()), $e);
-                }
+                EntitiesManager::updateEntityReputations(array_fill_keys(array_map('strval', array_keys($namedEntities)), $namedEntityDelta));
+            }
+            catch(DatabaseOperationException $e)
+            {
+                // The report is already closed at this point, a failed mention adjustment must not fail the request
+                Logger::log()->warning(sprintf('Failed to update reputation of %d mentioned entities: %s', count($namedEntities), $e->getMessage()), $e);
             }
         }
 
@@ -522,9 +509,11 @@
                 {
                     RedisConnection::getConnection()->del(sprintf("%s%s", self::CACHE_PREFIX, $reportUuid));
                     RedisConnection::clearSearchCache(self::CACHE_PREFIX);
-                    RedisConnection::deleteRecordsByField(BlacklistManager::CACHE_PREFIX, 'report', $reportUuid);
+                    RedisConnection::deleteRecordsByFields([
+                        [BlacklistManager::CACHE_PREFIX, 'report', $reportUuid],
+                        [EvidenceManager::CACHE_PREFIX, 'report', $reportUuid],
+                    ]);
                     RedisConnection::clearSearchCache(BlacklistManager::CACHE_PREFIX);
-                    RedisConnection::deleteRecordsByField(EvidenceManager::CACHE_PREFIX, 'report', $reportUuid);
                     RedisConnection::clearSearchCache(EvidenceManager::CACHE_PREFIX);
                 }
             }
