@@ -4,6 +4,8 @@
 
     use CURLFile;
     use CurlHandle;
+    use CurlShareHandle;
+    use CurlSharePersistentHandle;
     use FederationLib\Classes\Logger;
     use FederationLib\Enums\ClassificationFlag;
     use FederationLib\Enums\ContentType;
@@ -31,9 +33,15 @@
     use FederationLib\Objects\UploadResult;
     use InvalidArgumentException;
     use RuntimeException;
+    use Throwable;
 
     class FederationClient
     {
+        /** Data shared between requests: open connections, DNS lookups and TLS sessions. */
+        private const array SHARED_DATA = [CURL_LOCK_DATA_CONNECT, CURL_LOCK_DATA_DNS, CURL_LOCK_DATA_SSL_SESSION];
+        /** @var CurlShareHandle|CurlSharePersistentHandle|false|null The share handle of every request, false when unavailable, null until created. */
+        private static mixed $shareHandle = null;
+
         private string $endpoint;
         private ?string $accessToken;
 
@@ -2785,7 +2793,7 @@
             $path = ltrim('attachments', '/');
             Logger::log()->debug(sprintf("POST Request to %s for file upload", $this->buildUrl($path)));
 
-            $ch = curl_init($this->buildUrl($path));
+            $ch = $this->buildCurl($path);
 
             // Set up headers for file upload
             $headers = [
@@ -2937,7 +2945,7 @@
                 $path = ltrim('attachments', '/');
                 Logger::log()->debug(sprintf("POST Request to %s for note upload", $this->buildUrl($path)));
 
-                $ch = curl_init($this->buildUrl($path));
+                $ch = $this->buildCurl($path);
 
                 $headers = [
                     'Accept: application/json'
@@ -3143,7 +3151,7 @@
                 // Upload the downloaded file
                 $path = ltrim('attachments', '/');
                 Logger::log()->debug(sprintf("POST Request to %s for URL-based file upload", $this->buildUrl($path)));
-                $ch = curl_init($this->buildUrl($path));
+                $ch = $this->buildCurl($path);
 
                 // Set up headers for file upload
                 $headers = [
@@ -3378,8 +3386,58 @@
 
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt_array($ch, [
+                CURLOPT_ENCODING => '',
+                CURLOPT_TCP_KEEPALIVE => 1,
+                CURLOPT_TCP_NODELAY => true,
+            ]);
+
+            $shareHandle = self::getShareHandle();
+            if($shareHandle !== false)
+            {
+                curl_setopt($ch, CURLOPT_SHARE, $shareHandle);
+            }
 
             return $ch;
+        }
+
+        /**
+         * Returns the share handle that lets requests reuse connections. Where PHP supports persistent share handles
+         * (8.5 and newer), connections also outlive the PHP request, so a long-running worker connects to the server
+         * once rather than once per request.
+         *
+         * @return CurlShareHandle|CurlSharePersistentHandle|false The share handle, or false when it cannot be created.
+         */
+        private static function getShareHandle(): mixed
+        {
+            if(self::$shareHandle === null)
+            {
+                self::$shareHandle = false;
+                try
+                {
+                    if(function_exists('curl_share_init_persistent'))
+                    {
+                        self::$shareHandle = curl_share_init_persistent(self::SHARED_DATA);
+                    }
+                    else
+                    {
+                        $shareHandle = curl_share_init();
+                        foreach(self::SHARED_DATA as $data)
+                        {
+                            curl_share_setopt($shareHandle, CURLSHOPT_SHARE, $data);
+                        }
+
+                        self::$shareHandle = $shareHandle;
+                    }
+                }
+                catch(Throwable $e)
+                {
+                    // Requests still work without sharing, each on its own connection
+                    Logger::log()->debug('Unable to create a cURL share handle: ' . $e->getMessage());
+                }
+            }
+
+            return self::$shareHandle;
         }
 
         /**
