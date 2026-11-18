@@ -273,6 +273,11 @@
         public static function matchHandle(string $requestMethod, string $path): ?Method
         {
             Logger::log()->debug(sprintf("Handling request [%s] %s", $requestMethod, $path));
+            $entitySuffix = null;
+            if(str_starts_with($path, '/entities/') && preg_match('#^/entities/' . Utilities::ENTITY_IDENTIFIER_SEGMENT . '(/[a-z-]+)?$#', $path, $matches) === 1)
+            {
+                $entitySuffix = $matches[2] ?? '';
+            }
 
             return match (true)
             {
@@ -283,13 +288,13 @@
                 $path === '/specification.json' && $requestMethod === 'GET' => Method::GET_SPECIFICATION,
                 $path === '/search' && $requestMethod === 'GET' => Method::SEARCH,
                 $path === '/scan' && $requestMethod === 'POST' => Method::SCAN_CONTENT,
-                preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::VIEW_AUDIT_ENTRY,
+                $requestMethod === 'GET' && preg_match('#^/audit/([a-fA-F0-9\-]{36})$#', $path) => Method::VIEW_AUDIT_ENTRY,
                 $path === '/audit/search' && $requestMethod === 'GET' => Method::SEARCH_AUDIT_LOGS,
 
                 // Attachment methods
-                preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::DOWNLOAD_ATTACHMENT,
-                preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_ATTACHMENT,
-                preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) && $requestMethod === 'GET' => Method::GET_ATTACHMENT_INFO,
+                $requestMethod === 'GET' && preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) => Method::DOWNLOAD_ATTACHMENT,
+                $requestMethod === 'DELETE' && preg_match('#^/attachments/([a-fA-F0-9\-]{36})$#', $path) => Method::DELETE_ATTACHMENT,
+                $requestMethod === 'GET' && preg_match('#^/attachments/([a-fA-F0-9\-]{36})/info$#', $path) => Method::GET_ATTACHMENT_INFO,
                 $path === '/attachments/search' && $requestMethod === 'GET' => Method::SEARCH_ATTACHMENTS,
                 $path === '/attachments' && $requestMethod === 'GET' => Method::LIST_ATTACHMENTS,
                 $path === '/attachments' && $requestMethod === 'POST', $path === '/attachments' && $requestMethod === 'PUT' => Method::UPLOAD_ATTACHMENT,
@@ -301,39 +306,39 @@
                 $path === '/entities/top-threats' && $requestMethod === 'GET' => Method::TOP_THREATS,
                 // Entity identifier routing (UUID, SHA-256 identifier or entity address), never matching the literal
                 // sub-paths above
-                Utilities::matchEntityPath($path) !== null && $requestMethod === 'GET' => Method::GET_ENTITY_RECORD,
-                Utilities::matchEntityPath($path) !== null && $requestMethod === 'DELETE' => Method::DELETE_ENTITY,
-                Utilities::matchEntityPath($path) !== null && $requestMethod === 'PATCH' => Method::UPDATE_ENTITY,
-                Utilities::matchEntityPath($path, '/relationship') !== null && $requestMethod === 'PATCH' => Method::SET_ENTITY_RELATIONSHIP,
-                Utilities::matchEntityPath($path, '/relationship') !== null && $requestMethod === 'DELETE' => Method::CLEAR_ENTITY_RELATIONSHIP,
-                Utilities::matchEntityPath($path, '/query') !== null && $requestMethod === 'GET' => Method::QUERY_ENTITY,
-                Utilities::matchEntityPath($path, '/evidence') !== null && $requestMethod === 'GET' => Method::LIST_ENTITY_EVIDENCE,
-                Utilities::matchEntityPath($path, '/audit') !== null && $requestMethod === 'GET' => Method::LIST_ENTITY_AUDIT_LOGS,
-                Utilities::matchEntityPath($path, '/blacklist') !== null && $requestMethod === 'GET' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
-                Utilities::matchEntityPath($path, '/clear-reputation') !== null && $requestMethod === 'PATCH' => Method::CLEAR_REPUTATION,
-                Utilities::matchEntityPath($path, '/whitelist') !== null && $requestMethod === 'PATCH' => Method::SET_ENTITY_WHITELIST,
-                Utilities::matchEntityPath($path, '/reports') !== null && $requestMethod === 'GET' => Method::LIST_ENTITY_REPORTS,
+                $requestMethod === 'GET' && $entitySuffix === '' => Method::GET_ENTITY_RECORD,
+                $requestMethod === 'DELETE' && $entitySuffix === '' => Method::DELETE_ENTITY,
+                $requestMethod === 'PATCH' && $entitySuffix === '' => Method::UPDATE_ENTITY,
+                $requestMethod === 'PATCH' && $entitySuffix === '/relationship' => Method::SET_ENTITY_RELATIONSHIP,
+                $requestMethod === 'DELETE' && $entitySuffix === '/relationship' => Method::CLEAR_ENTITY_RELATIONSHIP,
+                $requestMethod === 'GET' && $entitySuffix === '/query' => Method::QUERY_ENTITY,
+                $requestMethod === 'GET' && $entitySuffix === '/evidence' => Method::LIST_ENTITY_EVIDENCE,
+                $requestMethod === 'GET' && $entitySuffix === '/audit' => Method::LIST_ENTITY_AUDIT_LOGS,
+                $requestMethod === 'GET' && $entitySuffix === '/blacklist' => Method::LIST_ENTITY_BLACKLIST_RECORDS,
+                $requestMethod === 'PATCH' && $entitySuffix === '/clear-reputation' => Method::CLEAR_REPUTATION,
+                $requestMethod === 'PATCH' && $entitySuffix === '/whitelist' => Method::SET_ENTITY_WHITELIST,
+                $requestMethod === 'GET' && $entitySuffix === '/reports' => Method::LIST_ENTITY_REPORTS,
 
                 // Blcaklist Methods
                 $path === '/blacklist' && $requestMethod === 'GET' => Method::LIST_BLACKLIST,
                 $path === '/blacklist' && $requestMethod === 'POST' => Method::BLACKLIST_ENTITY,
                 $path === '/blacklist/search' && $requestMethod === 'GET' => Method::SEARCH_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_BLACKLIST_RECORD,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', $path) && $requestMethod === 'PATCH' => Method::LIFT_BLACKLIST,
-                preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/extend$#', $path) && $requestMethod === 'PATCH' => Method::EXTEND_BLACKLIST,
+                $requestMethod === 'GET' && preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) => Method::GET_BLACKLIST_RECORD,
+                $requestMethod === 'DELETE' && preg_match('#^/blacklist/([a-fA-F0-9\-]{36})$#', $path) => Method::DELETE_BLACKLIST,
+                $requestMethod === 'PATCH' && preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/lift$#', $path) => Method::LIFT_BLACKLIST,
+                $requestMethod === 'PATCH' && preg_match('#^/blacklist/([a-fA-F0-9\-]{36})/extend$#', $path) => Method::EXTEND_BLACKLIST,
 
                 // Evidence Methods
                 $path === '/evidence' && $requestMethod === 'GET' => Method::LIST_EVIDENCE,
                 $path === '/evidence' && $requestMethod === 'POST' => Method::SUBMIT_EVIDENCE,
                 $path === '/evidence/search' && $requestMethod === 'GET' => Method::SEARCH_EVIDENCE,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_RECORD,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/attachments$#', $path) && $requestMethod === 'GET' => Method::GET_EVIDENCE_ATTACHMENTS,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-confidentiality$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_CONFIDENTIALITY,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/classify$#', $path) && $requestMethod === 'PATCH' => Method::CLASSIFY_EVIDENCE,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-tag$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_EVIDENCE_TAG,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})/link-report$#', $path) && $requestMethod === 'PATCH' => Method::ADD_EVIDENCE_TO_REPORT,
-                preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_EVIDENCE,
+                $requestMethod === 'GET' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) => Method::GET_EVIDENCE_RECORD,
+                $requestMethod === 'GET' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})/attachments$#', $path) => Method::GET_EVIDENCE_ATTACHMENTS,
+                $requestMethod === 'PATCH' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-confidentiality$#', $path) => Method::UPDATE_CONFIDENTIALITY,
+                $requestMethod === 'PATCH' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})/classify$#', $path) => Method::CLASSIFY_EVIDENCE,
+                $requestMethod === 'PATCH' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})/update-tag$#', $path) => Method::UPDATE_EVIDENCE_TAG,
+                $requestMethod === 'PATCH' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})/link-report$#', $path) => Method::ADD_EVIDENCE_TO_REPORT,
+                $requestMethod === 'DELETE' && preg_match('#^/evidence/([a-fA-F0-9\-]{36})$#', $path) => Method::DELETE_EVIDENCE,
 
                 // Operator Methods
                 $path === '/operators' && $requestMethod === 'GET' => Method::LIST_OPERATORS,
@@ -341,30 +346,30 @@
                 $path === '/operators/search' && $requestMethod === 'GET' => Method::SEARCH_OPERATORS,
                 $path === '/operators/self' && $requestMethod === 'GET' => Method::GET_SELF_OPERATOR,
                 $path === '/operators/refresh' && $requestMethod === 'POST' => Method::GENERATE_ACCESS_TOKEN,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/enable$#', $path) && $requestMethod === 'PATCH' => Method::ENABLE_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/disable$#', $path) && $requestMethod === 'PATCH' => Method::DISABLE_OPERATOR,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', $path) && $requestMethod === 'POST' => Method::GENERATE_OPERATOR_ACCESS_TOKEN,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/permissions$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_PERMISSIONS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/configuration$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_CONFIGURATION,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_EVIDENCE,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/audit$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_AUDIT_LOGS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/blacklist$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_BLACKLIST,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports/assigned$#', $path) && $requestMethod === 'GET' => Method::LIST_ASSIGNED_OPERATOR_REPORTS,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/update-name$#', $path) && $requestMethod === 'PATCH' => Method::UPDATE_OPERATOR_NAME,
-                preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports$#', $path) && $requestMethod === 'GET' => Method::LIST_OPERATOR_REPORTS,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) => Method::GET_OPERATOR,
+                $requestMethod === 'DELETE' && preg_match('#^/operators/([a-fA-F0-9\-]{36})$#', $path) => Method::DELETE_OPERATOR,
+                $requestMethod === 'PATCH' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/enable$#', $path) => Method::ENABLE_OPERATOR,
+                $requestMethod === 'PATCH' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/disable$#', $path) => Method::DISABLE_OPERATOR,
+                $requestMethod === 'POST' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/refresh$#', $path) => Method::GENERATE_OPERATOR_ACCESS_TOKEN,
+                $requestMethod === 'PATCH' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/permissions$#', $path) => Method::UPDATE_OPERATOR_PERMISSIONS,
+                $requestMethod === 'PATCH' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/configuration$#', $path) => Method::UPDATE_OPERATOR_CONFIGURATION,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/evidence$#', $path) => Method::LIST_OPERATOR_EVIDENCE,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/audit$#', $path) => Method::LIST_OPERATOR_AUDIT_LOGS,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/blacklist$#', $path) => Method::LIST_OPERATOR_BLACKLIST,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports/assigned$#', $path) => Method::LIST_ASSIGNED_OPERATOR_REPORTS,
+                $requestMethod === 'PATCH' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/update-name$#', $path) => Method::UPDATE_OPERATOR_NAME,
+                $requestMethod === 'GET' && preg_match('#^/operators/([a-fA-F0-9\-]{36})/reports$#', $path) => Method::LIST_OPERATOR_REPORTS,
 
                 // Reports methods
                 $path === '/reports/opened' && $requestMethod === 'GET' => Method::LIST_OPENED_REPORTS,
                 $path === '/reports' && $requestMethod === 'GET' => Method::LIST_REPORTS,
                 $path === '/reports' && $requestMethod === 'POST' => Method::SUBMIT_REPORT,
                 $path === '/reports/search' && $requestMethod === 'GET' => Method::SEARCH_REPORTS,
-                preg_match('#^/reports/([a-fA-F0-9\-]{36})/close$#', $path) && $requestMethod === 'PATCH' => Method::CLOSE_REPORT,
-                preg_match('#^/reports/([a-fA-F0-9\-]{36})/evidence$#', $path) && $requestMethod === 'GET' => Method::GET_REPORT_EVIDENCE_RECORDS,
-                preg_match('#^/reports/([a-fA-F0-9\-]{36})/assign$#', $path) && $requestMethod === 'PATCH' => Method::ASSIGN_OPERATOR_TO_REPORT,
-                preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'GET' => Method::GET_REPORT,
-                preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) && $requestMethod === 'DELETE' => Method::DELETE_REPORT,
+                $requestMethod === 'PATCH' && preg_match('#^/reports/([a-fA-F0-9\-]{36})/close$#', $path) => Method::CLOSE_REPORT,
+                $requestMethod === 'GET' && preg_match('#^/reports/([a-fA-F0-9\-]{36})/evidence$#', $path) => Method::GET_REPORT_EVIDENCE_RECORDS,
+                $requestMethod === 'PATCH' && preg_match('#^/reports/([a-fA-F0-9\-]{36})/assign$#', $path) => Method::ASSIGN_OPERATOR_TO_REPORT,
+                $requestMethod === 'GET' && preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) => Method::GET_REPORT,
+                $requestMethod === 'DELETE' && preg_match('#^/reports/([a-fA-F0-9\-]{36})$#', $path) => Method::DELETE_REPORT,
                 default => null,
             };
 
