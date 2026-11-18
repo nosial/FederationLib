@@ -98,6 +98,11 @@
                         continue;
                     }
 
+                    if ($type !== self::TELEPHONE && !$type->isValid($match))
+                    {
+                        continue;
+                    }
+
                     array_splice($reservedOffsets, $position, 0, [$offset]);
                     array_splice($reservedEnds, $position, 0, [$offset + $length]);
 
@@ -139,7 +144,8 @@
         }
 
         /**
-         * Finds the valid mentions of one named entity type in the content
+         * Finds the mentions of one named entity type in the content, telephone numbers are only found when valid and
+         * the matches of other types are validated by extract()
          *
          * @param NamedEntityType $type The named entity type
          * @param string $content The text to scan
@@ -157,18 +163,29 @@
                 );
             }
 
+            // Every match of the pattern contains this character sequence, content without it is not searched
+            $required = match($type)
+            {
+                self::URL => '://',
+                self::EMAIL => '@',
+                self::IPv6 => ':',
+                default => '.',
+            };
+            if (!str_contains($content, $required))
+            {
+                return [];
+            }
+
             if (preg_match_all($type->getPattern(), $content, $matches, PREG_OFFSET_CAPTURE) === false)
             {
                 return [];
             }
 
+            // The matches are validated by extract(), only those that don't overlap a match of a higher priority
             $results = [];
             foreach ($matches[0] as [$match, $offset])
             {
-                if ($type->isValid($match))
-                {
-                    $results[] = [$match, $offset, strlen($match)];
-                }
+                $results[] = [$match, $offset, strlen($match)];
             }
 
             return $results;
